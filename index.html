@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- TODO: Set the document title to the name of your application -->
+    <title>GeFlow — Fast. Smart. Reliable.</title>
+    <meta name="description" content="GeFlow manages inventory, sales, purchases, and profit tracking for pharmacies, retail stores, and warehouses.">
+    <meta name="author" content="GeFlow" />
+
+    
+    
+    <meta property="og:type" content="website" />
+    
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@Lovable" />
+  <meta property="og:title" content="GeFlow — Fast. Smart. Reliable.">
+  <meta name="twitter:title" content="GeFlow — Fast. Smart. Reliable.">
+  <meta property="og:description" content="GeFlow manages inventory, sales, purchases, and profit tracking for pharmacies, retail stores, and warehouses.">
+  <meta name="twitter:description" content="GeFlow manages inventory, sales, purchases, and profit tracking for pharmacies, retail stores, and warehouses.">
+  <meta property="og:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/49e56264-c461-460e-9149-247322211274">
+  <meta name="twitter:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/49e56264-c461-460e-9149-247322211274">
+  <script>
+    (function() {
+      try {
+        if (typeof window !== "undefined" && typeof window.fetch === "function") {
+          var currentFetch = window.fetch.bind(window);
+          Object.defineProperty(window, "fetch", {
+            get: function() {
+              return currentFetch;
+            },
+            set: function(fn) {
+              currentFetch = typeof fn === "function" ? fn : window.fetch;
+            },
+            configurable: true,
+            enumerable: true,
+          });
+        }
+      } catch (e) {
+        console.warn("Fetch descriptor setup failed", e);
+      }
+    })();
+  </script>
+</head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

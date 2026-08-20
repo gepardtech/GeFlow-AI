@@ -1,0 +1,249 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 220 20% 14%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 14%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 14%;
+
+    --primary: 195 95% 65%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 284 40% 66%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 210 30% 96%;
+    --muted-foreground: 220 10% 50%;
+
+    --accent: 284 40% 66%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 20% 92%;
+    --input: 214 20% 92%;
+    --ring: 195 95% 65%;
+
+    --radius: 0.75rem;
+
+    --cta-gradient: linear-gradient(135deg, hsl(284 40% 66%) 0%, hsl(195 95% 65%) 50%, hsl(320 60% 65%) 100%);
+    --hero-gradient: linear-gradient(135deg, hsl(195 95% 65%) 0%, hsl(284 40% 66%) 100%);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 195 95% 65%;
+  }
+
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 8%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 8%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 195 95% 65%;
+    --primary-foreground: 220 20% 8%;
+    --secondary: 284 40% 66%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 284 40% 66%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 195 95% 65%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 195 95% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 195 95% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight text-foreground;
+  }
+  select {
+    @apply bg-card text-foreground border border-border rounded-xl transition-colors;
+    color-scheme: light dark;
+  }
+  select option {
+    background-color: hsl(var(--card));
+    color: hsl(var(--card-foreground));
+    padding: 8px 12px;
+  }
+  .dark select option {
+    background-color: #18181b;
+    color: #f4f4f5;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--hero-gradient);
+  }
+  .bg-hero-gradient {
+    background-image: var(--hero-gradient);
+  }
+  .bg-cta-gradient {
+    background-image: var(--cta-gradient);
+  }
+  .section-padding {
+    @apply py-20;
+  }
+  .glass-card {
+    @apply bg-card border border-border rounded-2xl shadow-sm;
+  }
+  .font-display {
+    font-family: 'Playfair Display', serif;
+  }
+}
+
+/* Floating animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-12px); }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-float:hover {
+  animation-play-state: paused;
+  transform: scale(1.03) translateY(-4px);
+  transition: transform 0.3s ease;
+}
+
+/* Premium card with colorful glow */
+.premium-card {
+  position: relative;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 1rem;
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  overflow: hidden;
+}
+.premium-card::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 1rem;
+  padding: 1px;
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+.premium-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px -12px hsl(var(--primary) / 0.25), 0 8px 20px -8px hsl(var(--secondary) / 0.2);
+}
+.premium-card:hover::before {
+  opacity: 1;
+}
+
+/* CTA button animations */
+.cta-btn {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.cta-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s ease, height 0.6s ease;
+}
+.cta-btn:hover::before {
+  width: 300px;
+  height: 300px;
+}
+.cta-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px -5px hsl(var(--primary) / 0.4);
+}
+.cta-btn-outline {
+  transition: all 0.3s ease;
+}
+.cta-btn-outline:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -5px rgba(0,0,0,0.1);
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary));
+}
+
+/* Day/Night toggle */
+.theme-toggle {
+  position: relative;
+  width: 52px;
+  height: 28px;
+  border-radius: 14px;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+.theme-toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  transition: transform 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+.theme-toggle.dark-active {
+  background: hsl(var(--secondary));
+}
+.theme-toggle.dark-active::after {
+  transform: translateX(24px);
+}
+
+.paypal-field { min-height: 3rem; display: flex; align-items: center; }
+.paypal-field > div, .paypal-field iframe { width: 100%; }
+
+.dark .paypal-field iframe {
+  filter: invert(0.88) hue-rotate(180deg) contrast(0.9);
+}
+

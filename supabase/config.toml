@@ -1,0 +1,7 @@
+project_id = "bglzohtmgamypgooddru"
+
+[functions.admin-users]
+verify_jwt = true
+
+[functions.admin-business-ops]
+verify_jwt = true

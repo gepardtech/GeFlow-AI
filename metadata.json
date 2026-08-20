@@ -1,0 +1,8 @@
+{
+  "name": "GeFlow",
+  "description": "Inventory, sales, purchases, and profit tracking management system for pharmacies, retail stores, and warehouses.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
