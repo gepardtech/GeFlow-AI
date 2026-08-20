@@ -22,7 +22,7 @@ const Terms = () => (
         body: (
           <>
             <p>You must be at least 18 years of age, or the age of majority in your jurisdiction (whichever is greater), to register for a GeFlow workspace. By creating an account, you represent and warrant that you meet this age requirement, that you have the legal capacity to enter into a binding contract, and that you are not barred from using the Service under any applicable law or regulation.</p>
-            <p>When registering, you agree to provide accurate, current, and complete information about yourself and your business, and to keep that information current throughout the lifetime of your account. You are solely responsible for safeguarding your credentials and for all activity that occurs under your account, whether or not authorized by you. You agree to notify us immediately at security@geflow.io of any unauthorized access, suspected breach, or other security concern.</p>
+            <p>When registering, you agree to provide accurate, current, and complete information about yourself and your business, and to keep that information current throughout the lifetime of your account. You are solely responsible for safeguarding your credentials and for all activity that occurs under your account, whether or not authorized by you. You agree to notify us immediately at security@geflowai.com of any unauthorized access, suspected breach, or other security concern.</p>
             <p>One natural person may operate multiple workspaces. Sharing a single set of credentials among multiple natural persons is prohibited; each individual user must register their own account. We reserve the right to require additional verification — including government-issued identification or business registration documents — at any time to confirm the legitimacy of an account, particularly in connection with high-value transactions, suspected fraud, or compliance investigations.</p>
           </>
         ),
@@ -37,7 +37,7 @@ const Terms = () => (
             <p><strong className="text-foreground">Price Changes.</strong> We may modify subscription pricing from time to time. New pricing applies only to renewals occurring at least 30 days after the change is announced; your current term continues at the rate in force at the time of your most recent payment.</p>
             <p><strong className="text-foreground">Failed Payments.</strong> If a renewal payment fails, we will retry the charge over a 14-day grace period and notify you by email. During the grace period, your workspace remains fully functional. If payment cannot be collected after the grace period expires, your workspace will be downgraded to the Free plan and paid features will be locked until the outstanding balance is settled.</p>
             <p><strong className="text-foreground">Taxes.</strong> Subscription prices are exclusive of taxes. You are responsible for all applicable sales tax, VAT, GST, and other governmental charges arising from your use of the Service. Where required by law, we will collect and remit these taxes to the relevant authorities.</p>
-            <p>Refund eligibility is governed by our Refund Policy, available at geflow.io/refund-policy and incorporated into these Terms by reference.</p>
+            <p>Refund eligibility is governed by our Refund Policy, available at geflowai.com/refund-policy and incorporated into these Terms by reference.</p>
           </>
         ),
       },
@@ -69,7 +69,7 @@ const Terms = () => (
         body: (
           <>
             <p>The Service and all associated software, source code, designs, user interfaces, trademarks, logos, documentation, and other materials (collectively, the "GeFlow IP") are the exclusive property of Gepard Tech and its licensors and are protected by copyright, trademark, patent, trade-secret, and other intellectual-property laws. Except for the limited license granted in these Terms, no rights are granted to you by implication, estoppel, or otherwise.</p>
-            <p>You may not remove, obscure, or alter any proprietary notices contained in the Service. You may not use the GeFlow name, logos, or trademarks except as expressly permitted by our brand-usage guidelines available at geflow.io/brand or under a separate written agreement.</p>
+            <p>You may not remove, obscure, or alter any proprietary notices contained in the Service. You may not use the GeFlow name, logos, or trademarks except as expressly permitted by our brand-usage guidelines available at geflowai.com/brand or under a separate written agreement.</p>
             <p>If you submit feedback, suggestions, feature requests, or ideas about the Service ("Feedback"), you grant us a perpetual, irrevocable, royalty-free, worldwide license to use, modify, and incorporate that Feedback into the Service or any other product without obligation or compensation. We sincerely value Feedback and encourage you to share it openly.</p>
           </>
         ),
@@ -79,7 +79,7 @@ const Terms = () => (
         title: "Suspension and Termination",
         body: (
           <>
-            <p>You may terminate your account at any time by visiting Settings → Workspace → Delete Workspace, or by emailing support@geflow.io. Termination by you takes effect at the end of your current billing period for monthly and annual subscriptions; refund eligibility is governed by our Refund Policy.</p>
+            <p>You may terminate your account at any time by visiting Settings → Workspace → Delete Workspace, or by emailing support@geflowai.com. Termination by you takes effect at the end of your current billing period for monthly and annual subscriptions; refund eligibility is governed by our Refund Policy.</p>
             <p>We may suspend or terminate your access to the Service, in whole or in part, at any time and without prior notice if we determine in our reasonable discretion that you have breached these Terms, our Acceptable Use Policy, or any other agreement with us; that your use of the Service poses a security risk, may subject us to liability, or may harm other users; that we are required to do so by law, court order, or governmental authority; or that you have failed to pay any amount due within the grace period described above.</p>
             <p>Upon termination, all rights granted to you under these Terms will immediately cease, and you must stop using the Service. Sections of these Terms that by their nature should survive termination — including ownership, indemnification, limitations of liability, and dispute resolution — will survive.</p>
           </>
@@ -116,7 +116,7 @@ const Terms = () => (
             <p>These Terms constitute the entire agreement between you and us regarding the Service and supersede all prior agreements, communications, or understandings. If any provision is held invalid or unenforceable, the remaining provisions will continue in full force and effect, and the invalid provision will be modified to the minimum extent necessary to make it enforceable while preserving its original intent.</p>
             <p>Our failure to enforce any right or provision of these Terms will not be deemed a waiver of that right or provision. You may not assign or transfer these Terms or any rights hereunder without our prior written consent; we may assign these Terms freely.</p>
             <p>We may modify these Terms at any time. Material changes will be communicated by email and in-product notice at least 30 days before they take effect. Continued use of the Service after the effective date of any update constitutes your acceptance of the revised Terms. If you do not agree, you must discontinue use and may terminate your account.</p>
-            <p>Questions about these Terms should be directed to legal@geflow.io. We typically respond within two business days.</p>
+            <p>Questions about these Terms should be directed to legal@geflowai.com. We typically respond within two business days.</p>
           </>
         ),
       },

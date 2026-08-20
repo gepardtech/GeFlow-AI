@@ -58,7 +58,7 @@ const Disclaimer = () => (
             <p>While we strive to maintain high availability — with a 99.9% uptime Service Level Agreement for Premium and Lifetime Premium customers — we do not guarantee that the Service will be uninterrupted, error-free, or available at all times. The Service may be temporarily unavailable due to scheduled maintenance, unscheduled emergencies, infrastructure failures, denial-of-service attacks, force majeure events, or factors outside our reasonable control.</p>
             <p>You acknowledge that internet connectivity, browser compatibility, device performance, and local network configuration are outside our control and may affect your experience of the Service. Issues stemming from these external factors are not the responsibility of GeFlow.</p>
             <p>You are responsible for maintaining adequate offline backups of critical business data. While we perform automated daily backups of all workspace data, we recommend that you periodically export and store local copies of important records for additional resilience.</p>
-            <p>Compatibility with specific browsers, operating systems, point-of-sale hardware, barcode scanners, receipt printers, or cash drawers may change over time as we update the Service. We will provide reasonable notice of any planned compatibility changes, but you are responsible for ensuring that your hardware and software environment meets the current published requirements at geflow.io/system-requirements.</p>
+            <p>Compatibility with specific browsers, operating systems, point-of-sale hardware, barcode scanners, receipt printers, or cash drawers may change over time as we update the Service. We will provide reasonable notice of any planned compatibility changes, but you are responsible for ensuring that your hardware and software environment meets the current published requirements at geflowai.com/system-requirements.</p>
           </>
         ),
       },
@@ -110,8 +110,8 @@ const Disclaimer = () => (
         body: (
           <>
             <p>We reserve the right to modify this Disclaimer at any time, with or without prior notice. Material changes will be communicated by email and through in-product notification at least 14 days before they take effect, and the "Last Updated" date at the top of this page will be revised accordingly.</p>
-            <p>Your continued use of the Service following the effective date of any updated Disclaimer constitutes your acceptance of the revised terms. If you do not agree with the revised Disclaimer, you must discontinue use of the Service. Historical versions of this Disclaimer are archived and available upon request at legal@geflow.io.</p>
-            <p>Questions about this Disclaimer should be directed to legal@geflow.io. We typically respond to legal inquiries within two business days. For urgent matters concerning ongoing operations, please also notify support@geflow.io for parallel handling.</p>
+            <p>Your continued use of the Service following the effective date of any updated Disclaimer constitutes your acceptance of the revised terms. If you do not agree with the revised Disclaimer, you must discontinue use of the Service. Historical versions of this Disclaimer are archived and available upon request at legal@geflowai.com.</p>
+            <p>Questions about this Disclaimer should be directed to legal@geflowai.com. We typically respond to legal inquiries within two business days. For urgent matters concerning ongoing operations, please also notify support@geflowai.com for parallel handling.</p>
           </>
         ),
       },

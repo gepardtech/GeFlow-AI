@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Layout from "@/components/Layout";
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthRedirectUrl } from "@/lib/appUrl";
 import { useToast } from "@/hooks/use-toast";
 import { Camera, CheckCircle2, Eye, EyeOff, Heart, Loader2, Lock, Mail, ShieldCheck, Sparkles, User } from "lucide-react";
 
@@ -39,7 +40,7 @@ const Signup = () => {
       password,
       options: {
         data: { full_name: fullName, plan: "free" },
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: getAuthRedirectUrl("/auth/callback"),
       },
     });
     setLoading(false);

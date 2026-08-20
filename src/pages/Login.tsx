@@ -76,14 +76,7 @@ const Login = () => {
                     Password
                   </Label>
                   <Link
-                    to="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      toast({
-                        title: "Password Reset Link",
-                        description: "If an account exists, password recovery instructions will be dispatched to your email address.",
-                      });
-                    }}
+                    to="/forgot-password"
                     className="text-xs font-semibold text-primary hover:underline"
                   >
                     Forgot Password?

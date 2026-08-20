@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import Layout from "@/components/Layout";
 import { ArrowLeft, ArrowRight, CheckCircle2, CreditCard, Lock, ShieldCheck, Wallet, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { getAuthRedirectUrl } from "@/lib/appUrl";
 import { useToast } from "@/hooks/use-toast";
 import InvoiceDialog, { InvoiceData } from "@/components/InvoiceDialog";
 import { useMoney } from "@/lib/currency";
@@ -165,7 +166,10 @@ const Checkout = () => {
     const { data: signUpData, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { full_name: fullName.trim(), plan, period }, emailRedirectTo: window.location.origin },
+      options: {
+        data: { full_name: fullName.trim(), plan, period },
+        emailRedirectTo: getAuthRedirectUrl("/auth/callback"),
+      },
     });
     if (error) {
       // Account already exists → sign in with the same credentials.
@@ -355,7 +359,7 @@ const Checkout = () => {
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] font-bold tracking-wider text-muted-foreground mb-2 block">{authMode === "signup" ? "WORK EMAIL IDENTITY" : "ACCOUNT EMAIL"}</label>
-                    <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="alex@geflow.io" className="h-12" />
+                    <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="alex@geflowai.com" className="h-12" />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold tracking-wider text-muted-foreground mb-2 block">ACCOUNT PASSWORD</label>

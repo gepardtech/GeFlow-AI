@@ -11,6 +11,9 @@ import HowItWorks from "./pages/HowItWorks";
 import Contact from "./pages/Contact";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import AuthCallback from "./pages/AuthCallback";
 import Checkout from "./pages/Checkout";
 import Admin from "./pages/Admin";
 import Dashboard from "./pages/Dashboard";
@@ -80,6 +83,11 @@ const App = () => (
           <Route path="/contact" element={<Contact />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/update-password" element={<ResetPassword />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/auth/confirm" element={<AuthCallback />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/admin" element={<AdminGuard><Admin /></AdminGuard>} />
           <Route path="/admin/users" element={<AdminGuard><AdminUsers /></AdminGuard>} />

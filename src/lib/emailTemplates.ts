@@ -13,12 +13,12 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
     id: "magic_link",
     name: "Magic Link & One-Time Login",
     category: "auth",
-    description: "Sent when users choose 'Continue with Google' passwordless login or request a magic sign-in link.",
+    description: "Sent when users choose passwordless login or request a direct magic sign-in link.",
     defaultSubject: "Your GeFlow One-Time Login Link & Code: {{ .Token }}",
     variables: [
-      { name: "{{ .ConfirmationURL }}", desc: "The 1-click direct authentication URL" },
-      { name: "{{ .Token }}", desc: "The 6-digit numeric login verification code" },
-      { name: "{{ .SiteURL }}", desc: "Your website origin URL (https://geflow.io)" },
+      { name: "{{ .ConfirmationURL }}", desc: "Dynamic 1-click direct authentication URL" },
+      { name: "{{ .Token }}", desc: "6-digit numeric login verification code" },
+      { name: "{{ .SiteURL }}", desc: "Website origin URL" },
       { name: "{{ .Email }}", desc: "Recipient user email address" },
     ],
     html: `<!DOCTYPE html>
@@ -40,7 +40,7 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
     .code-box { background: #0b0e14; border: 1px dashed #38bdf8; border-radius: 16px; padding: 18px 24px; margin: 0 auto 28px; display: inline-block; min-width: 240px; }
     .code-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #64748b; margin-bottom: 6px; }
     .code-value { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #38bdf8; }
-    .btn { display: inline-block; background: #38bdf8; color: #041017 !important; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 36px; border-radius: 12px; box-shadow: 0 10px 20px rgba(56,189,248,0.25); transition: background 0.2s; }
+    .btn { display: inline-block; background: #38bdf8; color: #041017 !important; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 36px; border-radius: 12px; box-shadow: 0 10px 20px rgba(56,189,248,0.25); }
     .divider { height: 1px; background: #1e293b; margin: 32px 0 24px; }
     .footer { padding: 0 40px 36px; text-align: center; font-size: 12px; color: #64748b; line-height: 1.5; }
     .footer a { color: #94a3b8; text-decoration: underline; }
@@ -212,6 +212,67 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
 
       <p style="font-size: 12px; color: #64748b; margin-top: 24px;">
         If you did not request a password reset, you can safely ignore this email. Your password will not change.
+      </p>
+    </div>
+
+    <div class="footer">
+      <p style="margin: 0;">GeFlow Security • Support: gepardwebs@gmail.com</p>
+    </div>
+  </div>
+</body>
+</html>`,
+  },
+  {
+    id: "change_email",
+    name: "Change Email Address",
+    category: "auth",
+    description: "Sent when an existing user updates their registered email address.",
+    defaultSubject: "Confirm Your New Email Address for GeFlow",
+    variables: [
+      { name: "{{ .ConfirmationURL }}", desc: "Confirm new email link" },
+      { name: "{{ .Token }}", desc: "Verification token code" },
+      { name: "{{ .SiteURL }}", desc: "Website URL" },
+      { name: "{{ .Email }}", desc: "New email address" },
+    ],
+    html: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirm Email Change</title>
+  <style>
+    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0c0f17; color: #f1f5f9; }
+    .container { max-width: 580px; margin: 40px auto; background: #131825; border: 1px solid #1e293b; border-radius: 24px; overflow: hidden; }
+    .header { padding: 36px 40px 24px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .logo-text { font-size: 26px; font-weight: 800; color: #ffffff; text-decoration: none; }
+    .logo-accent { color: #38bdf8; }
+    .content { padding: 36px 40px; text-align: center; }
+    .title { font-size: 24px; font-weight: 700; color: #ffffff; margin: 0 0 12px; }
+    .desc { font-size: 15px; line-height: 1.6; color: #94a3b8; margin: 0 0 28px; }
+    .btn { display: inline-block; background: #38bdf8; color: #041017 !important; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 36px; border-radius: 12px; }
+    .footer { padding: 24px 40px 36px; text-align: center; font-size: 12px; color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo-text">Ge<span class="logo-accent">Flow</span></div>
+    </div>
+    
+    <div class="content">
+      <h1 class="title">Confirm New Email Address</h1>
+      <p class="desc">
+        A request was made to update your GeFlow account email to this address. Click the button below to confirm and activate this change:
+      </p>
+
+      <div>
+        <a href="{{ .ConfirmationURL }}" class="btn" target="_blank">
+          ✓ Confirm Email Change
+        </a>
+      </div>
+
+      <p style="font-size: 12px; color: #64748b; margin-top: 24px;">
+        If you did not request this update, please contact our security team immediately at gepardwebs@gmail.com.
       </p>
     </div>
 

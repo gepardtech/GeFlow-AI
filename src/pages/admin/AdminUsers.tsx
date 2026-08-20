@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { getPasswordResetRedirectUrl } from "@/lib/appUrl";
 import PanelLayout from "@/components/PanelLayout";
 import ExportReportDialog from "@/components/ExportReportDialog";
 import { ADMIN_NAV, ADMIN_IDENTITY } from "@/lib/panelNav";
@@ -235,7 +236,7 @@ const AdminUsers = () => {
     setBusy(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(resetUser.email, {
-        redirectTo: `${window.location.origin}/login`,
+        redirectTo: getPasswordResetRedirectUrl(),
       });
       if (error) throw error;
       toast({ title: "Reset link sent", description: `An email was sent to ${resetUser.email}.` });

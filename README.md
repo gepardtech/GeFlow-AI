@@ -139,25 +139,20 @@ The final output should feel like:
 
 “A real-world SaaS product landing website like Stripe, Notion, or Shopify-level quality"
 
-This project was built with [Lovable](https://lovable.dev).
+## Deployment & Platform Architecture
 
-**Live app**: https://ge-flow.lovable.app
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/f4c51741-1686-4570-af82-5516170c6c86).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+GeFlow is built to be 100% hosting- and platform-independent:
+- **Canonical App URL**: Set via `VITE_APP_URL` in `.env` or dynamic runtime resolution.
+- **Authentication**: Powered by Supabase Auth with dynamic redirect callbacks (`/auth/callback`, `/reset-password`).
+- **Deploy Anywhere**: Runs seamlessly on Google Cloud Run, Hostinger, Vercel, AWS, VPS, or Docker containers.
 
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+To run locally:
 
 ```sh
 git clone <this-repository-url>
 cd <repository-name>
-npm i
+npm install
 npm run dev
 ```

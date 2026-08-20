@@ -297,7 +297,7 @@ const AdminPayments = () => {
                                 <Input
                                   value={g.webhook_url ?? ""}
                                   onChange={(e) => patchGateway(g.id, { webhook_url: e.target.value })}
-                                  placeholder={`https://api.geflow.io/webhooks/${g.gateway_key}`}
+                                  placeholder={`https://api.geflowai.com/webhooks/${g.gateway_key}`}
                                   className="h-11 pr-11"
                                 />
                                 <button type="button"
@@ -418,7 +418,7 @@ const AdminPayments = () => {
               <div>
                 <label className="text-xs font-semibold mb-1.5 block">Payout Account</label>
                 <Input value={settings?.payout_account ?? ""} onChange={(e) => set({ payout_account: e.target.value })}
-                  placeholder="payouts@geflow.io / IBAN" className="h-11" />
+                  placeholder="payouts@geflowai.com / IBAN" className="h-11" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
