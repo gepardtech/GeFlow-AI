@@ -9,14 +9,19 @@ export const useIsAdmin = () => {
   useEffect(() => {
     let active = true;
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { if (active) { setIsAdmin(false); setLoading(false); } return; }
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .eq("role", "admin");
-      if (active) { setIsAdmin((data?.length ?? 0) > 0); setLoading(false); }
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { if (active) { setIsAdmin(false); setLoading(false); } return; }
+        const { data } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .eq("role", "admin");
+        if (active) { setIsAdmin((data?.length ?? 0) > 0); setLoading(false); }
+      } catch (err) {
+        console.warn("Failed to check admin status:", err);
+        if (active) { setIsAdmin(false); setLoading(false); }
+      }
     })();
     return () => { active = false; };
   }, []);

@@ -84,54 +84,58 @@ const subs = new Set<() => void>();
 const emit = () => subs.forEach((fn) => fn());
 
 const loadBusinessMoney = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) { cache = { currency: null, baseCurrency: null, taxRate: null }; emit(); return; }
-  
-  const userMeta = user.user_metadata || {};
-  const userCurrency = userMeta.user_currency || null;
-  const userTax = userMeta.user_default_tax !== undefined && userMeta.user_default_tax !== null ? Number(userMeta.user_default_tax) : null;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { cache = { currency: null, baseCurrency: null, taxRate: null }; emit(); return; }
+    
+    const userMeta = user.user_metadata || {};
+    const userCurrency = userMeta.user_currency || null;
+    const userTax = userMeta.user_default_tax !== undefined && userMeta.user_default_tax !== null ? Number(userMeta.user_default_tax) : null;
 
-  const { data } = await supabase
-    .from("businesses")
-    .select("id, currency, base_currency, default_tax, category_id, created_at")
-    .eq("owner_user_id", user.id)
-    .order("created_at", { ascending: true });
-  const rows = data ?? [];
-  const saved = localStorage.getItem(LS_KEY);
-  const row = rows.find((r: any) => r.id === saved) ?? rows[0];
+    const { data } = await supabase
+      .from("businesses")
+      .select("id, currency, base_currency, default_tax, category_id, created_at")
+      .eq("owner_user_id", user.id)
+      .order("created_at", { ascending: true });
+    const rows = data ?? [];
+    const saved = localStorage.getItem(LS_KEY);
+    const row = rows.find((r: any) => r.id === saved) ?? rows[0];
 
-  if (row) {
-    let catCurrency: string | null = null;
-    let catTax: number | null = null;
-    if ((row as any).category_id) {
-      const { data: cat } = await supabase
-        .from("business_categories")
-        .select("currency, default_tax")
-        .eq("id", (row as any).category_id)
-        .maybeSingle();
-      if (cat) {
-        catCurrency = cat.currency ?? null;
-        catTax = cat.default_tax !== undefined && cat.default_tax !== null ? Number(cat.default_tax) : null;
+    if (row) {
+      let catCurrency: string | null = null;
+      let catTax: number | null = null;
+      if ((row as any).category_id) {
+        const { data: cat } = await supabase
+          .from("business_categories")
+          .select("currency, default_tax")
+          .eq("id", (row as any).category_id)
+          .maybeSingle();
+        if (cat) {
+          catCurrency = cat.currency ?? null;
+          catTax = cat.default_tax !== undefined && cat.default_tax !== null ? Number(cat.default_tax) : null;
+        }
       }
+
+      const effectiveCurrency = (row as any).currency || (row as any).base_currency || userCurrency || catCurrency || null;
+      const effectiveBaseCurrency = (row as any).base_currency || (row as any).currency || effectiveCurrency;
+      const effectiveTax = (row as any).default_tax !== undefined && (row as any).default_tax !== null
+        ? Number((row as any).default_tax)
+        : (userTax !== null ? userTax : (catTax !== null ? catTax : 0));
+
+      cache = {
+        currency: effectiveCurrency,
+        baseCurrency: effectiveBaseCurrency,
+        taxRate: effectiveTax,
+      };
+    } else {
+      cache = {
+        currency: userCurrency,
+        baseCurrency: userCurrency,
+        taxRate: userTax ?? 0,
+      };
     }
-
-    const effectiveCurrency = (row as any).currency || (row as any).base_currency || userCurrency || catCurrency || null;
-    const effectiveBaseCurrency = (row as any).base_currency || (row as any).currency || effectiveCurrency;
-    const effectiveTax = (row as any).default_tax !== undefined && (row as any).default_tax !== null
-      ? Number((row as any).default_tax)
-      : (userTax !== null ? userTax : (catTax !== null ? catTax : 0));
-
-    cache = {
-      currency: effectiveCurrency,
-      baseCurrency: effectiveBaseCurrency,
-      taxRate: effectiveTax,
-    };
-  } else {
-    cache = {
-      currency: userCurrency,
-      baseCurrency: userCurrency,
-      taxRate: userTax ?? 0,
-    };
+  } catch (err) {
+    console.warn("Failed to load business currency:", err);
   }
   emit();
 };

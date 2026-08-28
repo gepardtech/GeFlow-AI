@@ -103,6 +103,7 @@ export const AuthCallback = () => {
 
         // Special routing for password recovery
         if (type === "recovery") {
+          sessionStorage.setItem("geflow_auth_is_recovery_session", "true");
           setStatusTitle("Password Recovery Verified");
           setStatusMessage("Redirecting to create your new password...");
           toast({

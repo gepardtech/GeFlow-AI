@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { resolveSettingsHierarchy, getCachedUserMetadata } from "./settingsHierarchy";
 import { currencySymbol } from "./currency";
+import { PlanId } from "./plans";
 
 export const formatCurrency = (val: number, code: string = "USD") => {
   const sym = currencySymbol(code);
@@ -24,6 +25,25 @@ export interface AIChatMessage {
 }
 
 export type AIMode = "analyst" | "operator" | "knowledge" | "advisor";
+
+export function isModeAllowedForPlan(mode: AIMode, planId: PlanId = "free"): boolean {
+  if (planId === "premium" || planId === "lifetime") return true;
+  if (planId === "standard") return mode === "analyst" || mode === "operator";
+  // free
+  return mode === "analyst";
+}
+
+export function getRequiredPlanForMode(mode: AIMode): { requiredPlan: "free" | "standard" | "premium"; label: string } {
+  switch (mode) {
+    case "operator":
+      return { requiredPlan: "standard", label: "Standard+" };
+    case "knowledge":
+    case "advisor":
+      return { requiredPlan: "premium", label: "Premium" };
+    default:
+      return { requiredPlan: "free", label: "All Plans" };
+  }
+}
 
 export interface BusinessAnalyticsContext {
   business: {
@@ -312,11 +332,16 @@ export function detectQueryLanguage(text: string): "english" | "roman_urdu" | "u
 
 /**
  * Intelligent Client-Side fallback analyzer & synthesizer using actual business data.
+ * Respects user plan capabilities:
+ * - Free: only basic assistance, only Monthly profit report, only Analyst mode (not operator, knowledge, advisor).
+ * - Standard: Monthly & Weekly report, basic operator mode (not knowledge, advisor).
+ * - Premium / Lifetime: Full access, all 4 models, Lifetime, monthly, weekly, and daily reports and full supportive assistant.
  */
 export function generateLocalBusinessAnalysis(
   query: string,
   mode: AIMode,
-  ctx: BusinessAnalyticsContext | null
+  ctx: BusinessAnalyticsContext | null,
+  planId: PlanId = "free"
 ): string {
   if (!ctx) {
     return "⚠️ Please select an active business in the workspace header so I can read your live sales, inventory, and profit data.";
@@ -327,73 +352,200 @@ export function generateLocalBusinessAnalysis(
   const curr = ctx.business.currency;
   const fmt = (val: number) => formatCurrency(val, curr);
 
+  // 0. PLAN MODE RESTRICTION CHECK
+  if (!isModeAllowedForPlan(mode, planId)) {
+    if (planId === "free") {
+      return `🔒 **Model Restricted (Free Plan)**\n\nThe **${mode.toUpperCase()}** model is available on **Standard** (Operator) and **Premium** (Knowledge & Advisor) plans. On the Free Plan, you have full access to **Analyst** mode with monthly business intelligence.\n\n*Upgrade your subscription to unlock this specialized AI model.*`;
+    }
+    if (planId === "standard" && (mode === "knowledge" || mode === "advisor")) {
+      return `🔒 **Model Restricted (Standard Plan)**\n\nThe **${mode.toUpperCase()}** model is exclusive to the **Premium Plan** with multi-branch predictive intelligence and strategic advisors. On the Standard Plan, you have full access to **Analyst** and **Operator** modes.\n\n*Upgrade to Premium in the Subscription tab to unlock this model.*`;
+    }
+  }
+
+  const isFree = planId === "free";
+  const isStandard = planId === "standard";
+  const isPremiumOrLifetime = planId === "premium" || planId === "lifetime";
+
+  // Check if query is explicitly asking for today/daily or weekly reports
+  const asksDaily = q.includes("today") || q.includes("aaj") || q.includes("daily") || q.includes("din") || q.includes("hoy") || q.includes("يوم");
+  const asksWeekly = q.includes("week") || q.includes("hafta") || q.includes("semana") || q.includes("أسبوع") || q.includes("7 day");
+  const asksLifetime = q.includes("lifetime") || q.includes("all time") || q.includes("total") || q.includes("overall");
+
   // 1. PROFIT / EARNINGS QUERIES
   if (q.includes("profit") || q.includes("margin") || q.includes("munafa") || q.includes("kamai") || q.includes("faida") || q.includes("beneficio") || q.includes("ربح")) {
+    // Plan restriction on Free Plan (Monthly only, not daily/weekly)
+    if (isFree) {
+      const notice = (asksDaily || asksWeekly)
+        ? `📅 *Plan Notice: Daily and Weekly breakdowns are available on Standard & Premium plans. Showing your Monthly Profit Performance:*\n\n`
+        : "";
+
+      if (lang === "roman_urdu") {
+        return [
+          `${notice}**${ctx.business.name} ka Monthly Profit Analysis (${curr}):**`,
+          `• **Pichle 30 Din Ka Munafa:** ${fmt(ctx.sales.monthProfit)} (Total Sales: ${fmt(ctx.sales.monthRevenue)})`,
+          `• **Net Profit Margin:** ${ctx.sales.netProfitMargin.toFixed(1)}%`,
+          `• **Total Completed Orders (30 Days):** ${ctx.sales.monthTransactions} orders`,
+          ``,
+          `💡 *Free Plan Info:* Daily aur Weekly profit reports Standard aur Premium plans par dastiyab hain.`
+        ].join("\n");
+      }
+
+      return [
+        `${notice}### Monthly Profit & Margin Analysis for **${ctx.business.name}**`,
+        `• **Last 30 Days Profit:** **${fmt(ctx.sales.monthProfit)}** on **${fmt(ctx.sales.monthRevenue)}** revenue`,
+        `• **Net Profit Margin:** **${ctx.sales.netProfitMargin.toFixed(1)}%**`,
+        `• **Monthly Completed Orders:** **${ctx.sales.monthTransactions} transactions**`,
+        `• **Average Order Value:** **${fmt(ctx.sales.averageOrderValue)}**`,
+        ``,
+        `*Upgrade to Standard or Premium to unlock real-time Daily and 7-Day Weekly profit trends.*`
+      ].join("\n");
+    }
+
+    // Plan restriction on Standard Plan (Monthly & Weekly, not daily breakdown)
+    if (isStandard) {
+      const notice = asksDaily
+        ? `📅 *Plan Notice: Daily real-time tracking is exclusive to the Premium Plan. Showing Weekly & Monthly Profit Performance:*\n\n`
+        : "";
+
+      if (lang === "roman_urdu") {
+        return [
+          `${notice}**${ctx.business.name} ka Weekly & Monthly Profit Analysis (${curr}):**`,
+          `• **Pichle 7 Din Ka Munafa:** ${fmt(ctx.sales.weekProfit)} (Sales: ${fmt(ctx.sales.weekRevenue)}, ${ctx.sales.weekTransactions} orders)`,
+          `• **Pichle 30 Din Ka Munafa:** ${fmt(ctx.sales.monthProfit)} (Sales: ${fmt(ctx.sales.monthRevenue)}, ${ctx.sales.monthTransactions} orders)`,
+          `• **Net Profit Margin:** ${ctx.sales.netProfitMargin.toFixed(1)}%`,
+          ``,
+          `💡 *Standard Plan Info:* Real-time daily reports aur lifetime deep audit Premium plan par dastiyab hain.`
+        ].join("\n");
+      }
+
+      return [
+        `${notice}### Weekly & Monthly Profit Analysis for **${ctx.business.name}**`,
+        `• **Last 7 Days (Weekly) Profit:** **${fmt(ctx.sales.weekProfit)}** on **${fmt(ctx.sales.weekRevenue)}** revenue (${ctx.sales.weekTransactions} orders)`,
+        `• **Last 30 Days (Monthly) Profit:** **${fmt(ctx.sales.monthProfit)}** on **${fmt(ctx.sales.monthRevenue)}** revenue (${ctx.sales.monthTransactions} orders)`,
+        `• **Net Profit Margin:** **${ctx.sales.netProfitMargin.toFixed(1)}%**`,
+        `• **Average Order Value:** **${fmt(ctx.sales.averageOrderValue)}**`,
+        ``,
+        `*Upgrade to Premium to unlock full Daily real-time tracking, lifetime reports, and AI strategic advisors.*`
+      ].join("\n");
+    }
+
+    // Premium / Lifetime Plan: Full access, daily, weekly, monthly, lifetime!
     if (lang === "roman_urdu") {
       return [
-        `**${ctx.business.name} ka Profit Analysis (${curr}):**`,
-        `• **Aaj Ka Munafa:** ${fmt(ctx.sales.todayProfit)} (${ctx.sales.todayTransactions} sales)`,
-        `• **Pichle 30 Din Ka Munafa:** ${fmt(ctx.sales.monthProfit)} (Total Sales: ${fmt(ctx.sales.monthRevenue)})`,
+        `**${ctx.business.name} ka Full Comprehensive Profit Report (${curr}) [VIP]:**`,
+        `• **Aaj Ka Munafa (Daily):** ${fmt(ctx.sales.todayProfit)} (${ctx.sales.todayTransactions} sales, ${fmt(ctx.sales.todayRevenue)} revenue)`,
+        `• **Pichle 7 Din Ka Munafa (Weekly):** ${fmt(ctx.sales.weekProfit)} (Sales: ${fmt(ctx.sales.weekRevenue)})`,
+        `• **Pichle 30 Din Ka Munafa (Monthly):** ${fmt(ctx.sales.monthProfit)} (Sales: ${fmt(ctx.sales.monthRevenue)})`,
         `• **Net Profit Margin:** ${ctx.sales.netProfitMargin.toFixed(1)}%`,
-        `• **Overall Lifetime Profit:** ${fmt(ctx.sales.totalProfit)}`,
+        `• **Overall Lifetime Profit:** ${fmt(ctx.sales.totalProfit)} across ${ctx.sales.totalTransactions} transactions`,
         ``,
-        `💡 *Recommendation:* Margin behtar karne ke liye top-selling items ki wholesale bulk purchasing karein.`
+        `💡 *Premium Strategy:* Margin behtar karne ke liye top-selling items ki wholesale bulk purchasing karein.`
       ].join("\n");
     }
 
     if (lang === "urdu") {
       return [
-        `**${ctx.business.name} کا منافع جاتی تجزیہ (${curr}):**`,
-        `• **آج کا منافع:** ${fmt(ctx.sales.todayProfit)} (${ctx.sales.todayTransactions} بل)`,
-        `• **گزشتہ 30 دن کا منافع:** ${fmt(ctx.sales.monthProfit)} (کل فروخت: ${fmt(ctx.sales.monthRevenue)})`,
+        `**${ctx.business.name} کا مکمل منافع جاتی تجزیہ (${curr}) [پریمیم]:**`,
+        `• **آج کا منافع (Daily):** ${fmt(ctx.sales.todayProfit)} (${ctx.sales.todayTransactions} بل)`,
+        `• **گزشتہ 7 دن کا منافع (Weekly):** ${fmt(ctx.sales.weekProfit)} (فروخت: ${fmt(ctx.sales.weekRevenue)})`,
+        `• **گزشتہ 30 دن کا منافع (Monthly):** ${fmt(ctx.sales.monthProfit)} (فروخت: ${fmt(ctx.sales.monthRevenue)})`,
         `• **خالص منافع کا تناسب (Margin):** ${ctx.sales.netProfitMargin.toFixed(1)}%`,
-        `• **مجموعی منافع:** ${fmt(ctx.sales.totalProfit)}`,
-        ``,
-        `💡 *تجویز:* زیادہ منافع بخش مصنوعات کی انوینٹری برقرار رکھیں۔`
+        `• **مجموعی لائف ٹائم منافع:** ${fmt(ctx.sales.totalProfit)}`
       ].join("\n");
     }
 
     if (lang === "arabic") {
       return [
-        `**تحليل الأرباح لـ ${ctx.business.name} (${curr}):**`,
+        `**تحليل الأرباح الشامل لـ ${ctx.business.name} (${curr}) [بريميوم]:**`,
         `• **أرباح اليوم:** ${fmt(ctx.sales.todayProfit)} (${ctx.sales.todayTransactions} معاملة)`,
-        `• **أرباح آخر 30 يوماً:** ${fmt(ctx.sales.monthProfit)} (إجمالي المبيعات: ${fmt(ctx.sales.monthRevenue)})`,
+        `• **أرباح آخر 7 أيام:** ${fmt(ctx.sales.weekProfit)} (المبيعات: ${fmt(ctx.sales.weekRevenue)})`,
+        `• **أرباح آخر 30 يوماً:** ${fmt(ctx.sales.monthProfit)} (المبيعات: ${fmt(ctx.sales.monthRevenue)})`,
         `• **هامش صافي الربح:** ${ctx.sales.netProfitMargin.toFixed(1)}%`,
         `• **إجمالي الأرباح الكلية:** ${fmt(ctx.sales.totalProfit)}`
       ].join("\n");
     }
 
     return [
-      `### Profit & Margin Analysis for **${ctx.business.name}**`,
-      `• **Today's Net Profit:** **${fmt(ctx.sales.todayProfit)}** across ${ctx.sales.todayTransactions} transaction(s)`,
-      `• **Last 30 Days Profit:** **${fmt(ctx.sales.monthProfit)}** on **${fmt(ctx.sales.monthRevenue)}** revenue`,
+      `### Complete Profit & Margin Audit for **${ctx.business.name}** *(Premium Access)*`,
+      `• **Today's Net Profit (Daily):** **${fmt(ctx.sales.todayProfit)}** on **${fmt(ctx.sales.todayRevenue)}** revenue (${ctx.sales.todayTransactions} orders)`,
+      `• **Last 7 Days (Weekly):** **${fmt(ctx.sales.weekProfit)}** profit on **${fmt(ctx.sales.weekRevenue)}** revenue`,
+      `• **Last 30 Days (Monthly):** **${fmt(ctx.sales.monthProfit)}** profit on **${fmt(ctx.sales.monthRevenue)}** revenue`,
       `• **Net Profit Margin:** **${ctx.sales.netProfitMargin.toFixed(1)}%**`,
-      `• **All-Time Total Profit:** **${fmt(ctx.sales.totalProfit)}**`,
+      `• **All-Time Lifetime Profit:** **${fmt(ctx.sales.totalProfit)}** across ${ctx.sales.totalTransactions} transactions`,
       ``,
-      `**Operational Insight:** Your average sale value is **${fmt(ctx.sales.averageOrderValue)}**. Focus on fast-moving high-margin categories to sustain positive cashflow.`
+      `**Executive Recommendation:** Your average order value is **${fmt(ctx.sales.averageOrderValue)}**. Fast-moving items yield strong returns—consider restocking high margin items.`
     ].join("\n");
   }
 
   // 2. SALES / REVENUE QUERIES
   if (q.includes("sale") || q.includes("revenue") || q.includes("bikri") || q.includes("becha") || q.includes("ventas") || q.includes("مبيعات")) {
+    if (isFree) {
+      const notice = (asksDaily || asksWeekly)
+        ? `📅 *Plan Notice: Daily and Weekly breakdown reports are available on Standard & Premium. Showing Monthly Performance:*\n\n`
+        : "";
+
+      if (lang === "roman_urdu") {
+        return [
+          `${notice}**${ctx.business.name} ki Monthly Sales Report:**`,
+          `• **Pichle 30 Din Ki Sales:** ${fmt(ctx.sales.monthRevenue)} (${ctx.sales.monthTransactions} transactions)`,
+          `• **Average Order Value:** ${fmt(ctx.sales.averageOrderValue)}`,
+          `• **Active Products in Catalog:** ${ctx.inventory.activeProducts} items`
+        ].join("\n");
+      }
+
+      return [
+        `${notice}### Monthly Sales Summary for **${ctx.business.name}**`,
+        `• **Last 30 Days Revenue:** **${fmt(ctx.sales.monthRevenue)}** (${ctx.sales.monthTransactions} orders)`,
+        `• **Average Order Value (AOV):** **${fmt(ctx.sales.averageOrderValue)}**`,
+        `• **Catalog Size:** **${ctx.inventory.activeProducts} products**`,
+        ``,
+        `*Upgrade to Standard or Premium to view 7-Day Weekly and Real-time Daily sales logs.*`
+      ].join("\n");
+    }
+
+    if (isStandard) {
+      const notice = asksDaily
+        ? `📅 *Plan Notice: Daily live logs are exclusive to the Premium Plan. Showing Weekly & Monthly Sales:*\n\n`
+        : "";
+
+      if (lang === "roman_urdu") {
+        return [
+          `${notice}**${ctx.business.name} ki Weekly & Monthly Sales Report:**`,
+          `• **Pichle 7 Din (Weekly):** ${fmt(ctx.sales.weekRevenue)} (${ctx.sales.weekTransactions} transactions)`,
+          `• **Pichle 30 Din (Monthly):** ${fmt(ctx.sales.monthRevenue)} (${ctx.sales.monthTransactions} transactions)`,
+          `• **Average Order Value:** ${fmt(ctx.sales.averageOrderValue)}`
+        ].join("\n");
+      }
+
+      return [
+        `${notice}### Weekly & Monthly Sales Summary for **${ctx.business.name}**`,
+        `• **Last 7 Days (Weekly):** **${fmt(ctx.sales.weekRevenue)}** (${ctx.sales.weekTransactions} orders)`,
+        `• **Last 30 Days (Monthly):** **${fmt(ctx.sales.monthRevenue)}** (${ctx.sales.monthTransactions} orders)`,
+        `• **Average Order Value (AOV):** **${fmt(ctx.sales.averageOrderValue)}**`,
+        ``,
+        `*Upgrade to Premium to unlock daily breakdown logs, lifetime analytics, and AI Strategic Advisor.*`
+      ].join("\n");
+    }
+
+    // Premium
     if (lang === "roman_urdu") {
       return [
-        `**${ctx.business.name} ki Sales Report:**`,
-        `• **Aaj Ki Sales:** ${fmt(ctx.sales.todayRevenue)} (${ctx.sales.todayTransactions} transactions)`,
-        `• **Pichle 7 Din:** ${fmt(ctx.sales.weekRevenue)} (${ctx.sales.weekTransactions} transactions)`,
-        `• **Pichle 30 Din:** ${fmt(ctx.sales.monthRevenue)} (${ctx.sales.monthTransactions} transactions)`,
+        `**${ctx.business.name} ki Full Sales Report [VIP]:**`,
+        `• **Aaj Ki Sales (Daily):** ${fmt(ctx.sales.todayRevenue)} (${ctx.sales.todayTransactions} transactions)`,
+        `• **Pichle 7 Din (Weekly):** ${fmt(ctx.sales.weekRevenue)} (${ctx.sales.weekTransactions} transactions)`,
+        `• **Pichle 30 Din (Monthly):** ${fmt(ctx.sales.monthRevenue)} (${ctx.sales.monthTransactions} transactions)`,
         `• **Average Order Value:** ${fmt(ctx.sales.averageOrderValue)}`,
-        `• **Total Lifetime Sales:** ${fmt(ctx.sales.totalRevenue)}`
+        `• **Total Lifetime Sales:** ${fmt(ctx.sales.totalRevenue)} (${ctx.sales.totalTransactions} transactions)`
       ].join("\n");
     }
 
     return [
-      `### Sales & Revenue Summary for **${ctx.business.name}**`,
-      `• **Today's Revenue:** **${fmt(ctx.sales.todayRevenue)}** (${ctx.sales.todayTransactions} order(s))`,
-      `• **Last 7 Days Revenue:** **${fmt(ctx.sales.weekRevenue)}** (${ctx.sales.weekTransactions} orders)`,
-      `• **Last 30 Days Revenue:** **${fmt(ctx.sales.monthRevenue)}** (${ctx.sales.monthTransactions} orders)`,
+      `### Full Sales & Revenue Audit for **${ctx.business.name}** *(Premium Access)*`,
+      `• **Today's Revenue (Daily):** **${fmt(ctx.sales.todayRevenue)}** (${ctx.sales.todayTransactions} order(s))`,
+      `• **Last 7 Days (Weekly):** **${fmt(ctx.sales.weekRevenue)}** (${ctx.sales.weekTransactions} orders)`,
+      `• **Last 30 Days (Monthly):** **${fmt(ctx.sales.monthRevenue)}** (${ctx.sales.monthTransactions} orders)`,
       `• **Average Order Value (AOV):** **${fmt(ctx.sales.averageOrderValue)}**`,
-      `• **Total Revenue:** **${fmt(ctx.sales.totalRevenue)}** from ${ctx.sales.totalTransactions} completed transactions.`
+      `• **Total Lifetime Revenue:** **${fmt(ctx.sales.totalRevenue)}** from ${ctx.sales.totalTransactions} completed transactions.`
     ].join("\n");
   }
 
@@ -487,39 +639,81 @@ export function generateLocalBusinessAnalysis(
   }
 
   // 6. GENERAL BUSINESS OVERVIEW / PERFORMANCE
-  if (lang === "roman_urdu") {
+  if (isFree) {
+    if (lang === "roman_urdu") {
+      return [
+        `**${ctx.business.name} ka Monthly Summary (Free Plan):**`,
+        `• **Active Currency:** ${ctx.business.currency} | **Tax Rate:** ${ctx.business.taxRate}%`,
+        `• **Pichle 30 Din Ka Revenue:** ${fmt(ctx.sales.monthRevenue)} | **Net Profit:** ${fmt(ctx.sales.monthProfit)} (${ctx.sales.netProfitMargin.toFixed(1)}% margin)`,
+        `• **Inventory Valuation:** ${fmt(ctx.inventory.inventoryCostValue)} (${ctx.inventory.activeProducts} products)`,
+        `• **Stock Status:** ${ctx.inventory.outOfStockCount} out-of-stock, ${ctx.inventory.lowStockCount} low stock alerts`,
+        ``,
+        `Aap mujh se monthly profit, inventory, aur business settings ke bare mein pooch sakte hain!`
+      ].join("\n");
+    }
+
     return [
-      `**${ctx.business.name} ka Executive Business Summary:**`,
-      `• **Active Currency:** ${ctx.business.currency} | **Tax Rate:** ${ctx.business.taxRate}%`,
-      `• **Aaj Ki Sales:** ${fmt(ctx.sales.todayRevenue)} (${ctx.sales.todayTransactions} sales) | **Munafa:** ${fmt(ctx.sales.todayProfit)}`,
-      `• **Pichle 30 Din Ka Revenue:** ${fmt(ctx.sales.monthRevenue)} | **Net Profit:** ${fmt(ctx.sales.monthProfit)} (${ctx.sales.netProfitMargin.toFixed(1)}% margin)`,
-      `• **Inventory Worth:** ${fmt(ctx.inventory.inventoryCostValue)} (${ctx.inventory.activeProducts} products, ${ctx.inventory.totalUnitsInStock} units)`,
-      `• **Stock Status:** ${ctx.inventory.outOfStockCount} out-of-stock, ${ctx.inventory.lowStockCount} low stock alerts`,
+      `### Monthly Business Overview for **${ctx.business.name}** *(Free Plan)*`,
+      `• **Configuration:** Currency: **${ctx.business.currency}** | Tax Rate: **${ctx.business.taxRate}%** | Stock Alert: **${ctx.business.stockAlertLimit} units**`,
+      `• **Trailing 30 Days (Monthly):** **${fmt(ctx.sales.monthRevenue)}** revenue with **${fmt(ctx.sales.monthProfit)}** net profit (**${ctx.sales.netProfitMargin.toFixed(1)}% margin**).`,
+      `• **Inventory Valuation:** **${fmt(ctx.inventory.inventoryCostValue)}** cost value across **${ctx.inventory.activeProducts} active products** (${ctx.inventory.totalUnitsInStock} units).`,
+      `• **Stock Health Alerts:** **${ctx.inventory.outOfStockCount}** out-of-stock, **${ctx.inventory.lowStockCount}** low-stock items.`,
       ``,
-      `Aap mujh se sales, profit, stock, ya tax rate ke bare mein mazeed tafseelat pooch sakte hain!`
+      `*Note: Upgrade to Standard or Premium to unlock 7-day weekly, daily real-time reports, and all 4 AI operational models.*`
     ].join("\n");
   }
 
-  if (lang === "urdu") {
+  if (isStandard) {
+    if (lang === "roman_urdu") {
+      return [
+        `**${ctx.business.name} ka Weekly & Monthly Summary (Standard Plan):**`,
+        `• **Pichle 7 Din (Weekly):** ${fmt(ctx.sales.weekRevenue)} (Munafa: ${fmt(ctx.sales.weekProfit)})`,
+        `• **Pichle 30 Din (Monthly):** ${fmt(ctx.sales.monthRevenue)} (Munafa: ${fmt(ctx.sales.monthProfit)}, ${ctx.sales.netProfitMargin.toFixed(1)}% margin)`,
+        `• **Inventory Valuation:** ${fmt(ctx.inventory.inventoryCostValue)} (${ctx.inventory.activeProducts} products)`,
+        `• **Stock Status:** ${ctx.inventory.outOfStockCount} out-of-stock, ${ctx.inventory.lowStockCount} low stock alerts`,
+        ``,
+        `💡 *Standard Access:* Analyst aur Operator modes active hain.`
+      ].join("\n");
+    }
+
     return [
-      `**${ctx.business.name} کا کاروباری خلاصہ:**`,
-      `• **کرنسی:** ${ctx.business.currency} | **ٹیکس کی شرح:** ${ctx.business.taxRate}%`,
-      `• **آج کی فروخت:** ${fmt(ctx.sales.todayRevenue)} | **منافع:** ${fmt(ctx.sales.todayProfit)}`,
-      `• **گزشتہ 30 دن کی فروخت:** ${fmt(ctx.sales.monthRevenue)} | **خالص منافع:** ${fmt(ctx.sales.monthProfit)} (${ctx.sales.netProfitMargin.toFixed(1)}%)`,
-      `• **انوینٹری کی قیمت:** ${fmt(ctx.inventory.inventoryCostValue)} (${ctx.inventory.activeProducts} مصنوعات)`,
-      `• **اسٹاک الرٹس:** ${ctx.inventory.lowStockCount} مصنوعات کم اسٹاک پر ہیں، ${ctx.inventory.outOfStockCount} ختم ہیں۔`
+      `### Weekly & Monthly Business Overview for **${ctx.business.name}** *(Standard Plan)*`,
+      `• **Last 7 Days (Weekly):** **${fmt(ctx.sales.weekRevenue)}** revenue with **${fmt(ctx.sales.weekProfit)}** profit (${ctx.sales.weekTransactions} orders).`,
+      `• **Last 30 Days (Monthly):** **${fmt(ctx.sales.monthRevenue)}** revenue with **${fmt(ctx.sales.monthProfit)}** profit (**${ctx.sales.netProfitMargin.toFixed(1)}% margin**).`,
+      `• **Inventory Valuation:** **${fmt(ctx.inventory.inventoryCostValue)}** across **${ctx.inventory.activeProducts} active products**.`,
+      `• **Stock Health:** **${ctx.inventory.outOfStockCount}** out-of-stock items, **${ctx.inventory.lowStockCount}** low stock alerts.`,
+      ``,
+      `*Upgrade to Premium to unlock daily real-time reports, lifetime data, Knowledge mode, and Advisor mode.*`
+    ].join("\n");
+  }
+
+  // Premium / Lifetime
+  if (lang === "roman_urdu") {
+    return [
+      `**${ctx.business.name} ka Complete Executive Summary [Premium / Lifetime]:**`,
+      `• **Active Currency:** ${ctx.business.currency} | **Tax Rate:** ${ctx.business.taxRate}%`,
+      `• **Aaj Ki Sales (Daily):** ${fmt(ctx.sales.todayRevenue)} (${ctx.sales.todayTransactions} sales) | **Munafa:** ${fmt(ctx.sales.todayProfit)}`,
+      `• **Pichle 7 Din (Weekly):** ${fmt(ctx.sales.weekRevenue)} | **Munafa:** ${fmt(ctx.sales.weekProfit)}`,
+      `• **Pichle 30 Din (Monthly):** ${fmt(ctx.sales.monthRevenue)} | **Munafa:** ${fmt(ctx.sales.monthProfit)} (${ctx.sales.netProfitMargin.toFixed(1)}% margin)`,
+      `• **Lifetime Profit:** ${fmt(ctx.sales.totalProfit)} on ${fmt(ctx.sales.totalRevenue)} revenue`,
+      `• **Inventory Valuation:** ${fmt(ctx.inventory.inventoryCostValue)} (${ctx.inventory.activeProducts} products, ${ctx.inventory.totalUnitsInStock} units)`,
+      `• **Stock Status:** ${ctx.inventory.outOfStockCount} out-of-stock, ${ctx.inventory.lowStockCount} low stock alerts`,
+      ``,
+      `Aap tamam 4 AI models (Analyst, Operator, Knowledge, Advisor) se full assistance le sakte hain!`
     ].join("\n");
   }
 
   return [
-    `### Comprehensive Performance Summary for **${ctx.business.name}**`,
-    `• **Resolved Configuration:** Currency: **${ctx.business.currency}** | Tax Rate: **${ctx.business.taxRate}%** | Stock Alert: **${ctx.business.stockAlertLimit} units**`,
-    `• **Today's Performance:** **${fmt(ctx.sales.todayRevenue)}** revenue (${ctx.sales.todayTransactions} orders) generating **${fmt(ctx.sales.todayProfit)}** net profit.`,
-    `• **Trailing 30 Days:** **${fmt(ctx.sales.monthRevenue)}** revenue with **${fmt(ctx.sales.monthProfit)}** net profit (**${ctx.sales.netProfitMargin.toFixed(1)}% margin**).`,
+    `### Comprehensive Performance Audit for **${ctx.business.name}** *(Premium / Lifetime VIP)*`,
+    `• **Configuration:** Currency: **${ctx.business.currency}** | Tax Rate: **${ctx.business.taxRate}%** | Stock Alert: **${ctx.business.stockAlertLimit} units**`,
+    `• **Today's Real-Time Performance (Daily):** **${fmt(ctx.sales.todayRevenue)}** revenue (${ctx.sales.todayTransactions} orders) generating **${fmt(ctx.sales.todayProfit)}** net profit.`,
+    `• **Trailing 7 Days (Weekly):** **${fmt(ctx.sales.weekRevenue)}** revenue with **${fmt(ctx.sales.weekProfit)}** profit.`,
+    `• **Trailing 30 Days (Monthly):** **${fmt(ctx.sales.monthRevenue)}** revenue with **${fmt(ctx.sales.monthProfit)}** profit (**${ctx.sales.netProfitMargin.toFixed(1)}% margin**).`,
+    `• **All-Time Lifetime Totals:** **${fmt(ctx.sales.totalProfit)}** net profit on **${fmt(ctx.sales.totalRevenue)}** lifetime revenue.`,
     `• **Inventory Valuation:** **${fmt(ctx.inventory.inventoryCostValue)}** cost value across **${ctx.inventory.activeProducts} active products** (${ctx.inventory.totalUnitsInStock} total units).`,
     `• **Stock Health Alerts:** **${ctx.inventory.outOfStockCount}** out-of-stock items, **${ctx.inventory.lowStockCount}** low-stock items, and **${ctx.inventory.expiringCount}** expiring items.`,
     ``,
-    `Ask me specific questions on profit breakdown, top sellers, supplier purchase orders, or operational strategies!`
+    `Ask me specific questions across all 4 intelligence models: profit breakdowns, operator drafting, industry knowledge, or multi-branch growth advisory!`
   ].join("\n");
 }
 

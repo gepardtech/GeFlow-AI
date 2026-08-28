@@ -67,12 +67,17 @@ export const usePricingPlans = () => {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const { data } = await supabase
-      .from("pricing_plans")
-      .select("*")
-      .order("sort_order", { ascending: true });
-    setPlans(((data ?? []) as unknown as PricingPlanRow[]).filter((p) => p.is_active));
-    setLoading(false);
+    try {
+      const { data } = await supabase
+        .from("pricing_plans")
+        .select("*")
+        .order("sort_order", { ascending: true });
+      setPlans(((data ?? []) as unknown as PricingPlanRow[]).filter((p) => p.is_active));
+    } catch (err) {
+      console.warn("Failed to load pricing plans:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {

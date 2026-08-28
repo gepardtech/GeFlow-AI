@@ -845,8 +845,12 @@ export const StepReview = ({
 
                       {/* Confidence */}
                       <td className="py-3 px-3">
-                        {p.ai_confidence !== undefined ? (
-                          <AIConfidenceBadge score={p.ai_confidence} size="sm" showPercentage />
+                        {(p.confidence?.overall !== undefined || (p as any).ai_confidence !== undefined) ? (
+                          <AIConfidenceBadge
+                            score={p.confidence?.overall ?? (p as any).ai_confidence ?? 0.88}
+                            size="sm"
+                            showPercentage
+                          />
                         ) : (
                           <span className="text-[10px] text-muted-foreground">N/A</span>
                         )}
@@ -958,8 +962,12 @@ export const StepReview = ({
 
                 <div className="flex items-center justify-between pt-1">
                   <div>
-                    {p.ai_confidence !== undefined && (
-                      <AIConfidenceBadge score={p.ai_confidence} size="sm" showPercentage />
+                    {(p.confidence?.overall !== undefined || (p as any).ai_confidence !== undefined) && (
+                      <AIConfidenceBadge
+                        score={p.confidence?.overall ?? (p as any).ai_confidence ?? 0.88}
+                        size="sm"
+                        showPercentage
+                      />
                     )}
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -984,6 +992,46 @@ export const StepReview = ({
             );
           })
         )}
+      </div>
+
+      {/* Persistent Bottom Action Bar */}
+      <div className="sticky bottom-0 z-10 bg-background/95 backdrop-blur-md border-t border-border p-3 sm:p-4 rounded-2xl shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onBack}
+            className="rounded-xl text-xs gap-1.5 h-9"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" /> Back to Mapping
+          </Button>
+
+          <span className="text-xs text-muted-foreground font-medium">
+            <strong className="text-foreground">{selectedCount}</strong> of {total} products selected
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+          {selectedProducts.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setBulkEditOpen(true)}
+              className="rounded-xl text-xs gap-1.5 h-9"
+            >
+              <Edit3 className="w-3.5 h-3.5" /> Bulk Edit ({selectedProducts.length})
+            </Button>
+          )}
+
+          <Button
+            size="sm"
+            onClick={() => setConfirmOpen(true)}
+            disabled={selectedCount === 0}
+            className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 h-9 px-5 shadow-sm min-w-[180px]"
+          >
+            <CheckCircle2 className="w-4 h-4" /> Confirm & Import ({selectedCount})
+          </Button>
+        </div>
       </div>
 
       {/* Row Edit Modal */}

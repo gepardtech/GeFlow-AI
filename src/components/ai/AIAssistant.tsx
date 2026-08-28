@@ -3,6 +3,9 @@ import ReactMarkdown from "react-markdown";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
+import { usePlan } from "@/hooks/usePlan";
+import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 import {
   Sparkles,
   Send,
@@ -17,6 +20,8 @@ import {
   Trash2,
   Coins,
   Percent,
+  Lock,
+  Crown,
 } from "lucide-react";
 import {
   AIMode,
@@ -27,6 +32,8 @@ import {
   saveAIConversation,
   detectQueryLanguage,
   BusinessAnalyticsContext,
+  isModeAllowedForPlan,
+  getRequiredPlanForMode,
 } from "@/lib/aiAssistantService";
 
 const MODES: { id: AIMode; label: string; icon: typeof BarChart3; desc: string; color: string }[] = [
@@ -67,6 +74,9 @@ interface Props {
 
 const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
   const { activeId, businesses } = useActiveBusiness();
+  const { plan, planId } = usePlan();
+  const { toast } = useToast();
+  const navigate = useNavigate();
   const [mode, setMode] = useState<AIMode>("analyst");
   const [messages, setMessages] = useState<AIChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -78,6 +88,13 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const activeBiz = businesses.find((b) => b.id === activeId);
+
+  // Auto-reset mode if currently selected mode is not allowed for the plan
+  useEffect(() => {
+    if (!isModeAllowedForPlan(mode, planId)) {
+      setMode("analyst");
+    }
+  }, [planId, mode]);
 
   // Fetch current user and load conversation history
   useEffect(() => {
@@ -121,6 +138,19 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
     saveAIConversation([], activeId, currentUserId);
   };
 
+  const handleSelectMode = (selectedMode: AIMode) => {
+    const isAllowed = isModeAllowedForPlan(selectedMode, planId);
+    if (!isAllowed) {
+      const { label } = getRequiredPlanForMode(selectedMode);
+      toast({
+        title: `${selectedMode.toUpperCase()} Model Locked`,
+        description: `This AI model is available on the ${label} plan. Upgrade your subscription to unlock it.`,
+      });
+      return;
+    }
+    setMode(selectedMode);
+  };
+
   const send = useCallback(
     async (text: string) => {
       const content = text.trim();
@@ -155,6 +185,7 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
               messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
               mode,
               businessId: activeId ?? "",
+              planId,
             },
           });
 
@@ -168,9 +199,9 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
           console.debug("Edge function invocation bypassed/failed, engaging smart local analyzer:", edgeErr);
         }
 
-        // Step 3: If Edge Function did not return a response, execute high-precision local analysis
+        // Step 3: If Edge Function did not return a response, execute high-precision plan-aware local analysis
         if (!succeededRemotely || !replyText) {
-          replyText = generateLocalBusinessAnalysis(content, mode, currentCtx);
+          replyText = generateLocalBusinessAnalysis(content, mode, currentCtx, planId);
         }
 
         const assistantMsg: AIChatMessage = {
@@ -179,7 +210,7 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
           timestamp: new Date().toISOString(),
           meta: {
             language: detectQueryLanguage(content),
-            model: "GeCore AI",
+            model: `GeCore AI (${planId.toUpperCase()})`,
           },
         };
 
@@ -201,7 +232,7 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
         setTimeout(() => inputRef.current?.focus(), 100);
       }
     },
-    [loading, messages, liveAnalytics, activeId, mode, currentUserId]
+    [loading, messages, liveAnalytics, activeId, mode, currentUserId, planId]
   );
 
   const activeMode = MODES.find((m) => m.id === mode) || MODES[0];
@@ -211,7 +242,10 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
       <DialogContent
         className="max-w-3xl p-0 overflow-hidden h-[85vh] flex flex-col gap-0 border-border bg-card shadow-2xl"
         onPointerDownOutside={(e) => {
-          // Prevent accidental dismissal when clicking near edges
+          e.preventDefault();
+        }}
+        onInteractOutside={(e) => {
+          e.preventDefault();
         }}
       >
         <DialogTitle className="sr-only">GeFlow AI Assistant</DialogTitle>
@@ -228,8 +262,9 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <p className="font-extrabold text-sm sm:text-base leading-tight text-foreground">GeFlow AI Assistant</p>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
-                  GeCore AI
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+                  <Crown className="w-3 h-3 text-primary" />
+                  {plan?.label || "Free"} Plan
                 </span>
               </div>
               <p className="text-[11px] text-muted-foreground flex items-center gap-2 truncate mt-0.5">
@@ -267,6 +302,9 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
           {MODES.map((m) => {
             const Icon = m.icon;
             const on = m.id === mode;
+            const isAllowed = isModeAllowedForPlan(m.id, planId);
+            const { label: reqLabel } = getRequiredPlanForMode(m.id);
+
             return (
               <button
                 key={m.id}
@@ -274,18 +312,28 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  setMode(m.id);
+                  handleSelectMode(m.id);
                 }}
-                className={`flex flex-col items-start gap-1 rounded-xl p-2.5 border text-left transition-all ${
+                className={`relative flex flex-col items-start gap-1 rounded-xl p-2.5 border text-left transition-all ${
                   on
                     ? "border-primary bg-primary/10 shadow-sm"
-                    : "border-border/60 bg-card hover:bg-muted/50"
+                    : isAllowed
+                    ? "border-border/60 bg-card hover:bg-muted/50"
+                    : "border-border/40 bg-muted/40 opacity-70 hover:opacity-90"
                 }`}
               >
+                {!isAllowed && (
+                  <span className="absolute top-2 right-2 flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-muted-foreground/10 text-muted-foreground border border-border">
+                    <Lock className="w-2.5 h-2.5" />
+                    {reqLabel}
+                  </span>
+                )}
                 <span className={`h-7 w-7 rounded-lg flex items-center justify-center ${m.color}`}>
                   <Icon className="h-4 w-4" />
                 </span>
-                <span className="text-xs font-bold text-foreground">{m.label}</span>
+                <span className="text-xs font-bold text-foreground flex items-center gap-1">
+                  {m.label}
+                </span>
                 <span className="text-[10px] text-muted-foreground leading-tight hidden sm:block truncate w-full">
                   {m.desc}
                 </span>

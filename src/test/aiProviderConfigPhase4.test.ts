@@ -47,7 +47,7 @@ describe("GEFLOW AI — PHASE 4: SUPABASE AI PROVIDER CONFIGURATION", () => {
     it("should retrieve registered models for a given provider", () => {
       const geminiModels = aiConfigurationService.getModelsForProvider("gemini");
       expect(geminiModels.length).toBeGreaterThanOrEqual(2);
-      expect(geminiModels.some((m) => m.model_id === "gemini-2.5-flash")).toBe(true);
+      expect(geminiModels.some((m) => m.model_id === "gemini-3.7-flash")).toBe(true);
 
       const openaiModels = aiConfigurationService.getModelsForProvider("openai");
       expect(openaiModels.some((m) => m.model_id === "gpt-4o-mini")).toBe(true);
@@ -59,7 +59,7 @@ describe("GEFLOW AI — PHASE 4: SUPABASE AI PROVIDER CONFIGURATION", () => {
 
   describe("4. Default Model Lookup", () => {
     it("should resolve the default model for each provider", () => {
-      expect(aiConfigurationService.getDefaultModel("gemini")).toBe("gemini-2.5-flash");
+      expect(aiConfigurationService.getDefaultModel("gemini")).toBe("gemini-3.7-flash");
       expect(aiConfigurationService.getDefaultModel("openai")).toBe("gpt-4o-mini");
       expect(aiConfigurationService.getDefaultModel("openrouter")).toBe("meta-llama/llama-3.3-70b-instruct");
     });
@@ -151,7 +151,7 @@ describe("GEFLOW AI — PHASE 4: SUPABASE AI PROVIDER CONFIGURATION", () => {
     it("should dynamically route to fallback provider when primary fails", async () => {
       const failingGemini: AIProviderInterface = {
         name: "gemini",
-        defaultModel: "gemini-2.5-flash",
+        defaultModel: "gemini-3.7-flash",
         isConfigured: () => true,
         analyzeProduct: async () => {
           throw new AIServiceError("AI_PROVIDER_UNAVAILABLE", "Gemini 503 error");
@@ -219,7 +219,7 @@ describe("GEFLOW AI — PHASE 4: SUPABASE AI PROVIDER CONFIGURATION", () => {
         userId: "usr-1",
         businessId: "biz-demo",
         provider: "gemini",
-        model: "gemini-2.5-flash",
+        model: "gemini-3.7-flash",
         taskType: "product_analysis",
         status: "success",
         latencyMs: 120,
@@ -231,7 +231,7 @@ describe("GEFLOW AI — PHASE 4: SUPABASE AI PROVIDER CONFIGURATION", () => {
         userId: "usr-1",
         businessId: "biz-demo",
         provider: "gemini",
-        model: "gemini-2.5-flash",
+        model: "gemini-3.7-flash",
         taskType: "product_analysis",
         status: "success",
         latencyMs: 180,

@@ -11,8 +11,9 @@ export interface MappingAnalysisResult {
 const normalizeString = (str: string): string => {
   return str
     .toLowerCase()
-    .replace(/[_-]/g, " ")
+    .replace(/[_\-./\\]/g, " ")
     .replace(/[^a-z0-9 %]/g, "")
+    .replace(/\s+/g, " ")
     .trim();
 };
 
@@ -24,8 +25,6 @@ export const analyzeColumnMappings = (
   sampleRows: string[][]
 ): MappingAnalysisResult => {
   const mappings: ColumnMapping[] = [];
-  const assignedFields = new Map<CanonicalField, { colIndex: number; score: number }>();
-  const conflictFields: CanonicalField[] = [];
 
   for (let colIdx = 0; colIdx < headers.length; colIdx++) {
     const rawHeader = headers[colIdx] || `Column ${colIdx + 1}`;
@@ -36,7 +35,7 @@ export const analyzeColumnMappings = (
     for (const row of sampleRows) {
       if (row[colIdx] && row[colIdx].trim() !== "") {
         sampleValues.push(row[colIdx].trim());
-        if (sampleValues.length >= 5) break;
+        if (sampleValues.length >= 8) break;
       }
     }
 
@@ -60,21 +59,29 @@ export const analyzeColumnMappings = (
           }
         }
         // 2. Starts with / Ends with
-        else if (cleanHeader.startsWith(cleanAlias + " ") || cleanHeader.endsWith(" " + cleanAlias)) {
+        else if (
+          cleanHeader.startsWith(cleanAlias + " ") ||
+          cleanHeader.endsWith(" " + cleanAlias) ||
+          cleanHeader.startsWith(cleanAlias)
+        ) {
           const score = 92;
           if (score > bestScore) {
             bestScore = score;
             bestField = fieldDef.key;
-            reason = `Close prefix/suffix match with "${alias}"`;
+            reason = `Close match with "${alias}"`;
           }
         }
-        // 3. Contains phrase
-        else if (cleanHeader.includes(cleanAlias) || cleanAlias.includes(cleanHeader)) {
-          const score = 84;
+        // 3. Contains phrase or token overlap
+        else if (
+          cleanHeader.includes(cleanAlias) ||
+          cleanAlias.includes(cleanHeader) ||
+          (cleanHeader.length > 3 && cleanAlias.split(" ").some((w) => w.length > 3 && cleanHeader.includes(w)))
+        ) {
+          const score = 82;
           if (score > bestScore) {
             bestScore = score;
             bestField = fieldDef.key;
-            reason = `Partial match with "${alias}"`;
+            reason = `Keyword match with "${alias}"`;
           }
         }
       }
@@ -92,35 +99,54 @@ export const analyzeColumnMappings = (
 
       // Check if date-like
       const isDateLike = sampleValues.every((v) =>
-        /^\d{4}[-/]\d{1,2}[-/]\d{1,2}$|^\d{1,2}[-/]\d{1,2}[-/]\d{2,4}$|[a-z]{3,9}\s+\d{1,2},\s*\d{4}/i.test(v)
+        /^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$|^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}$|[a-z]{3,9}\s+\d{1,2},\s*\d{4}/i.test(v)
       );
 
       // Check if image URLs
       const isImageLike = sampleValues.some((v) => /^https?:\/\/.+\.(jpg|jpeg|png|webp|gif|svg)/i.test(v));
 
+      // Check if purely textual product names (e.g. multi-word strings like "Paracetamol 500mg")
+      const isLikelyProductName =
+        sampleValues.some((v) => v.length > 3 && /[a-zA-Z]/.test(v) && !/^https?:\/\//.test(v)) &&
+        (cleanHeader.includes("name") ||
+          cleanHeader.includes("item") ||
+          cleanHeader.includes("prod") ||
+          cleanHeader.includes("desc") ||
+          cleanHeader.includes("title") ||
+          cleanHeader.includes("particular") ||
+          cleanHeader === "");
+
       if (bestField === "ignore" || bestScore < 70) {
         if (isImageLike) {
           bestField = "images";
-          bestScore = Math.max(bestScore, 85);
-          reason = "Contains web image URLs";
-        } else if (isBarcodeLike && (cleanHeader.includes("code") || cleanHeader.includes("num") || cleanHeader.includes("bar"))) {
-          bestField = "barcode";
           bestScore = Math.max(bestScore, 88);
-          reason = "Header & 8-14 digit numeric barcode sample values";
+          reason = "Contains image web URLs";
+        } else if (isBarcodeLike && (cleanHeader.includes("code") || cleanHeader.includes("num") || cleanHeader.includes("bar") || cleanHeader.includes("ean") || cleanHeader.includes("upc"))) {
+          bestField = "barcode";
+          bestScore = Math.max(bestScore, 90);
+          reason = "Contains 8-14 digit numeric barcodes";
         } else if (isDateLike && (cleanHeader.includes("date") || cleanHeader.includes("exp") || cleanHeader.includes("val"))) {
           bestField = "expiry_date";
-          bestScore = Math.max(bestScore, 85);
+          bestScore = Math.max(bestScore, 88);
           reason = "Contains formatted date values";
-        } else if (hasCurrencyOrDecimals && (cleanHeader.includes("rate") || cleanHeader.includes("price") || cleanHeader.includes("amount"))) {
-          bestField = "retail_price";
+        } else if (hasCurrencyOrDecimals && (cleanHeader.includes("rate") || cleanHeader.includes("price") || cleanHeader.includes("mrp") || cleanHeader.includes("amount") || cleanHeader.includes("cost"))) {
+          if (cleanHeader.includes("cost") || cleanHeader.includes("pur") || cleanHeader.includes("buy")) {
+            bestField = "purchase_cost";
+          } else {
+            bestField = "retail_price";
+          }
+          bestScore = Math.max(bestScore, 82);
+          reason = "Contains currency & monetary amounts";
+        } else if (isLikelyProductName && colIdx <= 2) {
+          bestField = "name";
           bestScore = Math.max(bestScore, 75);
-          reason = "Contains currency & monetary values";
+          reason = "Contains product descriptions";
         }
       }
     }
 
     const confidence = bestScore;
-    const requiresReview = confidence > 0 && confidence < 90;
+    const requiresReview = confidence > 0 && confidence < 80;
     const status: ColumnMapping["status"] =
       bestField === "ignore"
         ? "ignored"
@@ -156,59 +182,88 @@ export const analyzeColumnMappings = (
     "expiry_date",
   ];
 
+  const conflictFields: CanonicalField[] = [];
+
   for (const field of nonRepeatableFields) {
     const matching = mappings.filter((m) => m.mappedField === field);
     if (matching.length > 1) {
       conflictFields.push(field);
-      // Sort matching by confidence descending
+      // Pick the one with the highest confidence; set others to review
       matching.sort((a, b) => b.confidence - a.confidence);
-
-      // Keep the first one as matched, flag the second one for review / conflict
       for (let i = 1; i < matching.length; i++) {
-        matching[i].status = "conflict";
-        matching[i].requiresReview = true;
-        matching[i].reason = `Multiple columns mapped to ${field}. Review recommended.`;
+        matching[i].mappedField = "ignore";
+        matching[i].status = "ignored";
+        matching[i].reason = `Conflict with Column "${matching[0].uploadedHeader}" (higher match score)`;
       }
     }
   }
 
+  // If name is not assigned but column 0 or 1 contains descriptive text, auto-assign
   const hasProductName = mappings.some((m) => m.mappedField === "name");
+  if (!hasProductName && mappings.length > 0) {
+    // Find first non-ignored column or column 0
+    const candidate = mappings.find((m) => m.sampleValues.some((s) => s.length > 2 && isNaN(Number(s)))) || mappings[0];
+    if (candidate) {
+      candidate.mappedField = "name";
+      candidate.confidence = 70;
+      candidate.status = "review";
+      candidate.reason = "Auto-assigned as Product Name (First textual column)";
+    }
+  }
+
+  const finalHasProductName = mappings.some((m) => m.mappedField === "name");
   const warnings: string[] = [];
 
-  if (!hasProductName) {
-    warnings.push("No column was automatically identified as 'Product Name'. Please map a column to Product Name.");
+  if (!finalHasProductName) {
+    warnings.push("Product Name column was not detected. Please select which column contains product names.");
   }
-  if (conflictFields.length > 0) {
-    warnings.push(`Multiple columns appear to represent: ${conflictFields.join(", ")}. Please review.`);
+
+  const hasPrice = mappings.some((m) => m.mappedField === "retail_price" || m.mappedField === "purchase_cost");
+  if (!hasPrice) {
+    warnings.push("No pricing column detected. Default pricing will be set to 0.00 if unmapped.");
   }
 
   return {
     mappings,
-    hasProductName,
+    hasProductName: finalHasProductName,
     warnings,
     conflictFields,
   };
 };
 
-/**
- * Updates a column mapping with user manual override.
- */
-export const updateColumnMapping = (
+export const updateSingleMapping = (
   mappings: ColumnMapping[],
   columnIndex: number,
   newField: CanonicalField
 ): ColumnMapping[] => {
   return mappings.map((m) => {
-    if (m.columnIndex !== columnIndex) return m;
-
-    const isIgnored = newField === "ignore";
-    return {
-      ...m,
-      mappedField: newField,
-      confidence: isIgnored ? 0 : 100,
-      reason: isIgnored ? "Ignored by user" : "Manually assigned by user",
-      requiresReview: false,
-      status: isIgnored ? "ignored" : "matched",
-    };
+    if (m.columnIndex === columnIndex) {
+      return {
+        ...m,
+        mappedField: newField,
+        confidence: newField === "ignore" ? 0 : 100,
+        status: newField === "ignore" ? "ignored" : "matched",
+        requiresReview: false,
+        reason: "Manually set by user",
+      };
+    }
+    // If setting a unique field that another column had, reset that column
+    if (
+      newField !== "ignore" &&
+      newField !== "images" &&
+      newField !== "metadata" &&
+      m.mappedField === newField
+    ) {
+      return {
+        ...m,
+        mappedField: "ignore",
+        status: "ignored",
+        reason: `Reassigned to Column ${columnIndex + 1}`,
+      };
+    }
+    return m;
   });
 };
+
+export const updateColumnMapping = updateSingleMapping;
+

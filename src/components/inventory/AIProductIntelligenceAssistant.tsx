@@ -112,8 +112,8 @@ export const AIProductIntelligenceAssistant = forwardRef<AIProductIntelligenceAs
 
     // Sync input text if currentProductName changes and user hasn't typed a custom prompt
     useEffect(() => {
-      if (currentProductName && !inputText) {
-        setInputText(currentProductName);
+      if (currentProductName) {
+        setInputText((prev) => (!prev ? currentProductName : prev));
       }
     }, [currentProductName]);
 

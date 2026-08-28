@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllContactSubmissions, markLocalContactSubmissionRead } from "@/lib/contactService";
 import PanelLayout from "@/components/PanelLayout";
 import { ADMIN_NAV, ADMIN_IDENTITY } from "@/lib/panelNav";
 import {
@@ -27,13 +28,13 @@ const AdminNotifications = () => {
 
   const load = useCallback(async () => {
     const [msgs, tickets, anns] = await Promise.all([
-      supabase.from("contact_submissions").select("id, name, email, message, is_read, created_at").order("created_at", { ascending: false }).limit(50),
+      fetchAllContactSubmissions(),
       supabase.from("support_tickets").select("id, ticket_number, subject, status, priority, created_at").order("created_at", { ascending: false }).limit(50),
       supabase.from("announcements").select("id, title, body, audience, created_at").order("created_at", { ascending: false }).limit(30),
     ]);
 
     const rows: Item[] = [
-      ...(msgs.data ?? []).map((d: any) => ({
+      ...(msgs ?? []).map((d: any) => ({
         id: `msg-${d.id}`, kind: "message" as Kind,
         title: `New message from ${d.name}`,
         description: `${d.email} — ${d.message ?? ""}`,
@@ -57,22 +58,38 @@ const AdminNotifications = () => {
 
   useEffect(() => {
     load();
+    const onSubChange = () => load();
+    window.addEventListener("geflow:contact-submission-added", onSubChange);
+    window.addEventListener("geflow:contact-submission-updated", onSubChange);
+    window.addEventListener("geflow:contact-submission-deleted", onSubChange);
     const ch = supabase.channel("admin_notifications_page")
       .on("postgres_changes", { event: "*", schema: "public", table: "contact_submissions" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "support_tickets" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, load)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      window.removeEventListener("geflow:contact-submission-added", onSubChange);
+      window.removeEventListener("geflow:contact-submission-updated", onSubChange);
+      window.removeEventListener("geflow:contact-submission-deleted", onSubChange);
+      supabase.removeChannel(ch);
+    };
   }, [load]);
 
   const markAllRead = async () => {
+    items.forEach((it) => {
+      if (it.kind === "message" && it.unread) {
+        markLocalContactSubmissionRead(it.id.replace("msg-", ""), true);
+      }
+    });
     await supabase.from("contact_submissions").update({ is_read: true }).eq("is_read", false);
     load();
   };
 
   const markRead = async (item: Item) => {
     if (item.kind !== "message" || !item.unread) return;
-    await supabase.from("contact_submissions").update({ is_read: true }).eq("id", item.id.replace("msg-", ""));
+    const rawId = item.id.replace("msg-", "");
+    markLocalContactSubmissionRead(rawId, true);
+    await supabase.from("contact_submissions").update({ is_read: true }).eq("id", rawId);
     load();
   };
 

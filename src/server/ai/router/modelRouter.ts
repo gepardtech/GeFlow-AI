@@ -35,7 +35,7 @@ export class ModelRouter {
   constructor(customProviders?: AIProviderInterface[], config?: RouterConfig) {
     this.config = {
       maxRetriesPerProvider: config?.maxRetriesPerProvider ?? 1,
-      requestTimeoutMs: config?.requestTimeoutMs ?? 4000,
+      requestTimeoutMs: config?.requestTimeoutMs ?? 25000,
     };
 
     if (customProviders && customProviders.length > 0) {

@@ -23,14 +23,21 @@ function getGeminiClient(): GoogleGenAI | null {
     return null;
   }
   if (!geminiClient) {
-    geminiClient = new GoogleGenAI({ apiKey });
+    geminiClient = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
+      },
+    });
   }
   return geminiClient;
 }
 
 export class GeminiProvider implements AIProviderInterface {
   public readonly name = "gemini" as const;
-  public readonly defaultModel = "gemini-2.5-flash";
+  public readonly defaultModel = "gemini-3.7-flash";
 
   public isConfigured(): boolean {
     return !!process.env.GEMINI_API_KEY;

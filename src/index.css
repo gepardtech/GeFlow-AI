@@ -91,6 +91,41 @@
   h1, h2, h3, h4, h5, h6 {
     @apply font-semibold tracking-tight text-foreground;
   }
+  
+  /* Universal Form Controls Dark & Light Mode Responsiveness */
+  input, textarea, select {
+    color-scheme: light dark;
+  }
+  
+  .dark, .dark * {
+    color-scheme: dark;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: hsl(var(--muted-foreground));
+    opacity: 0.85;
+  }
+
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: hsl(var(--muted-foreground));
+    opacity: 0.8;
+  }
+
+  /* Date, Time, Number and Native Widget Indicators */
+  .dark input[type="date"]::-webkit-calendar-picker-indicator,
+  .dark input[type="time"]::-webkit-calendar-picker-indicator,
+  .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.9) brightness(1.2);
+    cursor: pointer;
+  }
+
+  .dark input[type="search"]::-webkit-search-cancel-button {
+    filter: invert(0.8);
+    cursor: pointer;
+  }
+
   select {
     @apply bg-card text-foreground border border-border rounded-xl transition-colors;
     color-scheme: light dark;
@@ -103,6 +138,28 @@
   .dark select option {
     background-color: #18181b;
     color: #f4f4f5;
+  }
+
+  /* Professional Smooth Themed Scrollbars */
+  ::-webkit-scrollbar {
+    width: 7px;
+    height: 7px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border) / 0.8);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border) / 0.9);
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.6);
   }
 }
 

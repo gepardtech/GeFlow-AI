@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
 import { useToast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
+import { usePlan } from "@/hooks/usePlan";
+import { useNavigate, Link } from "react-router-dom";
 import UserPanelGate from "@/components/UserPanelGate";
 import { BusinessCategoryDef, BusinessItem } from "@/types/business";
 import { getExtendedBusinessData } from "@/lib/businessStorage";
@@ -12,6 +13,13 @@ import { CreateBusinessWizard } from "@/components/business/CreateBusinessWizard
 import { EditBusinessModal } from "@/components/business/EditBusinessModal";
 import { BusinessDetailsDrawer } from "@/components/business/BusinessDetailsDrawer";
 import { ArchiveBusinessDialog } from "@/components/business/ArchiveBusinessDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 import {
   Building2,
@@ -38,6 +46,7 @@ import {
   Eye,
   Settings,
   Sparkles,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +64,7 @@ const UserBusinesses = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { activeId, setActive, reload } = useActiveBusiness();
+  const { plan, planId } = usePlan();
 
   const [businesses, setBusinesses] = useState<BusinessItem[]>([]);
   const [categories, setCategories] = useState<BusinessCategoryDef[]>([]);
@@ -67,12 +77,16 @@ const UserBusinesses = () => {
 
   // Modals & Drawers state
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [limitDialogOpen, setLimitDialogOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [detailsDrawerOpen, setDetailsDrawerOpen] = useState(false);
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState(false);
 
   const [selectedBiz, setSelectedBiz] = useState<BusinessItem | null>(null);
+
+  const maxBranches = plan?.limits?.branchesMax ?? (planId === "free" ? 1 : planId === "standard" ? 5 : 10);
+  const isBranchLimitReached = typeof maxBranches === "number" && businesses.length >= maxBranches;
 
   // Load Businesses and Categories relationally
   const loadData = useCallback(async () => {
@@ -255,17 +269,38 @@ const UserBusinesses = () => {
               <span className="px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-sky-500/15 text-sky-500 border border-sky-500/20 shadow-xs">
                 {activeCount} ACTIVE BUSINESSES
               </span>
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide border ${
+                isBranchLimitReached 
+                  ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30" 
+                  : "bg-muted text-muted-foreground border-border"
+              }`}>
+                {businesses.length}/{typeof maxBranches === "number" ? maxBranches : "∞"} ({plan?.label || "Free"} Plan)
+              </span>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Manage all your businesses from one place.
+              Manage all your businesses and branches from one centralized place.
             </p>
           </div>
 
           <Button
-            onClick={() => setWizardOpen(true)}
+            onClick={() => {
+              if (isBranchLimitReached) {
+                setLimitDialogOpen(true);
+              } else {
+                setWizardOpen(true);
+              }
+            }}
             className="h-11 px-5 rounded-2xl text-xs font-extrabold uppercase tracking-wider bg-sky-400 hover:bg-sky-500 text-slate-950 shadow-md shadow-sky-500/20 border-0 shrink-0 gap-2 transition-transform active:scale-[0.98]"
           >
-            <Plus className="w-4 h-4 stroke-[2.5]" /> Create New Business
+            {isBranchLimitReached ? (
+              <>
+                <Lock className="w-4 h-4 stroke-[2.5] text-slate-950" /> Branch Limit Reached
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4 stroke-[2.5]" /> Create New Business
+              </>
+            )}
           </Button>
         </div>
 
@@ -671,6 +706,57 @@ const UserBusinesses = () => {
         onConfirm={handleConfirmArchive}
         busy={archiveBusy}
       />
+
+      {/* 5. Plan Branch Limit Dialog */}
+      <Dialog open={limitDialogOpen} onOpenChange={setLimitDialogOpen}>
+        <DialogContent className="max-w-md p-6 rounded-3xl">
+          <DialogHeader>
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mb-3">
+              <Lock className="w-6 h-6" />
+            </div>
+            <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
+              Branch Registration Limit Reached
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+              You have currently registered <strong className="text-foreground">{businesses.length}</strong> of <strong className="text-foreground">{typeof maxBranches === "number" ? maxBranches : "unlimited"}</strong> allowed business branches on your <strong className="text-foreground">{plan?.label || "Free"} Plan</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-3 text-xs border-y border-border my-2">
+            <div className="flex justify-between items-center py-1">
+              <span className="text-muted-foreground">Free Plan</span>
+              <span className="font-bold text-foreground">1 Business Branch</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-muted-foreground">Standard Plan</span>
+              <span className="font-bold text-sky-500">Up to 5 Business Branches</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-muted-foreground">Premium / Lifetime</span>
+              <span className="font-bold text-violet-500">Up to 10 Business Branches + Team Hub</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setLimitDialogOpen(false)}
+              className="h-11 px-5 rounded-2xl text-xs font-bold"
+            >
+              Close
+            </Button>
+            <Button
+              onClick={() => {
+                setLimitDialogOpen(false);
+                navigate("/dashboard/subscription");
+              }}
+              className="h-11 px-5 rounded-2xl text-xs font-extrabold bg-sky-500 hover:bg-sky-600 text-white"
+            >
+              Upgrade Subscription
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </UserPanelGate>
   );
 };

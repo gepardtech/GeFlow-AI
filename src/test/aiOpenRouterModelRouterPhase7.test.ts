@@ -117,14 +117,14 @@ describe("Phase 7: OpenRouter Integration & AI Model Router Suite", () => {
     it("should support custom routing preferences per task type", () => {
       aiConfigurationService.setTaskRouting("vision_analysis", {
         primaryProvider: "gemini",
-        primaryModel: "gemini-2.5-pro",
+        primaryModel: "gemini-3.1-pro-preview",
         fallbackProvider: "openrouter",
         fallbackModel: "anthropic/claude-3.5-sonnet",
       });
 
       const visionRouting = aiConfigurationService.getTaskRouting("vision_analysis");
       expect(visionRouting.primaryProvider).toBe("gemini");
-      expect(visionRouting.primaryModel).toBe("gemini-2.5-pro");
+      expect(visionRouting.primaryModel).toBe("gemini-3.1-pro-preview");
       expect(visionRouting.fallbackProvider).toBe("openrouter");
       expect(visionRouting.fallbackModel).toBe("anthropic/claude-3.5-sonnet");
     });
@@ -137,7 +137,7 @@ describe("Phase 7: OpenRouter Integration & AI Model Router Suite", () => {
 
       const mockGemini: AIProviderInterface = {
         name: "gemini",
-        defaultModel: "gemini-2.5-flash",
+        defaultModel: "gemini-3.7-flash",
         isConfigured: () => true,
         analyzeProduct: async (req) => {
           geminiCalls.push(req.rawInput);
@@ -155,14 +155,14 @@ describe("Phase 7: OpenRouter Integration & AI Model Router Suite", () => {
               overall_confidence: 0.96,
             },
             provider: "gemini",
-            model: "gemini-2.5-flash",
+            model: "gemini-3.7-flash",
             latencyMs: 120,
           };
         },
         verifyProduct: async () => ({
           rawOutput: { is_consistent: true, critique_notes: [] },
           provider: "gemini",
-          model: "gemini-2.5-flash",
+          model: "gemini-3.7-flash",
           latencyMs: 50,
         }),
       };
@@ -213,7 +213,7 @@ describe("Phase 7: OpenRouter Integration & AI Model Router Suite", () => {
 
       const mockGeminiFailing: AIProviderInterface = {
         name: "gemini",
-        defaultModel: "gemini-2.5-flash",
+        defaultModel: "gemini-3.7-flash",
         isConfigured: () => true,
         analyzeProduct: async () => {
           throw new AIServiceError("AI_REQUEST_TIMEOUT", "Gemini upstream gateway timeout", {
@@ -278,7 +278,7 @@ describe("Phase 7: OpenRouter Integration & AI Model Router Suite", () => {
     it("should gracefully fall back to local heuristic engine and never loop endlessly when all cloud providers fail", async () => {
       const mockGeminiFailing: AIProviderInterface = {
         name: "gemini",
-        defaultModel: "gemini-2.5-flash",
+        defaultModel: "gemini-3.7-flash",
         isConfigured: () => true,
         analyzeProduct: async () => {
           throw new AIServiceError("AI_PROVIDER_UNAVAILABLE", "Gemini 503 Outage");
@@ -328,7 +328,7 @@ describe("Phase 7: OpenRouter Integration & AI Model Router Suite", () => {
 
       const mockGeminiLowConfidence: AIProviderInterface = {
         name: "gemini",
-        defaultModel: "gemini-2.5-flash",
+        defaultModel: "gemini-3.7-flash",
         isConfigured: () => true,
         analyzeProduct: async () => ({
           rawOutput: {
@@ -338,13 +338,13 @@ describe("Phase 7: OpenRouter Integration & AI Model Router Suite", () => {
             warnings: ["Uncertain packaging"],
           },
           provider: "gemini",
-          model: "gemini-2.5-flash",
+          model: "gemini-3.7-flash",
           latencyMs: 90,
         }),
         verifyProduct: async () => ({
           rawOutput: { is_consistent: false, critique_notes: ["Unclear dosage"] },
           provider: "gemini",
-          model: "gemini-2.5-flash",
+          model: "gemini-3.7-flash",
           latencyMs: 40,
         }),
       };

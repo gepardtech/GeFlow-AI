@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllContactSubmissions, ContactSubmissionRecord } from "@/lib/contactService";
 import { useToast } from "@/hooks/use-toast";
 import PanelLayout from "@/components/PanelLayout";
 import ExportReportDialog from "@/components/ExportReportDialog";
@@ -10,7 +11,7 @@ import {
 } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend } from "recharts";
 
-interface ContactSubmission { id: string; name: string; email: string; message: string; is_read: boolean; created_at: string; }
+type ContactSubmission = ContactSubmissionRecord;
 interface UserRow { user_id: string; full_name: string | null; email: string | null; plan: string; usage: number; listed_products: number; last_active: string; created_at: string; }
 interface BusinessRow { id: string; business_name: string; owner_user_id: string; listed_products: number; usage: number; created_at: string; }
 
@@ -57,12 +58,12 @@ const Admin = () => {
   const { toast } = useToast();
 
   const loadData = useCallback(async () => {
-    const [{ data: sub }, { data: prof }, { data: biz }] = await Promise.all([
-      supabase.from("contact_submissions").select("*").order("created_at", { ascending: false }),
+    const [sub, { data: prof }, { data: biz }] = await Promise.all([
+      fetchAllContactSubmissions(),
       supabase.from("profiles").select("user_id, full_name, email, plan, usage, listed_products, last_active, created_at").order("created_at", { ascending: false }),
       supabase.from("businesses").select("id, business_name, owner_user_id, listed_products, usage, created_at"),
     ]);
-    setSubmissions((sub as ContactSubmission[]) || []);
+    setSubmissions(sub || []);
     setUsers((prof as UserRow[]) || []);
     setBusinesses((biz as BusinessRow[]) || []);
     setLoading(false);
@@ -90,6 +91,9 @@ const Admin = () => {
     if (!isAdmin) return;
     const onRefresh = () => loadData();
     window.addEventListener("panel:refresh", onRefresh);
+    window.addEventListener("geflow:contact-submission-added", onRefresh);
+    window.addEventListener("geflow:contact-submission-updated", onRefresh);
+    window.addEventListener("geflow:contact-submission-deleted", onRefresh);
     const channel = supabase
       .channel("admin_realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, loadData)
@@ -98,6 +102,9 @@ const Admin = () => {
       .subscribe();
     return () => {
       window.removeEventListener("panel:refresh", onRefresh);
+      window.removeEventListener("geflow:contact-submission-added", onRefresh);
+      window.removeEventListener("geflow:contact-submission-updated", onRefresh);
+      window.removeEventListener("geflow:contact-submission-deleted", onRefresh);
       supabase.removeChannel(channel);
     };
   }, [isAdmin, loadData]);

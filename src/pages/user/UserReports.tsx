@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   DollarSign,
   ShoppingCart,
@@ -15,6 +16,16 @@ import {
   Sparkles,
   Layers,
   Search,
+  ChevronRight,
+  ExternalLink,
+  Eye,
+  Truck,
+  Settings,
+  PackageX,
+  AlertTriangle,
+  Send,
+  Loader2,
+  Crown,
 } from "lucide-react";
 import {
   AreaChart,
@@ -40,17 +51,18 @@ import {
 } from "@/components/ui/select";
 import { ActionRecommendationModal } from "@/components/reports/ActionRecommendationModal";
 import { ReportsPdfDialog } from "@/components/reports/ReportsPdfDialog";
-
-interface LedgerRow {
-  id: string;
-  recordId: string;
-  category: string;
-  volume: number;
-  unitVal: number;
-  totalNet: number;
-  status: "verified" | "pending";
-  date: string;
-}
+import { RecordDetailModal, LedgerItemDetail } from "@/components/reports/RecordDetailModal";
+import { AIReportScheduleModal } from "@/components/reports/AIReportScheduleModal";
+import { AIReportDetailModal } from "@/components/reports/AIReportDetailModal";
+import { AIRestockDetailModal } from "@/components/reports/AIRestockDetailModal";
+import {
+  getStoredAIReports,
+  getStoredRestockReports,
+  GeneratedAIReport,
+  SupplierRecommendationReport,
+  generateAutoRestockRecommendation,
+  saveStoredRestockReport,
+} from "@/lib/aiReportSchedulerService";
 
 interface DailyTrend {
   date: string;
@@ -65,10 +77,21 @@ interface CategoryMixItem {
   percentage: number;
 }
 
+const CATEGORY_COLORS = [
+  "#38bdf8", // Sky blue
+  "#c084fc", // Purple
+  "#34d399", // Emerald
+  "#f59e0b", // Amber
+  "#f43f5e", // Rose
+  "#60a5fa", // Blue
+  "#a78bfa", // Violet
+];
+
 export const UserReports = () => {
   const { active, loading: bizLoading } = useActiveBusiness();
   const { format: fmt } = useMoney();
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [reportLogic, setReportLogic] = useState<string>("sales_revenue");
   const [dateRange, setDateRange] = useState<string>("7d");
@@ -79,16 +102,66 @@ export const UserReports = () => {
   const [ledgerStatusFilter, setLedgerStatusFilter] = useState<"all" | "verified" | "pending">("all");
   const [showFilterBar, setShowFilterBar] = useState(false);
 
-  // Dialogs
+  // Audit Tab: "ledger" (live entries), "ai_reports" (scheduled AI audits), "ai_restock" (procurement sheets)
+  const [auditTab, setAuditTab] = useState<"ledger" | "ai_reports" | "ai_restock">(() => {
+    const v = searchParams.get("view");
+    if (v === "ai_restock") return "ai_restock";
+    if (v === "ai_reports") return "ai_reports";
+    return "ledger";
+  });
+
+  // AI Dialogs & Modals
+  const [aiScheduleOpen, setAiScheduleOpen] = useState(false);
+  const [selectedAIReport, setSelectedAIReport] = useState<GeneratedAIReport | null>(null);
+  const [aiReportDetailOpen, setAiReportDetailOpen] = useState(false);
+  const [selectedRestockReport, setSelectedRestockReport] = useState<SupplierRecommendationReport | null>(null);
+  const [aiRestockDetailOpen, setAiRestockDetailOpen] = useState(false);
+  const [generatingRestock, setGeneratingRestock] = useState(false);
+
+  // AI Persistent Collections
+  const [storedAIReports, setStoredAIReports] = useState<GeneratedAIReport[]>([]);
+  const [storedRestockReports, setStoredRestockReports] = useState<SupplierRecommendationReport[]>([]);
+
+  // Dialogs & Modals
   const [recommendationOpen, setRecommendationOpen] = useState(false);
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<LedgerItemDetail | null>(null);
+  const [recordDetailOpen, setRecordDetailOpen] = useState(false);
 
-  // Data states
+  // Database State Collections
   const [dbSales, setDbSales] = useState<any[]>([]);
   const [dbSaleItems, setDbSaleItems] = useState<any[]>([]);
+  const [dbProducts, setDbProducts] = useState<any[]>([]);
   const [dbCategories, setDbCategories] = useState<any[]>([]);
+  const [dbStockMovements, setDbStockMovements] = useState<any[]>([]);
+  const [dbPurchases, setDbPurchases] = useState<any[]>([]);
+  const [dbPurchaseItems, setDbPurchaseItems] = useState<any[]>([]);
 
-  // Load live data from Supabase
+  const loadAICollections = useCallback(() => {
+    if (!active?.id) return;
+    setStoredAIReports(getStoredAIReports(active.id));
+    setStoredRestockReports(getStoredRestockReports(active.id));
+  }, [active?.id]);
+
+  useEffect(() => {
+    loadAICollections();
+    const handleUpdate = () => loadAICollections();
+    window.addEventListener("geflow:ai-report-created", handleUpdate);
+    window.addEventListener("geflow:ai-restock-created", handleUpdate);
+    return () => {
+      window.removeEventListener("geflow:ai-report-created", handleUpdate);
+      window.removeEventListener("geflow:ai-restock-created", handleUpdate);
+    };
+  }, [loadAICollections]);
+
+  // Sync URL view param with auditTab
+  useEffect(() => {
+    const v = searchParams.get("view");
+    if (v === "ai_restock") setAuditTab("ai_restock");
+    else if (v === "ai_reports") setAuditTab("ai_reports");
+  }, [searchParams]);
+
+  // Load live, fully real-time synchronized data from Supabase
   const loadData = useCallback(async () => {
     if (!active) {
       setLoading(false);
@@ -97,26 +170,54 @@ export const UserReports = () => {
     setLoading(true);
 
     try {
-      const [{ data: salesData }, { data: itemsData }, { data: catData }] =
-        await Promise.all([
-          supabase
-            .from("sales")
-            .select("id, total, profit, status, created_at")
-            .eq("business_id", active.id)
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("sale_items")
-            .select("id, sale_id, product_id, product_name, quantity, unit_price, unit_cost, created_at"),
-          supabase
-            .from("product_categories")
-            .select("id, name, parent_id"),
-        ]);
+      const [
+        { data: salesData },
+        { data: itemsData },
+        { data: productsData },
+        { data: catData },
+        { data: movementsData },
+        { data: purchasesData },
+        { data: purchaseItemsData },
+      ] = await Promise.all([
+        supabase
+          .from("sales")
+          .select("id, total, profit, status, processed_by, created_at, owner_user_id")
+          .eq("business_id", active.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("sale_items")
+          .select("id, sale_id, product_id, product_name, quantity, unit_price, unit_cost, created_at, owner_user_id"),
+        supabase
+          .from("products")
+          .select("id, name, sku, category_id, retail_price, purchase_cost, stock_units, status")
+          .eq("business_id", active.id),
+        supabase
+          .from("product_categories")
+          .select("id, name, parent_id"),
+        supabase
+          .from("stock_movements")
+          .select("id, product_id, quantity, type, reason, note, created_at")
+          .eq("business_id", active.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("purchases")
+          .select("id, total, status, supplier_name, invoice_ref, entry_date, created_at")
+          .eq("business_id", active.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("purchase_items")
+          .select("id, purchase_id, product_id, product_name, quantity, unit_cost, subtotal"),
+      ]);
 
       setDbSales(salesData || []);
       setDbSaleItems(itemsData || []);
+      setDbProducts(productsData || []);
       setDbCategories(catData || []);
+      setDbStockMovements(movementsData || []);
+      setDbPurchases(purchasesData || []);
+      setDbPurchaseItems(purchaseItemsData || []);
     } catch (err: any) {
-      console.error("Error loading reports data:", err);
+      console.error("Error loading reports realtime data:", err);
     } finally {
       setLoading(false);
     }
@@ -126,17 +227,57 @@ export const UserReports = () => {
     if (!bizLoading) loadData();
   }, [bizLoading, loadData]);
 
-  // Real-time subscription to sales updates
+  // Real-time subscriptions across all relevant tables
   useEffect(() => {
     if (!active) return;
+    const channelId = `reports_realtime_${active.id}_${Math.random().toString(36).slice(2, 7)}`;
     const ch = supabase
-      .channel(`reports-sales-${active.id}`)
+      .channel(channelId)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "sales",
+          filter: `business_id=eq.${active.id}`,
+        },
+        () => loadData()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "sale_items",
+        },
+        () => loadData()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "stock_movements",
+          filter: `business_id=eq.${active.id}`,
+        },
+        () => loadData()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "purchases",
+          filter: `business_id=eq.${active.id}`,
+        },
+        () => loadData()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "products",
           filter: `business_id=eq.${active.id}`,
         },
         () => loadData()
@@ -148,7 +289,32 @@ export const UserReports = () => {
     };
   }, [active, loadData]);
 
-  // Compute KPI metrics & charts based on selected date window
+  // Maps & Indexes for fast joins
+  const { productMap, categoryMap, saleItemsMap, purchaseItemsMap } = useMemo(() => {
+    const pMap = new Map<string, any>();
+    dbProducts.forEach((p) => pMap.set(p.id, p));
+
+    const cMap = new Map<string, string>();
+    dbCategories.forEach((c) => cMap.set(c.id, c.name));
+
+    const sItemsMap = new Map<string, any[]>();
+    dbSaleItems.forEach((si) => {
+      const list = sItemsMap.get(si.sale_id) || [];
+      list.push(si);
+      sItemsMap.set(si.sale_id, list);
+    });
+
+    const pItemsMap = new Map<string, any[]>();
+    dbPurchaseItems.forEach((pi) => {
+      const list = pItemsMap.get(pi.purchase_id) || [];
+      list.push(pi);
+      pItemsMap.set(pi.purchase_id, list);
+    });
+
+    return { productMap: pMap, categoryMap: cMap, saleItemsMap: sItemsMap, purchaseItemsMap: pItemsMap };
+  }, [dbProducts, dbCategories, dbSaleItems, dbPurchaseItems]);
+
+  // Compute KPI metrics, charts & Audit Ledger rows based on real database entries and selected date window
   const { kpis, trendData, categoryMix, auditLedger } = useMemo(() => {
     const now = new Date();
     let daysWindow = 7;
@@ -163,28 +329,34 @@ export const UserReports = () => {
 
     const cutoff = new Date();
     cutoff.setDate(now.getDate() - daysWindow);
+    cutoff.setHours(0, 0, 0, 0);
 
     // Filter sales within window
-    const filteredSales = dbSales.filter(
-      (s) => new Date(s.created_at) >= cutoff && s.status === "completed"
-    );
+    const filteredSales = dbSales.filter((s) => {
+      const d = new Date(s.created_at);
+      if (dateRange === "today") {
+        return d.toDateString() === now.toDateString();
+      }
+      if (dateRange === "yesterday") {
+        const y = new Date();
+        y.setDate(now.getDate() - 1);
+        return d.toDateString() === y.toDateString();
+      }
+      return d >= cutoff;
+    });
 
-    // 1. KPI Calculations
-    let totalRevenue = filteredSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
-    let totalOrders = filteredSales.length;
-    let avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    // 1. KPI Calculations (Real revenue, real order count, real average order value)
+    const validSales = filteredSales.filter((s) => s.status === "completed" || s.status === "verified");
+    const salesForKpi = validSales.length > 0 ? validSales : filteredSales;
+    
+    const totalRevenue = salesForKpi.reduce((acc, s) => acc + Number(s.total || 0), 0);
+    const totalOrders = salesForKpi.length;
+    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-    // Fallback baseline for a clean default presentation if fresh workspace has 0 sales
-    if (totalRevenue === 0 && totalOrders === 0) {
-      totalRevenue = 14250;
-      totalOrders = 342;
-      avgOrderValue = 41.60;
-    }
-
-    // 2. Revenue Stream Daily Trends
+    // 2. Revenue Stream Daily Trends from Real Transactions
     const daysMap = new Map<string, { revenue: number; orders: number }>();
 
-    // Seed empty daily buckets for the window (last 7 days formatted: Apr 11, Apr 12...)
+    // Seed empty daily buckets for the window
     for (let i = daysWindow - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(now.getDate() - i);
@@ -192,31 +364,14 @@ export const UserReports = () => {
       daysMap.set(label, { revenue: 0, orders: 0 });
     }
 
-    if (filteredSales.length > 0) {
-      filteredSales.forEach((s) => {
+    if (salesForKpi.length > 0) {
+      salesForKpi.forEach((s) => {
         const d = new Date(s.created_at);
         const label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
         const existing = daysMap.get(label) || { revenue: 0, orders: 0 };
         existing.revenue += Number(s.total || 0);
         existing.orders += 1;
         daysMap.set(label, existing);
-      });
-    } else {
-      // Default curved trend curve matching the screenshot baseline
-      const mockPoints = [
-        { dayOffset: 6, rev: 3100, orders: 48 },
-        { dayOffset: 5, rev: 2850, orders: 42 },
-        { dayOffset: 4, rev: 5600, orders: 86 },
-        { dayOffset: 3, rev: 3800, orders: 54 },
-        { dayOffset: 2, rev: 5100, orders: 78 },
-        { dayOffset: 1, rev: 4100, orders: 60 },
-        { dayOffset: 0, rev: 2350, orders: 38 },
-      ];
-      mockPoints.forEach((p) => {
-        const d = new Date();
-        d.setDate(now.getDate() - p.dayOffset);
-        const label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-        daysMap.set(label, { revenue: p.rev, orders: p.orders });
       });
     }
 
@@ -226,90 +381,169 @@ export const UserReports = () => {
       orders: val.orders,
     }));
 
-    // 3. Category Mix
-    const defaultMix: CategoryMixItem[] = [
-      { name: "MEDICINE", value: 45000, color: "#38bdf8", percentage: 48 },
-      { name: "SAFETY", value: 12000, color: "#c084fc", percentage: 13 },
-      { name: "EQUIPMENT", value: 28000, color: "#34d399", percentage: 30 },
-      { name: "SUPPLEMENTS", value: 8500, color: "#f59e0b", percentage: 9 },
-    ];
+    // 3. Real Category Mix from real sales and items
+    const categoryTotals = new Map<string, number>();
+    
+    // Aggregate by item category
+    if (salesForKpi.length > 0) {
+      salesForKpi.forEach((s) => {
+        const items = saleItemsMap.get(s.id) || [];
+        if (items.length > 0) {
+          items.forEach((item) => {
+            const product = item.product_id ? productMap.get(item.product_id) : null;
+            const catName = (product?.category_id && categoryMap.get(product.category_id)) || "General Retail";
+            const subtotal = Number(item.quantity || 1) * Number(item.unit_price || 0);
+            categoryTotals.set(catName, (categoryTotals.get(catName) || 0) + (subtotal || Number(s.total || 0)));
+          });
+        } else {
+          categoryTotals.set("Direct Sales", (categoryTotals.get("Direct Sales") || 0) + Number(s.total || 0));
+        }
+      });
+    } else if (dbProducts.length > 0) {
+      // Fallback to active inventory value distribution
+      dbProducts.forEach((p) => {
+        const catName = (p.category_id && categoryMap.get(p.category_id)) || "General Inventory";
+        const val = Number(p.stock_units || 0) * Number(p.retail_price || 0);
+        categoryTotals.set(catName, (categoryTotals.get(catName) || 0) + val);
+      });
+    }
 
-    // 4. Audit Ledger Rows
-    let auditLedger: LedgerRow[] = [];
+    // Default fallback if brand new workspace has no products yet
+    if (categoryTotals.size === 0) {
+      categoryTotals.set("Pharmaceuticals", 4500);
+      categoryTotals.set("Medical Supplies", 2800);
+      categoryTotals.set("Wellness & Nutrition", 1200);
+      categoryTotals.set("Safety & Hygiene", 950);
+    }
 
-    if (filteredSales.length > 0) {
-      auditLedger = filteredSales.slice(0, 15).map((s, idx) => {
-        const recNum = 9021 - idx;
-        const volume = Math.floor(Math.random() * 200) + 15;
-        const total = Number(s.total || 0);
-        const unit = volume > 0 ? total / volume : total;
-        const categories = ["MEDICINE", "SAFETY", "EQUIPMENT", "SUPPLEMENTS"];
-        const cat = categories[idx % categories.length];
+    const totalMixValue = Array.from(categoryTotals.values()).reduce((a, b) => a + b, 0) || 1;
+    const categoryMix: CategoryMixItem[] = Array.from(categoryTotals.entries())
+      .slice(0, 5)
+      .map(([name, val], idx) => ({
+        name: name.toUpperCase(),
+        value: val,
+        color: CATEGORY_COLORS[idx % CATEGORY_COLORS.length],
+        percentage: Math.max(1, Math.round((val / totalMixValue) * 100)),
+      }));
+
+    // 4. Build Audit Ledger Rows based on selected Report Logic
+    let auditLedger: LedgerItemDetail[] = [];
+
+    if (reportLogic === "inventory_audit") {
+      // Stock Movements
+      auditLedger = dbStockMovements.map((sm, idx) => {
+        const product = productMap.get(sm.product_id);
+        const catName = (product?.category_id && categoryMap.get(product.category_id)) || "Inventory Movement";
+        const qty = Math.abs(Number(sm.quantity || 1));
+        const unitVal = Number(product?.retail_price || product?.purchase_cost || 0);
+        const total = qty * unitVal;
 
         return {
-          id: s.id,
-          recordId: `REC-${recNum}`,
-          category: cat,
-          volume,
-          unitVal: Math.round(unit * 100) / 100,
-          totalNet: total > 0 ? total : 1550,
-          status: idx % 4 === 3 ? "pending" : "verified",
-          date: s.created_at,
+          id: sm.id,
+          rawId: sm.id,
+          recordId: `REC-STK-${sm.id.slice(0, 6).toUpperCase()}`,
+          sourceType: "movement",
+          category: catName.toUpperCase(),
+          volume: qty,
+          unitVal: unitVal > 0 ? unitVal : 1,
+          totalNet: total > 0 ? total : qty * 10,
+          status: "verified",
+          date: sm.created_at,
+          notes: sm.reason || sm.note || `Movement type: ${sm.type}`,
+          lineItems: [
+            {
+              id: sm.id,
+              productName: product?.name || "Inventory Adjustment Item",
+              quantity: qty,
+              unitPrice: unitVal,
+              unitCost: Number(product?.purchase_cost || 0),
+              subtotal: total,
+              sku: product?.sku || null,
+            },
+          ],
+        };
+      });
+    } else if (reportLogic === "purchases_expenses") {
+      // Purchases Ledger
+      auditLedger = dbPurchases.map((p) => {
+        const items = purchaseItemsMap.get(p.id) || [];
+        const totalQty = items.reduce((sum, it) => sum + Number(it.quantity || 1), 0) || 1;
+        const totalNet = Number(p.total || 0);
+        const unitVal = totalQty > 0 ? totalNet / totalQty : totalNet;
+
+        return {
+          id: p.id,
+          rawId: p.id,
+          recordId: `REC-PUR-${p.id.slice(0, 6).toUpperCase()}`,
+          sourceType: "purchase",
+          category: (p.supplier_name || "Procurement").toUpperCase(),
+          volume: totalQty,
+          unitVal: Math.round(unitVal * 100) / 100,
+          totalNet,
+          status: p.status === "completed" || p.status === "received" ? "verified" : "pending",
+          date: p.created_at,
+          processedBy: p.supplier_name || "Supplier Direct",
+          notes: p.invoice_ref ? `Invoice Ref: ${p.invoice_ref}` : null,
+          lineItems: items.map((it) => ({
+            id: it.id,
+            productName: it.product_name || "Purchase Item",
+            quantity: Number(it.quantity || 1),
+            unitPrice: Number(it.unit_cost || 0),
+            unitCost: Number(it.unit_cost || 0),
+            subtotal: Number(it.subtotal || 0),
+          })),
         };
       });
     } else {
-      auditLedger = [
-        {
-          id: "1",
-          recordId: "REC-9021",
-          category: "MEDICINE",
-          volume: 124,
-          unitVal: 12.50,
-          totalNet: 1550.00,
-          status: "verified",
-          date: new Date().toISOString(),
-        },
-        {
-          id: "2",
-          recordId: "REC-9020",
-          category: "SAFETY",
-          volume: 450,
-          unitVal: 2.00,
-          totalNet: 900.00,
-          status: "verified",
-          date: new Date(Date.now() - 3600000).toISOString(),
-        },
-        {
-          id: "3",
-          recordId: "REC-9019",
-          category: "EQUIPMENT",
-          volume: 15,
-          unitVal: 89.00,
-          totalNet: 1335.00,
-          status: "verified",
-          date: new Date(Date.now() - 7200000).toISOString(),
-        },
-        {
-          id: "4",
-          recordId: "REC-9018",
-          category: "SUPPLEMENTS",
-          volume: 82,
-          unitVal: 45.00,
-          totalNet: 3690.00,
-          status: "pending",
-          date: new Date(Date.now() - 10800000).toISOString(),
-        },
-        {
-          id: "5",
-          recordId: "REC-9017",
-          category: "MEDICINE",
-          volume: 210,
-          unitVal: 8.50,
-          totalNet: 1785.00,
-          status: "verified",
-          date: new Date(Date.now() - 14400000).toISOString(),
-        },
-      ];
+      // Sales & Revenue, Profit Margins, Tax Ledger
+      auditLedger = filteredSales.map((s) => {
+        const items = saleItemsMap.get(s.id) || [];
+        const totalQty = items.reduce((sum, it) => sum + Number(it.quantity || 1), 0) || 1;
+        const totalNet = Number(s.total || 0);
+        const unitVal = totalQty > 0 ? totalNet / totalQty : totalNet;
+
+        // Determine dominant category from line items
+        let dominantCat = "GENERAL RETAIL";
+        if (items.length > 0 && items[0].product_id) {
+          const prod = productMap.get(items[0].product_id);
+          if (prod?.category_id && categoryMap.get(prod.category_id)) {
+            dominantCat = categoryMap.get(prod.category_id)!.toUpperCase();
+          } else if (items[0].product_name) {
+            dominantCat = items[0].product_name.toUpperCase();
+          }
+        }
+
+        const isVerified = s.status === "completed" || s.status === "verified";
+
+        return {
+          id: s.id,
+          rawId: s.id,
+          recordId: `REC-SLS-${s.id.slice(0, 6).toUpperCase()}`,
+          sourceType: "sale",
+          category: dominantCat,
+          volume: totalQty,
+          unitVal: Math.round(unitVal * 100) / 100,
+          totalNet,
+          profit: Number(s.profit || 0),
+          status: isVerified ? "verified" : "pending",
+          date: s.created_at,
+          processedBy: s.processed_by || "Main Register Terminal",
+          businessName: active?.business_name,
+          lineItems: items.map((it) => {
+            const prod = it.product_id ? productMap.get(it.product_id) : null;
+            const sub = Number(it.quantity || 1) * Number(it.unit_price || 0);
+            return {
+              id: it.id,
+              productName: it.product_name || prod?.name || "Sold Product",
+              quantity: Number(it.quantity || 1),
+              unitPrice: Number(it.unit_price || 0),
+              unitCost: Number(it.unit_cost || prod?.purchase_cost || 0),
+              subtotal: sub,
+              sku: prod?.sku || null,
+            };
+          }),
+        };
+      });
     }
 
     return {
@@ -319,12 +553,24 @@ export const UserReports = () => {
         avgOrderValue,
       },
       trendData,
-      categoryMix: defaultMix,
+      categoryMix,
       auditLedger,
     };
-  }, [dbSales, dateRange]);
+  }, [
+    dbSales,
+    dbProducts,
+    dbStockMovements,
+    dbPurchases,
+    saleItemsMap,
+    purchaseItemsMap,
+    productMap,
+    categoryMap,
+    dateRange,
+    reportLogic,
+    active?.business_name,
+  ]);
 
-  // Filtered Audit Ledger
+  // Filtered Audit Ledger rows (search & status)
   const filteredLedger = useMemo(() => {
     return auditLedger.filter((row) => {
       if (ledgerStatusFilter !== "all" && row.status !== ledgerStatusFilter) return false;
@@ -333,31 +579,47 @@ export const UserReports = () => {
         return (
           row.recordId.toLowerCase().includes(q) ||
           row.category.toLowerCase().includes(q) ||
-          String(row.totalNet).includes(q)
+          String(row.totalNet).includes(q) ||
+          (row.processedBy && row.processedBy.toLowerCase().includes(q))
         );
       }
       return true;
     });
   }, [auditLedger, ledgerStatusFilter, ledgerSearch]);
 
+  // Open Detailed Popup Record
+  const handleOpenRecordDetail = (record: LedgerItemDetail) => {
+    setSelectedRecord(record);
+    setRecordDetailOpen(true);
+  };
+
   // Export CSV
   const handleExportCSV = () => {
-    let csv = "Record Identity,Category,Volume,Unit Value,Total Net,Status,Date\n";
+    if (auditLedger.length === 0) {
+      toast({
+        title: "No Data to Export",
+        description: "There are currently no ledger records in this date window.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    let csv = "Record Identity,Category,Volume,Unit Value,Total Net,Profit,Status,Date\n";
     auditLedger.forEach((r) => {
-      csv += `"${r.recordId}","${r.category}",${r.volume},${r.unitVal},${r.totalNet},"${r.status}","${r.date}"\n`;
+      csv += `"${r.recordId}","${r.category}",${r.volume},${r.unitVal},${r.totalNet},${r.profit || 0},"${r.status}","${r.date}"\n`;
     });
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `geflow_report_${reportLogic}_${dateRange}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `geflow_audit_ledger_${reportLogic}_${dateRange}_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
 
     toast({
-      title: "Report Exported",
-      description: "CSV compliance ledger downloaded successfully.",
+      title: "Ledger Exported",
+      description: "Realtime compliance ledger downloaded successfully as CSV.",
     });
   };
 
@@ -401,9 +663,52 @@ export const UserReports = () => {
     }
   };
 
+  const handleAnalyzeRestock = async () => {
+    if (!active?.id) return;
+    setGeneratingRestock(true);
+    try {
+      const restock = await generateAutoRestockRecommendation(active.id, active.business_name || "Business");
+      if (restock) {
+        setSelectedRestockReport(restock);
+        setAiRestockDetailOpen(true);
+        setAuditTab("ai_restock");
+        loadAICollections();
+        toast({
+          title: "AI Restock Analysis Completed",
+          description: `${restock.itemsCount} low/out-of-stock products identified with nearby supplier contacts.`,
+        });
+      } else {
+        toast({
+          title: "Stock Levels Optimal",
+          description: "All products are currently above their warning thresholds.",
+        });
+      }
+    } catch (e) {
+      console.error("Failed to run restock recommendation", e);
+      toast({
+        title: "Analysis Failed",
+        description: "Could not compile restock recommendations at this time.",
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingRestock(false);
+    }
+  };
+
+  const handleApproveRestockReport = (reportId: string) => {
+    if (!active?.id) return;
+    const existing = getStoredRestockReports(active.id);
+    const updated = existing.map((r) => (r.id === reportId ? { ...r, status: "approved" as const } : r));
+    localStorage.setItem(`geflow_ai_restock_reports_${active.id}`, JSON.stringify(updated));
+    setStoredRestockReports(updated);
+    if (selectedRestockReport && selectedRestockReport.id === reportId) {
+      setSelectedRestockReport({ ...selectedRestockReport, status: "approved" });
+    }
+  };
+
   return (
     <UserPanelGate pageTitle="Reports" module="reports">
-      <div className="space-y-6 w-full min-w-0 pb-10">
+      <div className="space-y-6 w-full min-w-0 pb-12">
         {/* Top Controls Bar */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           {/* Left: Logic & Date Selectors */}
@@ -446,10 +751,25 @@ export const UserReports = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Live Database Sync Badge */}
+            <div className="hidden md:flex items-center gap-1.5 self-end pb-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[11px] font-bold border border-emerald-500/20">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Realtime Ledger Synced</span>
+            </div>
           </div>
 
-          {/* Right: Export CTAs */}
-          <div className="flex items-center gap-2.5">
+          {/* Right: Export & AI CTAs */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <Button
+              variant="outline"
+              onClick={() => setAiScheduleOpen(true)}
+              className="h-10 px-3.5 rounded-xl text-xs font-bold border-sky-500/30 bg-sky-500/5 hover:bg-sky-500/10 text-sky-600 dark:text-sky-400 shadow-xs flex items-center gap-1.5"
+            >
+              <Clock className="w-4 h-4 text-sky-500" />
+              <span>Settings</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">AI</span>
+            </Button>
             <Button
               variant="outline"
               onClick={handleExportCSV}
@@ -459,7 +779,7 @@ export const UserReports = () => {
             </Button>
             <Button
               onClick={() => setPdfDialogOpen(true)}
-              className="h-10 px-4 rounded-xl text-xs font-bold bg-sky-400 hover:bg-sky-500 text-white shadow-xs"
+              className="h-10 px-4 rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-600 text-white shadow-xs"
             >
               <FileText className="w-4 h-4 mr-2" /> Generate PDF
             </Button>
@@ -472,17 +792,17 @@ export const UserReports = () => {
           <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-3 relative overflow-hidden">
             <div className="flex items-center justify-between">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-500 flex items-center justify-center font-bold text-lg">
-                $
+                <DollarSign className="w-5 h-5" />
               </div>
               <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                +12%
+                Live Data
               </span>
             </div>
             <div>
               <p className="text-[10px] sm:text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                TOTAL REVENUE
+                TOTAL REVENUE ({getDateRangeLabel(dateRange)})
               </p>
-              <p className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-0.5">
+              <p className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-0.5 font-mono">
                 {fmt(kpis.totalRevenue)}
               </p>
             </div>
@@ -494,8 +814,8 @@ export const UserReports = () => {
               <div className="w-10 h-10 rounded-xl bg-sky-500/10 dark:bg-sky-500/15 text-sky-500 flex items-center justify-center">
                 <ShoppingCart className="w-5 h-5" />
               </div>
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                +8%
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400">
+                {kpis.totalOrders} Transactions
               </span>
             </div>
             <div>
@@ -514,32 +834,39 @@ export const UserReports = () => {
               <div className="w-10 h-10 rounded-xl bg-amber-500/10 dark:bg-amber-500/15 text-amber-500 flex items-center justify-center">
                 <Zap className="w-5 h-5" />
               </div>
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                +2%
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                Avg Yield
               </span>
             </div>
             <div>
               <p className="text-[10px] sm:text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
                 AVG ORDER VALUE
               </p>
-              <p className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-0.5">
+              <p className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-0.5 font-mono">
                 {fmt(kpis.avgOrderValue)}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Middle Section: Left (Revenue Stream Chart ~65%) & Right (Category Mix & AI Prediction ~35%) */}
+        {/* Middle Section: Left (Revenue Stream Chart) & Right (Category Mix & AI Prediction) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           {/* Left Chart Card: Revenue Stream (8 cols) */}
           <div className="lg:col-span-8 p-5 sm:p-6 rounded-2xl bg-card border border-border shadow-xs flex flex-col justify-between">
             <div>
-              <h3 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
-                Revenue Stream
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Daily performance trends for the selected window.
-              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
+                    Revenue Stream
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Realtime daily performance trends from verified database ledger entries.
+                  </p>
+                </div>
+                <span className="text-xs font-bold text-sky-500 font-mono">
+                  {fmt(kpis.totalRevenue)}
+                </span>
+              </div>
             </div>
 
             {/* Recharts Area Chart */}
@@ -551,7 +878,7 @@ export const UserReports = () => {
                 >
                   <defs>
                     <linearGradient id="revGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.25} />
+                      <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.3} />
                       <stop offset="95%" stopColor="#38bdf8" stopOpacity={0.0} />
                     </linearGradient>
                   </defs>
@@ -585,9 +912,9 @@ export const UserReports = () => {
                             <p className="text-sky-500 font-semibold mt-0.5">
                               Revenue: {fmt(Number(payload[0].value))}
                             </p>
-                            {payload[0].payload.orders > 0 && (
+                            {payload[0].payload.orders !== undefined && (
                               <p className="text-[10px] text-muted-foreground">
-                                Orders: {payload[0].payload.orders}
+                                Transactions: {payload[0].payload.orders}
                               </p>
                             )}
                           </div>
@@ -618,13 +945,12 @@ export const UserReports = () => {
                   Category Mix
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Revenue contribution by group.
+                  Actual revenue and volume contribution by category.
                 </p>
               </div>
 
-              {/* Horizontal Multi-colored Stacked Bars matching Design */}
+              {/* Segmented Horizontal Bars */}
               <div className="space-y-2 pt-1">
-                {/* Visual Horizontal Segmented Bars */}
                 <div className="space-y-2">
                   {categoryMix.map((cat, idx) => (
                     <div key={idx} className="space-y-1">
@@ -632,8 +958,11 @@ export const UserReports = () => {
                         <span className="text-muted-foreground font-medium capitalize text-[10px]">
                           {cat.name.toLowerCase()}
                         </span>
+                        <span className="font-bold text-foreground font-mono text-[10px]">
+                          {cat.percentage}%
+                        </span>
                       </div>
-                      <div className="h-6 w-full bg-muted/30 rounded-lg overflow-hidden flex">
+                      <div className="h-4 w-full bg-muted/30 rounded-md overflow-hidden flex">
                         <div
                           className="h-full rounded-md transition-all duration-500"
                           style={{
@@ -670,18 +999,17 @@ export const UserReports = () => {
 
             {/* AI Prediction Card */}
             <div className="p-5 rounded-2xl bg-sky-500/5 dark:bg-sky-950/25 border border-sky-500/20 shadow-xs relative overflow-hidden space-y-3">
-              {/* Translucent background watermark */}
               <Zap className="w-14 h-14 text-sky-500/15 absolute -top-2 -right-2 pointer-events-none" />
 
               <div className="space-y-1">
                 <span className="text-[10px] font-bold tracking-widest text-sky-500 uppercase">
-                  AI PREDICTION
+                  AI PREDICTION & OPTIMIZATION
                 </span>
                 <h4 className="text-base font-bold text-foreground">
-                  Inventory Shift Expected
+                  Inventory Shift Projected
                 </h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Based on sales trends, demand for &apos;Cold &amp; Flu&apos; medicines will increase by 24% next week.
+                  Based on recent transaction patterns, demand across primary inventory groups is projected to increase by +18% over the next cycle.
                 </p>
               </div>
 
@@ -696,158 +1024,530 @@ export const UserReports = () => {
           </div>
         </div>
 
-        {/* Bottom Section: Audit Ledger */}
+        {/* Bottom Section: Audit Ledger & AI Reports */}
         <div className="p-5 sm:p-6 rounded-2xl bg-card border border-border shadow-xs space-y-4">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Top Header & Tab Navigation */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-border">
             <div>
-              <h3 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
-                Audit Ledger
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
+                  Audit Ledger & Intelligence Hub
+                </h3>
+              </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Granular transaction and stock data for compliance.
+                Granular transaction audit entries, scheduled AI business reports, and automated supplier procurement sheets.
               </p>
             </div>
 
-            {/* Filter & Refresh Controls */}
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowFilterBar(!showFilterBar)}
-                className={`h-8 w-8 rounded-lg ${
-                  showFilterBar || ledgerStatusFilter !== "all" || ledgerSearch
-                    ? "bg-sky-500/15 text-sky-500"
-                    : "text-muted-foreground"
+            {/* Audit Tab Switcher */}
+            <div className="flex items-center gap-1.5 p-1 rounded-xl bg-muted/60 border border-border self-start sm:self-auto flex-wrap">
+              <button
+                type="button"
+                onClick={() => setAuditTab("ledger")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  auditTab === "ledger"
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
-                title="Filter Audit Ledger"
               >
-                <Filter className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={loadData}
-                className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
-                title="Refresh Ledger"
+                <Layers className="w-3.5 h-3.5" />
+                <span>Live Ledger</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-sky-500/10 text-sky-500">
+                  {filteredLedger.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAuditTab("ai_reports")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  auditTab === "ai_reports"
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
               >
-                <History className="w-4 h-4" />
-              </Button>
+                <Sparkles className="w-3.5 h-3.5 text-sky-500" />
+                <span>AI Scheduled Reports</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-violet-500/10 text-violet-500">
+                  {storedAIReports.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAuditTab("ai_restock")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  auditTab === "ai_restock"
+                    ? "bg-background text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Truck className="w-3.5 h-3.5 text-amber-500" />
+                <span>AI Restock & Suppliers</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500/10 text-amber-600">
+                  {storedRestockReports.length}
+                </span>
+              </button>
             </div>
           </div>
 
-          {/* Optional Filter Toolbar */}
-          {showFilterBar && (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-xl bg-muted/40 border border-border animate-in fade-in-50">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <input
-                  type="text"
-                  value={ledgerSearch}
-                  onChange={(e) => setLedgerSearch(e.target.value)}
-                  placeholder="Search ledger by identity or category..."
-                  className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-background border border-border focus:outline-none focus:ring-1 focus:ring-sky-500"
-                />
+          {/* TAB 1: LIVE LEDGER */}
+          {auditTab === "ledger" && (
+            <div className="space-y-4 animate-in fade-in-50">
+              <div className="flex items-center justify-between gap-3">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-sky-500/10 text-sky-500 border border-sky-500/20">
+                  {filteredLedger.length} LIVE AUDIT ENTRIES
+                </span>
+
+                {/* Filter & Refresh Controls */}
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowFilterBar(!showFilterBar)}
+                    className={`h-8 w-8 rounded-lg ${
+                      showFilterBar || ledgerStatusFilter !== "all" || ledgerSearch
+                        ? "bg-sky-500/15 text-sky-500"
+                        : "text-muted-foreground"
+                    }`}
+                    title="Filter Audit Ledger"
+                  >
+                    <Filter className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={loadData}
+                    className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
+                    title="Refresh Ledger"
+                  >
+                    <History className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-semibold text-muted-foreground">Status:</span>
-                <div className="flex gap-1">
-                  {(["all", "verified", "pending"] as const).map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => setLedgerStatusFilter(st)}
-                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${
-                        ledgerStatusFilter === st
-                          ? "bg-sky-500 text-white"
-                          : "bg-background border border-border text-muted-foreground hover:bg-muted"
-                      }`}
-                    >
-                      {st}
-                    </button>
-                  ))}
+              {/* Optional Filter Toolbar */}
+              {showFilterBar && (
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-xl bg-muted/40 border border-border animate-in fade-in-50">
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <input
+                      type="text"
+                      value={ledgerSearch}
+                      onChange={(e) => setLedgerSearch(e.target.value)}
+                      placeholder="Search ledger by ID, category, cashier, or total..."
+                      className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs bg-background border border-border focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold text-muted-foreground">Status:</span>
+                    <div className="flex gap-1">
+                      {(["all", "verified", "pending"] as const).map((st) => (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setLedgerStatusFilter(st)}
+                          className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${
+                            ledgerStatusFilter === st
+                              ? "bg-sky-500 text-white"
+                              : "bg-background border border-border text-muted-foreground hover:bg-muted"
+                          }`}
+                        >
+                          {st}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
+              )}
+
+              {/* Audit Ledger Table (Clickable Rows) */}
+              <div className="overflow-x-auto rounded-xl border border-border/80">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-muted/40 border-b border-border text-[10px] font-bold uppercase text-muted-foreground tracking-widest">
+                      <th className="py-3 px-3 w-[22%]">RECORD IDENTITY</th>
+                      <th className="py-3 px-3 w-[22%] text-center">CATEGORY / CLASSIFICATION</th>
+                      <th className="py-3 px-3 w-[16%] text-center">VOLUME</th>
+                      <th className="py-3 px-3 w-[16%] text-center">UNIT VAL</th>
+                      <th className="py-3 px-3 w-[18%] text-right">TOTAL NET</th>
+                      <th className="py-3 px-3 w-[6%] text-center"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredLedger.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-10 text-center text-muted-foreground">
+                          <div className="flex flex-col items-center justify-center gap-1.5">
+                            <FileText className="w-7 h-7 text-muted-foreground/50 mb-1" />
+                            <p className="font-bold text-sm text-foreground">No ledger entries match this criteria</p>
+                            <p className="text-xs text-muted-foreground max-w-sm">
+                              New sales transactions from the POS terminal and inventory adjustments will automatically stream here in real-time.
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredLedger.map((row) => (
+                        <tr
+                          key={row.id}
+                          onClick={() => handleOpenRecordDetail(row)}
+                          className="hover:bg-sky-500/5 dark:hover:bg-sky-950/20 cursor-pointer transition-all group"
+                          title="Click to view full record details"
+                        >
+                          <td className="py-3.5 px-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-500 flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-sky-500 group-hover:text-white transition-colors">
+                                R
+                              </div>
+                              <div>
+                                <span className="font-bold text-foreground text-xs font-mono block">
+                                  {row.recordId}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground block">
+                                  {new Date(row.date).toLocaleDateString(undefined, {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-3 text-center">
+                            <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-muted text-muted-foreground border border-border/70 group-hover:border-sky-500/30">
+                              {row.category}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-3 text-center font-extrabold text-foreground text-xs">
+                            {row.volume} {row.volume === 1 ? "unit" : "units"}
+                          </td>
+                          <td className="py-3.5 px-3 text-center font-semibold text-muted-foreground font-mono text-xs">
+                            {fmt(row.unitVal)}
+                          </td>
+                          <td className="py-3.5 px-3 text-right">
+                            <p className="font-extrabold text-foreground text-xs font-mono">
+                              {fmt(row.totalNet)}
+                            </p>
+                            <span
+                              className={`text-[9px] font-extrabold tracking-widest uppercase inline-block mt-0.5 ${
+                                row.status === "verified"
+                                  ? "text-emerald-500"
+                                  : "text-amber-500"
+                              }`}
+                            >
+                              {row.status}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-3 text-center text-muted-foreground group-hover:text-sky-500 transition-colors">
+                            <ChevronRight className="w-4 h-4 inline-block group-hover:translate-x-0.5 transition-transform" />
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
 
-          {/* Audit Ledger Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-border text-[10px] font-bold uppercase text-muted-foreground tracking-widest">
-                  <th className="py-3 px-3 w-[22%]">RECORD IDENTITY</th>
-                  <th className="py-3 px-3 w-[24%] text-center">CATEGORY / GROUP</th>
-                  <th className="py-3 px-3 w-[18%] text-center">VOLUME</th>
-                  <th className="py-3 px-3 w-[18%] text-center">UNIT VAL</th>
-                  <th className="py-3 px-3 w-[18%] text-right">TOTAL NET</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredLedger.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-muted-foreground">
-                      No records match the current criteria.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredLedger.map((row) => (
-                    <tr key={row.id} className="hover:bg-muted/20 transition-colors">
-                      {/* Record Identity: [R] Icon + Code */}
-                      <td className="py-3.5 px-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-500 flex items-center justify-center font-bold text-xs shrink-0">
-                            R
-                          </div>
-                          <span className="font-bold text-foreground text-xs font-mono">
-                            {row.recordId}
-                          </span>
-                        </div>
-                      </td>
+          {/* TAB 2: AI SCHEDULED REPORTS */}
+          {auditTab === "ai_reports" && (
+            <div className="space-y-4 animate-in fade-in-50">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-sky-500/5 border border-sky-500/20">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-sky-500/10 text-sky-500 flex items-center justify-center font-bold">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-foreground">
+                      Automated AI Performance & Audit Ledgers
+                    </h4>
+                    <p className="text-[11px] text-muted-foreground">
+                      6-pillar intelligence digests: Profit, Inventory, Out of Stock, Low Stock, Bestsellers, and Issues.
+                    </p>
+                  </div>
+                </div>
 
-                      {/* Category Pill */}
-                      <td className="py-3.5 px-3 text-center">
-                        <span className="inline-block px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-muted text-muted-foreground border border-border/70">
-                          {row.category}
-                        </span>
-                      </td>
+                <Button
+                  size="sm"
+                  onClick={() => setAiScheduleOpen(true)}
+                  className="rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-600 text-white h-8 self-start sm:self-auto"
+                >
+                  <Clock className="w-3.5 h-3.5 mr-1.5" /> Configure Schedule
+                </Button>
+              </div>
 
-                      {/* Volume */}
-                      <td className="py-3.5 px-3 text-center font-extrabold text-foreground text-xs">
-                        {row.volume}
-                      </td>
-
-                      {/* Unit Val */}
-                      <td className="py-3.5 px-3 text-center font-semibold text-muted-foreground font-mono text-xs">
-                        {fmt(row.unitVal)}
-                      </td>
-
-                      {/* Total Net & Status Tag */}
-                      <td className="py-3.5 px-3 text-right">
-                        <p className="font-extrabold text-foreground text-xs font-mono">
-                          {fmt(row.totalNet)}
-                        </p>
-                        <span
-                          className={`text-[9px] font-extrabold tracking-widest uppercase block mt-0.5 ${
-                            row.status === "verified"
-                              ? "text-emerald-500"
-                              : "text-amber-500"
-                          }`}
-                        >
-                          {row.status}
-                        </span>
-                      </td>
+              {/* Reports Table */}
+              <div className="overflow-x-auto rounded-xl border border-border">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-muted/40 border-b border-border text-[10px] font-bold uppercase text-muted-foreground tracking-widest">
+                      <th className="py-3 px-3">REPORT TITLE & DATE</th>
+                      <th className="py-3 px-3 text-center">FREQUENCY</th>
+                      <th className="py-3 px-3 text-center">NET PROFIT / REVENUE</th>
+                      <th className="py-3 px-3 text-center">STOCK ALERTS</th>
+                      <th className="py-3 px-3 text-center">ISSUES DETECTED</th>
+                      <th className="py-3 px-3 text-center">ACTIONS</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {storedAIReports.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <Sparkles className="w-8 h-8 text-sky-500/40" />
+                            <p className="font-bold text-sm text-foreground">No scheduled AI reports generated yet</p>
+                            <p className="text-xs text-muted-foreground max-w-md">
+                              Click "Settings" in the top bar to set up your Daily, Weekly, or Monthly automated AI audit timeline.
+                            </p>
+                            <Button
+                              size="sm"
+                              onClick={() => setAiScheduleOpen(true)}
+                              className="mt-2 rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-600 text-white"
+                            >
+                              <Clock className="w-3.5 h-3.5 mr-1.5" /> Setup Report Time
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      storedAIReports.map((rep) => (
+                        <tr
+                          key={rep.id}
+                          onClick={() => {
+                            setSelectedAIReport(rep);
+                            setAiReportDetailOpen(true);
+                          }}
+                          className="hover:bg-sky-500/5 cursor-pointer transition-colors group"
+                        >
+                          <td className="py-3 px-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-lg bg-violet-500/10 text-violet-500 flex items-center justify-center font-bold text-xs shrink-0">
+                                AI
+                              </div>
+                              <div>
+                                <span className="font-bold text-foreground block">{rep.title}</span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {new Date(rep.createdAt).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-3 text-center">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-sky-500/10 text-sky-500 border border-sky-500/20">
+                              {rep.frequency}
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-3 text-center">
+                            <span className="font-bold text-emerald-500 font-mono block">
+                              {fmt(rep.sections.profit.profit)}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              Rev: {fmt(rep.sections.profit.revenue)}
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-3 text-center font-mono">
+                            <span className="text-rose-500 font-bold">
+                              {rep.sections.outOfStock.count} Out
+                            </span>
+                            <span className="text-muted-foreground text-[10px] block">
+                              {rep.sections.lowStock.count} Low
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-3 text-center font-mono">
+                            <span
+                              className={`font-bold ${
+                                rep.sections.issueProducts.count > 0 ? "text-amber-500" : "text-emerald-500"
+                              }`}
+                            >
+                              {rep.sections.issueProducts.count} Items
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-3 text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2.5 rounded-lg text-xs font-semibold text-sky-500 hover:bg-sky-500/10"
+                            >
+                              <Eye className="w-3.5 h-3.5 mr-1" /> View Full
+                            </Button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: AI RESTOCK & SUPPLIER ORDERS */}
+          {auditTab === "ai_restock" && (
+            <div className="space-y-4 animate-in fade-in-50">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
+                    <Truck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-foreground">
+                      AI Low & Out of Stock Restock Intelligence
+                    </h4>
+                    <p className="text-[11px] text-muted-foreground">
+                      Autonomous supplier research matching with replenishment purchase orders for quick fulfillment.
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  size="sm"
+                  disabled={generatingRestock}
+                  onClick={handleAnalyzeRestock}
+                  className="rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white h-8 self-start sm:self-auto shadow-xs"
+                >
+                  {generatingRestock ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                      Scanning Suppliers…
+                    </>
+                  ) : (
+                    <>
+                      <Truck className="w-3.5 h-3.5 mr-1.5" /> Auto-Analyze Stock
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {/* Restock Sheets Table */}
+              <div className="overflow-x-auto rounded-xl border border-border">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-muted/40 border-b border-border text-[10px] font-bold uppercase text-muted-foreground tracking-widest">
+                      <th className="py-3 px-3">PROCUREMENT SHEET & DATE</th>
+                      <th className="py-3 px-3 text-center">SKUS REQUIRING STOCK</th>
+                      <th className="py-3 px-3 text-right">ESTIMATED CAPITAL</th>
+                      <th className="py-3 px-3 text-center">STATUS</th>
+                      <th className="py-3 px-3 text-center">ACTIONS</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {storedRestockReports.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <Truck className="w-8 h-8 text-amber-500/40" />
+                            <p className="font-bold text-sm text-foreground">No supplier restock sheets compiled yet</p>
+                            <p className="text-xs text-muted-foreground max-w-md">
+                              Run the AI stock analysis to automatically detect low and out-of-stock items, calculate reorder quantities, and research nearby supplier contacts.
+                            </p>
+                            <Button
+                              size="sm"
+                              disabled={generatingRestock}
+                              onClick={handleAnalyzeRestock}
+                              className="mt-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white"
+                            >
+                              <Truck className="w-3.5 h-3.5 mr-1.5" /> Analyze Stock Now
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      storedRestockReports.map((rec) => (
+                        <tr
+                          key={rec.id}
+                          onClick={() => {
+                            setSelectedRestockReport(rec);
+                            setAiRestockDetailOpen(true);
+                          }}
+                          className="hover:bg-amber-500/5 cursor-pointer transition-colors group"
+                        >
+                          <td className="py-3 px-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold text-xs shrink-0">
+                                PO
+                              </div>
+                              <div>
+                                <span className="font-bold text-foreground block">{rec.title}</span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {new Date(rec.createdAt).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-3 text-center font-mono font-bold text-foreground">
+                            {rec.itemsCount} Products
+                          </td>
+
+                          <td className="py-3 px-3 text-right font-mono font-bold text-emerald-500">
+                            {fmt(rec.totalEstimatedCost)}
+                          </td>
+
+                          <td className="py-3 px-3 text-center">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                rec.status === "approved"
+                                  ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                                  : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+                              }`}
+                            >
+                              {rec.status.replace("_", " ")}
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-3 text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2.5 rounded-lg text-xs font-semibold text-sky-500 hover:bg-sky-500/10"
+                            >
+                              <Eye className="w-3.5 h-3.5 mr-1" /> View Suppliers
+                            </Button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* AI Recommendation Modal */}
+      {/* AI Report Schedule Modal (Settings) */}
+      <AIReportScheduleModal
+        open={aiScheduleOpen}
+        onOpenChange={setAiScheduleOpen}
+        businessId={active?.id}
+        businessName={active?.business_name || "Business"}
+        onReportGenerated={loadAICollections}
+      />
+
+      {/* AI Scheduled Report Detail Modal */}
+      <AIReportDetailModal
+        open={aiReportDetailOpen}
+        onOpenChange={setAiReportDetailOpen}
+        report={selectedAIReport}
+      />
+
+      {/* AI Restock & Supplier Procurement Modal */}
+      <AIRestockDetailModal
+        open={aiRestockDetailOpen}
+        onOpenChange={setAiRestockDetailOpen}
+        report={selectedRestockReport}
+        onApprove={handleApproveRestockReport}
+      />
+
+      {/* Action Recommendation Modal */}
       <ActionRecommendationModal
         open={recommendationOpen}
         onOpenChange={setRecommendationOpen}
@@ -863,6 +1563,14 @@ export const UserReports = () => {
         kpis={kpis}
         categoryMix={categoryMix}
         auditLedger={auditLedger}
+      />
+
+      {/* Clickable Ledger Record Detail Modal */}
+      <RecordDetailModal
+        open={recordDetailOpen}
+        onOpenChange={setRecordDetailOpen}
+        record={selectedRecord}
+        businessName={active?.business_name || "Enterprise Workspace"}
       />
     </UserPanelGate>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { CheckCircle2, Printer, ArrowRight, Download, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -57,31 +57,18 @@ const fmtTime = (d: Date) =>
 export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: Props) => {
   const printedRef = useRef(false);
 
-  useEffect(() => {
-    if (open && data && data.autoPrintReceipt && !printedRef.current) {
-      printedRef.current = true;
-      const t = setTimeout(() => {
-        handlePrint();
-      }, 350);
-      return () => clearTimeout(t);
-    }
-    if (!open) {
-      printedRef.current = false;
-    }
-  }, [open, data]);
+  const sym = data?.symbol || "$";
+  const showLogo = data?.showLogoOnReceipt !== false;
+  const showTax = data?.showTaxBreakdown !== false;
+  const showCashier = data?.showCashierName !== false;
+  const showBarcode = data?.showBarcodeOnReceipt !== false;
+  const headerTitle = data?.receiptHeader || data?.businessName || "GEFLOW STORE";
+  const subheader = data?.receiptSubheader || "Official Store Receipt & Fiscal Log";
+  const footerMsg = data?.receiptFooter || "Thank you for choosing us! Returns accepted within 14 days.";
+  const storeAddress = data?.businessAddress || "";
 
-  if (!data) return null;
-  const sym = data.symbol || "$";
-  const showLogo = data.showLogoOnReceipt !== false;
-  const showTax = data.showTaxBreakdown !== false;
-  const showCashier = data.showCashierName !== false;
-  const showBarcode = data.showBarcodeOnReceipt !== false;
-  const headerTitle = data.receiptHeader || data.businessName || "GEFLOW STORE";
-  const subheader = data.receiptSubheader || "Official Store Receipt & Fiscal Log";
-  const footerMsg = data.receiptFooter || "Thank you for choosing us! Returns accepted within 14 days.";
-  const storeAddress = data.businessAddress || "";
-
-  const handlePrint = () => {
+  const handlePrint = useCallback(() => {
+    if (!data) return;
     const rows = data.lines
       .map(
         (l) =>
@@ -186,7 +173,22 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
     };
     if (frame.contentWindow?.document.readyState === "complete") setTimeout(run, 200);
     else frame.onload = () => setTimeout(run, 200);
-  };
+  }, [data, sym, showLogo, showTax, showCashier, showBarcode, headerTitle, subheader, storeAddress, footerMsg]);
+
+  useEffect(() => {
+    if (open && data && data.autoPrintReceipt && !printedRef.current) {
+      printedRef.current = true;
+      const t = setTimeout(() => {
+        handlePrint();
+      }, 350);
+      return () => clearTimeout(t);
+    }
+    if (!open) {
+      printedRef.current = false;
+    }
+  }, [open, data, handlePrint]);
+
+  if (!data) return null;
 
   const downloadReceipt = () => {
     const line = (a: string, b: string) => `${a}${" ".repeat(Math.max(1, 32 - a.length - b.length))}${b}`;

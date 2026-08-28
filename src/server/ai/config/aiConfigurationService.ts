@@ -92,8 +92,8 @@ export class AIConfigurationService {
         id: "m_gemini_flash",
         provider_id: "11111111-1111-4111-a111-111111111111",
         provider_slug: "gemini",
-        model_id: "gemini-2.5-flash",
-        display_name: "Gemini 2.5 Flash",
+        model_id: "gemini-3.7-flash",
+        display_name: "Gemini 3.7 Flash",
         model_type: "multimodal",
         capabilities: [
           "product_analysis",
@@ -116,8 +116,8 @@ export class AIConfigurationService {
         id: "m_gemini_pro",
         provider_id: "11111111-1111-4111-a111-111111111111",
         provider_slug: "gemini",
-        model_id: "gemini-2.5-pro",
-        display_name: "Gemini 2.5 Pro",
+        model_id: "gemini-3.1-pro-preview",
+        display_name: "Gemini 3.1 Pro",
         model_type: "multimodal",
         capabilities: [
           "product_analysis",
@@ -129,6 +129,26 @@ export class AIConfigurationService {
         is_active: true,
         is_default: false,
         priority: 2,
+        fallback_eligible: true,
+        created_at: now,
+        updated_at: now,
+      },
+      {
+        id: "m_gemini_lite",
+        provider_id: "11111111-1111-4111-a111-111111111111",
+        provider_slug: "gemini",
+        model_id: "gemini-3.1-flash-lite",
+        display_name: "Gemini 3.1 Flash Lite",
+        model_type: "multimodal",
+        capabilities: [
+          "product_analysis",
+          "product_category_detection",
+          "product_uom_detection",
+          "assistant_response",
+        ],
+        is_active: true,
+        is_default: false,
+        priority: 3,
         fallback_eligible: true,
         created_at: now,
         updated_at: now,
@@ -328,7 +348,7 @@ export class AIConfigurationService {
     // Static fallback defaults
     switch (slug) {
       case "gemini":
-        return "gemini-2.5-flash";
+        return "gemini-3.7-flash";
       case "openai":
         return "gpt-4o-mini";
       case "openrouter":
@@ -412,14 +432,17 @@ export class AIConfigurationService {
 
         let primary: AIProviderType = customConfig?.primaryProvider || "openai";
         if (primary === "openai" && !openaiActive) {
-          if (openrouterActive) primary = "openrouter";
-          else if (geminiActive) primary = "gemini";
+          if (geminiActive) primary = "gemini";
+          else if (openrouterActive) primary = "openrouter";
           else primary = "heuristic_fallback";
         }
 
-        let fallback: AIProviderType = customConfig?.fallbackProvider || "openrouter";
+        let fallback: AIProviderType = customConfig?.fallbackProvider || (primary === "gemini" ? "openrouter" : "gemini");
         if (fallback === "openrouter" && !openrouterActive) {
-          if (geminiActive) fallback = "gemini";
+          if (geminiActive && primary !== "gemini") fallback = "gemini";
+          else fallback = "heuristic_fallback";
+        } else if (fallback === "gemini" && !geminiActive) {
+          if (openrouterActive && primary !== "openrouter") fallback = "openrouter";
           else fallback = "heuristic_fallback";
         }
 

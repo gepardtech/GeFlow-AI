@@ -50,7 +50,7 @@ const PlanLockedScreen = ({ currentPlan, path, pageTitle }: Props) => {
 
           <div className="mt-7 flex flex-wrap gap-3 justify-center">
             <Link
-              to="/pricing"
+              to="/dashboard/subscription"
               className="h-11 px-6 rounded-xl bg-gradient-to-r from-sky-500 to-violet-500 text-white text-sm font-bold inline-flex items-center gap-2 hover:shadow-lg hover:shadow-violet-500/30 hover:-translate-y-0.5 transition-all"
             >
               Upgrade to {requiredPlan.label} <ArrowRight className="h-4 w-4" />
@@ -59,7 +59,7 @@ const PlanLockedScreen = ({ currentPlan, path, pageTitle }: Props) => {
               to="/dashboard/subscription"
               className="h-11 px-6 rounded-xl bg-card border border-border text-sm font-bold inline-flex items-center hover:bg-muted transition"
             >
-              Compare plans
+              View Subscription & Plans
             </Link>
           </div>
         </div>

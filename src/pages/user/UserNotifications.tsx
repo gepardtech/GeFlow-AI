@@ -3,10 +3,11 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import UserPanelGate from "@/components/UserPanelGate";
 import {
-  Bell, Loader2, Megaphone, LifeBuoy, PackageX, Search, Filter, ExternalLink,
+  Bell, Loader2, Megaphone, LifeBuoy, PackageX, Search, Filter, ExternalLink, Sparkles, Truck,
 } from "lucide-react";
+import { getStoredAIReports, getStoredRestockReports } from "@/lib/aiReportSchedulerService";
 
-type Kind = "announcement" | "ticket" | "stock";
+type Kind = "announcement" | "ticket" | "stock" | "ai_report" | "ai_restock";
 interface Item {
   id: string; kind: Kind; title: string; description: string; createdAt: string;
   unread: boolean; to?: string; link?: string | null; linkLabel?: string | null;
@@ -16,6 +17,8 @@ const kindMeta: Record<Kind, { icon: typeof Bell; label: string; cls: string }> 
   announcement: { icon: Megaphone, label: "Announcement", cls: "bg-violet-500/15 text-violet-500 border-violet-500/30" },
   ticket: { icon: LifeBuoy, label: "Support", cls: "bg-amber-500/15 text-amber-600 border-amber-500/30" },
   stock: { icon: PackageX, label: "Inventory", cls: "bg-rose-500/15 text-rose-500 border-rose-500/30" },
+  ai_report: { icon: Sparkles, label: "AI Report", cls: "bg-sky-500/15 text-sky-500 border-sky-500/30" },
+  ai_restock: { icon: Truck, label: "AI Restock", cls: "bg-amber-500/15 text-amber-500 border-amber-500/30" },
 };
 
 const SEEN_KEY = "geflow.notifications.seenAt";
@@ -30,17 +33,51 @@ const UserNotifications = () => {
     const seenAt = Number(localStorage.getItem(SEEN_KEY) || 0);
     const { data: { user } } = await supabase.auth.getUser();
 
-    const [anns, tickets, lowStock] = await Promise.all([
+    const [anns, tickets, lowStock, businesses] = await Promise.all([
       supabase.from("announcements").select("id, title, body, audience, link_url, link_label, created_at").order("created_at", { ascending: false }).limit(30),
       user
         ? supabase.from("support_tickets").select("id, ticket_number, subject, status, priority, updated_at").eq("owner_user_id", user.id).order("updated_at", { ascending: false }).limit(20)
         : Promise.resolve({ data: [] as any[] }),
       user
-        ? supabase.from("products").select("id, name, stock_units, min_stock_alert, updated_at").eq("owner_user_id", user.id).order("updated_at", { ascending: false }).limit(100)
+        ? supabase.from("products").select("id, name, stock_units, min_stock_alert, updated_at, business_id").eq("owner_user_id", user.id).order("updated_at", { ascending: false }).limit(100)
+        : Promise.resolve({ data: [] as any[] }),
+      user
+        ? supabase.from("businesses").select("id, business_name").eq("owner_user_id", user.id)
         : Promise.resolve({ data: [] as any[] }),
     ]);
 
+    // Collect all stored AI Reports and Restock Reports across active user businesses
+    const allAIReports: Item[] = [];
+    (businesses.data || []).forEach((b: any) => {
+      const reps = getStoredAIReports(b.id);
+      reps.forEach((r) => {
+        allAIReports.push({
+          id: `ai-rep-${r.id}`,
+          kind: "ai_report" as Kind,
+          title: `🤖 ${r.title} Compiled`,
+          description: r.summary,
+          createdAt: r.createdAt,
+          unread: +new Date(r.createdAt) > seenAt,
+          to: "/dashboard/reports?view=ai_reports",
+        });
+      });
+
+      const restocks = getStoredRestockReports(b.id);
+      restocks.forEach((rs) => {
+        allAIReports.push({
+          id: `ai-rstk-${rs.id}`,
+          kind: "ai_restock" as Kind,
+          title: `📦 ${rs.title}`,
+          description: `${rs.itemsCount} products require immediate replenishment. Click to view supplier procurement sheet in Audit Ledger.`,
+          createdAt: rs.createdAt,
+          unread: +new Date(rs.createdAt) > seenAt,
+          to: "/dashboard/reports?view=ai_restock",
+        });
+      });
+    });
+
     const rows: Item[] = [
+      ...allAIReports,
       ...(anns.data ?? [])
         .filter((a: any) => a.audience === "all" || a.audience === "users")
         .map((a: any) => ({

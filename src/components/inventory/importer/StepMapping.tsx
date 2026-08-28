@@ -335,16 +335,16 @@ export const StepMapping = ({
       </div>
 
       {/* Navigation Footer */}
-      <div className="flex items-center justify-between pt-4 border-t border-border">
-        <Button variant="ghost" onClick={onBack} className="rounded-xl">
-          <ArrowLeft className="w-4 h-4 mr-2" /> Back
+      <div className="sticky bottom-0 z-10 bg-background/95 backdrop-blur-md border-t border-border p-3 sm:p-4 rounded-2xl shadow-lg flex items-center justify-between gap-3">
+        <Button variant="outline" onClick={onBack} className="rounded-xl text-xs gap-1.5 h-9">
+          <ArrowLeft className="w-4 h-4" /> Back to Upload
         </Button>
         <Button
           onClick={onContinue}
           disabled={!hasProductName}
-          className="rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold px-6 shadow-sm disabled:opacity-50"
+          className="rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs px-6 h-9 shadow-sm disabled:opacity-50 gap-2"
         >
-          Review Data & Duplicates <ArrowRight className="w-4 h-4 ml-2" />
+          Review Data & Duplicates <ArrowRight className="w-4 h-4" />
         </Button>
       </div>
     </div>

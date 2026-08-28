@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllContactSubmissions, markLocalContactSubmissionRead, deleteLocalContactSubmission, ContactSubmissionRecord } from "@/lib/contactService";
 import PanelLayout from "@/components/PanelLayout";
 import { ADMIN_NAV, ADMIN_IDENTITY } from "@/lib/panelNav";
 import {
   Search, MessageSquareReply, Megaphone, BookOpen, Users, Bot,
-  LifeBuoy, Eye, Send, Plus, Pencil, Trash2, Loader2, X, Sparkles, Activity, Shield, Clock,
+  LifeBuoy, Eye, Send, Plus, Pencil, Trash2, Loader2, X, Sparkles, Activity, Shield, Clock, Mail, CheckCircle2,
 } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -58,14 +59,19 @@ const AdminSupport = () => {
 
   // ---------- TICKETS ----------
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [contactSubmissions, setContactSubmissions] = useState<ContactSubmissionRecord[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
   const [search, setSearch] = useState("");
   const [statusF, setStatusF] = useState("all");
   const [priorityF, setPriorityF] = useState("all");
 
   const loadTickets = useCallback(async () => {
-    const { data } = await supabase.from("support_tickets").select("*").order("created_at", { ascending: false });
-    const list = (data ?? []) as any[];
+    const [tktRes, contactMsgs] = await Promise.all([
+      supabase.from("support_tickets").select("*").order("created_at", { ascending: false }),
+      fetchAllContactSubmissions(),
+    ]);
+    setContactSubmissions(contactMsgs || []);
+    const list = (tktRes.data ?? []) as any[];
     if (list.length === 0) { setTickets([]); setLoadingTickets(false); return; }
     const ids = Array.from(new Set(list.map((t) => t.owner_user_id)));
     const { data: profs } = await supabase.from("profiles").select("user_id, full_name, email, plan").in("user_id", ids);
@@ -116,8 +122,13 @@ const AdminSupport = () => {
 
   useEffect(() => {
     loadTickets(); loadTemplates(); loadAnnouncements(); loadKb(); loadTeam(); loadAutomation();
+    const onSubChange = () => loadTickets();
+    window.addEventListener("geflow:contact-submission-added", onSubChange);
+    window.addEventListener("geflow:contact-submission-updated", onSubChange);
+    window.addEventListener("geflow:contact-submission-deleted", onSubChange);
     const ch = supabase.channel("admin_support_rt")
       .on("postgres_changes", { event: "*", schema: "public", table: "support_tickets" }, loadTickets)
+      .on("postgres_changes", { event: "*", schema: "public", table: "contact_submissions" }, loadTickets)
       .on("postgres_changes", { event: "*", schema: "public", table: "ticket_messages" }, loadTickets)
       .on("postgres_changes", { event: "*", schema: "public", table: "reply_templates" }, loadTemplates)
       .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, loadAnnouncements)
@@ -125,7 +136,12 @@ const AdminSupport = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "support_team_members" }, loadTeam)
       .on("postgres_changes", { event: "*", schema: "public", table: "support_automation_settings" }, loadAutomation)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      window.removeEventListener("geflow:contact-submission-added", onSubChange);
+      window.removeEventListener("geflow:contact-submission-updated", onSubChange);
+      window.removeEventListener("geflow:contact-submission-deleted", onSubChange);
+      supabase.removeChannel(ch);
+    };
   }, [loadTickets, loadTemplates, loadAnnouncements, loadKb, loadTeam, loadAutomation]);
 
   // KPIs
@@ -157,6 +173,7 @@ const AdminSupport = () => {
 
   // Ticket detail / reply dialog
   const [openTicket, setOpenTicket] = useState<Ticket | null>(null);
+  const [selectedContact, setSelectedContact] = useState<ContactSubmissionRecord | null>(null);
   const [delTicket, setDelTicket] = useState<Ticket | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -233,6 +250,7 @@ const AdminSupport = () => {
       <Tabs defaultValue="tickets">
         <TabsList className="bg-card border border-border rounded-xl p-1.5 inline-flex flex-wrap h-auto gap-1">
           <TabsTrigger value="tickets" className="data-[state=active]:bg-sky-400/15 data-[state=active]:text-sky-500 rounded-lg gap-2 font-bold"><LifeBuoy className="h-4 w-4" /> User Tickets</TabsTrigger>
+          <TabsTrigger value="contacts" className="data-[state=active]:bg-sky-400/15 data-[state=active]:text-sky-500 rounded-lg gap-2 font-bold"><Mail className="h-4 w-4" /> Contact Messages ({contactSubmissions.filter(c => !c.is_read).length})</TabsTrigger>
           <TabsTrigger value="ann" className="rounded-lg gap-2 font-bold"><Megaphone className="h-4 w-4" /> Announcements</TabsTrigger>
           <TabsTrigger value="kb" className="rounded-lg gap-2 font-bold"><BookOpen className="h-4 w-4" /> Knowledge Base</TabsTrigger>
           <TabsTrigger value="team" className="rounded-lg gap-2 font-bold"><Users className="h-4 w-4" /> Support Team</TabsTrigger>
@@ -325,6 +343,91 @@ const AdminSupport = () => {
           </div>
         </TabsContent>
 
+        {/* CONTACT MESSAGES */}
+        <TabsContent value="contacts" className="mt-6">
+          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[10px] font-bold tracking-widest text-muted-foreground border-b border-border bg-muted/20">
+                    <th className="text-left px-6 py-4">SENDER</th>
+                    <th className="text-left px-4 py-4">MESSAGE PREVIEW</th>
+                    <th className="text-center px-4 py-4">STATUS</th>
+                    <th className="text-center px-4 py-4">RECEIVED</th>
+                    <th className="text-right px-6 py-4">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contactSubmissions.length === 0 ? (
+                    <tr><td colSpan={5} className="p-12 text-center text-muted-foreground">No contact messages received yet.</td></tr>
+                  ) : contactSubmissions.filter((c) => {
+                    if (!search) return true;
+                    const q = search.toLowerCase();
+                    return c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q) || c.message.toLowerCase().includes(q);
+                  }).map((c) => (
+                    <tr key={c.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="h-9 w-9 rounded-full bg-sky-400/15 text-sky-500 flex items-center justify-center font-bold text-xs">
+                            {c.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-bold flex items-center gap-1.5">
+                              {c.name}
+                              {!c.is_read && <span className="h-2 w-2 rounded-full bg-sky-500 inline-block" />}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{c.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 max-w-md">
+                        <p className="text-sm line-clamp-2 text-foreground font-medium">{c.message}</p>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${
+                          c.is_read ? "bg-muted text-muted-foreground" : "bg-sky-500 text-white"
+                        }`}>
+                          {c.is_read ? "Read" : "New"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-center text-xs text-muted-foreground whitespace-nowrap">
+                        {new Date(c.created_at).toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedContact(c);
+                              markLocalContactSubmissionRead(c.id, true);
+                              supabase.from("contact_submissions").update({ is_read: true }).eq("id", c.id);
+                              loadTickets();
+                            }}
+                            className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-sky-400/15 text-sky-500 hover:bg-sky-400/25"
+                          >
+                            <Eye className="h-3.5 w-3.5" /> Read
+                          </button>
+                          <button
+                            onClick={async () => {
+                              deleteLocalContactSubmission(c.id);
+                              await supabase.from("contact_submissions").delete().eq("id", c.id);
+                              toast({ title: "Message removed" });
+                              loadTickets();
+                            }}
+                            title="Delete message"
+                            className="h-8 w-8 rounded-lg hover:bg-rose-500/10 text-rose-500 inline-flex items-center justify-center"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </TabsContent>
+
         {/* ANNOUNCEMENTS */}
         <TabsContent value="ann" className="mt-6">
           <AnnouncementsManager items={announcements} onChange={loadAnnouncements} openCreate={() => setAnnOpen(true)} />
@@ -386,6 +489,48 @@ const AdminSupport = () => {
       <TemplatesDialog open={tplOpen} onOpenChange={setTplOpen} templates={templates} onChange={loadTemplates} />
       <AnnouncementDialog open={annOpen} onOpenChange={setAnnOpen} onSaved={loadAnnouncements} />
       <TicketDialog open={!!openTicket} ticket={openTicket} templates={templates} onOpenChange={(o) => !o && setOpenTicket(null)} onUpdated={loadTickets} />
+
+      <Dialog open={!!selectedContact} onOpenChange={(o) => !o && setSelectedContact(null)}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-sky-400" />
+              Contact Message from {selectedContact?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Received on {selectedContact?.created_at ? new Date(selectedContact.created_at).toLocaleString() : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="p-3 bg-muted/40 rounded-xl border border-border flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Sender Email</p>
+                <p className="font-semibold text-sm">{selectedContact?.email}</p>
+              </div>
+              <a
+                href={`mailto:${selectedContact?.email}?subject=Regarding your message to GEFLOW`}
+                className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold inline-flex items-center gap-1.5"
+              >
+                <Mail className="h-3.5 w-3.5" /> Reply by Email
+              </a>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Message Content</p>
+              <div className="p-4 rounded-xl bg-card border border-border text-sm leading-relaxed whitespace-pre-wrap">
+                {selectedContact?.message}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <button
+              onClick={() => setSelectedContact(null)}
+              className="px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 text-sm font-semibold"
+            >
+              Close
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!delTicket} onOpenChange={(o) => !o && setDelTicket(null)}>
         <AlertDialogContent>

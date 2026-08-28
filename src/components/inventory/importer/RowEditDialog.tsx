@@ -26,7 +26,6 @@ import {
   User,
   AlertTriangle,
   CheckCircle2,
-  HelpCircle,
   Package,
 } from "lucide-react";
 import { AIConfidenceBadge } from "../AIConfidenceBadge";
@@ -108,10 +107,7 @@ export const RowEditDialog = ({
   };
 
   /**
-   * Helper to compute field-level AI origin tag:
-   * 1. If modified by user in this dialog -> 👤 User Supplied
-   * 2. If AI normalized / suggested -> ✨ AI Detected
-   * 3. If present in raw sheet -> 📄 Spreadsheet
+   * Helper to compute field-level AI origin tag
    */
   const getFieldOrigin = (fieldKey: string, rawKey?: string) => {
     if (modifiedFields.has(fieldKey)) {
@@ -122,7 +118,7 @@ export const RowEditDialog = ({
       );
     }
 
-    const hasRaw = rawKey && product.raw[rawKey] && product.raw[rawKey].trim() !== "";
+    const hasRaw = rawKey && product.raw && (product.raw as any)[rawKey] && (product.raw as any)[rawKey].trim() !== "";
     if (product.ai_normalized && (!hasRaw || fieldKey === "category_id" || fieldKey === "strength" || fieldKey === "package_type")) {
       return (
         <span className="inline-flex items-center gap-1 px-1.5 py-0.2 text-[9px] font-semibold rounded bg-purple-500/10 text-purple-600 dark:text-purple-400">
@@ -199,18 +195,18 @@ export const RowEditDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-xl">
+        <DialogHeader className="p-5 border-b border-border flex-shrink-0 bg-muted/10">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center flex-shrink-0">
                 <Sparkles className="w-4 h-4" />
               </div>
               <div>
                 <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
                   Review Row #{product.rowIndex}
-                  {product.ai_confidence !== undefined && (
-                    <AIConfidenceBadge score={product.ai_confidence} size="sm" showPercentage />
+                  {product.confidence?.overall !== undefined && (
+                    <AIConfidenceBadge score={product.confidence.overall} size="sm" showPercentage />
                   )}
                 </DialogTitle>
                 <DialogDescription className="text-xs">
@@ -221,7 +217,7 @@ export const RowEditDialog = ({
           </div>
         </DialogHeader>
 
-        <div className="space-y-4 py-2 text-xs">
+        <div className="space-y-4 p-5 overflow-y-auto max-h-[62vh] text-xs">
           {/* Row 1: Product Name */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
@@ -236,7 +232,7 @@ export const RowEditDialog = ({
                 setForm({ ...form, name: e.target.value });
                 markModified("name");
               }}
-              placeholder="e.g. Paracetamol 500mg"
+              placeholder="e.g. Paracetamol 500mg Tablets"
               className="h-9 text-xs rounded-xl"
             />
           </div>
@@ -245,7 +241,7 @@ export const RowEditDialog = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold text-foreground">SKU / Item Code</Label>
+                <Label className="text-xs font-semibold text-foreground">Internal SKU</Label>
                 {getFieldOrigin("internal_sku", "SKU")}
               </div>
               <Input
@@ -254,13 +250,13 @@ export const RowEditDialog = ({
                   setForm({ ...form, internal_sku: e.target.value });
                   markModified("internal_sku");
                 }}
-                placeholder="e.g. MED-00123"
-                className="h-9 text-xs rounded-xl font-mono"
+                placeholder="e.g. SKU-10023"
+                className="h-9 text-xs rounded-xl"
               />
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold text-foreground">Global BarCode</Label>
+                <Label className="text-xs font-semibold text-foreground">Barcode / UPC / EAN</Label>
                 {getFieldOrigin("barcode", "Barcode")}
               </div>
               <Input
@@ -275,12 +271,12 @@ export const RowEditDialog = ({
             </div>
           </div>
 
-          {/* Row 3: Category & Subcategory (Strict Admin Verification) */}
+          {/* Row 3: Category & Subcategory */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold text-foreground">Primary Category</Label>
-                {getFieldOrigin("category_id", "Category")}
+                {getFieldOrigin("category_id")}
               </div>
               <Select
                 value={form.category_id}
@@ -293,19 +289,18 @@ export const RowEditDialog = ({
                   <SelectValue placeholder="Select Category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {parents.map((c) => (
-                    <SelectItem key={c.id} value={c.id} className="text-xs">
-                      {c.name}
+                  {parents.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id} className="text-xs">
+                      {cat.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold text-foreground">Subcategory</Label>
-                {getFieldOrigin("subcategory_id", "Subcategory")}
+                {getFieldOrigin("subcategory_id")}
               </div>
               <Select
                 value={form.subcategory_id}
@@ -319,9 +314,9 @@ export const RowEditDialog = ({
                   <SelectValue placeholder={subcategories.length === 0 ? "No Subcategories" : "Select Subcategory"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {subcategories.map((s) => (
-                    <SelectItem key={s.id} value={s.id} className="text-xs">
-                      {s.name}
+                  {subcategories.map((sub) => (
+                    <SelectItem key={sub.id} value={sub.id} className="text-xs">
+                      {sub.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -329,12 +324,12 @@ export const RowEditDialog = ({
             </div>
           </div>
 
-          {/* Row 4: Base UOM, Packaging, Pack Size */}
+          {/* Row 4: UOM & Packaging */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold text-foreground">Base Unit of Measure (UOM)</Label>
-                {getFieldOrigin("stock_unit", "UOM")}
+                <Label className="text-xs font-semibold text-foreground">Stock UOM</Label>
+                {getFieldOrigin("stock_unit")}
               </div>
               <Select
                 value={form.stock_unit}
@@ -343,28 +338,22 @@ export const RowEditDialog = ({
                   markModified("stock_unit");
                 }}
               >
-                <SelectTrigger className="h-9 text-xs rounded-xl capitalize">
-                  <SelectValue placeholder="Select UOM" />
+                <SelectTrigger className="h-9 text-xs rounded-xl">
+                  <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="max-h-56">
-                  {allowedUoms.map((u) => (
-                    <SelectItem key={u} value={u} className="text-xs capitalize">
-                      {u}
+                <SelectContent>
+                  {allowedUoms.map((uom) => (
+                    <SelectItem key={uom} value={uom} className="text-xs capitalize">
+                      {uom}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {!isCurrentUomAllowed && (
-                <p className="text-[10px] text-amber-500 font-semibold flex items-center gap-1 mt-0.5">
-                  <AlertTriangle className="w-3 h-3" /> Unconfigured unit. Select an allowed UOM.
-                </p>
-              )}
             </div>
-
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold text-foreground">Packaging Type</Label>
-                {getFieldOrigin("package_type", "Packaging")}
+                {getFieldOrigin("package_type")}
               </div>
               <Input
                 value={form.package_type}
@@ -372,15 +361,14 @@ export const RowEditDialog = ({
                   setForm({ ...form, package_type: e.target.value });
                   markModified("package_type");
                 }}
-                placeholder="e.g. Box, Strip, Pack"
+                placeholder="e.g. Blister Pack"
                 className="h-9 text-xs rounded-xl"
               />
             </div>
-
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold text-foreground">Units Per Pack</Label>
-                {getFieldOrigin("pack_size", "Pack Size")}
+                <Label className="text-xs font-semibold text-foreground">Pack Size</Label>
+                {getFieldOrigin("pack_size")}
               </div>
               <Input
                 type="number"
@@ -389,47 +377,13 @@ export const RowEditDialog = ({
                   setForm({ ...form, pack_size: e.target.value });
                   markModified("pack_size");
                 }}
-                placeholder="e.g. 20"
+                placeholder="e.g. 10"
                 className="h-9 text-xs rounded-xl"
               />
             </div>
           </div>
 
-          {/* Row 5: Strength & Brand */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold text-foreground">Strength / Formulation</Label>
-                {getFieldOrigin("strength", "Strength")}
-              </div>
-              <Input
-                value={form.strength}
-                onChange={(e) => {
-                  setForm({ ...form, strength: e.target.value });
-                  markModified("strength");
-                }}
-                placeholder="e.g. 500mg, 10mg/5ml"
-                className="h-9 text-xs rounded-xl"
-              />
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold text-foreground">Brand / Manufacturer</Label>
-                {getFieldOrigin("brand", "Brand")}
-              </div>
-              <Input
-                value={form.brand}
-                onChange={(e) => {
-                  setForm({ ...form, brand: e.target.value });
-                  markModified("brand");
-                }}
-                placeholder="e.g. GSK, Pfizer, Nestle"
-                className="h-9 text-xs rounded-xl"
-              />
-            </div>
-          </div>
-
-          {/* Row 6: Pricing */}
+          {/* Row 5: Pricing */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1">
               <div className="flex items-center justify-between">
@@ -444,14 +398,13 @@ export const RowEditDialog = ({
                   setForm({ ...form, purchase_cost: e.target.value });
                   markModified("purchase_cost");
                 }}
+                placeholder="0.00"
                 className="h-9 text-xs rounded-xl"
               />
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold text-foreground">
-                  Retail Price <span className="text-rose-500">*</span>
-                </Label>
+                <Label className="text-xs font-semibold text-foreground">Retail Price</Label>
                 {getFieldOrigin("retail_price", "Retail Price")}
               </div>
               <Input
@@ -462,13 +415,14 @@ export const RowEditDialog = ({
                   setForm({ ...form, retail_price: e.target.value });
                   markModified("retail_price");
                 }}
+                placeholder="0.00"
                 className="h-9 text-xs rounded-xl"
               />
             </div>
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold text-foreground">Discount Price</Label>
-                {getFieldOrigin("discount_price", "Discount Price")}
+                {getFieldOrigin("discount_price", "Discount")}
               </div>
               <Input
                 type="number"
@@ -478,18 +432,18 @@ export const RowEditDialog = ({
                   setForm({ ...form, discount_price: e.target.value });
                   markModified("discount_price");
                 }}
-                placeholder="Optional"
+                placeholder="0.00"
                 className="h-9 text-xs rounded-xl"
               />
             </div>
           </div>
 
-          {/* Row 7: Stock & Alert */}
+          {/* Row 6: Stock & Alert */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-semibold text-foreground">Stock Units</Label>
-                {getFieldOrigin("stock_units", "Stock")}
+                {getFieldOrigin("stock_units", "Stock Units")}
               </div>
               <Input
                 type="number"
@@ -498,6 +452,7 @@ export const RowEditDialog = ({
                   setForm({ ...form, stock_units: e.target.value });
                   markModified("stock_units");
                 }}
+                placeholder="0"
                 className="h-9 text-xs rounded-xl"
               />
             </div>
@@ -513,6 +468,41 @@ export const RowEditDialog = ({
                   setForm({ ...form, min_stock_alert: e.target.value });
                   markModified("min_stock_alert");
                 }}
+                placeholder="10"
+                className="h-9 text-xs rounded-xl"
+              />
+            </div>
+          </div>
+
+          {/* Row 7: Strength & Brand */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-foreground">Strength / Formulation</Label>
+                {getFieldOrigin("strength")}
+              </div>
+              <Input
+                value={form.strength}
+                onChange={(e) => {
+                  setForm({ ...form, strength: e.target.value });
+                  markModified("strength");
+                }}
+                placeholder="e.g. 500mg"
+                className="h-9 text-xs rounded-xl"
+              />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-foreground">Brand / Manufacturer</Label>
+                {getFieldOrigin("brand")}
+              </div>
+              <Input
+                value={form.brand}
+                onChange={(e) => {
+                  setForm({ ...form, brand: e.target.value });
+                  markModified("brand");
+                }}
+                placeholder="e.g. GlaxoSmithKline"
                 className="h-9 text-xs rounded-xl"
               />
             </div>
@@ -553,13 +543,13 @@ export const RowEditDialog = ({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 pt-3 border-t border-border">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} className="rounded-xl">
+        <DialogFooter className="p-4 bg-muted/20 border-t border-border flex-shrink-0 flex items-center justify-end gap-2.5">
+          <Button variant="ghost" onClick={() => onOpenChange(false)} className="rounded-xl text-xs font-semibold">
             Cancel
           </Button>
           <Button
             onClick={handleSave}
-            className="rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold px-6"
+            className="rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs px-6 shadow-sm"
           >
             Save & Update Row
           </Button>

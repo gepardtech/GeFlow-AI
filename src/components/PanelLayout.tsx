@@ -1,6 +1,7 @@
 import { ReactNode, useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllContactSubmissions } from "@/lib/contactService";
 import { Bell, ChevronLeft, ChevronDown, LogOut, RefreshCw, Search, Sun, Moon, Settings, LifeBuoy, LogIn, Lock, Menu, Sparkles, LucideIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useToast } from "@/hooks/use-toast";
@@ -85,13 +86,9 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
 
   const fetchNotifications = useCallback(async () => {
     if (isAdmin) {
-      const { data } = await supabase
-        .from("contact_submissions")
-        .select("id, name, message, is_read, created_at")
-        .order("created_at", { ascending: false })
-        .limit(8);
+      const data = await fetchAllContactSubmissions();
       setNotifications(
-        (data ?? []).map((d: any) => ({
+        (data ?? []).slice(0, 8).map((d: any) => ({
           id: d.id,
           title: `New message from ${d.name}`,
           description: d.message?.slice(0, 80) ?? "",
@@ -114,11 +111,24 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
   // Realtime updates for admin
   useEffect(() => {
     if (!isAdmin) return;
+    const onSubmissionChange = () => fetchNotifications();
+    window.addEventListener("geflow:contact-submission-added", onSubmissionChange);
+    window.addEventListener("geflow:contact-submission-updated", onSubmissionChange);
+    window.addEventListener("geflow:contact-submission-deleted", onSubmissionChange);
+    window.addEventListener("geflow:ai-report-created", onSubmissionChange);
+    window.addEventListener("geflow:ai-restock-created", onSubmissionChange);
     const channel = supabase
       .channel("contact_notifications")
       .on("postgres_changes", { event: "*", schema: "public", table: "contact_submissions" }, () => fetchNotifications())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      window.removeEventListener("geflow:contact-submission-added", onSubmissionChange);
+      window.removeEventListener("geflow:contact-submission-updated", onSubmissionChange);
+      window.removeEventListener("geflow:contact-submission-deleted", onSubmissionChange);
+      window.removeEventListener("geflow:ai-report-created", onSubmissionChange);
+      window.removeEventListener("geflow:ai-restock-created", onSubmissionChange);
+      supabase.removeChannel(channel);
+    };
   }, [isAdmin, fetchNotifications]);
 
   const handleRefresh = () => {
@@ -198,7 +208,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
   );
 
   const BrandLogo = () => (
-    <Link to="/" className="flex items-center gap-2">
+    <Link to={isAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2">
       {settings?.logo_url ? (
         <img src={settings.logo_url} alt={settings?.app_name ?? "Logo"} className="h-8 max-w-[140px] object-contain" />
       ) : (
@@ -258,6 +268,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 h-screen">
+        <AnnouncementBar audience={isAdmin ? "admins" : "users"} />
         <header className="h-16 border-b border-border bg-background flex items-center gap-3 px-4 md:px-6 flex-shrink-0">
           {/* Mobile hamburger */}
           <button
@@ -399,7 +410,6 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
             </DropdownMenu>
           </div>
         </header>
-        <AnnouncementBar audience={isAdmin ? "admins" : "users"} />
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-3.5 sm:p-5 md:p-8 min-w-0 w-full">{children}</main>
       </div>
       {!isAdmin && <AIAssistant open={aiOpen} onOpenChange={setAiOpen} />}

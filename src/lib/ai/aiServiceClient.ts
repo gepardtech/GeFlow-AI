@@ -33,7 +33,7 @@ export async function requestProductAnalysis(
     headers["x-user-id"] = "active-user";
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch("/api/ai/analyze-product", {
       method: "POST",
@@ -88,7 +88,7 @@ export async function requestProductVerification(
     headers["x-user-id"] = "active-user";
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     const response = await fetch("/api/ai/verify-product", {
       method: "POST",
@@ -247,26 +247,39 @@ export async function testAIProviderConnection(
   }
   headers["x-user-id"] = "active-user";
 
-  const response = await fetch("/api/ai/test-provider", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ provider, modelId }),
-  });
+  try {
+    const response = await fetch("/api/ai/test-provider", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ provider, modelId }),
+    });
 
-  if (!response.ok) {
-    const errorJson = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const errorJson = await response.json().catch(() => ({}));
+      return {
+        success: false,
+        provider,
+        model: modelId || "default",
+        latencyMs: 0,
+        healthStatus: "unhealthy",
+        errorCode: errorJson?.code || "AI_PROVIDER_UNAVAILABLE",
+        message: errorJson?.message || "Connection test failed",
+        testedAt: new Date().toISOString(),
+      };
+    }
+
+    const json = await response.json();
+    return json.data;
+  } catch (err: any) {
     return {
       success: false,
       provider,
       model: modelId || "default",
       latencyMs: 0,
       healthStatus: "unhealthy",
-      errorCode: errorJson?.code || "AI_PROVIDER_UNAVAILABLE",
-      message: errorJson?.message || "Connection test failed",
+      errorCode: "AI_NETWORK_ERROR",
+      message: err?.message || "Failed to reach AI service",
       testedAt: new Date().toISOString(),
     };
   }
-
-  const json = await response.json();
-  return json.data;
 }

@@ -307,6 +307,9 @@ export class ProductVerifier {
       suggestion,
       businessContext,
       searchEvidence,
+      options: {
+        timeoutMs: 25000,
+      },
     };
 
     let aiProviderName = "openai";

@@ -37,47 +37,52 @@ export const useActiveBusiness = () => {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setLoading(false); return; }
-    const { data } = await supabase
-      .from("businesses")
-      .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id")
-      .eq("owner_user_id", user.id)
-      .order("created_at", { ascending: true });
-    const rows = (data ?? []) as BusinessRow[];
-    setBusinesses(rows);
-    const saved = localStorage.getItem(LS_KEY);
-    const exists = rows.find((r) => r.id === saved);
-    const chosen = exists ? saved : rows[0]?.id ?? null;
-    setActiveId(chosen);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
+      const { data } = await supabase
+        .from("businesses")
+        .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id")
+        .eq("owner_user_id", user.id)
+        .order("created_at", { ascending: true });
+      const rows = (data ?? []) as BusinessRow[];
+      setBusinesses(rows);
+      const saved = localStorage.getItem(LS_KEY);
+      const exists = rows.find((r) => r.id === saved);
+      const chosen = exists ? saved : rows[0]?.id ?? null;
+      setActiveId(chosen);
 
-    const activeRow = rows.find((r) => r.id === chosen);
-    if (activeRow?.category_id) {
-      const { data: cat } = await supabase
-        .from("business_categories")
-        .select("id, industry_type, name, currency, default_tax, stock_alert_limit, enabled_modules, enabled_features")
-        .eq("id", activeRow.category_id)
-        .maybeSingle();
-      setIndustryType((cat?.industry_type as string) ?? null);
-      setCategoryName((cat?.name as string) ?? null);
-      setCategorySettings(cat ? {
-        id: cat.id,
-        name: cat.name,
-        industry_type: cat.industry_type,
-        currency: cat.currency,
-        default_tax: cat.default_tax,
-        stock_alert_limit: cat.stock_alert_limit,
-      } : null);
-      setEnabledModules((cat?.enabled_modules as string[]) ?? null);
-      setEnabledFeatures((cat?.enabled_features as string[]) ?? null);
-    } else {
-      setIndustryType(null);
-      setCategoryName(null);
-      setCategorySettings(null);
-      setEnabledModules(null);
-      setEnabledFeatures(null);
+      const activeRow = rows.find((r) => r.id === chosen);
+      if (activeRow?.category_id) {
+        const { data: cat } = await supabase
+          .from("business_categories")
+          .select("id, industry_type, name, currency, default_tax, stock_alert_limit, enabled_modules, enabled_features")
+          .eq("id", activeRow.category_id)
+          .maybeSingle();
+        setIndustryType((cat?.industry_type as string) ?? null);
+        setCategoryName((cat?.name as string) ?? null);
+        setCategorySettings(cat ? {
+          id: cat.id,
+          name: cat.name,
+          industry_type: cat.industry_type,
+          currency: cat.currency,
+          default_tax: cat.default_tax,
+          stock_alert_limit: cat.stock_alert_limit,
+        } : null);
+        setEnabledModules((cat?.enabled_modules as string[]) ?? null);
+        setEnabledFeatures((cat?.enabled_features as string[]) ?? null);
+      } else {
+        setIndustryType(null);
+        setCategoryName(null);
+        setCategorySettings(null);
+        setEnabledModules(null);
+        setEnabledFeatures(null);
+      }
+    } catch (err) {
+      console.warn("Failed to load active business:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {

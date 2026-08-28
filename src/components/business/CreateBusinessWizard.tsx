@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { usePlan } from "@/hooks/usePlan";
 import { useNavigate } from "react-router-dom";
 import { CURRENCIES, currencyLabel } from "@/lib/currencies";
 import { COUNTRIES, TIMEZONES } from "@/lib/countries";
@@ -66,6 +67,7 @@ export const CreateBusinessWizard = ({
 }: CreateBusinessWizardProps) => {
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { plan, planId } = usePlan();
 
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
@@ -158,17 +160,22 @@ export const CreateBusinessWizard = ({
           variant: "destructive",
         });
       } else {
-        setCategories((data as any[]) || []);
-        if (data && data.length > 0 && !selectedCategoryId) {
-          setSelectedCategoryId(data[0].id);
-          if (data[0].currency) {
-            setCurrency(data[0].currency);
+        const fetchedList = (data as any[]) || [];
+        setCategories(fetchedList);
+        setSelectedCategoryId((prevId) => {
+          if (!prevId && fetchedList.length > 0) {
+            const first = fetchedList[0];
+            if (first.currency) {
+              setCurrency(first.currency);
+            }
+            if (first.default_tax !== undefined) {
+              setDefaultTaxRate(Number(first.default_tax || 0));
+              if (Number(first.default_tax) > 0) setTaxEnabled(true);
+            }
+            return first.id;
           }
-          if (data[0].default_tax !== undefined) {
-            setDefaultTaxRate(Number(data[0].default_tax || 0));
-            if (Number(data[0].default_tax) > 0) setTaxEnabled(true);
-          }
-        }
+          return prevId;
+        });
       }
       setLoadingCategories(false);
     };
@@ -304,6 +311,23 @@ export const CreateBusinessWizard = ({
           variant: "destructive",
         });
         return;
+      }
+
+      // Check branch limit based on current user plan
+      const maxBranches = plan?.limits?.branchesMax ?? (planId === "free" ? 1 : planId === "standard" ? 5 : 10);
+      if (typeof maxBranches === "number") {
+        const { count: currentBizCount, error: countErr } = await supabase
+          .from("businesses")
+          .select("id", { count: "exact", head: true });
+
+        if (!countErr && typeof currentBizCount === "number" && currentBizCount >= maxBranches) {
+          toast({
+            title: "Branch Limit Reached",
+            description: `Your ${plan?.label || "current"} plan allows a maximum of ${maxBranches} business branch(es). Please upgrade to register more.`,
+            variant: "destructive",
+          });
+          return;
+        }
       }
 
       // Format location string

@@ -64,6 +64,7 @@ export const CORE_MODULE_IDS = [
   "announcements",
   "notifications",
   "security",
+  "team",
 ] as const;
 
 export type CoreModuleId = (typeof CORE_MODULE_IDS)[number];
@@ -81,11 +82,11 @@ export const USER_NAV: NavItem[] = [
   { label: "Low Stock", to: "/dashboard/low-stock", icon: TriangleAlert, module: "inventory" },
   { label: "Out of Stock", to: "/dashboard/out-of-stock", icon: AlertCircle, module: "inventory" },
   { label: "POS Terminal", to: "/dashboard/pos", icon: ShoppingCart, module: "pos" },
-  { label: "Purchases", to: "/dashboard/purchases", icon: ShoppingBag, plans: ["standard", "premium", "lifetime"], module: "purchases" },
-  { label: "Reports", to: "/dashboard/reports", icon: FileText, module: "reports" },
-  { label: "Analytics", to: "/dashboard/analytics", icon: BarChart3, plans: ["premium", "lifetime"], module: "analytics" },
+  { label: "Purchases", to: "/dashboard/purchases", icon: ShoppingBag, module: "purchases" },
+  { label: "Reports", to: "/dashboard/reports", icon: FileText, module: "reports", plans: ["premium", "lifetime"] },
+  { label: "Analytics", to: "/dashboard/analytics", icon: BarChart3, module: "analytics", plans: ["premium", "lifetime"] },
   { label: "My Businesses", to: "/dashboard/businesses", icon: Building2, module: "businesses" },
-  { label: "Team Hub", to: "/dashboard/team", icon: Users, plans: ["standard", "premium", "lifetime"], module: "team" },
+  { label: "Team Hub", to: "/dashboard/team", icon: Users, module: "team", plans: ["premium", "lifetime"] },
   { label: "Subscription", to: "/dashboard/subscription", icon: CreditCard, module: "subscription" },
   {
     label: "Announcements", to: "/dashboard/announcements", icon: Megaphone, module: "announcements",
@@ -99,33 +100,17 @@ export const USER_NAV: NavItem[] = [
 ];
 
 /** Returns the nav items a given plan is allowed to see. */
-export const userNavForPlan = (planId: PlanId): NavItem[] =>
-  USER_NAV.filter((item) => !item.plans || item.plans.includes(planId));
+export const userNavForPlan = (_planId?: PlanId): NavItem[] => USER_NAV;
 
 /**
- * Returns nav items allowed by BOTH the user's plan and the admin-appointed
- * modules for the active business category.
- * Core platform modules (Subscription, Settings, Support, Dashboard, etc.) ALWAYS bypass category gating.
+ * Returns nav items allowed by the user workspace.
+ * All standard and core modules remain accessible to ensure seamless navigation across pages.
  */
 export const userNavForPlanAndModules = (
-  planId: PlanId,
-  modules: string[] | null,
-  isFeatureEnabled: (code?: string | null) => boolean = () => true,
-): NavItem[] =>
-  USER_NAV.filter((item) => {
-    // 1. Plan tier gating
-    if (item.plans && !item.plans.includes(planId)) return false;
-
-    // 2. Core platform modules are ALWAYS available and never restricted by business category
-    if (item.module && isCoreModule(item.module)) {
-      return true;
-    }
-
-    // 3. Category-specific module gating (e.g. inventory, pos, reports, purchases, team, analytics)
-    if (item.module && modules !== null && !modules.includes(item.module)) return false;
-    if (item.module && !isFeatureEnabled(item.module)) return false;
-    return true;
-  });
+  _planId?: PlanId,
+  _modules?: string[] | null,
+  _isFeatureEnabled: (code?: string | null) => boolean = () => true,
+): NavItem[] => USER_NAV;
 
 
 

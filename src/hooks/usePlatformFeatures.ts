@@ -23,9 +23,14 @@ export const usePlatformFeatures = (planId?: string) => {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from("public_feature_modules").select("*");
-    setRows((data ?? []) as unknown as PublicFeatureModule[]);
-    setLoading(false);
+    try {
+      const { data } = await supabase.from("public_feature_modules").select("*");
+      setRows((data ?? []) as unknown as PublicFeatureModule[]);
+    } catch (err) {
+      console.warn("Failed to load platform features:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {

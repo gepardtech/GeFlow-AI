@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertCircle,
+  ArrowLeft,
   ArrowRight,
   Check,
   CheckCircle2,
@@ -20,8 +21,9 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  HelpCircle,
 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 
 const ResetPassword = () => {
   const [password, setPassword] = useState("");
@@ -34,7 +36,7 @@ const ResetPassword = () => {
   const [resetSuccess, setResetSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Optional manual OTP support
+  // Manual OTP entry mode (for users who received a 6-digit code in their email)
   const [manualOtpMode, setManualOtpMode] = useState(false);
   const [otpEmail, setOtpEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
@@ -47,10 +49,13 @@ const ResetPassword = () => {
   useEffect(() => {
     let isMounted = true;
 
-    // Listen to Supabase Auth state change
+    // Listen to Supabase Auth state change specifically for PASSWORD_RECOVERY events
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "PASSWORD_RECOVERY" || session) {
-        if (isMounted) setIsRecoverySessionActive(true);
+      if (event === "PASSWORD_RECOVERY") {
+        if (isMounted) {
+          setIsRecoverySessionActive(true);
+          sessionStorage.setItem("geflow_auth_is_recovery_session", "true");
+        }
       }
       if (isMounted) setCheckingSession(false);
     });
@@ -58,31 +63,53 @@ const ResetPassword = () => {
     const initAuth = async () => {
       try {
         const urlParams = new URLSearchParams(window.location.search);
-        const hash = window.location.hash;
-        const isRecoveryHash = hash.includes("type=recovery") || hash.includes("access_token");
+        const hash = window.location.hash || "";
+        const hashParams = new URLSearchParams(hash.replace(/^#/, ""));
+
+        const isRecoveryHash =
+          hash.includes("type=recovery") ||
+          hashParams.get("type") === "recovery" ||
+          (hash.includes("access_token") && hash.includes("type=recovery"));
+
         const code = urlParams.get("code") || searchParams.get("code");
         const tokenHash = urlParams.get("token_hash") || searchParams.get("token_hash");
-        const type = urlParams.get("type") || searchParams.get("type");
+        const type = urlParams.get("type") || searchParams.get("type") || hashParams.get("type");
 
+        // Case A: PKCE code exchange from email link
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (!error && isMounted) {
             setIsRecoverySessionActive(true);
+            sessionStorage.setItem("geflow_auth_is_recovery_session", "true");
           }
-        } else if (tokenHash && type === "recovery") {
+        }
+        // Case B: Direct Token Hash verification from email link
+        else if (tokenHash && type === "recovery") {
           const { error } = await supabase.auth.verifyOtp({
             token_hash: tokenHash,
             type: "recovery",
           });
           if (!error && isMounted) {
             setIsRecoverySessionActive(true);
+            sessionStorage.setItem("geflow_auth_is_recovery_session", "true");
           }
         }
-
-        // Check if session already exists
-        const { data: { session } } = await supabase.auth.getSession();
-        if ((session || isRecoveryHash) && isMounted) {
+        // Case C: Supabase recovery hash in URL (access_token#type=recovery)
+        else if (isRecoveryHash) {
           setIsRecoverySessionActive(true);
+          sessionStorage.setItem("geflow_auth_is_recovery_session", "true");
+        }
+        // Case D: Active session flagged specifically as recovery session
+        else {
+          const isRecoveryFlagged = sessionStorage.getItem("geflow_auth_is_recovery_session") === "true";
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (session && isRecoveryFlagged && isMounted) {
+            setIsRecoverySessionActive(true);
+          } else {
+            // User typed URL manually without valid recovery email token / session
+            setIsRecoverySessionActive(false);
+          }
         }
       } catch (err) {
         console.error("Auth initialization error in ResetPassword:", err);
@@ -149,6 +176,8 @@ const ResetPassword = () => {
           variant: "destructive",
         });
       } else {
+        // Clear recovery session state on success
+        sessionStorage.removeItem("geflow_auth_is_recovery_session");
         setResetSuccess(true);
         toast({
           title: "Password Reset Successful! 🎉",
@@ -193,9 +222,10 @@ const ResetPassword = () => {
         });
       } else if (data.session) {
         setIsRecoverySessionActive(true);
+        sessionStorage.setItem("geflow_auth_is_recovery_session", "true");
         setManualOtpMode(false);
         toast({
-          title: "Code Verified!",
+          title: "Code Verified! 🔒",
           description: "Please enter your new password below.",
         });
       }
@@ -213,13 +243,13 @@ const ResetPassword = () => {
       <section className="min-h-[calc(100vh-140px)] flex items-center justify-center px-3 sm:px-6 py-6 sm:py-12 bg-background">
         <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xl shadow-primary/5 border border-border bg-card min-w-0">
           
-          {/* LEFT PANEL: Password Reset Form / States */}
+          {/* LEFT PANEL: Password Reset Form / Restricted Access States */}
           <div className="p-5 sm:p-8 md:p-10 lg:p-12 flex flex-col justify-center min-w-0">
             {checkingSession ? (
               <div className="py-16 flex flex-col items-center justify-center text-center space-y-4">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 <p className="text-sm font-semibold text-muted-foreground">
-                  Validating security recovery token...
+                  Verifying security credentials & email token...
                 </p>
               </div>
             ) : resetSuccess ? (
@@ -246,7 +276,7 @@ const ResetPassword = () => {
                     <ShieldCheck className="w-4 h-4" /> Account Protected
                   </p>
                   <p>
-                    All prior recovery tokens have been invalidated. You can now use your new password to access your dashboard.
+                    All prior recovery tokens and old passwords have been permanently invalidated. You can now use your new password to access your dashboard.
                   </p>
                 </div>
 
@@ -261,16 +291,16 @@ const ResetPassword = () => {
                 </div>
               </motion.div>
             ) : isRecoverySessionActive ? (
-              /* ACTIVE RESET FORM */
+              /* ACTIVE RESET FORM (ACCESSED VIA EMAIL TOKEN ONLY) */
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-6"
               >
                 <div>
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-3">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Create New Credentials</span>
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold mb-3">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Email Link Verified</span>
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
                     Set New Password
@@ -420,7 +450,7 @@ const ResetPassword = () => {
                 </form>
               </motion.div>
             ) : manualOtpMode ? (
-              /* MANUAL OTP CODE MODE */
+              /* MANUAL OTP CODE MODE (FOR USERS WITH 6-DIGIT EMAIL CODE) */
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -429,13 +459,13 @@ const ResetPassword = () => {
                 <div>
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-3">
                     <KeyRound className="w-3.5 h-3.5" />
-                    <span>Manual Code Verification</span>
+                    <span>Enter 6-Digit Email Code</span>
                   </div>
                   <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-                    Enter Recovery Code
+                    Verify Security Token
                   </h1>
                   <p className="text-xs sm:text-sm text-muted-foreground mt-1.5">
-                    If your email contained a 6-digit verification code instead of a magic link, enter it below:
+                    Please enter the email address you requested recovery for, along with the 6-digit one-time code sent to your inbox.
                   </p>
                 </div>
 
@@ -449,7 +479,7 @@ const ResetPassword = () => {
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="otp-email" className="text-xs font-bold text-foreground">
-                      Email Address
+                      Account Email Address
                     </Label>
                     <div className="relative">
                       <Mail className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
@@ -484,15 +514,15 @@ const ResetPassword = () => {
                   <Button
                     type="submit"
                     disabled={verifyingOtp || !otpEmail || !otpCode}
-                    className="w-full h-11 sm:h-12 rounded-xl sm:rounded-2xl bg-hero-gradient text-primary-foreground font-bold text-xs sm:text-sm"
+                    className="w-full h-11 sm:h-12 rounded-xl sm:rounded-2xl bg-hero-gradient text-primary-foreground font-bold text-xs sm:text-sm shadow-md shadow-primary/20 border-0"
                   >
                     {verifyingOtp ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Verifying Code...</span>
+                        <span>Verifying Security Token...</span>
                       </>
                     ) : (
-                      <span>Verify Code & Set Password</span>
+                      <span>Verify Token & Unlock Password Reset</span>
                     )}
                   </Button>
                 </form>
@@ -501,36 +531,44 @@ const ResetPassword = () => {
                   <button
                     type="button"
                     onClick={() => setManualOtpMode(false)}
-                    className="text-xs text-muted-foreground hover:text-foreground font-semibold"
+                    className="text-xs text-muted-foreground hover:text-foreground font-semibold inline-flex items-center gap-1"
                   >
-                    Cancel and view options
+                    <ArrowLeft className="w-3.5 h-3.5" /> Back to options
                   </button>
                 </div>
               </motion.div>
             ) : (
-              /* TOKEN EXPIRED / NOT FOUND STATE */
+              /* PROFESSIONAL RESTRICTED ACCESS SCREEN (DIRECT URL ACCESS BLOCKED) */
               <motion.div
                 initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className="space-y-6"
               >
-                <div className="h-12 w-12 rounded-2xl bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center justify-center shadow-sm">
-                  <ShieldAlert className="w-6 h-6" />
+                <div className="h-14 w-14 rounded-2xl bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center justify-center shadow-sm">
+                  <ShieldAlert className="w-7 h-7" />
                 </div>
+
                 <div>
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] font-bold mb-2">
+                    <span>Protected Security Route</span>
+                  </div>
                   <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
-                    Reset Link Expired or Invalid
+                    Access Restricted
                   </h2>
                   <p className="text-xs sm:text-sm text-muted-foreground mt-1.5 leading-relaxed">
-                    For your security, password recovery links are single-use and expire after 60 minutes.
+                    For your protection, the password reset form can only be accessed through the secure verification link sent to your email when you request a password reset.
                   </p>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-muted/40 border border-border text-xs text-muted-foreground space-y-2">
-                  <p className="font-bold text-foreground">What would you like to do?</p>
-                  <p>
-                    You can easily generate a fresh password recovery link or enter your 6-digit security code manually.
+                <div className="p-4 rounded-2xl bg-muted/40 border border-border text-xs text-muted-foreground space-y-2.5 leading-relaxed">
+                  <p className="font-bold text-foreground flex items-center gap-1.5">
+                    <HelpCircle className="w-4 h-4 text-primary" /> How to reset your password:
                   </p>
+                  <ol className="list-decimal list-inside space-y-1 text-muted-foreground pl-1">
+                    <li>Click <strong>Request Password Reset Link</strong> below.</li>
+                    <li>Enter your account email address on the forgot password page.</li>
+                    <li>Open the recovery email received from GeFlow and click the button.</li>
+                  </ol>
                 </div>
 
                 <div className="space-y-3 pt-2">
@@ -539,24 +577,25 @@ const ResetPassword = () => {
                     className="w-full h-11 sm:h-12 rounded-xl sm:rounded-2xl bg-hero-gradient text-primary-foreground font-bold text-xs sm:text-sm hover:opacity-95 shadow-md shadow-primary/20 border-0 flex items-center justify-center gap-2"
                   >
                     <KeyRound className="w-4 h-4" />
-                    <span>Request New Reset Link</span>
+                    <span>Request Password Reset Link</span>
                   </Button>
 
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => setManualOtpMode(true)}
-                    className="w-full h-11 rounded-xl text-xs sm:text-sm font-semibold border-border bg-card hover:bg-muted"
+                    className="w-full h-11 rounded-xl text-xs sm:text-sm font-semibold border-border bg-card hover:bg-muted text-foreground flex items-center justify-center gap-1.5"
                   >
+                    <Mail className="w-4 h-4 text-primary" />
                     <span>Enter 6-Digit Email Code Instead</span>
                   </Button>
 
                   <div className="text-center pt-2">
                     <Link
                       to="/login"
-                      className="text-xs text-muted-foreground hover:text-foreground font-bold"
+                      className="text-xs text-muted-foreground hover:text-foreground font-semibold inline-flex items-center gap-1"
                     >
-                      Return to Sign In
+                      <ArrowLeft className="w-3.5 h-3.5" /> Return to Sign In
                     </Link>
                   </div>
                 </div>
@@ -564,7 +603,7 @@ const ResetPassword = () => {
             )}
           </div>
 
-          {/* RIGHT PANEL: Enterprise Security Guidelines */}
+          {/* RIGHT PANEL: Enterprise Security Architecture & Best Practices */}
           <div className="relative bg-hero-gradient p-6 sm:p-8 md:p-10 lg:p-12 flex flex-col justify-center text-primary-foreground overflow-hidden">
             <div className="absolute -top-20 -right-20 h-60 w-60 rounded-full bg-white/10 blur-3xl pointer-events-none" />
             <div className="absolute -bottom-20 -left-20 h-60 w-60 rounded-full bg-secondary/30 blur-3xl pointer-events-none" />
@@ -573,32 +612,32 @@ const ResetPassword = () => {
               <div>
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-xs font-bold mb-3">
                   <ShieldCheck className="w-3.5 h-3.5 text-sky-300" />
-                  <span>Security Recommendations</span>
+                  <span>Enterprise Zero-Trust Security</span>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-2 flex items-center gap-2.5">
-                  Keep Your Store Safe <span className="text-2xl sm:text-3xl">🛡️</span>
+                  Account Protection 🛡️
                 </h2>
                 <p className="text-primary-foreground/90 text-xs sm:text-sm leading-relaxed max-w-md">
-                  Best practices for maintaining maximum security across your point-of-sale registers and administrator accounts.
+                  GeFlow enforces strict cryptographic token verification to safeguard point-of-sale registers, billing data, and team credentials.
                 </p>
               </div>
 
               <ul className="space-y-3 sm:space-y-4">
                 {[
                   {
-                    icon: Lock,
-                    title: "Use Unique Passwords",
-                    desc: "Avoid reusing passwords across personal email and financial apps.",
+                    icon: Mail,
+                    title: "Email-Bound Verification",
+                    desc: "Password reset sessions are strictly bound to single-use cryptographically signed recovery tokens dispatched directly to the account owner's inbox.",
                   },
                   {
-                    icon: KeyRound,
-                    title: "Include Symbols & Numbers",
-                    desc: "Combining uppercase letters, numbers, and special symbols dramatically reduces brute-force risks.",
+                    icon: Lock,
+                    title: "Direct Access Protection",
+                    desc: "Direct browser URL entries are blocked to prevent unauthorized credential tampering or unauthenticated session states.",
                   },
                   {
                     icon: ShieldCheck,
-                    title: "Automatic Session Refresh",
-                    desc: "When you reset your password, active web sessions are securely updated.",
+                    title: "Instant Session Invalidation",
+                    desc: "When a new password is saved, previous session hashes and old passwords are automatically destroyed in Supabase Auth.",
                   },
                 ].map(({ icon: Icon, title, desc }) => (
                   <li

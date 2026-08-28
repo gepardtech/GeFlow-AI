@@ -20,7 +20,7 @@ import {
 import { ProductCategory } from "@/hooks/useProductCategories";
 import { NormalizedProduct } from "@/lib/importer/types";
 import { getAllowedUomsForIndustry } from "@/lib/importer/uomCatalog";
-import { Edit3, Sparkles, Tag, Package, AlertCircle } from "lucide-react";
+import { Edit3 } from "lucide-react";
 
 interface BulkEditDialogProps {
   open: boolean;
@@ -118,22 +118,24 @@ export const BulkEditDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center">
+      <DialogContent className="max-w-xl max-h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-xl">
+        <DialogHeader className="p-5 border-b border-border flex-shrink-0 bg-muted/10">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center flex-shrink-0">
               <Edit3 className="w-4 h-4" />
             </div>
-            <DialogTitle className="text-base sm:text-lg font-bold">
-              Bulk Edit ({selectedProducts.length} Products)
-            </DialogTitle>
+            <div>
+              <DialogTitle className="text-base sm:text-lg font-bold">
+                Bulk Edit ({selectedProducts.length} Products)
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Apply changes across all selected products. Only checked attributes will be updated.
+              </DialogDescription>
+            </div>
           </div>
-          <DialogDescription className="text-xs">
-            Apply changes across all selected products. Only checked attributes will be updated.
-          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-3 text-xs">
+        <div className="space-y-4 p-5 overflow-y-auto max-h-[62vh] text-xs">
           {/* Section 1: Category */}
           <div className="p-3.5 rounded-2xl bg-card border border-border space-y-2.5">
             <div className="flex items-center justify-between">
@@ -142,7 +144,7 @@ export const BulkEditDialog = ({
                   type="checkbox"
                   checked={enableCategory}
                   onChange={(e) => setEnableCategory(e.target.checked)}
-                  className="rounded text-sky-500"
+                  className="rounded text-sky-500 h-4 w-4"
                 />
                 Update Category & Subcategory
               </label>
@@ -166,9 +168,9 @@ export const BulkEditDialog = ({
                       <SelectValue placeholder="Select Category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {parentCategories.map((c) => (
-                        <SelectItem key={c.id} value={c.id} className="text-xs">
-                          {c.name}
+                      {parentCategories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id} className="text-xs">
+                          {cat.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -179,7 +181,7 @@ export const BulkEditDialog = ({
                   <Label className="text-[11px] text-muted-foreground">Subcategory</Label>
                   <Select
                     value={selectedSubcategoryId}
-                    onValueChange={setSelectedSubcategoryId}
+                    onValueChange={(val) => setSelectedSubcategoryId(val)}
                     disabled={!selectedCategoryId || subcategories.length === 0}
                   >
                     <SelectTrigger className="h-9 text-xs rounded-xl">
@@ -190,9 +192,9 @@ export const BulkEditDialog = ({
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      {subcategories.map((s) => (
-                        <SelectItem key={s.id} value={s.id} className="text-xs">
-                          {s.name}
+                      {subcategories.map((sub) => (
+                        <SelectItem key={sub.id} value={sub.id} className="text-xs">
+                          {sub.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -202,7 +204,7 @@ export const BulkEditDialog = ({
             )}
           </div>
 
-          {/* Section 2: Base Unit of Measure (UOM) */}
+          {/* Section 2: Unit of Measure */}
           <div className="p-3.5 rounded-2xl bg-card border border-border space-y-2.5">
             <div className="flex items-center justify-between">
               <label className="font-bold text-foreground flex items-center gap-2 cursor-pointer">
@@ -210,25 +212,25 @@ export const BulkEditDialog = ({
                   type="checkbox"
                   checked={enableUom}
                   onChange={(e) => setEnableUom(e.target.checked)}
-                  className="rounded text-sky-500"
+                  className="rounded text-sky-500 h-4 w-4"
                 />
                 Update Base Unit of Measure (UOM)
               </label>
-              <span className="text-[10px] text-emerald-600 font-semibold uppercase">
-                Allowed Catalog
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                Industry Specific
               </span>
             </div>
 
             {enableUom && (
               <div className="pt-1">
-                <Select value={selectedUom} onValueChange={setSelectedUom}>
+                <Select value={selectedUom} onValueChange={(val) => setSelectedUom(val)}>
                   <SelectTrigger className="h-9 text-xs rounded-xl">
-                    <SelectValue placeholder="Select Allowed Unit" />
+                    <SelectValue placeholder="Select Base UOM" />
                   </SelectTrigger>
-                  <SelectContent className="max-h-56">
-                    {allowedUoms.map((u) => (
-                      <SelectItem key={u} value={u} className="text-xs capitalize">
-                        {u}
+                  <SelectContent>
+                    {allowedUoms.map((uom) => (
+                      <SelectItem key={uom} value={uom} className="text-xs capitalize">
+                        {uom}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -245,7 +247,7 @@ export const BulkEditDialog = ({
                   type="checkbox"
                   checked={enablePackaging}
                   onChange={(e) => setEnablePackaging(e.target.checked)}
-                  className="rounded text-sky-500"
+                  className="rounded text-sky-500 h-4 w-4"
                 />
                 Update Packaging Type
               </label>
@@ -256,14 +258,14 @@ export const BulkEditDialog = ({
                 <Input
                   value={packagingType}
                   onChange={(e) => setPackagingType(e.target.value)}
-                  placeholder="e.g. Box, Strip, Bottle, Carton, Pack"
+                  placeholder="e.g. Blister Pack, Bottle, Box"
                   className="h-9 text-xs rounded-xl"
                 />
               </div>
             )}
           </div>
 
-          {/* Section 4: Min Stock Alert & Status */}
+          {/* Section 4: Status & Low Stock Limit */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="p-3.5 rounded-2xl bg-card border border-border space-y-2">
               <label className="font-bold text-foreground flex items-center gap-2 cursor-pointer">
@@ -271,7 +273,7 @@ export const BulkEditDialog = ({
                   type="checkbox"
                   checked={enableStatus}
                   onChange={(e) => setEnableStatus(e.target.checked)}
-                  className="rounded text-sky-500"
+                  className="rounded text-sky-500 h-4 w-4"
                 />
                 Product Status
               </label>
@@ -304,7 +306,7 @@ export const BulkEditDialog = ({
                   type="checkbox"
                   checked={enableMinAlert}
                   onChange={(e) => setEnableMinAlert(e.target.checked)}
-                  className="rounded text-sky-500"
+                  className="rounded text-sky-500 h-4 w-4"
                 />
                 Min Stock Alert Limit
               </label>
@@ -321,18 +323,18 @@ export const BulkEditDialog = ({
           </div>
         </div>
 
-        <DialogFooter className="gap-2 pt-2 border-t border-border">
+        <DialogFooter className="p-4 bg-muted/20 border-t border-border flex-shrink-0 flex items-center justify-end gap-2.5">
           <Button
             variant="ghost"
             onClick={() => onOpenChange(false)}
-            className="rounded-xl text-xs"
+            className="rounded-xl text-xs font-semibold"
           >
             Cancel
           </Button>
           <Button
             onClick={handleApply}
             disabled={!hasAnySelected}
-            className="rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs px-5"
+            className="rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs px-5 shadow-sm"
           >
             Apply to {selectedProducts.length} Products
           </Button>

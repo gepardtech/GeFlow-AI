@@ -31,13 +31,18 @@ export const useProductCategories = (industryType: string | null, categoryName: 
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("product_categories")
-      .select("id, name, parent_id, industry_assignments, inherit_expiry, inherit_batch, inherit_barcode, inherit_alerts, status")
-      .eq("status", "active")
-      .order("name");
-    setAll((data as ProductCategory[]) ?? []);
-    setLoading(false);
+    try {
+      const { data } = await supabase
+        .from("product_categories")
+        .select("id, name, parent_id, industry_assignments, inherit_expiry, inherit_batch, inherit_barcode, inherit_alerts, status")
+        .eq("status", "active")
+        .order("name");
+      setAll((data as ProductCategory[]) ?? []);
+    } catch (err) {
+      console.warn("Failed to load product categories:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);

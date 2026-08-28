@@ -105,7 +105,7 @@ describe("Phase 8 — AI Suggestion Engine & Add Product UI Integration", () => 
         warnings: [],
         ai_metadata: {
           provider: "geflow-router",
-          model: "gemini-2.5-flash",
+          model: "gemini-3.7-flash",
           generated_at: new Date().toISOString(),
         },
         field_sources: { name: "ai", category: "ai", uom: "ai" },

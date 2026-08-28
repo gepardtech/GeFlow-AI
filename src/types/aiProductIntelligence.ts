@@ -252,7 +252,7 @@ export interface FieldConfidenceScores {
  */
 export interface AIMetadata {
   /**
-   * Identifier of the AI provider or subsystem (e.g., "gecore-ai-engine", "gemini-2.5-flash", "openai-gpt4o", "openrouter")
+   * Identifier of the AI provider or subsystem (e.g., "gecore-ai-engine", "gemini-3.7-flash", "openai-gpt4o", "openrouter")
    */
   provider: string;
 

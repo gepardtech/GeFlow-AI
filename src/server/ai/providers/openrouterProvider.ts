@@ -116,7 +116,7 @@ Allowed Subcategories: ${JSON.stringify(allowedSubcategories.map((s) => ({ id: s
 Allowed Stock Units: ${JSON.stringify(allowedStockUnits || ["piece", "box", "bottle", "strip", "tablet", "capsule", "can", "bag", "pack"])}`;
 
     const controller = new AbortController();
-    const timeoutMs = request.options?.timeoutMs || 8000;
+    const timeoutMs = request.options?.timeoutMs || 15000;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
@@ -135,6 +135,7 @@ Allowed Stock Units: ${JSON.stringify(allowedStockUnits || ["piece", "box", "bot
             { role: "user", content: request.rawInput },
           ],
           response_format: { type: "json_object" },
+          max_tokens: 1200,
           temperature: request.options?.temperature ?? 0.1,
         }),
         signal: controller.signal,
@@ -311,7 +312,7 @@ Allowed Stock Units: ${JSON.stringify(allowedStockUnits || ["piece", "box", "bot
     );
 
     const controller = new AbortController();
-    const timeoutMs = request.options?.timeoutMs || 8000;
+    const timeoutMs = request.options?.timeoutMs || 10000;
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
@@ -330,6 +331,7 @@ Allowed Stock Units: ${JSON.stringify(allowedStockUnits || ["piece", "box", "bot
             { role: "user", content: userContent },
           ],
           response_format: { type: "json_object" },
+          max_tokens: 800,
           temperature: 0.1,
         }),
         signal: controller.signal,

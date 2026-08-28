@@ -71,12 +71,17 @@ export const usePlanLimits = (): PlanLimitsState => {
 
   const load = useCallback(async () => {
     if (!planId) return;
-    const { data } = await supabase
-      .from("plan_limits")
-      .select("plan_key, resource_key, label, limit_value, is_locked")
-      .eq("plan_key", planId);
-    setRows((data as PlanLimitRow[]) ?? []);
-    setLoading(false);
+    try {
+      const { data } = await supabase
+        .from("plan_limits")
+        .select("plan_key, resource_key, label, limit_value, is_locked")
+        .eq("plan_key", planId);
+      setRows((data as PlanLimitRow[]) ?? []);
+    } catch (err) {
+      console.warn("Failed to load plan limits:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [planId]);
 
   useEffect(() => {

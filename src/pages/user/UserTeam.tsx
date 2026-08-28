@@ -16,6 +16,7 @@ import {
   Edit2,
   RefreshCw,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import UserPanelGate from "@/components/UserPanelGate";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
@@ -55,7 +56,7 @@ export type StaffStatus = "active" | "inactive";
 
 export interface StaffMember {
   id: string;
-  user_id?: string;
+  user_id: string;
   full_name: string;
   email: string;
   role: StaffRole;
@@ -80,12 +81,14 @@ const timeAgoOrOnline = (iso?: string | null) => {
 
 const pickColor = (nameOrEmail: string) => {
   const colors = ["sky", "blue", "cyan", "indigo", "purple", "emerald"];
-  const code = (nameOrEmail || "A").charCodeAt(0) + (nameOrEmail || "A").charCodeAt((nameOrEmail || "A").length - 1);
+  const code =
+    (nameOrEmail || "A").charCodeAt(0) +
+    (nameOrEmail || "A").charCodeAt((nameOrEmail || "A").length - 1);
   return colors[code % colors.length];
 };
 
 export const UserTeam = () => {
-  const { activeId, activeBusiness } = useActiveBusiness();
+  const { active, activeId, activeBusiness } = useActiveBusiness();
   const { toast } = useToast();
 
   const [members, setMembers] = useState<StaffMember[]>([]);
@@ -111,20 +114,26 @@ export const UserTeam = () => {
   const [formStatus, setFormStatus] = useState<StaffStatus>("active");
   const [submitting, setSubmitting] = useState(false);
 
-  // Load real team data from Supabase (profiles, support_team_members, user_roles)
+  // Load real team data directly from Supabase (profiles, support_team_members, user_roles)
   const loadRealTeam = useCallback(async () => {
     try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
 
       const [
-        { data: profilesData },
-        { data: rolesData },
-        { data: supportMembersData },
+        { data: profilesData, error: profErr },
+        { data: rolesData, error: rolesErr },
+        { data: supportMembersData, error: suppErr },
       ] = await Promise.all([
         supabase.from("profiles").select("*").order("created_at", { ascending: true }),
         supabase.from("user_roles").select("*"),
         supabase.from("support_team_members").select("*"),
       ]);
+
+      if (profErr) console.warn("Profiles query notice:", profErr);
+      if (rolesErr) console.warn("Roles query notice:", rolesErr);
+      if (suppErr) console.warn("Support members query notice:", suppErr);
 
       const rolesMap = new Map<string, string>();
       (rolesData || []).forEach((r) => {
@@ -139,19 +148,33 @@ export const UserTeam = () => {
       const realList: StaffMember[] = [];
       const seenUserIds = new Set<string>();
 
-      // 1. If we have currentUser, ensure they are listed as Workspace Admin / Owner
+      // 1. Current Authenticated User (Workspace Owner / Admin)
       if (currentUser) {
         const myProfile = (profilesData || []).find((p) => p.user_id === currentUser.id);
-        const myRole = rolesMap.get(currentUser.id);
-        const isOwnerAdmin = myRole === "admin" || true;
+        const mySupport = supportMap.get(currentUser.id);
+        const myRoleAssigned = rolesMap.get(currentUser.id);
+
+        let resolvedMyRole: StaffRole = "admin";
+        if (mySupport?.role) {
+          const r = String(mySupport.role).toLowerCase();
+          if (r === "admin" || r === "manager" || r === "inventory" || r === "cashier") {
+            resolvedMyRole = r as StaffRole;
+          }
+        } else if (myRoleAssigned === "admin") {
+          resolvedMyRole = "admin";
+        }
 
         realList.push({
           id: currentUser.id,
           user_id: currentUser.id,
-          full_name: myProfile?.full_name || currentUser.user_metadata?.full_name || "Workspace Owner",
+          full_name:
+            myProfile?.full_name ||
+            currentUser.user_metadata?.full_name ||
+            currentUser.email?.split("@")[0] ||
+            "Workspace Owner",
           email: myProfile?.email || currentUser.email || "owner@geflowai.com",
-          role: isOwnerAdmin ? "admin" : "manager",
-          status: (myProfile?.status === "suspended" ? "inactive" : "active") as StaffStatus,
+          role: resolvedMyRole,
+          status: (myProfile?.status === "suspended" || mySupport?.is_active === false) ? "inactive" : "active",
           last_telemetry: "Online Now",
           avatar_color: "sky",
           created_at: myProfile?.created_at || currentUser.created_at || new Date().toISOString(),
@@ -160,7 +183,7 @@ export const UserTeam = () => {
         seenUserIds.add(currentUser.id);
       }
 
-      // 2. Add other profiles registered in the system / business
+      // 2. Map all other authentic users from profiles and support members
       (profilesData || []).forEach((prof) => {
         if (seenUserIds.has(prof.user_id)) return;
         seenUserIds.add(prof.user_id);
@@ -169,10 +192,16 @@ export const UserTeam = () => {
         const supportInfo = supportMap.get(prof.user_id);
 
         let resolvedRole: StaffRole = "cashier";
-        if (assignedRole === "admin" || supportInfo?.role === "admin") resolvedRole = "admin";
-        else if (supportInfo?.role === "manager" || prof.plan === "premium" || prof.plan === "unlimited") resolvedRole = "manager";
-        else if (supportInfo?.role === "inventory") resolvedRole = "inventory";
-        else if (supportInfo?.role) resolvedRole = (supportInfo.role.toLowerCase() as StaffRole);
+        if (supportInfo?.role) {
+          const r = String(supportInfo.role).toLowerCase();
+          if (r === "admin" || r === "manager" || r === "inventory" || r === "cashier") {
+            resolvedRole = r as StaffRole;
+          }
+        } else if (assignedRole === "admin") {
+          resolvedRole = "admin";
+        } else if (assignedRole === "user") {
+          resolvedRole = "cashier";
+        }
 
         const isInactive = prof.status === "suspended" || supportInfo?.is_active === false;
 
@@ -190,40 +219,58 @@ export const UserTeam = () => {
         });
       });
 
-      // 3. Merge with any business-specific staff persisted in localStorage if needed as secondary fallback
-      try {
-        const localKey = `geflow_biz_staff_${activeId || "default"}`;
-        const localSaved = localStorage.getItem(localKey);
-        if (localSaved) {
-          const localList: StaffMember[] = JSON.parse(localSaved);
-          localList.forEach((lm) => {
-            if (!realList.some((r) => r.id === lm.id || r.email.toLowerCase() === lm.email.toLowerCase())) {
-              realList.push(lm);
-            }
-          });
+      // 3. Include any support team members registered whose profile might not yet be listed
+      (supportMembersData || []).forEach((supp) => {
+        if (seenUserIds.has(supp.user_id)) return;
+        seenUserIds.add(supp.user_id);
+
+        let resolvedRole: StaffRole = "cashier";
+        if (supp.role) {
+          const r = String(supp.role).toLowerCase();
+          if (r === "admin" || r === "manager" || r === "inventory" || r === "cashier") {
+            resolvedRole = r as StaffRole;
+          }
         }
-      } catch {
-        // ignore
-      }
+
+        realList.push({
+          id: supp.user_id,
+          user_id: supp.user_id,
+          full_name: `Staff Member (${supp.user_id.slice(0, 6)})`,
+          email: `staff-${supp.user_id.slice(0, 6)}@geflow.team`,
+          role: resolvedRole,
+          status: supp.is_active ? "active" : "inactive",
+          last_telemetry: timeAgoOrOnline(supp.created_at),
+          avatar_color: pickColor(supp.user_id),
+          created_at: supp.created_at || new Date().toISOString(),
+          is_owner: false,
+        });
+      });
 
       setMembers(realList);
     } catch (err) {
-      console.error("Error loading team data:", err);
+      console.error("Error loading live team data:", err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [activeId]);
+  }, []);
 
-  // Initial load and Realtime Database Subscription
+  // Initial load and Realtime Database Channel Listeners
   useEffect(() => {
     loadRealTeam();
 
+    const channelId = `team_hub_rt_${Math.random().toString(36).slice(2, 8)}`;
     const channel = supabase
-      .channel(`user_team_hub_rt_${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => loadRealTeam())
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_roles" }, () => loadRealTeam())
-      .on("postgres_changes", { event: "*", schema: "public", table: "support_team_members" }, () => loadRealTeam())
+      .channel(channelId)
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () =>
+        loadRealTeam()
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_roles" }, () =>
+        loadRealTeam()
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "support_team_members" }, () =>
+        loadRealTeam()
+      )
       .subscribe();
 
     return () => {
@@ -262,7 +309,7 @@ export const UserTeam = () => {
       });
   }, [members, searchQuery, roleFilter, statusFilter, sortBy]);
 
-  // KPI Calculations from live data
+  // KPI Calculations from authentic database records
   const totalUsersCount = members.length;
   const activeStaffCount = members.filter((m) => m.status === "active").length;
   const adminsCount = members.filter((m) => m.role === "admin").length;
@@ -287,7 +334,7 @@ export const UserTeam = () => {
     setEditOpen(true);
   };
 
-  // Handle Add Member
+  // Handle Add Member to database
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim() || !formEmail.trim()) {
@@ -303,47 +350,85 @@ export const UserTeam = () => {
     try {
       const emailClean = formEmail.trim().toLowerCase();
       const nameClean = formName.trim();
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
 
-      // Check if user profile already exists
+      // Check if user profile already exists with this email
       const { data: existingProf } = await supabase
         .from("profiles")
         .select("user_id, full_name, email")
         .eq("email", emailClean)
         .maybeSingle();
 
-      if (existingProf) {
-        // Appoint/assign role in support_team_members or user_roles
-        if (user) {
-          await supabase.from("support_team_members").insert({
-            user_id: existingProf.user_id,
-            role: formRole,
-            appointed_by_user_id: user.id,
-            is_active: true,
-          });
-        }
-      } else {
-        // Persist new team member
-        const newMember: StaffMember = {
-          id: `staff-${Date.now().toString().slice(-6)}`,
+      const targetUserId = existingProf ? existingProf.user_id : crypto.randomUUID();
+
+      // Optimistic state update
+      const newMemberObj: StaffMember = {
+        id: targetUserId,
+        user_id: targetUserId,
+        full_name: nameClean,
+        email: emailClean,
+        role: formRole,
+        status: formStatus,
+        last_telemetry: "Invited Recently",
+        avatar_color: pickColor(nameClean || emailClean),
+        created_at: new Date().toISOString(),
+        is_owner: false,
+      };
+      setMembers((prev) => [newMemberObj, ...prev.filter((m) => m.user_id !== targetUserId)]);
+
+      // 1. Upsert profile record
+      await supabase.from("profiles").upsert(
+        {
+          user_id: targetUserId,
           full_name: nameClean,
           email: emailClean,
-          role: formRole,
-          status: formStatus,
-          last_telemetry: "Invited Just Now",
-          avatar_color: pickColor(nameClean),
-          created_at: new Date().toISOString(),
-        };
+          status: formStatus === "active" ? "active" : "suspended",
+        },
+        { onConflict: "user_id" }
+      );
 
-        const localKey = `geflow_biz_staff_${activeId || "default"}`;
-        const localSaved = localStorage.getItem(localKey);
-        const existingList = localSaved ? JSON.parse(localSaved) : [];
-        localStorage.setItem(localKey, JSON.stringify([newMember, ...existingList]));
+      // 2. Upsert in support_team_members
+      const { data: existingSupp } = await supabase
+        .from("support_team_members")
+        .select("id")
+        .eq("user_id", targetUserId)
+        .maybeSingle();
+
+      if (existingSupp) {
+        await supabase
+          .from("support_team_members")
+          .update({
+            role: formRole,
+            is_active: formStatus === "active",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingSupp.id);
+      } else {
+        await supabase.from("support_team_members").insert({
+          user_id: targetUserId,
+          role: formRole,
+          appointed_by_user_id: currentUser?.id || targetUserId,
+          is_active: formStatus === "active",
+        });
+      }
+
+      // 3. Keep user_roles aligned
+      if (formRole === "admin") {
+        const { data: existRole } = await supabase
+          .from("user_roles")
+          .select("id")
+          .eq("user_id", targetUserId)
+          .maybeSingle();
+        if (!existRole) {
+          await supabase.from("user_roles").insert({ user_id: targetUserId, role: "admin" });
+        }
       }
 
       toast({
         title: "Staff Member Registered",
-        description: `Digital invitation and permissions dispatched to ${emailClean}.`,
+        description: `Permissions for ${nameClean} (${formRole.toUpperCase()}) saved to database.`,
       });
 
       setRegisterOpen(false);
@@ -354,52 +439,105 @@ export const UserTeam = () => {
         description: err?.message || "Failed to register team member.",
         variant: "destructive",
       });
+      await loadRealTeam();
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Handle Edit Member
+  // Handle Edit Member in database
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMember || !formName.trim() || !formEmail.trim()) return;
 
     setSubmitting(true);
+    const targetUserId = selectedMember.user_id;
+    const nameClean = formName.trim();
+    const emailClean = formEmail.trim().toLowerCase();
+
+    // Optimistic state update
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.user_id === targetUserId || m.id === selectedMember.id
+          ? {
+              ...m,
+              full_name: nameClean,
+              email: emailClean,
+              role: formRole,
+              status: formStatus,
+            }
+          : m
+      )
+    );
+
     try {
-      if (selectedMember.user_id) {
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      if (targetUserId) {
+        // 1. Update profiles table
         await supabase
           .from("profiles")
           .update({
-            full_name: formName.trim(),
+            full_name: nameClean,
+            email: emailClean,
             status: formStatus === "active" ? "active" : "suspended",
           })
-          .eq("user_id", selectedMember.user_id);
+          .eq("user_id", targetUserId);
 
-        await supabase
+        // 2. Check and upsert/update support_team_members table
+        const { data: existingSupp } = await supabase
           .from("support_team_members")
-          .update({
-            role: formRole,
-            is_active: formStatus === "active",
-          })
-          .eq("user_id", selectedMember.user_id);
-      }
+          .select("id")
+          .eq("user_id", targetUserId)
+          .maybeSingle();
 
-      // Also update in local business staff storage if applicable
-      const localKey = `geflow_biz_staff_${activeId || "default"}`;
-      const localSaved = localStorage.getItem(localKey);
-      if (localSaved) {
-        const existingList: StaffMember[] = JSON.parse(localSaved);
-        const updated = existingList.map((m) =>
-          m.id === selectedMember.id
-            ? { ...m, full_name: formName.trim(), email: formEmail.trim().toLowerCase(), role: formRole, status: formStatus }
-            : m
-        );
-        localStorage.setItem(localKey, JSON.stringify(updated));
+        if (existingSupp) {
+          await supabase
+            .from("support_team_members")
+            .update({
+              role: formRole,
+              is_active: formStatus === "active",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existingSupp.id);
+        } else {
+          await supabase.from("support_team_members").insert({
+            user_id: targetUserId,
+            role: formRole,
+            appointed_by_user_id: currentUser?.id || targetUserId,
+            is_active: formStatus === "active",
+          });
+        }
+
+        // 3. Synchronize user_roles table
+        if (formRole === "admin") {
+          const { data: existRole } = await supabase
+            .from("user_roles")
+            .select("id")
+            .eq("user_id", targetUserId)
+            .maybeSingle();
+          if (existRole) {
+            await supabase.from("user_roles").update({ role: "admin" }).eq("id", existRole.id);
+          } else {
+            await supabase.from("user_roles").insert({ user_id: targetUserId, role: "admin" });
+          }
+        } else {
+          const { data: existRole } = await supabase
+            .from("user_roles")
+            .select("id")
+            .eq("user_id", targetUserId)
+            .maybeSingle();
+          if (existRole) {
+            await supabase.from("user_roles").update({ role: "user" }).eq("id", existRole.id);
+          }
+        }
       }
 
       toast({
         title: "Permissions Updated",
-        description: `${formName.trim()}'s architectural role updated to ${formRole.toUpperCase()}.`,
+        description: `${nameClean}'s role updated to ${formRole.toUpperCase()} in database.`,
       });
 
       setEditOpen(false);
@@ -410,6 +548,7 @@ export const UserTeam = () => {
         description: err?.message || "Failed to update staff member.",
         variant: "destructive",
       });
+      await loadRealTeam();
     } finally {
       setSubmitting(false);
     }
@@ -418,27 +557,50 @@ export const UserTeam = () => {
   // Toggle Account Status
   const toggleMemberStatus = async (member: StaffMember) => {
     const nextStatus: StaffStatus = member.status === "active" ? "inactive" : "active";
+    const targetUserId = member.user_id;
+
+    // Optimistic update
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.user_id === targetUserId || m.id === member.id
+          ? { ...m, status: nextStatus }
+          : m
+      )
+    );
+
     try {
-      if (member.user_id) {
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      if (targetUserId) {
         await supabase
           .from("profiles")
           .update({ status: nextStatus === "active" ? "active" : "suspended" })
-          .eq("user_id", member.user_id);
+          .eq("user_id", targetUserId);
 
-        await supabase
+        const { data: existingSupp } = await supabase
           .from("support_team_members")
-          .update({ is_active: nextStatus === "active" })
-          .eq("user_id", member.user_id);
-      }
+          .select("id")
+          .eq("user_id", targetUserId)
+          .maybeSingle();
 
-      const localKey = `geflow_biz_staff_${activeId || "default"}`;
-      const localSaved = localStorage.getItem(localKey);
-      if (localSaved) {
-        const existingList: StaffMember[] = JSON.parse(localSaved);
-        const updated = existingList.map((m) =>
-          m.id === member.id ? { ...m, status: nextStatus } : m
-        );
-        localStorage.setItem(localKey, JSON.stringify(updated));
+        if (existingSupp) {
+          await supabase
+            .from("support_team_members")
+            .update({
+              is_active: nextStatus === "active",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existingSupp.id);
+        } else {
+          await supabase.from("support_team_members").insert({
+            user_id: targetUserId,
+            role: member.role,
+            appointed_by_user_id: currentUser?.id || targetUserId,
+            is_active: nextStatus === "active",
+          });
+        }
       }
 
       toast({
@@ -452,31 +614,29 @@ export const UserTeam = () => {
         description: err?.message || "Could not update status.",
         variant: "destructive",
       });
+      await loadRealTeam();
     }
   };
 
   // Delete Member
   const handleDeleteMember = async () => {
     if (!selectedMember) return;
+    const targetUserId = selectedMember.user_id;
+
+    // Optimistic removal
+    setMembers((prev) => prev.filter((m) => m.user_id !== targetUserId && m.id !== selectedMember.id));
+
     try {
-      if (selectedMember.user_id) {
+      if (targetUserId) {
         await supabase
           .from("support_team_members")
           .delete()
-          .eq("user_id", selectedMember.user_id);
-      }
-
-      const localKey = `geflow_biz_staff_${activeId || "default"}`;
-      const localSaved = localStorage.getItem(localKey);
-      if (localSaved) {
-        const existingList: StaffMember[] = JSON.parse(localSaved);
-        const updated = existingList.filter((m) => m.id !== selectedMember.id);
-        localStorage.setItem(localKey, JSON.stringify(updated));
+          .eq("user_id", targetUserId);
       }
 
       toast({
         title: "Member Decommissioned",
-        description: `${selectedMember.full_name} removed from active network hub.`,
+        description: `${selectedMember.full_name} removed from active database hub.`,
       });
       setDeleteOpen(false);
       await loadRealTeam();
@@ -486,6 +646,7 @@ export const UserTeam = () => {
         description: err?.message || "Could not delete staff member.",
         variant: "destructive",
       });
+      await loadRealTeam();
     }
   };
 
@@ -512,37 +673,37 @@ export const UserTeam = () => {
     switch (color) {
       case "blue":
         return (
-          <div className="w-11 h-11 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-extrabold text-sm shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-extrabold text-sm shrink-0 shadow-inner">
             {initial}
           </div>
         );
       case "cyan":
         return (
-          <div className="w-11 h-11 rounded-2xl bg-cyan-100 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center font-extrabold text-sm shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-cyan-100 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center font-extrabold text-sm shrink-0 shadow-inner">
             {initial}
           </div>
         );
       case "indigo":
         return (
-          <div className="w-11 h-11 rounded-2xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-extrabold text-sm shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-extrabold text-sm shrink-0 shadow-inner">
             {initial}
           </div>
         );
       case "purple":
         return (
-          <div className="w-11 h-11 rounded-2xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center font-extrabold text-sm shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center font-extrabold text-sm shrink-0 shadow-inner">
             {initial}
           </div>
         );
       case "emerald":
         return (
-          <div className="w-11 h-11 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-extrabold text-sm shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-extrabold text-sm shrink-0 shadow-inner">
             {initial}
           </div>
         );
       default:
         return (
-          <div className="w-11 h-11 rounded-2xl bg-sky-100 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 flex items-center justify-center font-extrabold text-sm shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-sky-100 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 flex items-center justify-center font-extrabold text-sm shrink-0 shadow-inner">
             {initial}
           </div>
         );
@@ -601,7 +762,7 @@ export const UserTeam = () => {
               )}
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Orchestrate organizational roles, permissions, and staff lifecycle in real-time.
+              Orchestrate organizational roles, permissions, and staff lifecycle with real-time database synchronization.
             </p>
           </div>
 
@@ -614,7 +775,7 @@ export const UserTeam = () => {
                 loadRealTeam();
               }}
               disabled={refreshing}
-              className="h-10 px-3.5 rounded-xl text-xs font-bold border-border/80 hover:bg-muted"
+              className="h-10 px-3.5 rounded-xl text-xs font-bold border-border/80 hover:bg-muted shadow-xs"
             >
               <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${refreshing ? "animate-spin" : ""}`} />
               Sync Realtime
@@ -622,7 +783,7 @@ export const UserTeam = () => {
 
             <Button
               onClick={openRegisterModal}
-              className="h-10 px-5 rounded-xl text-xs font-extrabold uppercase tracking-wider bg-sky-400 hover:bg-sky-500 text-slate-950 shadow-md shadow-sky-400/20 border-0 flex items-center gap-2 transition-all active:scale-[0.98]"
+              className="h-10 px-5 rounded-xl text-xs font-extrabold uppercase tracking-wider bg-sky-500 hover:bg-sky-600 text-white shadow-md border-0 flex items-center gap-2 transition-all active:scale-[0.98]"
             >
               <UserPlus className="w-4 h-4 stroke-[2.5]" /> Add New Member
             </Button>
@@ -639,7 +800,7 @@ export const UserTeam = () => {
               <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center">
                 <Users className="w-5 h-5" />
               </div>
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             </div>
             <div className="mt-3">
               <p className="text-[10px] font-extrabold tracking-widest text-muted-foreground uppercase">
@@ -715,7 +876,7 @@ export const UserTeam = () => {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name, email or ID..."
+              placeholder="Search by name, email or user ID..."
               className="h-12 pl-11 pr-4 rounded-2xl bg-card border-border/80 text-xs sm:text-sm shadow-xs focus-visible:ring-1 focus-visible:ring-sky-500"
             />
           </div>
@@ -788,10 +949,7 @@ export const UserTeam = () => {
                 <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1">
                   Sort Order
                 </label>
-                <Select
-                  value={sortBy}
-                  onValueChange={(val: any) => setSortBy(val)}
-                >
+                <Select value={sortBy} onValueChange={(val: any) => setSortBy(val)}>
                   <SelectTrigger className="rounded-xl text-xs">
                     <SelectValue />
                   </SelectTrigger>
@@ -826,7 +984,7 @@ export const UserTeam = () => {
             {loading ? (
               <div className="py-12 flex flex-col items-center justify-center text-muted-foreground text-xs gap-3">
                 <Loader2 className="w-7 h-7 animate-spin text-sky-500" />
-                <p>Synchronizing real-time team members...</p>
+                <p>Synchronizing real-time team members from database...</p>
               </div>
             ) : filteredMembers.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground text-xs space-y-2">
@@ -974,7 +1132,7 @@ export const UserTeam = () => {
         <DialogContent className="max-w-md p-6 sm:p-7 rounded-3xl">
           <DialogHeader>
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-sky-400/15 text-sky-500 flex items-center justify-center shrink-0">
+              <div className="w-11 h-11 rounded-2xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0">
                 <UserPlus className="w-6 h-6 stroke-[2.2]" />
               </div>
               <div>
@@ -1073,9 +1231,9 @@ export const UserTeam = () => {
             <Button
               type="submit"
               disabled={submitting}
-              className="w-full h-12 rounded-2xl bg-sky-400 hover:bg-sky-500 text-slate-950 font-bold text-sm shadow-md shadow-sky-400/20 transition-all active:scale-[0.99] border-0"
+              className="w-full h-12 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm shadow-md transition-all active:scale-[0.99] border-0"
             >
-              {submitting ? "Dispatching..." : "Send Digital Invite"}
+              {submitting ? "Registering..." : "Register & Dispatch Permissions"}
             </Button>
           </form>
         </DialogContent>
@@ -1162,9 +1320,9 @@ export const UserTeam = () => {
             <Button
               type="submit"
               disabled={submitting}
-              className="w-full h-12 rounded-2xl bg-sky-400 hover:bg-sky-500 text-slate-950 font-bold text-sm shadow-md shadow-sky-400/20 transition-all active:scale-[0.99] border-0"
+              className="w-full h-12 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm shadow-md transition-all active:scale-[0.99] border-0"
             >
-              {submitting ? "Saving Changes..." : "Save Architectural Permissions"}
+              {submitting ? "Saving Changes..." : "Save Database Permissions"}
             </Button>
           </form>
         </DialogContent>
@@ -1183,7 +1341,7 @@ export const UserTeam = () => {
               Remove Team Member?
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-1">
-              Are you sure you want to remove <span className="font-bold text-foreground">{selectedMember?.full_name}</span>? This will revoke all active security credentials and system sessions.
+              Are you sure you want to remove <span className="font-bold text-foreground">{selectedMember?.full_name}</span>? This will revoke active security credentials and system sessions.
             </DialogDescription>
           </DialogHeader>
 
@@ -1198,7 +1356,7 @@ export const UserTeam = () => {
             <Button
               variant="destructive"
               onClick={handleDeleteMember}
-              className="h-11 px-5 rounded-2xl text-xs font-bold bg-rose-500 hover:bg-rose-600"
+              className="h-11 px-5 rounded-2xl text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white"
             >
               Confirm Removal
             </Button>

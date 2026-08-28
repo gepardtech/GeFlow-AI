@@ -43,7 +43,10 @@ const UserPOS = () => {
   const [cashierName, setCashierName] = useState("Cashier");
 
   const taxRate = Number(active?.default_tax ?? 0);
-  const catName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? "General";
+  const catName = useCallback(
+    (id: string | null) => categories.find((c) => c.id === id)?.name ?? "General",
+    [categories]
+  );
 
   // Load POS settings
   const posConfig = useMemo(() => {
@@ -103,7 +106,7 @@ const UserPOS = () => {
       (p.barcode ?? "").toLowerCase().includes(q) ||
       catName(p.category_id).toLowerCase().includes(q),
     );
-  }, [products, search, categories]);
+  }, [products, search, catName]);
 
   const addToCart = (p: POSProduct) => {
     if (p.stock_units <= 0) { toast({ title: "Out of stock", description: p.name, variant: "destructive" }); return; }

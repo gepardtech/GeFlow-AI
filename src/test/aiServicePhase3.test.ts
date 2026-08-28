@@ -105,7 +105,7 @@ describe("Phase 3: AI Service Layer Architecture", () => {
           overall_confidence: 0.92,
         },
         provider: "gemini" as const,
-        model: "gemini-2.5-flash",
+        model: "gemini-3.7-flash",
         latencyMs: 120,
       };
 
@@ -125,7 +125,7 @@ describe("Phase 3: AI Service Layer Architecture", () => {
       expect(normalized.classification.primary_category_id).toBe("cat_meds");
       expect(normalized.extracted_business_data.purchase_cost).toBe(12.5);
       expect(normalized.ai_metadata.provider).toBe("gemini");
-      expect(normalized.ai_metadata.model).toBe("gemini-2.5-flash");
+      expect(normalized.ai_metadata.model).toBe("gemini-3.7-flash");
       expect(normalized.ai_metadata.request_id).toBe("req-normalizer-test");
     });
   });
@@ -170,7 +170,7 @@ describe("Phase 3: AI Service Layer Architecture", () => {
     it("should gracefully fall back to heuristic engine when primary cloud providers fail", async () => {
       const failingProvider: AIProviderInterface = {
         name: "gemini",
-        defaultModel: "gemini-2.5-flash",
+        defaultModel: "gemini-3.7-flash",
         isConfigured: () => true,
         analyzeProduct: async () => {
           throw new AIServiceError("AI_PROVIDER_UNAVAILABLE", "Gemini API unavailable");
