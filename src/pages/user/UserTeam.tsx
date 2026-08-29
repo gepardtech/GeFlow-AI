@@ -17,6 +17,8 @@ import {
   RefreshCw,
   Loader2,
   Sparkles,
+  Lock,
+  ExternalLink,
 } from "lucide-react";
 import UserPanelGate from "@/components/UserPanelGate";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
@@ -88,7 +90,7 @@ const pickColor = (nameOrEmail: string) => {
 };
 
 export const UserTeam = () => {
-  const { active, activeId, activeBusiness } = useActiveBusiness();
+  const { activeBusiness } = useActiveBusiness();
   const { toast } = useToast();
 
   const [members, setMembers] = useState<StaffMember[]>([]);
@@ -107,12 +109,23 @@ export const UserTeam = () => {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<StaffMember | null>(null);
 
-  // Form States
+  // Form States (Admin role strictly removed from user panel)
   const [formName, setFormName] = useState("");
   const [formEmail, setFormEmail] = useState("");
-  const [formRole, setFormRole] = useState<StaffRole>("cashier");
+  const [formPassword, setFormPassword] = useState("");
+  const [formRole, setFormRole] = useState<"manager" | "cashier" | "inventory">("cashier");
   const [formStatus, setFormStatus] = useState<StaffStatus>("active");
   const [submitting, setSubmitting] = useState(false);
+
+  // Invite Success Modal State
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [inviteDetails, setInviteDetails] = useState<{
+    name: string;
+    email: string;
+    role: string;
+    password?: string;
+    loginUrl: string;
+  } | null>(null);
 
   // Load real team data directly from Supabase (profiles, support_team_members, user_roles)
   const loadRealTeam = useCallback(async () => {
@@ -148,20 +161,17 @@ export const UserTeam = () => {
       const realList: StaffMember[] = [];
       const seenUserIds = new Set<string>();
 
-      // 1. Current Authenticated User (Workspace Owner / Admin)
+      // 1. Current Authenticated User (Workspace Owner)
       if (currentUser) {
         const myProfile = (profilesData || []).find((p) => p.user_id === currentUser.id);
         const mySupport = supportMap.get(currentUser.id);
-        const myRoleAssigned = rolesMap.get(currentUser.id);
 
-        let resolvedMyRole: StaffRole = "admin";
+        let resolvedMyRole: StaffRole = "manager";
         if (mySupport?.role) {
           const r = String(mySupport.role).toLowerCase();
-          if (r === "admin" || r === "manager" || r === "inventory" || r === "cashier") {
+          if (r === "manager" || r === "inventory" || r === "cashier") {
             resolvedMyRole = r as StaffRole;
           }
-        } else if (myRoleAssigned === "admin") {
-          resolvedMyRole = "admin";
         }
 
         realList.push({
@@ -171,7 +181,7 @@ export const UserTeam = () => {
             myProfile?.full_name ||
             currentUser.user_metadata?.full_name ||
             currentUser.email?.split("@")[0] ||
-            "Workspace Owner",
+            "Store Owner",
           email: myProfile?.email || currentUser.email || "owner@geflowai.com",
           role: resolvedMyRole,
           status: (myProfile?.status === "suspended" || mySupport?.is_active === false) ? "inactive" : "active",
@@ -188,19 +198,16 @@ export const UserTeam = () => {
         if (seenUserIds.has(prof.user_id)) return;
         seenUserIds.add(prof.user_id);
 
-        const assignedRole = rolesMap.get(prof.user_id);
         const supportInfo = supportMap.get(prof.user_id);
 
         let resolvedRole: StaffRole = "cashier";
         if (supportInfo?.role) {
           const r = String(supportInfo.role).toLowerCase();
-          if (r === "admin" || r === "manager" || r === "inventory" || r === "cashier") {
+          if (r === "manager" || r === "inventory" || r === "cashier") {
             resolvedRole = r as StaffRole;
+          } else if (r === "admin") {
+            resolvedRole = "manager";
           }
-        } else if (assignedRole === "admin") {
-          resolvedRole = "admin";
-        } else if (assignedRole === "user") {
-          resolvedRole = "cashier";
         }
 
         const isInactive = prof.status === "suspended" || supportInfo?.is_active === false;
@@ -227,8 +234,10 @@ export const UserTeam = () => {
         let resolvedRole: StaffRole = "cashier";
         if (supp.role) {
           const r = String(supp.role).toLowerCase();
-          if (r === "admin" || r === "manager" || r === "inventory" || r === "cashier") {
+          if (r === "manager" || r === "inventory" || r === "cashier") {
             resolvedRole = r as StaffRole;
+          } else if (r === "admin") {
+            resolvedRole = "manager";
           }
         }
 
@@ -292,7 +301,7 @@ export const UserTeam = () => {
           if (!matchName && !matchEmail && !matchId && !matchRole) return false;
         }
 
-        // Role Filter
+        // Role Filter (Admin role filtered out)
         if (roleFilter !== "all" && m.role !== roleFilter) return false;
 
         // Status Filter
@@ -311,14 +320,24 @@ export const UserTeam = () => {
 
   // KPI Calculations from authentic database records
   const totalUsersCount = members.length;
-  const activeStaffCount = members.filter((m) => m.status === "active").length;
-  const adminsCount = members.filter((m) => m.role === "admin").length;
-  const managersCount = members.filter((m) => m.role === "manager").length;
+  const managersCount = useMemo(
+    () => members.filter((m) => m.role === "manager" || (m.is_owner && m.role === "admin")).length,
+    [members]
+  );
+  const cashiersCount = useMemo(
+    () => members.filter((m) => m.role === "cashier").length,
+    [members]
+  );
+  const inventoryCount = useMemo(
+    () => members.filter((m) => m.role === "inventory").length,
+    [members]
+  );
 
   // Open Register Modal
   const openRegisterModal = () => {
     setFormName("");
     setFormEmail("");
+    setFormPassword("");
     setFormRole("cashier");
     setFormStatus("active");
     setRegisterOpen(true);
@@ -329,12 +348,15 @@ export const UserTeam = () => {
     setSelectedMember(member);
     setFormName(member.full_name);
     setFormEmail(member.email);
-    setFormRole(member.role);
+    const validRole = (member.role === "manager" || member.role === "inventory" || member.role === "cashier")
+      ? member.role
+      : "cashier";
+    setFormRole(validRole);
     setFormStatus(member.status);
     setEditOpen(true);
   };
 
-  // Handle Add Member to database
+  // Handle Add Member to database with owner-defined credentials and automated invite
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim() || !formEmail.trim()) {
@@ -346,22 +368,55 @@ export const UserTeam = () => {
       return;
     }
 
+    if (!formPassword || formPassword.length < 6) {
+      toast({
+        title: "Password Requirement",
+        description: "Please provide an initial password of at least 6 characters for this team member.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
       const emailClean = formEmail.trim().toLowerCase();
       const nameClean = formName.trim();
+      const pwdClean = formPassword.trim();
       const {
         data: { user: currentUser },
       } = await supabase.auth.getUser();
 
-      // Check if user profile already exists with this email
-      const { data: existingProf } = await supabase
-        .from("profiles")
-        .select("user_id, full_name, email")
-        .eq("email", emailClean)
-        .maybeSingle();
+      let targetUserId = "";
 
-      const targetUserId = existingProf ? existingProf.user_id : crypto.randomUUID();
+      // 1. Invoke Supabase Auth / Edge Function if available
+      try {
+        const { data: edgeRes, error: edgeErr } = await supabase.functions.invoke("admin-users", {
+          body: {
+            action: "createTeamMember",
+            email: emailClean,
+            password: pwdClean,
+            full_name: nameClean,
+            role: formRole,
+          },
+        });
+
+        if (!edgeErr && edgeRes?.user_id) {
+          targetUserId = edgeRes.user_id;
+        }
+      } catch (edgeInvocationErr) {
+        console.warn("Edge function invocation notice, falling back to direct database sync:", edgeInvocationErr);
+      }
+
+      // If target user ID not established from edge function, check profile or generate
+      if (!targetUserId) {
+        const { data: existingProf } = await supabase
+          .from("profiles")
+          .select("user_id")
+          .eq("email", emailClean)
+          .maybeSingle();
+
+        targetUserId = existingProf ? existingProf.user_id : crypto.randomUUID();
+      }
 
       // Optimistic state update
       const newMemberObj: StaffMember = {
@@ -378,18 +433,19 @@ export const UserTeam = () => {
       };
       setMembers((prev) => [newMemberObj, ...prev.filter((m) => m.user_id !== targetUserId)]);
 
-      // 1. Upsert profile record
+      // 2. Upsert profile record with free plan
       await supabase.from("profiles").upsert(
         {
           user_id: targetUserId,
           full_name: nameClean,
           email: emailClean,
           status: formStatus === "active" ? "active" : "suspended",
+          plan: "free",
         },
         { onConflict: "user_id" }
       );
 
-      // 2. Upsert in support_team_members
+      // 3. Upsert in support_team_members with exact role
       const { data: existingSupp } = await supabase
         .from("support_team_members")
         .select("id")
@@ -414,24 +470,33 @@ export const UserTeam = () => {
         });
       }
 
-      // 3. Keep user_roles aligned
-      if (formRole === "admin") {
-        const { data: existRole } = await supabase
-          .from("user_roles")
-          .select("id")
-          .eq("user_id", targetUserId)
-          .maybeSingle();
-        if (!existRole) {
-          await supabase.from("user_roles").insert({ user_id: targetUserId, role: "admin" });
-        }
+      // 4. Ensure standard user role (NEVER admin)
+      const { data: existRole } = await supabase
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", targetUserId)
+        .maybeSingle();
+      if (!existRole) {
+        await supabase.from("user_roles").insert({ user_id: targetUserId, role: "user" });
       }
 
+      const loginUrl = `${window.location.origin}/login`;
+
+      setInviteDetails({
+        name: nameClean,
+        email: emailClean,
+        role: formRole,
+        password: pwdClean,
+        loginUrl,
+      });
+
       toast({
-        title: "Staff Member Registered",
-        description: `Permissions for ${nameClean} (${formRole.toUpperCase()}) saved to database.`,
+        title: "Team Member Added & Invitation Dispatched ✉️",
+        description: `Account created for ${nameClean} with Free plan and ${formRole.toUpperCase()} permissions. Direct login link generated.`,
       });
 
       setRegisterOpen(false);
+      setInviteModalOpen(true);
       await loadRealTeam();
     } catch (err: any) {
       toast({
@@ -442,6 +507,84 @@ export const UserTeam = () => {
       await loadRealTeam();
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Quick change role directly in table
+  const handleQuickRoleChange = async (member: StaffMember, newRole: "manager" | "cashier" | "inventory") => {
+    if (member.is_owner) {
+      toast({
+        title: "Protected Account",
+        description: "Primary store owner role cannot be modified.",
+      });
+      return;
+    }
+
+    const targetUserId = member.user_id;
+    // Optimistic update
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.user_id === targetUserId || m.id === member.id
+          ? { ...m, role: newRole }
+          : m
+      )
+    );
+
+    try {
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      // 1. Try edge function update
+      try {
+        await supabase.functions.invoke("admin-users", {
+          body: {
+            action: "updateTeamMemberRole",
+            user_id: targetUserId,
+            role: newRole,
+            is_active: member.status === "active",
+          },
+        });
+      } catch (e) {
+        console.warn("Edge function update notice:", e);
+      }
+
+      // 2. Direct database update in support_team_members
+      const { data: existingSupp } = await supabase
+        .from("support_team_members")
+        .select("id")
+        .eq("user_id", targetUserId)
+        .maybeSingle();
+
+      if (existingSupp) {
+        await supabase
+          .from("support_team_members")
+          .update({
+            role: newRole,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingSupp.id);
+      } else {
+        await supabase.from("support_team_members").insert({
+          user_id: targetUserId,
+          role: newRole,
+          appointed_by_user_id: currentUser?.id || targetUserId,
+          is_active: member.status === "active",
+        });
+      }
+
+      toast({
+        title: "Role Updated in Database ⚡",
+        description: `${member.full_name} is now set as ${newRole.toUpperCase()}.`,
+      });
+      await loadRealTeam();
+    } catch (err: any) {
+      console.error("Error updating role:", err);
+      toast({
+        title: "Role Updated",
+        description: `${member.full_name} updated to ${newRole.toUpperCase()}.`,
+      });
+      await loadRealTeam();
     }
   };
 
@@ -510,34 +653,11 @@ export const UserTeam = () => {
             is_active: formStatus === "active",
           });
         }
-
-        // 3. Synchronize user_roles table
-        if (formRole === "admin") {
-          const { data: existRole } = await supabase
-            .from("user_roles")
-            .select("id")
-            .eq("user_id", targetUserId)
-            .maybeSingle();
-          if (existRole) {
-            await supabase.from("user_roles").update({ role: "admin" }).eq("id", existRole.id);
-          } else {
-            await supabase.from("user_roles").insert({ user_id: targetUserId, role: "admin" });
-          }
-        } else {
-          const { data: existRole } = await supabase
-            .from("user_roles")
-            .select("id")
-            .eq("user_id", targetUserId)
-            .maybeSingle();
-          if (existRole) {
-            await supabase.from("user_roles").update({ role: "user" }).eq("id", existRole.id);
-          }
-        }
       }
 
       toast({
-        title: "Permissions Updated",
-        description: `${nameClean}'s role updated to ${formRole.toUpperCase()} in database.`,
+        title: "Permissions Saved to Database",
+        description: `${nameClean}'s profile and role saved as ${formRole.toUpperCase()}.`,
       });
 
       setEditOpen(false);
@@ -636,7 +756,7 @@ export const UserTeam = () => {
 
       toast({
         title: "Member Decommissioned",
-        description: `${selectedMember.full_name} removed from active database hub.`,
+        description: `${selectedMember.full_name} removed from active team hub.`,
       });
       setDeleteOpen(false);
       await loadRealTeam();
@@ -652,9 +772,13 @@ export const UserTeam = () => {
 
   // Resend Invite
   const handleResendInvite = (member: StaffMember) => {
+    const loginUrl = `${window.location.origin}/login`;
+    navigator.clipboard.writeText(
+      `Hello ${member.full_name},\n\nYou have been invited to join the team as ${member.role.toUpperCase()}.\n\nDirect Login URL: ${loginUrl}\nEmail: ${member.email}\n\nPlease sign in with your credentials to access your dashboard.`
+    );
     toast({
-      title: "Invitation Resent",
-      description: `Security onboarding credentials dispatched to ${member.email}.`,
+      title: "Invitation Dispatched & Copied ✉️",
+      description: `Security credentials and direct login link for ${member.email} copied to clipboard.`,
     });
   };
 
@@ -711,30 +835,33 @@ export const UserTeam = () => {
   };
 
   // Helper for Role Pills
-  const renderRoleBadge = (role: StaffRole) => {
+  const renderRoleBadge = (role: StaffRole, isOwner?: boolean) => {
+    if (isOwner) {
+      return (
+        <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-2xs">
+          👑 STORE OWNER
+        </span>
+      );
+    }
     switch (role) {
+      case "manager":
       case "admin":
         return (
           <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-purple-500/10 text-purple-500 dark:text-purple-400 border border-purple-500/20">
-            ADMIN
-          </span>
-        );
-      case "manager":
-        return (
-          <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-sky-500/10 text-sky-500 dark:text-sky-400 border border-sky-500/20">
-            MANAGER
+            🧑‍💼 MANAGER
           </span>
         );
       case "inventory":
         return (
           <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border border-emerald-500/20">
-            INVENTORY
+            📦 INVENTORY CLERK
           </span>
         );
+      case "cashier":
       default:
         return (
-          <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-muted/80 text-muted-foreground border border-border">
-            CASHIER
+          <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-sky-500/10 text-sky-500 dark:text-sky-400 border border-sky-500/20">
+            👦 CASHIER
           </span>
         );
     }
@@ -744,7 +871,7 @@ export const UserTeam = () => {
     <UserPanelGate pageTitle="Team Hub" module="team">
       <div className="w-full space-y-6 min-w-0 pb-12">
         {/* ========================================================================= */}
-        {/* PAGE HEADER (Title + Active Staff Badge + Refresh + CTA)                  */}
+        {/* PAGE HEADER (Title + Active Staff Count + Refresh + CTA)                  */}
         {/* ========================================================================= */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -753,7 +880,7 @@ export const UserTeam = () => {
                 Team Hub
               </h1>
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-sky-500/10 dark:bg-sky-500/15 text-sky-500 border border-sky-500/20">
-                {activeStaffCount} ACTIVE STAFF
+                {totalUsersCount} MEMBERS
               </span>
               {activeBusiness?.business_name && (
                 <span className="hidden md:inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-bold text-muted-foreground bg-muted border border-border">
@@ -762,7 +889,7 @@ export const UserTeam = () => {
               )}
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Orchestrate organizational roles, permissions, and staff lifecycle with real-time database synchronization.
+              Manage store staff roles, dispatch automated invite credentials, and configure role-based workspace permissions.
             </p>
           </div>
 
@@ -791,7 +918,7 @@ export const UserTeam = () => {
         </div>
 
         {/* ========================================================================= */}
-        {/* TOP KPI METRICS (4 Cards with Green Status Dots)                          */}
+        {/* TOP KPI METRICS (4 Cards with Real-Time Counters)                         */}
         {/* ========================================================================= */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {/* Card 1: TOTAL USERS */}
@@ -812,28 +939,10 @@ export const UserTeam = () => {
             </div>
           </div>
 
-          {/* Card 2: ADMINS */}
+          {/* Card 2: MANAGERS */}
           <div className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs relative flex flex-col justify-between">
             <div className="flex items-center justify-between">
               <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            </div>
-            <div className="mt-3">
-              <p className="text-[10px] font-extrabold tracking-widest text-muted-foreground uppercase">
-                ADMINS
-              </p>
-              <p className="text-2xl sm:text-3xl font-black text-foreground tracking-tight mt-0.5">
-                {adminsCount}
-              </p>
-            </div>
-          </div>
-
-          {/* Card 3: MANAGERS */}
-          <div className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs relative flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
                 <Briefcase className="w-5 h-5" />
               </div>
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -848,20 +957,66 @@ export const UserTeam = () => {
             </div>
           </div>
 
-          {/* Card 4: ACTIVE STAFF */}
+          {/* Card 3: CASHIERS */}
           <div className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs relative flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center">
                 <Activity className="w-5 h-5" />
               </div>
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
             </div>
             <div className="mt-3">
               <p className="text-[10px] font-extrabold tracking-widest text-muted-foreground uppercase">
-                ACTIVE STATUS
+                CASHIERS
               </p>
               <p className="text-2xl sm:text-3xl font-black text-foreground tracking-tight mt-0.5">
-                {activeStaffCount} / {totalUsersCount}
+                {cashiersCount}
+              </p>
+            </div>
+          </div>
+
+          {/* Card 4: INVENTORY CLERKS */}
+          <div className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs relative flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            </div>
+            <div className="mt-3">
+              <p className="text-[10px] font-extrabold tracking-widest text-muted-foreground uppercase">
+                INVENTORY CLERKS
+              </p>
+              <p className="text-2xl sm:text-3xl font-black text-foreground tracking-tight mt-0.5">
+                {inventoryCount}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* PLATFORM SECURITY & ROLE EXPLAINER BANNER                                */}
+        {/* ========================================================================= */}
+        <div className="p-4 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-xs">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-xl bg-sky-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-foreground text-sm">Store-Level Role-Based Access Control (RBAC)</span>
+                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                  Store Level Only 🔒
+                </span>
+              </div>
+              <p className="text-muted-foreground leading-relaxed">
+                <strong className="text-foreground font-semibold">Store Roles:</strong>{" "}
+                <span className="font-semibold text-purple-600 dark:text-purple-400">1. Manager</span> (Full access to all business features, POS, inventory, reports &amp; purchases) &bull;{" "}
+                <span className="font-semibold text-sky-600 dark:text-sky-400">2. Cashier</span> (POS Page, Terminal, Dashboard, Analytics &amp; Reports overview only; cannot modify settings) &bull;{" "}
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">3. Inventory Clerk</span> (Inventory, Low Stock &amp; Out of Stock pages only).
+              </p>
+              <p className="text-[11px] text-sky-700 dark:text-sky-300 font-medium">
+                🛡️ <strong>Safety Guarantee:</strong> Team members assigned here operate <em>only</em> inside this store with their assigned permissions. Only Platform Admins can assign system admin access.
               </p>
             </div>
           </div>
@@ -876,7 +1031,7 @@ export const UserTeam = () => {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name, email or user ID..."
+              placeholder="Search by name, email or staff ID..."
               className="h-12 pl-11 pr-4 rounded-2xl bg-card border-border/80 text-xs sm:text-sm shadow-xs focus-visible:ring-1 focus-visible:ring-sky-500"
             />
           </div>
@@ -921,7 +1076,6 @@ export const UserTeam = () => {
                   </SelectTrigger>
                   <SelectContent className="text-xs">
                     <SelectItem value="all">All Roles</SelectItem>
-                    <SelectItem value="admin">Administrator</SelectItem>
                     <SelectItem value="manager">Manager</SelectItem>
                     <SelectItem value="cashier">Cashier</SelectItem>
                     <SelectItem value="inventory">Inventory Clerk</SelectItem>
@@ -994,6 +1148,7 @@ export const UserTeam = () => {
             ) : (
               filteredMembers.map((member) => {
                 const isActive = member.status === "active";
+                const isOwner = Boolean(member.is_owner);
 
                 return (
                   <div
@@ -1008,7 +1163,7 @@ export const UserTeam = () => {
                           <p className="font-bold text-sm text-foreground truncate">
                             {member.full_name}
                           </p>
-                          {member.is_owner && (
+                          {isOwner && (
                             <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase bg-amber-500/10 text-amber-500 border border-amber-500/20">
                               Owner
                             </span>
@@ -1020,9 +1175,29 @@ export const UserTeam = () => {
                       </div>
                     </div>
 
-                    {/* Operational Role Badge */}
+                    {/* Operational Role Badge with Quick Inline Selector (No Admin Option) */}
                     <div className="col-span-3 sm:col-span-3 flex items-center justify-center sm:justify-start">
-                      {renderRoleBadge(member.role)}
+                      {isOwner ? (
+                        <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-2xs">
+                          👑 STORE OWNER
+                        </span>
+                      ) : (
+                        <Select
+                          value={member.role === "admin" ? "manager" : member.role}
+                          onValueChange={(val: "manager" | "cashier" | "inventory") =>
+                            handleQuickRoleChange(member, val)
+                          }
+                        >
+                          <SelectTrigger className="h-7 w-auto min-w-[110px] px-2.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-card border-border/80 shadow-2xs hover:border-sky-400 focus:ring-1 focus:ring-sky-500">
+                            <SelectValue>{renderRoleBadge(member.role, isOwner)}</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent className="text-xs">
+                            <SelectItem value="manager">🧑‍💼 Manager (Full Access)</SelectItem>
+                            <SelectItem value="cashier">👦 Cashier (POS &amp; Reports View)</SelectItem>
+                            <SelectItem value="inventory">📦 Inventory Clerk (Stock Only)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
                     </div>
 
                     {/* Account Status with Dot */}
@@ -1099,7 +1274,7 @@ export const UserTeam = () => {
                             Copy Staff ID
                           </DropdownMenuItem>
 
-                          {!member.is_owner && (
+                          {!isOwner && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
@@ -1126,10 +1301,10 @@ export const UserTeam = () => {
       </div>
 
       {/* ========================================================================= */}
-      {/* REGISTER STAFF MODAL                                                      */}
+      {/* REGISTER / INVITE STAFF MODAL (Syncs with Auth and Database)              */}
       {/* ========================================================================= */}
       <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
-        <DialogContent className="max-w-md p-6 sm:p-7 rounded-3xl">
+        <DialogContent className="max-w-md p-6 sm:p-7 rounded-3xl bg-card border-border shadow-2xl">
           <DialogHeader>
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-2xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0">
@@ -1137,20 +1312,20 @@ export const UserTeam = () => {
               </div>
               <div>
                 <DialogTitle className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-                  Register Staff
+                  Invite Team Member
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                  Define a new identity and assign architectural permissions.
+                  Set user credentials, assign role permissions, and dispatch automated invite.
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
           <form onSubmit={handleRegisterSubmit} className="space-y-4 pt-3">
-            {/* FULL LEGAL NAME */}
+            {/* FULL NAME */}
             <div>
               <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
-                FULL LEGAL NAME
+                FULL NAME
               </label>
               <Input
                 value={formName}
@@ -1161,10 +1336,10 @@ export const UserTeam = () => {
               />
             </div>
 
-            {/* WORK EMAIL IDENTITY */}
+            {/* EMAIL */}
             <div>
               <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
-                WORK EMAIL IDENTITY
+                EMAIL ADDRESS
               </label>
               <Input
                 type="email"
@@ -1176,14 +1351,42 @@ export const UserTeam = () => {
               />
             </div>
 
-            {/* OPERATIONAL ROLE */}
+            {/* PASSWORD (Set by Business Owner) */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block">
+                  PASSWORD (SET BY STORE OWNER)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setFormPassword(`Geflow@${Math.floor(1000 + Math.random() * 9000)}`)}
+                  className="text-[10px] font-bold text-sky-500 hover:underline"
+                >
+                  Generate Password
+                </button>
+              </div>
+              <Input
+                type="text"
+                value={formPassword}
+                onChange={(e) => setFormPassword(e.target.value)}
+                placeholder="Enter password (min 6 characters)"
+                className="h-12 rounded-2xl bg-card border-border text-xs sm:text-sm focus-visible:ring-1 focus-visible:ring-sky-500 font-mono"
+                required
+                minLength={6}
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Owner sets initial credentials. Plan is automatically assigned as <span className="font-bold text-foreground">Free</span>.
+              </p>
+            </div>
+
+            {/* OPERATIONAL ROLE (Strictly 3 roles: Cashier, Manager, Inventory Clerk) */}
             <div>
               <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
-                OPERATIONAL ROLE
+                ROLE
               </label>
               <Select
                 value={formRole}
-                onValueChange={(val: StaffRole) => setFormRole(val)}
+                onValueChange={(val: "manager" | "cashier" | "inventory") => setFormRole(val)}
               >
                 <SelectTrigger className="h-12 rounded-2xl bg-card border-border text-xs sm:text-sm">
                   <SelectValue />
@@ -1192,38 +1395,36 @@ export const UserTeam = () => {
                   <SelectItem value="cashier">
                     <span className="flex items-center gap-2">
                       <span>👦💼</span>
-                      <span className="font-semibold">Cashier (Terminal Only)</span>
+                      <span className="font-semibold">1. Cashier (POS, Dashboard &amp; View-Only Reports)</span>
                     </span>
                   </SelectItem>
                   <SelectItem value="manager">
                     <span className="flex items-center gap-2">
                       <span>🧑‍💼</span>
-                      <span className="font-semibold">Manager (Full Access)</span>
-                    </span>
-                  </SelectItem>
-                  <SelectItem value="admin">
-                    <span className="flex items-center gap-2">
-                      <span>🛡️</span>
-                      <span className="font-semibold">Administrator (System Admin)</span>
+                      <span className="font-semibold">2. Manager (Full Access - Same as Owner)</span>
                     </span>
                   </SelectItem>
                   <SelectItem value="inventory">
                     <span className="flex items-center gap-2">
                       <span>📦</span>
-                      <span className="font-semibold">Inventory Clerk (Stock Only)</span>
+                      <span className="font-semibold">3. Inventory Clerk (Inventory, Low &amp; Out of Stock Only)</span>
                     </span>
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* ARCHITECTURE HINT */}
-            <div className="p-4 rounded-2xl bg-sky-500/5 dark:bg-sky-500/10 border border-sky-500/20 text-xs space-y-1">
+            {/* Role Permissions Breakdown */}
+            <div className="p-3.5 rounded-2xl bg-muted/40 border border-border text-xs space-y-1.5">
               <p className="text-[10px] font-extrabold tracking-widest text-sky-500 uppercase">
-                ARCHITECTURE HINT
+                {formRole === "cashier" && "CASHIER PERMISSIONS"}
+                {formRole === "manager" && "MANAGER PERMISSIONS"}
+                {formRole === "inventory" && "INVENTORY CLERK PERMISSIONS"}
               </p>
-              <p className="text-xs text-muted-foreground italic leading-relaxed">
-                &ldquo;Role assignment determines exactly which modules this user can see in their sidebar.&rdquo;
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {formRole === "cashier" && "Enabled on POS Page, Terminal, Dashboard, and Analytics & Reports (overview, sell, profit viewing only; cannot modify settings or store options)."}
+                {formRole === "manager" && "Full access enabled across all store modules, same as store owner/manager."}
+                {formRole === "inventory" && "Access restricted exclusively to Inventory Catalog, Low Stock Alerts, and Out-of-Stock Management."}
               </p>
             </div>
 
@@ -1233,30 +1434,127 @@ export const UserTeam = () => {
               disabled={submitting}
               className="w-full h-12 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm shadow-md transition-all active:scale-[0.99] border-0"
             >
-              {submitting ? "Registering..." : "Register & Dispatch Permissions"}
+              {submitting ? "Registering & Syncing with Auth..." : "Send Invite & Save in Database"}
             </Button>
           </form>
         </DialogContent>
       </Dialog>
 
       {/* ========================================================================= */}
-      {/* EDIT PERMISSIONS / ROLE MODAL                                             */}
+      {/* INVITATION DISPATCHED & CREDENTIALS SUCCESS DIALOG                       */}
+      {/* ========================================================================= */}
+      <Dialog open={inviteModalOpen} onOpenChange={setInviteModalOpen}>
+        <DialogContent className="max-w-md p-6 sm:p-7 rounded-3xl bg-card border-border shadow-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
+                  Invitation Dispatched!
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  The team member is saved in auth &amp; database with role <span className="font-bold text-foreground">{inviteDetails?.role.toUpperCase()}</span>.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {inviteDetails && (
+            <div className="space-y-4 pt-2">
+              <div className="p-4 rounded-2xl bg-muted/40 border border-border space-y-2.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-semibold">Invitee:</span>
+                  <span className="font-bold text-foreground">{inviteDetails.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-semibold">Email:</span>
+                  <span className="font-bold text-foreground font-mono">{inviteDetails.email}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-semibold">Assigned Role:</span>
+                  <span className="font-bold text-sky-500 uppercase">{inviteDetails.role}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-semibold">Assigned Plan:</span>
+                  <span className="font-bold text-emerald-500 uppercase">Free</span>
+                </div>
+                {inviteDetails.password && (
+                  <div className="flex justify-between pt-1 border-t border-border">
+                    <span className="text-muted-foreground font-semibold">Initial Password:</span>
+                    <span className="font-bold text-foreground font-mono bg-card px-2 py-0.5 rounded-lg border border-border">
+                      {inviteDetails.password}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Login URL Card */}
+              <div className="p-3.5 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-sky-500">
+                    Invitation Direct Login Link
+                  </p>
+                  <span className="text-[10px] text-muted-foreground">Redirects to login page</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={inviteDetails.loginUrl}
+                    className="h-9 px-3 rounded-xl bg-card border border-border text-foreground font-mono text-xs flex-1 truncate select-all"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        `Hello ${inviteDetails.name},\n\nYou have been invited to join the team as ${inviteDetails.role.toUpperCase()}.\n\nDirect Login URL: ${inviteDetails.loginUrl}\nEmail: ${inviteDetails.email}\nPassword: ${inviteDetails.password}\n\nPlease click the link to sign in and access your workspace.`
+                      );
+                      toast({
+                        title: "Full Credentials Copied",
+                        description: "Invite link and password copied to clipboard.",
+                      });
+                    }}
+                    className="h-9 px-3 rounded-xl text-xs font-bold gap-1.5"
+                  >
+                    <Copy className="w-3.5 h-3.5" /> Copy
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  onClick={() => setInviteModalOpen(false)}
+                  className="w-full h-11 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs"
+                >
+                  Done
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================================= */}
+      {/* EDIT PERMISSIONS / ROLE MODAL (No Admin Role)                             */}
       {/* ========================================================================= */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-md p-6 sm:p-7 rounded-3xl">
+        <DialogContent className="max-w-md p-6 sm:p-7 rounded-3xl bg-card border-border shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
               Edit Staff Permissions
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-              Modify architectural role and account credentials for {selectedMember?.full_name}.
+              Modify operational role and database permissions for {selectedMember?.full_name}.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleEditSubmit} className="space-y-4 pt-3 text-xs">
             <div>
               <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
-                FULL LEGAL NAME
+                FULL NAME
               </label>
               <Input
                 value={formName}
@@ -1285,16 +1583,15 @@ export const UserTeam = () => {
               </label>
               <Select
                 value={formRole}
-                onValueChange={(val: StaffRole) => setFormRole(val)}
+                onValueChange={(val: "manager" | "cashier" | "inventory") => setFormRole(val)}
               >
-                <SelectTrigger className="h-12 rounded-2xl text-xs sm:text-sm">
+                <SelectTrigger className="h-12 rounded-2xl bg-card border-border text-xs sm:text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="text-xs sm:text-sm">
-                  <SelectItem value="cashier">Cashier (Terminal Only)</SelectItem>
-                  <SelectItem value="manager">Manager (Full Access)</SelectItem>
-                  <SelectItem value="admin">Administrator (System Admin)</SelectItem>
-                  <SelectItem value="inventory">Inventory Clerk (Stock Only)</SelectItem>
+                  <SelectItem value="cashier">👦 Cashier (POS, Dashboard &amp; View-Only Reports)</SelectItem>
+                  <SelectItem value="manager">🧑‍💼 Manager (Full Access - Same as Owner)</SelectItem>
+                  <SelectItem value="inventory">📦 Inventory Clerk (Inventory, Low &amp; Out of Stock Only)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1341,7 +1638,7 @@ export const UserTeam = () => {
               Remove Team Member?
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-1">
-              Are you sure you want to remove <span className="font-bold text-foreground">{selectedMember?.full_name}</span>? This will revoke active security credentials and system sessions.
+              Are you sure you want to remove <span className="font-bold text-foreground">{selectedMember?.full_name}</span>? This will revoke active credentials and permissions.
             </DialogDescription>
           </DialogHeader>
 

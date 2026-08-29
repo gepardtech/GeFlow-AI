@@ -21,6 +21,9 @@ export interface ReceiptData {
   receiptSubheader?: string;
   receiptFooter?: string;
   cashierName?: string;
+  customerName?: string;
+  customerPhone?: string;
+  patientNote?: string;
   showLogoOnReceipt?: boolean;
   showTaxBreakdown?: boolean;
   showCashierName?: boolean;
@@ -130,6 +133,8 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
       <div class="meta">
         <div class="meta-row"><span>DATE: ${fmtDate(data.date)}</span><span>TIME: ${fmtTime(data.date)}</span></div>
         <div class="meta-row"><span>RECEIPT #: ${data.invoiceNo}</span>${showCashier && data.cashierName ? `<span>CASHIER: ${data.cashierName}</span>` : ""}</div>
+        ${(data.customerName || data.customerPhone) ? `<div class="meta-row" style="margin-top:2px;font-weight:bold;"><span>CUSTOMER: ${data.customerName || "Walk-in"}</span>${data.customerPhone ? `<span>TEL: ${data.customerPhone}</span>` : ""}</div>` : ""}
+        ${data.patientNote ? `<div class="meta-row" style="margin-top:2px;font-size:9px;color:#444;"><span>RX / NOTE: ${data.patientNote}</span></div>` : ""}
       </div>
       <div class="dash"></div>
       <table>
@@ -204,6 +209,8 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
       `DATE: ${fmtDate(data.date)}  TIME: ${fmtTime(data.date)}`,
       `RECEIPT #: ${data.invoiceNo}`,
       ...(showCashier && data.cashierName ? [`CASHIER: ${data.cashierName}`] : []),
+      ...(data.customerName || data.customerPhone ? [`CUSTOMER: ${data.customerName || "Walk-in"}${data.customerPhone ? ` (TEL: ${data.customerPhone})` : ""}`] : []),
+      ...(data.patientNote ? [`RX / NOTE: ${data.patientNote}`] : []),
       "-".repeat(32),
       line("ITEM", "AMT"),
       rows,
@@ -282,6 +289,17 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
                 <span>RECEIPT #: {data.invoiceNo}</span>
                 {showCashier && data.cashierName && <span>CASHIER: {data.cashierName}</span>}
               </div>
+              {(data.customerName || data.customerPhone) && (
+                <div className="flex justify-between font-bold text-zinc-800 dark:text-zinc-200 pt-0.5 border-t border-dotted border-zinc-300 dark:border-zinc-700">
+                  <span className="truncate max-w-[60%]">CUST: {data.customerName || "Walk-in"}</span>
+                  {data.customerPhone && <span>TEL: {data.customerPhone}</span>}
+                </div>
+              )}
+              {data.patientNote && (
+                <div className="text-[9px] text-zinc-500 dark:text-zinc-400 truncate">
+                  <span>RX/NOTE: {data.patientNote}</span>
+                </div>
+              )}
             </div>
 
             {/* Items Table */}

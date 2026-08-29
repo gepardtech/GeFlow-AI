@@ -1,13 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import PanelLayout from "@/components/PanelLayout";
-import { userNavForPlanAndModules } from "@/lib/panelNav";
-import { usePlatformFeatures } from "@/hooks/usePlatformFeatures";
+import UserPanelGate from "@/components/UserPanelGate";
 import { usePlan } from "@/hooks/usePlan";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
 import { useMoney } from "@/lib/currency";
-import { useBusinessModules } from "@/hooks/useBusinessModules";
+import { useStaffRole } from "@/hooks/useStaffRole";
 import {
   Package,
   ShoppingCart,
@@ -83,8 +81,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { plan, planId, fullName, loading: planLoading } = usePlan();
   const { active, loading: bizLoading } = useActiveBusiness();
-  const { modules } = useBusinessModules();
-  const { isEnabled: isFeatureEnabled } = usePlatformFeatures(planId);
+  const { isCashier, isInventoryClerk, isManager, isOwner } = useStaffRole();
 
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState({
@@ -329,15 +326,7 @@ const Dashboard = () => {
   const hasData = chart.some((c) => c.sales > 0);
 
   return (
-    <PanelLayout
-      sidebarLabel="BUSINESS WORKSPACE"
-      navItems={userNavForPlanAndModules(planId, modules, isFeatureEnabled)}
-      identityName={`${plan.label} ${firstName}`}
-      identityRole={`${plan.label.toUpperCase()} PLAN`}
-      identityBadgeClass={plan.badgeClass}
-      initial={initial}
-      lockedPaths={plan.lockedRoutes}
-    >
+    <UserPanelGate pageTitle="Dashboard" module="dashboard">
       <div className="w-full space-y-6 min-w-0 pb-10">
         {/* ========================================================================= */}
         {/* HEADER SECTION (Welcome Title + Action CTAs)                             */}
@@ -348,7 +337,9 @@ const Dashboard = () => {
               Welcome back, {firstName} 👋
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground truncate">
-              Here's your business pulse for the last 30 days.
+              {isCashier
+                ? "POS terminal and sales overview dashboard."
+                : "Here's your business pulse for the last 30 days."}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap shrink-0">
@@ -356,14 +347,16 @@ const Dashboard = () => {
               onClick={() => navigate("/dashboard/pos")}
               className="h-9 sm:h-10 px-3.5 sm:px-4 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 sm:gap-2 hover:bg-primary/90 transition shadow-md shadow-primary/20 whitespace-nowrap"
             >
-              <Plus className="h-4 w-4 shrink-0" /> New Sale
+              <Plus className="h-4 w-4 shrink-0" /> New Sale (POS)
             </button>
-            <button
-              onClick={() => navigate("/dashboard/inventory")}
-              className="h-9 sm:h-10 px-3.5 sm:px-4 rounded-xl bg-card border border-border/80 text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 sm:gap-2 hover:bg-muted transition whitespace-nowrap"
-            >
-              <Plus className="h-4 w-4 shrink-0" /> Add Product
-            </button>
+            {!isCashier && (
+              <button
+                onClick={() => navigate("/dashboard/inventory")}
+                className="h-9 sm:h-10 px-3.5 sm:px-4 rounded-xl bg-card border border-border/80 text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 sm:gap-2 hover:bg-muted transition whitespace-nowrap"
+              >
+                <Plus className="h-4 w-4 shrink-0" /> Add Product
+              </button>
+            )}
             <button
               onClick={() => navigate("/dashboard/reports")}
               className="h-9 sm:h-10 px-3.5 sm:px-4 rounded-xl bg-card border border-border/80 text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 sm:gap-2 hover:bg-muted transition whitespace-nowrap"
@@ -403,7 +396,9 @@ const Dashboard = () => {
             value={kpis.totalProducts.toLocaleString()}
             iconClass="bg-amber-500/15 text-amber-500"
             icon={Package}
-            onClick={() => navigate("/dashboard/inventory")}
+            onClick={() => {
+              if (!isCashier) navigate("/dashboard/inventory");
+            }}
           />
           <Stat
             label="LOW STOCK"
@@ -416,7 +411,9 @@ const Dashboard = () => {
             }
             iconClass="bg-rose-500/15 text-rose-500"
             icon={AlertTriangle}
-            onClick={() => navigate("/dashboard/low-stock")}
+            onClick={() => {
+              if (!isCashier) navigate("/dashboard/low-stock");
+            }}
           />
         </div>
 
@@ -734,16 +731,18 @@ const Dashboard = () => {
                 </div>
               )}
             </div>
-            <button
-              onClick={() => navigate("/dashboard/inventory")}
-              className="w-full mt-4 h-9 sm:h-10 text-xs font-bold tracking-wider text-primary hover:underline truncate"
-            >
-              FULL INVENTORY ANALYTICS →
-            </button>
+            {!isCashier && (
+              <button
+                onClick={() => navigate("/dashboard/inventory")}
+                className="w-full mt-4 h-9 sm:h-10 text-xs font-bold tracking-wider text-primary hover:underline truncate"
+              >
+                FULL INVENTORY ANALYTICS →
+              </button>
+            )}
           </div>
         </div>
       </div>
-    </PanelLayout>
+    </UserPanelGate>
   );
 };
 

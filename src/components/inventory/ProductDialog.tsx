@@ -655,49 +655,49 @@ const ProductDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[92vh] p-0 gap-0 overflow-hidden flex flex-col bg-background text-foreground border-border shadow-2xl">
+      <DialogContent className="w-[96vw] sm:w-full max-w-3xl max-h-[92vh] sm:max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col bg-background text-foreground border-border shadow-2xl rounded-2xl sm:rounded-3xl">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-border bg-card/60 shrink-0 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
-              <PackagePlus className="h-5 w-5" />
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-border bg-card/60 shrink-0 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+              <PackagePlus className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-extrabold tracking-tight">
-                  {isEdit ? "Edit Product Metadata" : "Register Product SKU"}
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-extrabold tracking-tight truncate">
+                  {isEdit ? "Edit Product SKU" : "Register Product SKU"}
                 </h2>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                <span className="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full font-semibold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 shrink-0">
                   {industryType || categoryName || "Standard Catalog"}
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Structured product entry with category enforcement, UOM controls, and AI readiness.
+              <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 line-clamp-1 sm:line-clamp-none">
+                Structured product entry with category hierarchy, UOM controls, and AI readiness.
               </p>
             </div>
           </div>
         </div>
 
         {/* Scrollable Form Body */}
-        <div className="overflow-y-auto px-6 py-5 space-y-6 flex-1">
+        <div className="overflow-y-auto px-3.5 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-6 flex-1">
           {/* SECTION 6 (Optional Top Placement): AI Product Intelligence */}
-          <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 p-3.5 transition-all">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="h-7 w-7 rounded-lg bg-sky-500/20 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
-                  <Sparkles className="h-4 w-4" />
+          <div className="rounded-xl sm:rounded-2xl border border-sky-500/30 bg-sky-500/5 p-3 sm:p-3.5 transition-all">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+                <div className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg bg-sky-500/20 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                  <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">
-                      Section 6: AI Product Intelligence
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] sm:text-xs font-bold text-sky-600 dark:text-sky-400 uppercase tracking-wider">
+                      AI Product Intelligence
                     </span>
-                    <span className="text-[9px] px-1.5 py-0.2 rounded font-medium bg-sky-500/20 text-sky-700 dark:text-sky-300">
-                      Optional Assistance
+                    <span className="text-[8px] sm:text-[9px] px-1.5 py-0.2 rounded font-medium bg-sky-500/20 text-sky-700 dark:text-sky-300 shrink-0">
+                      Optional
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Analyze product text or packaging to auto-suggest taxonomy, UOM, and specs for manual review.
+                  <p className="text-[10px] sm:text-[11px] text-muted-foreground line-clamp-1 sm:line-clamp-none">
+                    Auto-suggest taxonomy, UOM, and specs from product name or packaging.
                   </p>
                 </div>
               </div>
@@ -706,17 +706,17 @@ const ProductDialog = ({
                 variant="outline"
                 size="sm"
                 onClick={() => setShowAIAssistant(!showAIAssistant)}
-                className="h-8 text-xs font-semibold gap-1.5 border-sky-500/40 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 shrink-0"
+                className="h-7 sm:h-8 text-[11px] sm:text-xs font-semibold gap-1 border-sky-500/40 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 shrink-0 px-2 sm:px-3"
               >
                 {showAIAssistant ? (
                   <>
                     <ChevronUp className="h-3.5 w-3.5" />
-                    Hide AI
+                    <span>Hide</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-3.5 w-3.5" />
-                    Analyze Product
+                    <span>Analyze</span>
                   </>
                 )}
               </Button>
@@ -740,7 +740,7 @@ const ProductDialog = ({
           </div>
 
           {/* SECTION 1: Product Identification */}
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             <SectionHeader
               number={1}
               title="Product Identification"
@@ -748,7 +748,7 @@ const ProductDialog = ({
               icon={Tag}
             />
 
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <FieldLabel
                   htmlFor="product-name-input"
@@ -820,7 +820,7 @@ const ProductDialog = ({
                 suggestedValue={fieldAIStatuses.description?.suggested}
                 onApplySuggestion={(val) => set("description", String(val))}
               >
-                MetaData (Short Description & Specifications)
+                MetaData (Short Description &amp; Specifications)
               </FieldLabel>
               <Textarea
                 id="product-metadata-input"
@@ -834,7 +834,7 @@ const ProductDialog = ({
           </div>
 
           {/* SECTION 2: Product Classification & UOM */}
-          <div className="space-y-4 pt-2">
+          <div className="space-y-3 sm:space-y-4 pt-1 sm:pt-2">
             <SectionHeader
               number={2}
               title="Product Classification"
@@ -842,7 +842,7 @@ const ProductDialog = ({
               icon={Layers}
             />
 
-            <div className="grid sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
               {/* Primary Category */}
               <div>
                 <FieldLabel
@@ -970,15 +970,15 @@ const ProductDialog = ({
           </div>
 
           {/* SECTION 3: Pricing & Stock */}
-          <div className="space-y-4 pt-2">
+          <div className="space-y-3 sm:space-y-4 pt-1 sm:pt-2">
             <SectionHeader
               number={3}
-              title="Pricing & Stock"
+              title="Pricing &amp; Stock"
               description="Cost, retail price, stock inventory count, and deficit safety alerts"
               icon={DollarSign}
             />
 
-            <div className="grid sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
               {/* Purchase Cost */}
               <div>
                 <FieldLabel
@@ -1075,7 +1075,7 @@ const ProductDialog = ({
               )}
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {/* Stock Units (works with selected UOM) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
@@ -1143,15 +1143,15 @@ const ProductDialog = ({
 
           {/* SECTION 4: Batch & Expiry */}
           {(showBatch || showExpiry) && (
-            <div className="space-y-4 pt-2">
+            <div className="space-y-3 sm:space-y-4 pt-1 sm:pt-2">
               <SectionHeader
                 number={4}
-                title="Batch & Expiry Tracking"
+                title="Batch &amp; Expiry Tracking"
                 description="Regulatory lot identification and expiration date controls"
                 icon={Calendar}
               />
 
-              <div className="grid sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 {showBatch && (
                   <div>
                     <FieldLabel htmlFor="batch-number-input">
@@ -1184,10 +1184,10 @@ const ProductDialog = ({
           )}
 
           {/* SECTION 5: Images & Barcode */}
-          <div className="space-y-4 pt-2">
+          <div className="space-y-3 sm:space-y-4 pt-1 sm:pt-2">
             <SectionHeader
               number={5}
-              title="Images & Barcode"
+              title="Images &amp; Barcode"
               description="Visual product assets and scanner-ready barcode entry"
               icon={Barcode}
             />
@@ -1232,11 +1232,11 @@ const ProductDialog = ({
                 hidden
                 onChange={(e) => uploadImages(e.target.files)}
               />
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-2.5 sm:gap-3">
                 {images.map((url, i) => (
                   <div
                     key={i}
-                    className="relative h-20 w-20 rounded-xl overflow-hidden border border-border group bg-muted/30"
+                    className="relative h-16 w-16 sm:h-20 sm:w-20 rounded-xl overflow-hidden border border-border group bg-muted/30"
                   >
                     <img
                       src={url}
@@ -1258,14 +1258,14 @@ const ProductDialog = ({
                     type="button"
                     onClick={() => fileRef.current?.click()}
                     disabled={uploading}
-                    className="h-20 w-20 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-1 text-muted-foreground hover:border-sky-400 hover:text-sky-500 transition bg-card/40"
+                    className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-1 text-muted-foreground hover:border-sky-400 hover:text-sky-500 transition bg-card/40"
                   >
                     {uploading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Camera className="h-4 w-4" />
                     )}
-                    <span className="text-[9px] font-bold tracking-wider uppercase">Add</span>
+                    <span className="text-[8px] sm:text-[9px] font-bold tracking-wider uppercase">Add</span>
                   </button>
                 )}
               </div>
@@ -1273,7 +1273,7 @@ const ProductDialog = ({
           </div>
 
           {/* SECTION 7: Final Review Card */}
-          <div className="pt-2">
+          <div className="pt-1 sm:pt-2">
             <SectionHeader
               number={7}
               title="Final Verification Review"
@@ -1281,10 +1281,10 @@ const ProductDialog = ({
               icon={ShieldCheck}
             />
 
-            <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="rounded-xl sm:rounded-2xl border border-border bg-card p-3 sm:p-4 space-y-2.5 sm:space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground block">
+                  <span className="text-[9px] sm:text-[10px] uppercase font-bold text-muted-foreground block">
                     Product Name
                   </span>
                   <span className="font-semibold truncate block text-foreground">
@@ -1292,8 +1292,8 @@ const ProductDialog = ({
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground block">
-                    Category / Subcategory
+                  <span className="text-[9px] sm:text-[10px] uppercase font-bold text-muted-foreground block">
+                    Category / Sub
                   </span>
                   <span className="font-semibold truncate block text-foreground">
                     {selectedParent ? selectedParent.name : "—"}
@@ -1303,23 +1303,23 @@ const ProductDialog = ({
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground block">
-                    UOM & Stock
+                  <span className="text-[9px] sm:text-[10px] uppercase font-bold text-muted-foreground block">
+                    UOM &amp; Stock
                   </span>
                   <span className="font-semibold text-foreground">
                     {form.stock_units !== "" ? formatStockWithUOM(form.stock_units, form.uom) : "—"}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground block">
-                    Price & Margin
+                  <span className="text-[9px] sm:text-[10px] uppercase font-bold text-muted-foreground block">
+                    Price &amp; Margin
                   </span>
-                  <div className="flex items-center gap-1 font-semibold text-foreground">
+                  <div className="flex items-center gap-1 font-semibold text-foreground flex-wrap">
                     <span>
                       {form.retail_price !== "" ? `${symbol} ${Number(form.retail_price).toFixed(2)}` : "—"}
                     </span>
                     {calculatedMargin > 0 && (
-                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                      <span className="text-[9px] sm:text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
                         (+{calculatedMargin}%)
                       </span>
                     )}
@@ -1328,10 +1328,10 @@ const ProductDialog = ({
               </div>
 
               {(form.batch_number || form.expiry_date || form.barcode) && (
-                <div className="pt-2 border-t border-border/70 flex flex-wrap gap-4 text-xs">
+                <div className="pt-2 border-t border-border/70 flex flex-wrap gap-2.5 sm:gap-4 text-[11px] sm:text-xs">
                   {form.batch_number && (
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-muted-foreground">
+                      <span className="text-[9px] sm:text-[10px] uppercase font-bold text-muted-foreground">
                         Batch:{" "}
                       </span>
                       <span className="font-mono font-medium text-foreground">{form.batch_number}</span>
@@ -1339,7 +1339,7 @@ const ProductDialog = ({
                   )}
                   {form.expiry_date && (
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-muted-foreground">
+                      <span className="text-[9px] sm:text-[10px] uppercase font-bold text-muted-foreground">
                         Expiry:{" "}
                       </span>
                       <span className="font-medium text-foreground">{form.expiry_date}</span>
@@ -1347,7 +1347,7 @@ const ProductDialog = ({
                   )}
                   {form.barcode && (
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-muted-foreground">
+                      <span className="text-[9px] sm:text-[10px] uppercase font-bold text-muted-foreground">
                         Barcode:{" "}
                       </span>
                       <span className="font-mono font-medium text-foreground">{form.barcode}</span>
@@ -1360,13 +1360,13 @@ const ProductDialog = ({
         </div>
 
         {/* Sticky Actions Footer */}
-        <div className="px-6 py-3.5 border-t border-border bg-card/80 backdrop-blur shrink-0 flex items-center justify-between gap-3">
+        <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-t border-border bg-card/90 backdrop-blur shrink-0 flex items-center justify-between gap-2.5 sm:gap-3">
           <Button
             type="button"
             variant="ghost"
             onClick={() => onOpenChange(false)}
             disabled={saving}
-            className="text-xs font-semibold"
+            className="text-xs font-semibold h-10 sm:h-11 px-3 sm:px-4"
           >
             Cancel
           </Button>
@@ -1375,17 +1375,17 @@ const ProductDialog = ({
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="h-10 px-6 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm shadow-md transition-all flex items-center gap-2"
+            className="h-10 sm:h-11 px-4 sm:px-6 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs sm:text-sm shadow-md transition-all flex items-center gap-2 flex-1 sm:flex-initial justify-center"
           >
             {saving ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Saving SKU...</span>
+                <span>Saving...</span>
               </>
             ) : (
               <>
                 <Zap className="h-4 w-4" />
-                <span>{isEdit ? "Save Product Changes" : "Save Product"}</span>
+                <span>{isEdit ? "Save Changes" : "Save Product SKU"}</span>
               </>
             )}
           </Button>

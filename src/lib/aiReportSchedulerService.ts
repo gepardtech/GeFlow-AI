@@ -292,9 +292,9 @@ export async function generateScheduledAIReport(
 
   // Supplier recommendations for low and out-of-stock
   const defaultSuppliers = suppliers && suppliers.length > 0 ? suppliers : [
-    { id: "sup-1", name: "Metro Wholesale Logistics", contact_name: "Tariq Mahmood", phone: "+92 300 8492019", email: "procurement@metrowholesale.pk", address: "Plot 42, Industrial Area, Sector G-9" },
-    { id: "sup-2", name: "Apex Direct Distributors", contact_name: "Kamran Ali", phone: "+92 321 4455890", email: "orders@apexdistributors.com", address: "Warehouse 12, Main Hub Terminal" },
-    { id: "sup-3", name: "Global FastTrade Suppliers", contact_name: "Saad Sheikh", phone: "+92 333 9081234", email: "supply@fasttrade.pk", address: "Trade Center Building 3, Port Road" },
+    { id: "sup-1", name: "Metro Global Wholesale Logistics", contact_name: "Arthur Vance", phone: "+1 555 019 4820", email: "procurement@metrogloballogistics.com", address: "452 Logistics Parkway, Suite 100, New York" },
+    { id: "sup-2", name: "Apex Direct Global Distributors", contact_name: "Elena Rostova", phone: "+44 20 7946 0912", email: "orders@apexdistributors.com", address: "Warehouse 12, Terminal Gateway West, London" },
+    { id: "sup-3", name: "Pinnacle FastTrade International", contact_name: "David Chen", phone: "+65 6789 0123", email: "supply@fasttrade-global.com", address: "Trade Center Tower 3, Marina Bay, Singapore" },
   ];
 
   const supplierRecommendations: GeneratedAIReport["supplierRecommendations"] = [

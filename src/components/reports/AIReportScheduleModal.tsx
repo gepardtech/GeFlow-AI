@@ -20,7 +20,6 @@ import {
 import {
   Sparkles,
   Clock,
-  Calendar,
   DollarSign,
   Boxes,
   PackageX,
@@ -28,11 +27,10 @@ import {
   Flame,
   ShieldAlert,
   Crown,
-  Lock,
-  CheckCircle2,
   BellRing,
   Send,
   Loader2,
+  CheckCircle2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -60,7 +58,7 @@ export const AIReportScheduleModal: React.FC<Props> = ({
   businessName = "Business",
   onReportGenerated,
 }) => {
-  const { planId, isPremiumOrLifetime } = usePlan();
+  const { isPremiumOrLifetime } = usePlan();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -94,7 +92,7 @@ export const AIReportScheduleModal: React.FC<Props> = ({
     if (!businessId) return;
     setGenerating(true);
     try {
-      const rep = await generateScheduledAIReport(businessId, businessName, config.frequency);
+      await generateScheduledAIReport(businessId, businessName, config.frequency);
       toast({
         title: "AI Report Generated Instantly",
         description: `New ${config.frequency} report added to your Audit Ledger with real-time profit, stock, and supplier insights.`,
@@ -118,31 +116,31 @@ export const AIReportScheduleModal: React.FC<Props> = ({
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
-          className="max-w-md p-6 bg-card border-border shadow-2xl rounded-2xl"
+          className="max-w-md p-6 bg-card text-card-foreground border-border shadow-2xl rounded-3xl"
           onPointerDownOutside={(e) => e.preventDefault()}
         >
           <DialogHeader className="text-center space-y-3">
-            <div className="mx-auto w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/20">
+            <div className="mx-auto w-14 h-14 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center border border-amber-500/30">
               <Crown className="w-7 h-7" />
             </div>
             <DialogTitle className="text-xl font-bold text-foreground">
               Scheduled AI Reports is Premium
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground leading-relaxed">
-              Automated daily, weekly, and monthly AI performance audits with in-app notifications and supplier procurement research are available exclusively on <span className="font-bold text-foreground">Premium & Lifetime plans</span>.
+              Automated daily, weekly, and monthly AI performance audits with in-app notifications and supplier procurement research are available exclusively on <span className="font-bold text-foreground">Premium &amp; Lifetime plans</span>.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="my-4 p-4 rounded-xl bg-muted/40 border border-border space-y-2 text-xs">
+          <div className="my-4 p-4 rounded-2xl bg-muted/50 border border-border space-y-2 text-xs">
             <p className="font-bold text-foreground flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-sky-500" />
               What you unlock with Premium:
             </p>
             <ul className="space-y-1.5 text-muted-foreground pl-6 list-disc">
-              <li>Automatic Daily, Weekly, or Monthly Profit & Stock Reports</li>
+              <li>Automatic Daily, Weekly, or Monthly Profit &amp; Stock Reports</li>
               <li>Instant in-app alerts on new report generation</li>
-              <li>Autonomous low & out-of-stock supplier contact sheets</li>
-              <li>One-click export to PDF & CSV in the Audit Ledger</li>
+              <li>Autonomous low &amp; out-of-stock supplier contact sheets</li>
+              <li>One-click export to PDF &amp; CSV in the Audit Ledger</li>
             </ul>
           </div>
 
@@ -150,7 +148,7 @@ export const AIReportScheduleModal: React.FC<Props> = ({
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="w-full sm:w-1/2 rounded-xl text-xs font-semibold"
+              className="w-full sm:w-1/2 rounded-xl text-xs font-semibold hover:bg-muted"
             >
               Maybe Later
             </Button>
@@ -173,22 +171,22 @@ export const AIReportScheduleModal: React.FC<Props> = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-xl p-0 overflow-hidden bg-card border-border shadow-2xl rounded-2xl flex flex-col max-h-[90vh]"
+        className="max-w-xl p-0 overflow-hidden bg-card text-card-foreground border-border shadow-2xl rounded-3xl flex flex-col max-h-[90vh]"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
       >
         {/* Header */}
-        <div className="p-5 border-b border-border bg-muted/30 flex items-center justify-between">
+        <div className="p-5 border-b border-border bg-muted/40 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-sky-500 text-white flex items-center justify-center shadow-sm shrink-0">
-              <Clock className="w-5 h-5" />
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-500 to-sky-500 text-white flex items-center justify-center shadow-sm shrink-0">
+              <Clock className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <DialogTitle className="text-base font-bold text-foreground">
                   AI Report Schedule Settings
                 </DialogTitle>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center gap-1">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1">
                   <Crown className="w-3 h-3" />
                   Premium Active
                 </span>
@@ -203,10 +201,10 @@ export const AIReportScheduleModal: React.FC<Props> = ({
         {/* Form Body */}
         <div className="p-5 overflow-y-auto space-y-5 flex-1">
           {/* Master Enable Switch */}
-          <div className="flex items-center justify-between p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/20">
-            <div className="space-y-0.5">
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-sky-500/10 dark:bg-sky-500/15 border border-sky-500/25 transition-colors">
+            <div className="space-y-0.5 pr-3">
               <Label className="text-sm font-bold text-foreground flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-sky-500" />
+                <Sparkles className="w-4 h-4 text-sky-500 shrink-0" />
                 Enable Automated AI Intelligence Reports
               </Label>
               <p className="text-xs text-muted-foreground">
@@ -229,7 +227,7 @@ export const AIReportScheduleModal: React.FC<Props> = ({
                 value={config.frequency}
                 onValueChange={(val: ReportFrequency) => setConfig({ ...config, frequency: val })}
               >
-                <SelectTrigger className="h-10 rounded-xl bg-background border-border text-xs font-semibold">
+                <SelectTrigger className="h-10 rounded-xl bg-background border-border text-xs font-semibold text-foreground hover:bg-muted/40 transition">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="text-xs">
@@ -248,7 +246,7 @@ export const AIReportScheduleModal: React.FC<Props> = ({
                 value={config.timeOfDay}
                 onValueChange={(val) => setConfig({ ...config, timeOfDay: val })}
               >
-                <SelectTrigger className="h-10 rounded-xl bg-background border-border text-xs font-semibold">
+                <SelectTrigger className="h-10 rounded-xl bg-background border-border text-xs font-semibold text-foreground hover:bg-muted/40 transition">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="text-xs">
@@ -269,14 +267,14 @@ export const AIReportScheduleModal: React.FC<Props> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {/* 1. Profit */}
-              <div className="p-3 rounded-xl border border-border bg-card flex items-center justify-between">
+              <div className="p-3.5 rounded-2xl border border-border bg-card hover:bg-muted/20 transition-all flex items-center justify-between shadow-2xs">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold text-xs">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center font-bold text-xs shrink-0">
                     <DollarSign className="w-4 h-4" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-foreground">1. Profit & Margins</p>
-                    <p className="text-[10px] text-muted-foreground">Net revenue & margin %</p>
+                    <p className="text-xs font-bold text-foreground">1. Profit &amp; Margins</p>
+                    <p className="text-[10px] text-muted-foreground">Net revenue &amp; margin %</p>
                   </div>
                 </div>
                 <Switch
@@ -286,14 +284,14 @@ export const AIReportScheduleModal: React.FC<Props> = ({
               </div>
 
               {/* 2. Total Inventory */}
-              <div className="p-3 rounded-xl border border-border bg-card flex items-center justify-between">
+              <div className="p-3.5 rounded-2xl border border-border bg-card hover:bg-muted/20 transition-all flex items-center justify-between shadow-2xs">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-500 flex items-center justify-center font-bold text-xs">
+                  <div className="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center font-bold text-xs shrink-0">
                     <Boxes className="w-4 h-4" />
                   </div>
                   <div>
                     <p className="text-xs font-bold text-foreground">2. Total Inventory</p>
-                    <p className="text-[10px] text-muted-foreground">Valuation & total units</p>
+                    <p className="text-[10px] text-muted-foreground">Valuation &amp; total units</p>
                   </div>
                 </div>
                 <Switch
@@ -303,9 +301,9 @@ export const AIReportScheduleModal: React.FC<Props> = ({
               </div>
 
               {/* 3. Out of Stock */}
-              <div className="p-3 rounded-xl border border-border bg-card flex items-center justify-between">
+              <div className="p-3.5 rounded-2xl border border-border bg-card hover:bg-muted/20 transition-all flex items-center justify-between shadow-2xs">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-rose-500/10 text-rose-500 flex items-center justify-center font-bold text-xs">
+                  <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center font-bold text-xs shrink-0">
                     <PackageX className="w-4 h-4" />
                   </div>
                   <div>
@@ -320,9 +318,9 @@ export const AIReportScheduleModal: React.FC<Props> = ({
               </div>
 
               {/* 4. Low Stock */}
-              <div className="p-3 rounded-xl border border-border bg-card flex items-center justify-between">
+              <div className="p-3.5 rounded-2xl border border-border bg-card hover:bg-muted/20 transition-all flex items-center justify-between shadow-2xs">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold text-xs">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold text-xs shrink-0">
                     <AlertTriangle className="w-4 h-4" />
                   </div>
                   <div>
@@ -337,9 +335,9 @@ export const AIReportScheduleModal: React.FC<Props> = ({
               </div>
 
               {/* 5. Highly Demanded */}
-              <div className="p-3 rounded-xl border border-border bg-card flex items-center justify-between">
+              <div className="p-3.5 rounded-2xl border border-border bg-card hover:bg-muted/20 transition-all flex items-center justify-between shadow-2xs">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-500 flex items-center justify-center font-bold text-xs">
+                  <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center font-bold text-xs shrink-0">
                     <Flame className="w-4 h-4" />
                   </div>
                   <div>
@@ -354,14 +352,14 @@ export const AIReportScheduleModal: React.FC<Props> = ({
               </div>
 
               {/* 6. Issue Products */}
-              <div className="p-3 rounded-xl border border-border bg-card flex items-center justify-between">
+              <div className="p-3.5 rounded-2xl border border-border bg-card hover:bg-muted/20 transition-all flex items-center justify-between shadow-2xs">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center font-bold text-xs">
+                  <div className="w-8 h-8 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center font-bold text-xs shrink-0">
                     <ShieldAlert className="w-4 h-4" />
                   </div>
                   <div>
                     <p className="text-xs font-bold text-foreground">6. Issue Products</p>
-                    <p className="text-[10px] text-muted-foreground">Expiring & negative margin</p>
+                    <p className="text-[10px] text-muted-foreground">Expiring &amp; negative margin</p>
                   </div>
                 </div>
                 <Switch
@@ -373,7 +371,7 @@ export const AIReportScheduleModal: React.FC<Props> = ({
           </div>
 
           {/* Notification Alert Preview */}
-          <div className="p-3 rounded-xl bg-muted/40 border border-border text-xs flex items-center gap-2.5 text-muted-foreground">
+          <div className="p-3.5 rounded-2xl bg-muted/40 border border-border text-xs flex items-center gap-2.5 text-muted-foreground">
             <BellRing className="w-4 h-4 text-sky-500 shrink-0" />
             <span>
               Every time a scheduled report is generated, a notification will be pushed to your in-app notification bell with a direct link to the Audit Ledger.
@@ -382,13 +380,13 @@ export const AIReportScheduleModal: React.FC<Props> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t border-border bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="p-4 sm:p-5 border-t border-border bg-muted/30 flex flex-col sm:flex-row items-center justify-between gap-3">
           <Button
             type="button"
             variant="outline"
             disabled={generating}
             onClick={handleTriggerNow}
-            className="w-full sm:w-auto h-9 rounded-xl text-xs font-bold border-sky-500/30 text-sky-600 hover:bg-sky-500/10"
+            className="w-full sm:w-auto h-10 px-4 rounded-xl text-xs font-bold border-sky-500/30 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 transition shadow-2xs"
           >
             {generating ? (
               <>
@@ -398,7 +396,7 @@ export const AIReportScheduleModal: React.FC<Props> = ({
             ) : (
               <>
                 <Send className="w-3.5 h-3.5 mr-2" />
-                Generate Now & Send
+                Generate Now &amp; Send
               </>
             )}
           </Button>
@@ -406,9 +404,9 @@ export const AIReportScheduleModal: React.FC<Props> = ({
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               onClick={() => onOpenChange(false)}
-              className="h-9 px-4 rounded-xl text-xs font-semibold"
+              className="h-10 px-4 rounded-xl text-xs font-semibold hover:bg-muted"
             >
               Cancel
             </Button>
@@ -416,7 +414,7 @@ export const AIReportScheduleModal: React.FC<Props> = ({
               type="button"
               disabled={saving}
               onClick={handleSave}
-              className="h-9 px-5 rounded-xl text-xs font-bold bg-primary text-primary-foreground hover:opacity-90 shadow-xs"
+              className="h-10 px-5 rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-600 text-white shadow-md flex-1 sm:flex-initial"
             >
               {saving ? "Saving…" : "Save Schedule"}
             </Button>

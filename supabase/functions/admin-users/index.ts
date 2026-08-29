@@ -33,18 +33,140 @@ Deno.serve(async (req) => {
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData?.user) return json({ error: "Invalid session" }, 401);
 
-    // Verify admin role
+    // Verify role of caller
     const { data: roleRow } = await userClient
       .from("user_roles")
       .select("role")
       .eq("user_id", userData.user.id)
       .eq("role", "admin")
       .maybeSingle();
-    if (!roleRow) return json({ error: "Admin only" }, 403);
+    const isPlatformAdmin = Boolean(roleRow);
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
     const body = await req.json();
     const action = body?.action as string;
+
+    // Team Member Creation by Workspace Owner (authenticated users)
+    if (action === "createTeamMember") {
+      const { email, password, full_name, role } = body;
+      if (!email || !password || !full_name) {
+        return json({ error: "Full name, email and password are required." }, 400);
+      }
+
+      // Restrict role to valid store-level roles only (NEVER admin)
+      const allowedRoles = ["manager", "cashier", "inventory"];
+      const cleanRole = allowedRoles.includes(role) ? role : "cashier";
+
+      // 1. Create auth user with free plan
+      const { data: created, error: cErr } = await admin.auth.admin.createUser({
+        email: email.trim().toLowerCase(),
+        password: password.trim(),
+        email_confirm: true,
+        user_metadata: {
+          full_name: full_name.trim(),
+          plan: "free",
+          role: cleanRole,
+          invited_by: userData.user.id,
+        },
+      });
+
+      if (cErr) {
+        // If user already exists in auth, find existing user
+        return json({ error: cErr.message }, 400);
+      }
+
+      const targetUserId = created.user!.id;
+
+      // 2. Ensure profile exists with plan = "free"
+      await admin.from("profiles").upsert(
+        {
+          user_id: targetUserId,
+          full_name: full_name.trim(),
+          email: email.trim().toLowerCase(),
+          plan: "free",
+          status: "active",
+        },
+        { onConflict: "user_id" }
+      );
+
+      // 3. Insert or update support_team_members
+      const { data: existSupport } = await admin
+        .from("support_team_members")
+        .select("id")
+        .eq("user_id", targetUserId)
+        .maybeSingle();
+
+      if (existSupport) {
+        await admin
+          .from("support_team_members")
+          .update({
+            role: cleanRole,
+            is_active: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existSupport.id);
+      } else {
+        await admin.from("support_team_members").insert({
+          user_id: targetUserId,
+          role: cleanRole,
+          appointed_by_user_id: userData.user.id,
+          is_active: true,
+        });
+      }
+
+      // 4. Ensure user role is standard "user" (NEVER admin)
+      const { data: existRole } = await admin
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", targetUserId)
+        .maybeSingle();
+
+      if (!existRole) {
+        await admin.from("user_roles").insert({ user_id: targetUserId, role: "user" });
+      }
+
+      return json({ ok: true, user_id: targetUserId });
+    }
+
+    // Team Member Role Update
+    if (action === "updateTeamMemberRole") {
+      const { user_id, role, is_active } = body;
+      if (!user_id) return json({ error: "user_id required" }, 400);
+
+      const allowedRoles = ["manager", "cashier", "inventory"];
+      const cleanRole = allowedRoles.includes(role) ? role : "cashier";
+
+      const { data: existSupport } = await admin
+        .from("support_team_members")
+        .select("id")
+        .eq("user_id", user_id)
+        .maybeSingle();
+
+      if (existSupport) {
+        await admin
+          .from("support_team_members")
+          .update({
+            role: cleanRole,
+            is_active: is_active !== false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existSupport.id);
+      } else {
+        await admin.from("support_team_members").insert({
+          user_id,
+          role: cleanRole,
+          appointed_by_user_id: userData.user.id,
+          is_active: is_active !== false,
+        });
+      }
+
+      return json({ ok: true });
+    }
+
+    // All subsequent actions require Platform Super Admin
+    if (!isPlatformAdmin) {
+      return json({ error: "Platform Admin only" }, 403);
+    }
 
     if (action === "create") {
       const { email, password, full_name, plan } = body;

@@ -40,7 +40,7 @@ const UserPurchases = () => {
     setLoading(true);
     const [{ data: pr }, { data: pd }] = await Promise.all([
       supabase.from("purchases").select("*").eq("business_id", active.id).order("created_at", { ascending: false }),
-      supabase.from("products").select("id, name, stock_units, purchase_cost, retail_price").eq("business_id", active.id).eq("status", "active").order("name"),
+      supabase.from("products").select("id, name, description, stock_units, purchase_cost, retail_price").eq("business_id", active.id).eq("status", "active").order("name"),
     ]);
     setRows((pr as PurchaseRecord[]) ?? []);
     setProducts((pd as PurchaseProduct[]) ?? []);
