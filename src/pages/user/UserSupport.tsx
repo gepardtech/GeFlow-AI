@@ -55,16 +55,17 @@ const UserSupport = () => {
   }, []);
 
   useEffect(() => {
+    let ch: any = null;
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
       setUserId(user.id);
       loadTickets(user.id);
-      const ch = supabase.channel("user_tickets_rt")
+      ch = supabase.channel(`user_tickets_rt_${user.id}_${Math.random().toString(36).slice(2)}`)
         .on("postgres_changes", { event: "*", schema: "public", table: "support_tickets", filter: `owner_user_id=eq.${user.id}` }, () => loadTickets(user.id))
         .subscribe();
-      return () => { supabase.removeChannel(ch); };
     })();
+    return () => { if (ch) supabase.removeChannel(ch); };
   }, [loadTickets]);
 
   // thread messages + realtime
@@ -80,7 +81,7 @@ const UserSupport = () => {
       setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     };
     load();
-    const ch = supabase.channel(`ticket_msgs_${active.id}`)
+    const ch = supabase.channel(`ticket_msgs_${active.id}_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "ticket_messages", filter: `ticket_id=eq.${active.id}` }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };

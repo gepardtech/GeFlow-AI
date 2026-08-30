@@ -152,6 +152,12 @@ const Dashboard = () => {
     ]);
 
     const prods = products ?? [];
+    if (bizId) {
+      supabase.from("businesses").update({ listed_products: prods.length }).eq("id", bizId).then();
+    }
+    if (user?.id) {
+      supabase.from("profiles").update({ listed_products: prods.length }).eq("user_id", user.id).then();
+    }
     const allSales = sales ?? [];
 
     // KPIs
@@ -313,17 +319,20 @@ const Dashboard = () => {
     };
   }, [active, load]);
 
-  if (planLoading || bizLoading || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-muted-foreground text-sm font-medium">
-        Loading dashboard...
-      </div>
-    );
-  }
-
   const firstName = fullName?.split(" ")[0] || "there";
   const initial = firstName.charAt(0).toUpperCase();
   const hasData = chart.some((c) => c.sales > 0);
+
+  if (planLoading || bizLoading || loading) {
+    return (
+      <UserPanelGate pageTitle="Dashboard" module="dashboard">
+        <div className="min-h-[60vh] flex flex-col items-center justify-center text-muted-foreground text-sm font-medium gap-3">
+          <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <p>Loading your store dashboard...</p>
+        </div>
+      </UserPanelGate>
+    );
+  }
 
   return (
     <UserPanelGate pageTitle="Dashboard" module="dashboard">

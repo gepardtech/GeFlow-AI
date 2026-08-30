@@ -14,6 +14,7 @@ import {
   Users,
   Layers,
   BarChart3,
+  Sparkles,
 } from "lucide-react";
 
 type Plan = "Free" | "Standard" | "Premium";
@@ -57,6 +58,12 @@ const groups: Group[] = [
         desc: "Native integration with scanning hardware for error-free stock management.",
         icon: ScanLine,
         plans: ["Standard", "Premium"],
+      },
+      {
+        title: "AI Store Assistant (Basic Level)",
+        desc: "Interactive retail assistant for quick inventory lookups, low stock triage, and daily sales summaries.",
+        icon: Sparkles,
+        plans: ["Free", "Standard", "Premium"],
       },
     ],
   },

@@ -45,7 +45,7 @@ const AdminProductCategories = () => {
 
   useEffect(() => {
     load();
-    const ch = supabase.channel("admin_product_categories_rt")
+    const ch = supabase.channel(`admin_product_categories_rt_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "product_categories" }, load).subscribe();
     const onR = () => load();
     window.addEventListener("panel:refresh", onR);

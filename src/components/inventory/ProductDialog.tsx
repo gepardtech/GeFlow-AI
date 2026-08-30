@@ -636,6 +636,29 @@ const ProductDialog = ({
       return;
     }
 
+    // Synchronize listed_products count to businesses and profiles
+    try {
+      const { count: bCount } = await supabase
+        .from("products")
+        .select("*", { count: "exact", head: true })
+        .eq("business_id", businessId);
+      if (bCount !== null && bCount !== undefined) {
+        await supabase.from("businesses").update({ listed_products: bCount }).eq("id", businessId);
+      }
+      const targetUserId = ownerUserId;
+      if (targetUserId) {
+        const { count: uCount } = await supabase
+          .from("products")
+          .select("*", { count: "exact", head: true })
+          .eq("owner_user_id", targetUserId);
+        if (uCount !== null && uCount !== undefined) {
+          await supabase.from("profiles").update({ listed_products: uCount }).eq("user_id", targetUserId);
+        }
+      }
+    } catch (syncErr) {
+      console.warn("Product count sync notice:", syncErr);
+    }
+
     toast({
       title: isEdit ? "Product SKU updated" : "Product SKU saved successfully",
       description: `${form.name} (${formatStockWithUOM(form.stock_units, form.uom)}) committed to catalog.`,

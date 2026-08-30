@@ -93,7 +93,7 @@ const AdminBillingInvoices = () => {
 
   useEffect(() => {
     load();
-    const ch = supabase.channel("admin_inv_rt").on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, load).subscribe();
+    const ch = supabase.channel(`admin_inv_rt_${Math.random().toString(36).slice(2)}`).on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, load).subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [load]);
 

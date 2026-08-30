@@ -59,7 +59,7 @@ const AdminBillingCoupons = () => {
 
   useEffect(() => {
     load();
-    const ch = supabase.channel("admin_coupons_rt")
+    const ch = supabase.channel(`admin_coupons_rt_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "coupons" }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };

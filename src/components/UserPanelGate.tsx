@@ -1,7 +1,7 @@
 import { ReactNode, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import PanelLayout from "@/components/PanelLayout";
-import { userNavForPlanAndModules, NavItem } from "@/lib/panelNav";
+import { userNavForPlanAndModules } from "@/lib/panelNav";
 import { usePlan } from "@/hooks/usePlan";
 import { useBusinessModules } from "@/hooks/useBusinessModules";
 import { usePlatformFeatures } from "@/hooks/usePlatformFeatures";
@@ -25,22 +25,23 @@ interface Props {
  * - Loads plan in realtime
  * - Enforces Team Role Permissions (Cashier, Manager, Inventory Clerk, Owner)
  * - Renders the user PanelLayout with role and plan-aware identity
- * - Keeps navigation and pages fully accessible, functional, and responsive
+ * - Enforces Plan Tier limits & unlocks (Free / Standard / Premium / Lifetime)
  * - Shuts the panel down for non-admins when maintenance mode is on
  */
 const UserPanelGate = ({ children, pageTitle }: Props) => {
-  const { plan, planId, fullName, loading } = usePlan();
+  const { plan, planId, fullName, loading: planLoading } = usePlan();
   const { modules } = useBusinessModules();
   const { isEnabled } = usePlatformFeatures(planId);
   const { isAdmin } = useIsAdmin();
-  const { staffRole, isOwner, isManager, isCashier, isInventoryClerk, loading: roleLoading } = useStaffRole();
+  const { staffRole, isCashier, isInventoryClerk, loading: roleLoading } = useStaffRole();
   const { settings } = usePlatformSettings();
   const location = useLocation();
 
   const firstName = fullName?.split(" ")[0] || "Operator";
   const initial = firstName.charAt(0).toUpperCase();
+
   const locked = isRouteLocked(planId, location.pathname);
-  const showLocked = !loading && locked;
+  const showLocked = !planLoading && locked;
 
   // Check Staff Role access permission for the current path
   const isAllowedForStaff = useMemo(() => {
@@ -84,7 +85,7 @@ const UserPanelGate = ({ children, pageTitle }: Props) => {
       identityRole={roleBadgeLabel}
       identityBadgeClass={roleBadgeClass}
       initial={initial}
-      lockedPaths={loading ? [] : plan?.lockedRoutes || []}
+      lockedPaths={planLoading ? [] : plan?.lockedRoutes || []}
     >
       {!roleLoading && !isAllowedForStaff ? (
         <RoleRestrictedScreen role={staffRole} pageTitle={pageTitle} path={location.pathname} />

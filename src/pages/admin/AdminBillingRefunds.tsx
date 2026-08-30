@@ -48,7 +48,7 @@ const AdminBillingRefunds = () => {
 
   useEffect(() => {
     load();
-    const ch = supabase.channel("admin_refund_rt").on("postgres_changes", { event: "*", schema: "public", table: "refund_requests" }, load).subscribe();
+    const ch = supabase.channel(`admin_refund_rt_${Math.random().toString(36).slice(2)}`).on("postgres_changes", { event: "*", schema: "public", table: "refund_requests" }, load).subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [load]);
 

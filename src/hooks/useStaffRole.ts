@@ -117,7 +117,7 @@ export const useStaffRole = (): StaffRoleState => {
     fetchRole();
 
     const channel = supabase
-      .channel("staff_role_realtime")
+      .channel(`staff_role_realtime_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "support_team_members" }, () => {
         fetchRole();
       })

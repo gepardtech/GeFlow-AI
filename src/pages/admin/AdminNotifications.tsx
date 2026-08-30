@@ -62,7 +62,7 @@ const AdminNotifications = () => {
     window.addEventListener("geflow:contact-submission-added", onSubChange);
     window.addEventListener("geflow:contact-submission-updated", onSubChange);
     window.addEventListener("geflow:contact-submission-deleted", onSubChange);
-    const ch = supabase.channel("admin_notifications_page")
+    const ch = supabase.channel(`admin_notifications_page_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "contact_submissions" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "support_tickets" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, load)

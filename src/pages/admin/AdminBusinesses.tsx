@@ -109,28 +109,52 @@ const AdminBusinesses = () => {
   const openAnalytics = (r: BusinessRow) => { setAnalytics(r); fetchStats(r.id); };
 
   const load = useCallback(async () => {
-    const [{ data, error }, { data: profs }, { data: catsData }] = await Promise.all([
-      supabase.from("businesses").select("*").order("created_at", { ascending: true }),
-      supabase.from("profiles").select("user_id, full_name, email, plan"),
-      supabase.from("business_categories").select("id, name, industry_type"),
-    ]);
-    if (error) toast({ title: "Failed to load businesses", description: error.message, variant: "destructive" });
-    setRows((data as BusinessRow[]) ?? []);
-    const oMap: Record<string, OwnerInfo> = {};
-    (profs ?? []).forEach((p: any) => { oMap[p.user_id] = { full_name: p.full_name, email: p.email, plan: p.plan }; });
-    setOwners(oMap);
-    const cMap: Record<string, CategoryInfo> = {};
-    (catsData ?? []).forEach((c: any) => { cMap[c.id] = { name: c.name, industry_type: c.industry_type }; });
-    setCats(cMap);
-    setLoading(false);
+    try {
+      const [{ data, error }, { data: profs }, { data: catsData }, { data: prodRows }] = await Promise.all([
+        supabase.from("businesses").select("*").order("created_at", { ascending: true }),
+        supabase.from("profiles").select("user_id, full_name, email, plan"),
+        supabase.from("business_categories").select("id, name, industry_type"),
+        supabase.from("products").select("id, business_id"),
+      ]);
+      if (error) toast({ title: "Failed to load businesses", description: error.message, variant: "destructive" });
+
+      const bizProdCounts: Record<string, number> = {};
+      (prodRows ?? []).forEach((p: any) => {
+        if (p.business_id) {
+          bizProdCounts[p.business_id] = (bizProdCounts[p.business_id] || 0) + 1;
+        }
+      });
+
+      const enrichedRows = (data as BusinessRow[] ?? []).map((b) => {
+        const directCount = bizProdCounts[b.id] || 0;
+        const recordedCount = Number(b.listed_products) || 0;
+        return {
+          ...b,
+          listed_products: Math.max(directCount, recordedCount),
+        };
+      });
+
+      setRows(enrichedRows);
+      const oMap: Record<string, OwnerInfo> = {};
+      (profs ?? []).forEach((p: any) => { oMap[p.user_id] = { full_name: p.full_name, email: p.email, plan: p.plan }; });
+      setOwners(oMap);
+      const cMap: Record<string, CategoryInfo> = {};
+      (catsData ?? []).forEach((c: any) => { cMap[c.id] = { name: c.name, industry_type: c.industry_type }; });
+      setCats(cMap);
+    } catch (err: any) {
+      console.warn("Failed to load businesses:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [toast]);
 
   useEffect(() => {
     load();
     const channel = supabase
-      .channel("admin_businesses_realtime")
+      .channel(`admin_businesses_realtime_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "businesses" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, load)
       .subscribe();
     const onRefresh = () => load();
     window.addEventListener("panel:refresh", onRefresh);

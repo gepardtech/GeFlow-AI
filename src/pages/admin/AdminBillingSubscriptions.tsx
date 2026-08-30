@@ -48,7 +48,7 @@ const AdminBillingSubscriptions = () => {
 
   useEffect(() => {
     load();
-    const ch = supabase.channel("admin_subs_rt")
+    const ch = supabase.channel(`admin_subs_rt_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "subscriptions" }, load).subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [load]);

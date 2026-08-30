@@ -110,7 +110,7 @@ const UserNotifications = () => {
 
   useEffect(() => {
     load();
-    const ch = supabase.channel("user_notifications_page")
+    const ch = supabase.channel(`user_notifications_page_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "support_tickets" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, load)

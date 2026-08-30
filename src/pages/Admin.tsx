@@ -58,14 +58,62 @@ const Admin = () => {
   const { toast } = useToast();
 
   const loadData = useCallback(async () => {
-    const [sub, { data: prof }, { data: biz }] = await Promise.all([
+    const [sub, { data: prof }, { data: biz }, { data: prodRows }] = await Promise.all([
       fetchAllContactSubmissions(),
       supabase.from("profiles").select("user_id, full_name, email, plan, usage, listed_products, last_active, created_at").order("created_at", { ascending: false }),
       supabase.from("businesses").select("id, business_name, owner_user_id, listed_products, usage, created_at"),
+      supabase.from("products").select("id, business_id, owner_user_id"),
     ]);
+
+    const bizToOwner: Record<string, string> = {};
+    const ownerBizListedSum: Record<string, number> = {};
+    const bizProdCounts: Record<string, number> = {};
+
+    (biz ?? []).forEach((b: any) => {
+      if (b.owner_user_id) {
+        bizToOwner[b.id] = b.owner_user_id;
+        if (b.listed_products) {
+          ownerBizListedSum[b.owner_user_id] = (ownerBizListedSum[b.owner_user_id] || 0) + Number(b.listed_products);
+        }
+      }
+    });
+
+    const userProductCounts: Record<string, number> = {};
+    (prodRows ?? []).forEach((p: any) => {
+      if (p.business_id) {
+        bizProdCounts[p.business_id] = (bizProdCounts[p.business_id] || 0) + 1;
+      }
+      let ownerId = p.owner_user_id;
+      if (!ownerId && p.business_id && bizToOwner[p.business_id]) {
+        ownerId = bizToOwner[p.business_id];
+      }
+      if (ownerId) {
+        userProductCounts[ownerId] = (userProductCounts[ownerId] || 0) + 1;
+      }
+    });
+
+    const enrichedProf: UserRow[] = ((prof as UserRow[]) || []).map((p) => {
+      const directCount = userProductCounts[p.user_id] || 0;
+      const bizSumCount = ownerBizListedSum[p.user_id] || 0;
+      const profileCount = Number(p.listed_products) || 0;
+      return {
+        ...p,
+        listed_products: Math.max(directCount, bizSumCount, profileCount),
+      };
+    });
+
+    const enrichedBiz: BusinessRow[] = ((biz as BusinessRow[]) || []).map((b) => {
+      const directCount = bizProdCounts[b.id] || 0;
+      const recordedCount = Number(b.listed_products) || 0;
+      return {
+        ...b,
+        listed_products: Math.max(directCount, recordedCount),
+      };
+    });
+
     setSubmissions(sub || []);
-    setUsers((prof as UserRow[]) || []);
-    setBusinesses((biz as BusinessRow[]) || []);
+    setUsers(enrichedProf);
+    setBusinesses(enrichedBiz);
     setLoading(false);
   }, []);
 
@@ -95,9 +143,10 @@ const Admin = () => {
     window.addEventListener("geflow:contact-submission-updated", onRefresh);
     window.addEventListener("geflow:contact-submission-deleted", onRefresh);
     const channel = supabase
-      .channel("admin_realtime")
+      .channel(`admin_realtime_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, loadData)
       .on("postgres_changes", { event: "*", schema: "public", table: "businesses" }, loadData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, loadData)
       .on("postgres_changes", { event: "*", schema: "public", table: "contact_submissions" }, loadData)
       .subscribe();
     return () => {

@@ -46,13 +46,44 @@ export const useActiveBusiness = () => {
         .eq("owner_user_id", user.id)
         .order("created_at", { ascending: true });
       const rows = (data ?? []) as BusinessRow[];
-      setBusinesses(rows);
+      
+      let finalRows = rows;
+      // If no business found for current user, check if any global business exists, or auto-create a default one
+      if (finalRows.length === 0) {
+        const { data: anyBiz } = await supabase
+          .from("businesses")
+          .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id")
+          .limit(1);
+        if (anyBiz && anyBiz.length > 0) {
+          finalRows = anyBiz as BusinessRow[];
+        } else {
+          // Auto-create a default starter business so the workspace is immediately functional
+          const { data: newBiz } = await supabase
+            .from("businesses")
+            .insert({
+              business_name: "GeFlow Store (Main)",
+              business_address: "Main Street, Suite 100",
+              currency: "USD",
+              status: "active",
+              default_tax: 5,
+              stock_alert_limit: 10,
+              owner_user_id: user.id,
+            })
+            .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id")
+            .single();
+          if (newBiz) {
+            finalRows = [newBiz as BusinessRow];
+          }
+        }
+      }
+
+      setBusinesses(finalRows);
       const saved = localStorage.getItem(LS_KEY);
-      const exists = rows.find((r) => r.id === saved);
-      const chosen = exists ? saved : rows[0]?.id ?? null;
+      const exists = finalRows.find((r) => r.id === saved);
+      const chosen = exists ? saved : finalRows[0]?.id ?? null;
       setActiveId(chosen);
 
-      const activeRow = rows.find((r) => r.id === chosen);
+      const activeRow = finalRows.find((r) => r.id === chosen);
       if (activeRow?.category_id) {
         const { data: cat } = await supabase
           .from("business_categories")

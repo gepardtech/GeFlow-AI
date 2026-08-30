@@ -56,7 +56,7 @@ const AdminFeatures = () => {
 
   useEffect(() => {
     load();
-    const ch = supabase.channel("admin_features_rt").on("postgres_changes", { event: "*", schema: "public", table: "feature_modules" }, load).subscribe();
+    const ch = supabase.channel(`admin_features_rt_${Math.random().toString(36).slice(2)}`).on("postgres_changes", { event: "*", schema: "public", table: "feature_modules" }, load).subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [load]);
 

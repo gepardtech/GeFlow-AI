@@ -54,7 +54,7 @@ const AdminAnalytics = () => {
     load();
     const onRefresh = () => load();
     window.addEventListener("panel:refresh", onRefresh);
-    const ch = supabase.channel("admin_analytics_rt")
+    const ch = supabase.channel(`admin_analytics_rt_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "businesses" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "subscriptions" }, load)

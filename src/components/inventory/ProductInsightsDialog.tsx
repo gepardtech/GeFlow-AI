@@ -37,7 +37,7 @@ const ProductInsightsDialog = ({ open, onOpenChange, product, mode }: Props) => 
       setLoading(false);
     };
     load();
-    const ch = supabase.channel(`insights-${product.id}`)
+    const ch = supabase.channel(`insights-${product.id}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "sale_items", filter: `product_id=eq.${product.id}` }, load)
       .subscribe();
     return () => { active = false; supabase.removeChannel(ch); };

@@ -43,7 +43,7 @@ const AdminBillingPricing = () => {
 
   useEffect(() => {
     load();
-    const ch = supabase.channel("admin_pricing_rt").on("postgres_changes", { event: "*", schema: "public", table: "pricing_plans" }, load).subscribe();
+    const ch = supabase.channel(`admin_pricing_rt_${Math.random().toString(36).slice(2)}`).on("postgres_changes", { event: "*", schema: "public", table: "pricing_plans" }, load).subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [load]);
 

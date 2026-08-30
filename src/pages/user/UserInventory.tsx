@@ -64,9 +64,19 @@ const UserInventory = () => {
       .select("id, name, internal_sku, description, category_id, subcategory_id, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, barcode, status, images")
       .eq("business_id", active.id)
       .order("created_at", { ascending: false });
-    setProducts((data as ProductRecord[]) ?? []);
+    const prodList = (data as ProductRecord[]) ?? [];
+    setProducts(prodList);
     setLoading(false);
-  }, [active]);
+
+    // Keep database listed_products aggregates updated
+    if (active?.id) {
+      supabase.from("businesses").update({ listed_products: prodList.length }).eq("id", active.id).then();
+    }
+    const targetUserId = userId || active?.owner_user_id;
+    if (targetUserId) {
+      supabase.from("profiles").update({ listed_products: prodList.length }).eq("user_id", targetUserId).then();
+    }
+  }, [active, userId]);
 
   useEffect(() => {
     (async () => {

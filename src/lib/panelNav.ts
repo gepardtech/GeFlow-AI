@@ -2,7 +2,7 @@ import {
   Activity, Users, Building2, Tag, Package, CreditCard, Eye, BarChart3, Wallet,
   LifeBuoy, Settings, LayoutDashboard, AlertCircle, ShoppingCart, ShoppingBag,
   FileText, Settings as SettingsIcon, Repeat, DollarSign, Receipt, Undo2,
-  SlidersHorizontal, Megaphone, TriangleAlert, Bell, ScrollText,
+  SlidersHorizontal, Megaphone, TriangleAlert, Bell, ScrollText, GitBranch,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { PlanId } from "@/lib/plans";
@@ -83,10 +83,10 @@ export const USER_NAV: NavItem[] = [
   { label: "Out of Stock", to: "/dashboard/out-of-stock", icon: AlertCircle, module: "inventory" },
   { label: "POS Terminal", to: "/dashboard/pos", icon: ShoppingCart, module: "pos" },
   { label: "Purchases", to: "/dashboard/purchases", icon: ShoppingBag, module: "purchases" },
-  { label: "Reports", to: "/dashboard/reports", icon: FileText, module: "reports", plans: ["premium", "lifetime"] },
-  { label: "Analytics", to: "/dashboard/analytics", icon: BarChart3, module: "analytics", plans: ["premium", "lifetime"] },
+  { label: "Reports", to: "/dashboard/reports", icon: FileText, module: "reports" },
+  { label: "Analytics", to: "/dashboard/analytics", icon: BarChart3, module: "analytics" },
   { label: "My Businesses", to: "/dashboard/businesses", icon: Building2, module: "businesses" },
-  { label: "Team Hub", to: "/dashboard/team", icon: Users, module: "team", plans: ["premium", "lifetime"] },
+  { label: "Team Hub", to: "/dashboard/team", icon: Users, module: "team" },
   { label: "Subscription", to: "/dashboard/subscription", icon: CreditCard, module: "subscription" },
   {
     label: "Announcements", to: "/dashboard/announcements", icon: Megaphone, module: "announcements",

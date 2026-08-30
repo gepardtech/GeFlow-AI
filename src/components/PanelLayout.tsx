@@ -32,6 +32,10 @@ interface Props {
 }
 
 const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityRole, identityBadgeClass = "bg-primary/10 text-primary", initial, isAdmin = false, lockedPaths = [] }: Props) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  // Automatically treat any /admin route as an admin view
+  const isPathAdmin = isAdmin || location.pathname.startsWith("/admin");
   const isLocked = (to: string) => lockedPaths.some((p) => to === p || to.startsWith(p + "/"));
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -39,8 +43,6 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const location = useLocation();
-  const navigate = useNavigate();
   const { theme, setTheme, resolvedTheme } = useTheme();
   const { toast } = useToast();
   const [mounted, setMounted] = useState(false);
@@ -76,8 +78,8 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
     setOpenGroups((prev) => ({ ...initialGroups, ...prev }));
   }, [location.pathname, navItems]);
 
-  const settingsPath = isAdmin ? "/admin/settings" : "/dashboard/workspace";
-  const supportPath = isAdmin ? "/admin/support" : "/contact";
+  const settingsPath = isPathAdmin ? "/admin/settings" : "/dashboard/workspace";
+  const supportPath = isPathAdmin ? "/admin/support" : "/contact";
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -85,7 +87,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
   };
 
   const fetchNotifications = useCallback(async () => {
-    if (isAdmin) {
+    if (isPathAdmin) {
       const data = await fetchAllContactSubmissions();
       setNotifications(
         (data ?? []).slice(0, 8).map((d: any) => ({
@@ -104,13 +106,13 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
         ]);
       }
     }
-  }, [isAdmin]);
+  }, [isPathAdmin]);
 
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
   // Realtime updates for admin
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isPathAdmin) return;
     const onSubmissionChange = () => fetchNotifications();
     window.addEventListener("geflow:contact-submission-added", onSubmissionChange);
     window.addEventListener("geflow:contact-submission-updated", onSubmissionChange);
@@ -129,7 +131,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
       window.removeEventListener("geflow:ai-restock-created", onSubmissionChange);
       supabase.removeChannel(channel);
     };
-  }, [isAdmin, fetchNotifications]);
+  }, [isPathAdmin, fetchNotifications]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -268,7 +270,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 h-screen">
-        <AnnouncementBar audience={isAdmin ? "admins" : "users"} />
+        <AnnouncementBar audience={isPathAdmin ? "admins" : "users"} />
         <header className="h-16 border-b border-border bg-background flex items-center gap-3 px-4 md:px-6 flex-shrink-0">
           {/* Mobile hamburger */}
           <button
@@ -288,7 +290,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
             />
           </div>
           <div className="flex items-center gap-1.5 ml-auto pl-2">
-            {!isAdmin && (
+            {!isPathAdmin && (
               <button
                 onClick={() => setAiOpen(true)}
                 className="h-10 pl-2.5 pr-3 rounded-xl bg-gradient-to-r from-violet-500 to-sky-400 text-white flex items-center gap-1.5 text-xs font-bold transition-all hover:opacity-90 hover:scale-105 shadow-sm"
@@ -412,7 +414,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
         </header>
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-3.5 sm:p-5 md:p-8 min-w-0 w-full">{children}</main>
       </div>
-      {!isAdmin && <AIAssistant open={aiOpen} onOpenChange={setAiOpen} />}
+      {!isPathAdmin && <AIAssistant open={aiOpen} onOpenChange={setAiOpen} />}
     </div>
   );
 };

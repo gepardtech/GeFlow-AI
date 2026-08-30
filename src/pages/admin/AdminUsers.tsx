@@ -8,7 +8,7 @@ import { ADMIN_NAV, ADMIN_IDENTITY } from "@/lib/panelNav";
 import { useToast } from "@/hooks/use-toast";
 import {
   Search, Filter, UserPlus, MoreVertical, Users as UsersIcon,
-  UserCheck, Star, ShieldAlert, Eye, KeyRound, ShieldOff, ShieldCheck, Trash2, Pencil, Loader2,
+  UserCheck, Star, ShieldAlert, Eye, KeyRound, ShieldOff, ShieldCheck, Trash2, Pencil, Loader2, Package,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
@@ -38,6 +38,7 @@ interface UserRow {
   listed_products: number;
   created_at: string;
   last_active: string;
+  business_count?: number;
 }
 
 const PLANS = ["free", "standard", "premium", "unlimited", "lifetime"];
@@ -94,27 +95,86 @@ const AdminUsers = () => {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const [{ data: profs, error }, { data: roleRows }] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("user_id, full_name, email, plan, status, usage, listed_products, created_at, last_active")
-        .order("created_at", { ascending: false }),
-      supabase.from("user_roles").select("user_id, role"),
-    ]);
-    if (error) toast({ title: "Failed to load users", description: error.message, variant: "destructive" });
-    setUsers((profs as UserRow[]) ?? []);
-    const map: Record<string, string> = {};
-    (roleRows ?? []).forEach((r: any) => { map[r.user_id] = r.role; });
-    setRoles(map);
-    setLoading(false);
+    try {
+      const [
+        { data: profs, error },
+        { data: roleRows },
+        { data: bizRows },
+        { data: prodRows },
+      ] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("user_id, full_name, email, plan, status, usage, listed_products, created_at, last_active")
+          .order("created_at", { ascending: false }),
+        supabase.from("user_roles").select("user_id, role"),
+        supabase.from("businesses").select("id, owner_user_id"),
+        supabase.from("products").select("id, business_id, owner_user_id"),
+      ]);
+
+      if (error) {
+        toast({ title: "Failed to load users", description: error.message, variant: "destructive" });
+      }
+
+      // Map business IDs to owner user ID and collect business listed counts
+      const bizToOwner: Record<string, string> = {};
+      const ownerBizCount: Record<string, number> = {};
+      const ownerBizListedSum: Record<string, number> = {};
+      (bizRows ?? []).forEach((b: any) => {
+        if (b.owner_user_id) {
+          bizToOwner[b.id] = b.owner_user_id;
+          ownerBizCount[b.owner_user_id] = (ownerBizCount[b.owner_user_id] || 0) + 1;
+          if (b.listed_products) {
+            ownerBizListedSum[b.owner_user_id] = (ownerBizListedSum[b.owner_user_id] || 0) + Number(b.listed_products);
+          }
+        }
+      });
+
+      // Count products per user from direct product rows
+      const userProductCounts: Record<string, number> = {};
+      (prodRows ?? []).forEach((p: any) => {
+        let ownerId = p.owner_user_id;
+        if (!ownerId && p.business_id && bizToOwner[p.business_id]) {
+          ownerId = bizToOwner[p.business_id];
+        }
+        if (ownerId) {
+          userProductCounts[ownerId] = (userProductCounts[ownerId] || 0) + 1;
+        }
+      });
+
+      const enrichedProfs: UserRow[] = (profs ?? []).map((p: any) => {
+        const directCount = userProductCounts[p.user_id] || 0;
+        const bizSumCount = ownerBizListedSum[p.user_id] || 0;
+        const profileCount = Number(p.listed_products) || 0;
+
+        // Take the highest confirmed count across direct product rows, business aggregates, and profile record
+        const count = Math.max(directCount, bizSumCount, profileCount);
+
+        return {
+          ...p,
+          listed_products: count,
+          business_count: ownerBizCount[p.user_id] ?? 0,
+        };
+      });
+
+      setUsers(enrichedProfs);
+      const map: Record<string, string> = {};
+      (roleRows ?? []).forEach((r: any) => { map[r.user_id] = r.role; });
+      setRoles(map);
+    } catch (err: any) {
+      console.warn("Failed to load user records:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [toast]);
 
   useEffect(() => {
     load();
     const channel = supabase
-      .channel("admin_users_realtime")
+      .channel(`admin_users_realtime_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "user_roles" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "businesses" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, load)
       .subscribe();
     const onRefresh = () => load();
     window.addEventListener("panel:refresh", onRefresh);
@@ -383,7 +443,16 @@ const AdminUsers = () => {
                     </td>
                     <td className="px-4 py-4 text-xs text-muted-foreground">{new Date(u.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
                     <td className="px-4 py-4 text-xs text-muted-foreground">{timeAgo(u.last_active)}</td>
-                    <td className="px-4 py-4 text-right font-bold">{u.listed_products}</td>
+                    <td className="px-4 py-4 text-right">
+                      <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold ${
+                        u.listed_products > 0
+                          ? "bg-primary/10 text-primary border border-primary/20"
+                          : "bg-muted text-muted-foreground"
+                      }`}>
+                        <Package className="w-3 h-3 mr-1.5 opacity-70" />
+                        {u.listed_products} {u.listed_products === 1 ? "item" : "items"}
+                      </span>
+                    </td>
                     <td className="px-6 py-4 text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -458,8 +527,9 @@ const AdminUsers = () => {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="bg-muted/40 rounded-xl p-3"><p className="text-[10px] font-bold tracking-widest text-muted-foreground">PLAN</p><p className="font-bold capitalize mt-1">{viewUser.plan}</p></div>
                 <div className="bg-muted/40 rounded-xl p-3"><p className="text-[10px] font-bold tracking-widest text-muted-foreground">STATUS</p><p className="font-bold capitalize mt-1">{viewUser.status}</p></div>
-                <div className="bg-muted/40 rounded-xl p-3"><p className="text-[10px] font-bold tracking-widest text-muted-foreground">INVENTORY</p><p className="font-bold mt-1">{viewUser.listed_products} products</p></div>
-                <div className="bg-muted/40 rounded-xl p-3"><p className="text-[10px] font-bold tracking-widest text-muted-foreground">JOINED</p><p className="font-bold mt-1">{new Date(viewUser.created_at).toLocaleDateString()}</p></div>
+                <div className="bg-muted/40 rounded-xl p-3"><p className="text-[10px] font-bold tracking-widest text-muted-foreground">LISTED INVENTORY</p><p className="font-bold mt-1 text-primary">{viewUser.listed_products} {viewUser.listed_products === 1 ? "Product" : "Products"}</p></div>
+                <div className="bg-muted/40 rounded-xl p-3"><p className="text-[10px] font-bold tracking-widest text-muted-foreground">BRANCHES / STORES</p><p className="font-bold mt-1">{viewUser.business_count ?? 1} {viewUser.business_count === 1 ? "Store" : "Stores"}</p></div>
+                <div className="bg-muted/40 rounded-xl p-3 col-span-2"><p className="text-[10px] font-bold tracking-widest text-muted-foreground">JOINED ON</p><p className="font-bold mt-1">{new Date(viewUser.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p></div>
               </div>
             </div>
           )}
