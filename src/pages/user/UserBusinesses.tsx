@@ -85,7 +85,7 @@ const UserBusinesses = () => {
 
   const [selectedBiz, setSelectedBiz] = useState<BusinessItem | null>(null);
 
-  const maxBranches = plan?.limits?.branchesMax ?? (planId === "free" ? 1 : planId === "standard" ? 5 : 10);
+  const maxBranches = plan?.limits?.branchesMax ?? (planId === "free" ? 1 : planId === "standard" ? 3 : planId === "premium" ? 7 : 10);
   const isBranchLimitReached = typeof maxBranches === "number" && businesses.length >= maxBranches;
 
   // Load Businesses and Categories relationally
@@ -725,15 +725,19 @@ const UserBusinesses = () => {
           <div className="space-y-3 py-3 text-xs border-y border-border my-2">
             <div className="flex justify-between items-center py-1">
               <span className="text-muted-foreground">Free Plan</span>
-              <span className="font-bold text-foreground">1 Business Branch</span>
+              <span className="font-bold text-foreground">Single Business (1)</span>
             </div>
             <div className="flex justify-between items-center py-1">
               <span className="text-muted-foreground">Standard Plan</span>
-              <span className="font-bold text-sky-500">Up to 5 Business Branches</span>
+              <span className="font-bold text-sky-500">Up to 3 Businesses</span>
             </div>
             <div className="flex justify-between items-center py-1">
-              <span className="text-muted-foreground">Premium / Lifetime</span>
-              <span className="font-bold text-violet-500">Up to 10 Business Branches + Team Hub</span>
+              <span className="text-muted-foreground">Premium Plan</span>
+              <span className="font-bold text-violet-500">Up to 7 Businesses</span>
+            </div>
+            <div className="flex justify-between items-center py-1">
+              <span className="text-muted-foreground">Lifetime Plan</span>
+              <span className="font-bold text-amber-500">Up to 10 Businesses</span>
             </div>
           </div>
 

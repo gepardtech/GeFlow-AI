@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
 import {
   Users,
   ShieldCheck,
@@ -407,7 +408,35 @@ export const UserTeam = () => {
         console.warn("Edge function invocation notice, falling back to direct database sync:", edgeInvocationErr);
       }
 
-      // If target user ID not established from edge function, check profile or generate
+      // If target user ID not established from edge function, try client signup with non-persisting session
+      if (!targetUserId) {
+        try {
+          const rawUrl = import.meta.env.VITE_SUPABASE_URL || "https://placeholder-project.supabase.co";
+          const rawKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "placeholder-anon-key";
+          const tempClient = createClient(rawUrl, rawKey, {
+            auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+          });
+          const { data: signUpData } = await tempClient.auth.signUp({
+            email: emailClean,
+            password: pwdClean,
+            options: {
+              data: {
+                full_name: nameClean,
+                plan: "free",
+                role: formRole,
+                invited_by: currentUser?.id,
+              },
+            },
+          });
+          if (signUpData?.user?.id) {
+            targetUserId = signUpData.user.id;
+          }
+        } catch (signUpErr) {
+          console.warn("Secondary auth signup error:", signUpErr);
+        }
+      }
+
+      // If still not established, check profile or generate unique ID
       if (!targetUserId) {
         const { data: existingProf } = await supabase
           .from("profiles")
@@ -995,29 +1024,53 @@ export const UserTeam = () => {
         </div>
 
         {/* ========================================================================= */}
-        {/* PLATFORM SECURITY & ROLE EXPLAINER BANNER                                */}
+        {/* PLATFORM SECURITY & ROLE EXPLAINER BANNER (Professional Bullet List)      */}
         {/* ========================================================================= */}
-        <div className="p-4 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-xs">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-xl bg-sky-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-foreground text-sm">Store-Level Role-Based Access Control (RBAC)</span>
-                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-                  Store Level Only 🔒
-                </span>
+        <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-4 h-4" />
               </div>
-              <p className="text-muted-foreground leading-relaxed">
-                <strong className="text-foreground font-semibold">Store Roles:</strong>{" "}
-                <span className="font-semibold text-purple-600 dark:text-purple-400">1. Manager</span> (Full access to all business features, POS, inventory, reports &amp; purchases) &bull;{" "}
-                <span className="font-semibold text-sky-600 dark:text-sky-400">2. Cashier</span> (POS Page, Terminal, Dashboard, Analytics &amp; Reports overview only; cannot modify settings) &bull;{" "}
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">3. Inventory Clerk</span> (Inventory, Low Stock &amp; Out of Stock pages only).
+              <div>
+                <h3 className="font-extrabold text-sm text-foreground">Role-Based Access Control (RBAC) & Team Capacity</h3>
+                <p className="text-[11px] text-muted-foreground">Store-level permissions and member seat capacity rules</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-foreground">
+                Capacity: <span className="font-extrabold text-sky-500">{totalUsersCount}</span> / 20 Seats
+              </span>
+              <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+                V1.0 (20 Max)
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 text-xs">
+            <div className="space-y-2 rounded-xl bg-muted/30 p-3 border border-border/60">
+              <p className="font-bold text-foreground flex items-center gap-1.5">
+                <Briefcase className="w-3.5 h-3.5 text-purple-500" />
+                <span>Store Roles & Permissions:</span>
               </p>
-              <p className="text-[11px] text-sky-700 dark:text-sky-300 font-medium">
-                🛡️ <strong>Safety Guarantee:</strong> Team members assigned here operate <em>only</em> inside this store with their assigned permissions. Only Platform Admins can assign system admin access.
+              <ul className="space-y-1.5 text-muted-foreground list-disc list-inside text-[11px] leading-relaxed">
+                <li><strong className="text-foreground">Manager:</strong> Full operational access across POS, Inventory, Purchases & Reports.</li>
+                <li><strong className="text-foreground">Cashier:</strong> POS terminal checkout, receipt dispatch, and daily sales counter.</li>
+                <li><strong className="text-foreground">Inventory Clerk:</strong> Stock intake, SKU catalog, and out-of-stock monitoring.</li>
+                <li><strong className="text-foreground">Store Owner:</strong> Master business ownership and billing management.</li>
+              </ul>
+            </div>
+
+            <div className="space-y-2 rounded-xl bg-muted/30 p-3 border border-border/60">
+              <p className="font-bold text-foreground flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-sky-500" />
+                <span>Security & Team Access:</span>
               </p>
+              <ul className="space-y-1.5 text-muted-foreground list-disc list-inside text-[11px] leading-relaxed">
+                <li><strong className="text-foreground">Real-time Isolation:</strong> Invited staff members can only access authorized store modules.</li>
+                <li><strong className="text-foreground">Direct Invite Credentials:</strong> Generate encrypted passwords or custom login URLs per member.</li>
+                <li><strong className="text-foreground">Audit Logging:</strong> Every transaction and modification is tracked with the staff member's ID.</li>
+              </ul>
             </div>
           </div>
         </div>

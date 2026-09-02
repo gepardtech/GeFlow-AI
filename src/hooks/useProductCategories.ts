@@ -47,10 +47,11 @@ export const useProductCategories = (industryType: string | null, categoryName: 
 
   useEffect(() => { load(); }, [load]);
 
-  // Categories appointed to this business's industry.
-  const relevant = all.filter((c) =>
-    (c.industry_assignments ?? []).some((a) => relates(a, industryType) || relates(a, categoryName)),
-  );
+  // Categories appointed to this business's industry, or all active categories if general/unassigned
+  const relevant = all.filter((c) => {
+    if (!c.industry_assignments || c.industry_assignments.length === 0) return true;
+    return c.industry_assignments.some((a) => relates(a, industryType) || relates(a, categoryName));
+  });
 
   const parents = relevant.filter((c) => !c.parent_id);
   const subcategoriesOf = (parentId: string | null) =>

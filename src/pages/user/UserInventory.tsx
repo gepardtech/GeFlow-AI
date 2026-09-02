@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Package, Plus, Lock, Search, MoreVertical, Eye, ArrowRightLeft, Boxes as BoxesIcon,
   Pencil, Trash2, DollarSign, AlertTriangle, XCircle, ChevronDown, Download, Upload,
-  ScanLine, Barcode, PackagePlus, TriangleAlert,
+  ScanLine, Barcode, PackagePlus, TriangleAlert, CheckCircle2, FileText,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import UserPanelGate from "@/components/UserPanelGate";
@@ -20,6 +20,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import ProductDialog, { ProductRecord } from "@/components/inventory/ProductDialog";
 import ProductViewDialog from "@/components/inventory/ProductViewDialog";
 import StockUpdateDialog from "@/components/inventory/StockUpdateDialog";
@@ -29,6 +32,7 @@ import BulkImportDialog from "@/components/inventory/BulkImportDialog";
 import BarcodeLookupDialog from "@/components/inventory/BarcodeLookupDialog";
 import RestockWorkflowDialog from "@/components/inventory/RestockWorkflowDialog";
 import { useMoney } from "@/lib/currency";
+import { parseProductUOM } from "@/lib/uomRegistry";
 
 const UserInventory = () => {
   const { plan } = usePlan();
@@ -42,6 +46,14 @@ const UserInventory = () => {
   const [products, setProducts] = useState<ProductRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+  const [bulkStatusModalOpen, setBulkStatusModalOpen] = useState(false);
+  const [targetBulkStatus, setTargetBulkStatus] = useState<string>("active");
+  const [bulkUpdatingStatus, setBulkUpdatingStatus] = useState(false);
   const [userId, setUserId] = useState<string>("");
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -56,27 +68,33 @@ const UserInventory = () => {
   const [barcode, setBarcode] = useState<"manual" | "scanner" | null>(null);
   const [restockOpen, setRestockOpen] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!active) { setLoading(false); return; }
-    setLoading(true);
-    const { data } = await supabase
-      .from("products")
-      .select("id, name, internal_sku, description, category_id, subcategory_id, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, barcode, status, images")
-      .eq("business_id", active.id)
-      .order("created_at", { ascending: false });
-    const prodList = (data as ProductRecord[]) ?? [];
-    setProducts(prodList);
-    setLoading(false);
+  const activeId = active?.id;
+  const ownerUserId = active?.owner_user_id;
 
-    // Keep database listed_products aggregates updated
-    if (active?.id) {
-      supabase.from("businesses").update({ listed_products: prodList.length }).eq("id", active.id).then();
+  const load = useCallback(async (isSilent = false) => {
+    if (!activeId) {
+      setLoading(false);
+      return;
     }
-    const targetUserId = userId || active?.owner_user_id;
-    if (targetUserId) {
-      supabase.from("profiles").update({ listed_products: prodList.length }).eq("user_id", targetUserId).then();
+    if (!isSilent) {
+      setLoading(true);
     }
-  }, [active, userId]);
+    try {
+      const { data, error } = await supabase
+        .from("products")
+        .select("id, name, internal_sku, description, category_id, subcategory_id, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, barcode, status, images")
+        .eq("business_id", activeId)
+        .order("created_at", { ascending: false });
+      
+      if (!error && data) {
+        setProducts(data as ProductRecord[]);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch inventory products:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeId]);
 
   useEffect(() => {
     (async () => {
@@ -85,15 +103,21 @@ const UserInventory = () => {
     })();
   }, []);
 
-  useEffect(() => { if (!bizLoading) load(); }, [bizLoading, load]);
+  useEffect(() => {
+    if (!bizLoading && activeId) {
+      load(false);
+    }
+  }, [bizLoading, activeId, load]);
 
   useEffect(() => {
-    if (!active) return;
-    const ch = supabase.channel(`inventory-${active.id}-${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "products", filter: `business_id=eq.${active.id}` }, () => load())
+    if (!activeId) return;
+    const ch = supabase.channel(`inventory-${activeId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "products", filter: `business_id=eq.${activeId}` }, () => {
+        load(true);
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [active, load]);
+  }, [activeId, load]);
 
   const catName = (id: string | null) => allCategories.find((c) => c.id === id)?.name ?? "—";
 
@@ -133,11 +157,95 @@ const UserInventory = () => {
     setDeleteTarget(null);
   };
 
-  const filtered = products.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    (p.internal_sku ?? "").toLowerCase().includes(search.toLowerCase()) ||
-    (p.barcode ?? "").toLowerCase().includes(search.toLowerCase()),
-  );
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkDeleting(true);
+    try {
+      const { error } = await supabase.from("products").delete().in("id", selectedIds);
+      if (error) {
+        toast({ title: "Bulk delete failed", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Products deleted", description: `Successfully deleted ${selectedIds.length} product(s).` });
+        setSelectedIds([]);
+        load();
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setBulkDeleting(false);
+      setBulkDeleteModalOpen(false);
+    }
+  };
+
+  const handleBulkStatusChange = async (newStatus: string) => {
+    if (selectedIds.length === 0) return;
+    setBulkUpdatingStatus(true);
+    try {
+      const { error } = await supabase.from("products").update({ status: newStatus }).in("id", selectedIds);
+      if (error) {
+        toast({ title: "Bulk update failed", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Status updated", description: `Updated ${selectedIds.length} product(s) to ${newStatus}.` });
+        setSelectedIds([]);
+        load();
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setBulkUpdatingStatus(false);
+      setBulkStatusModalOpen(false);
+    }
+  };
+
+  const toggleSelectProduct = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const filtered = products.filter((p) => {
+    const matchesSearch =
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      (p.internal_sku ?? "").toLowerCase().includes(search.toLowerCase()) ||
+      (p.barcode ?? "").toLowerCase().includes(search.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    if (categoryFilter !== "all" && p.category_id !== categoryFilter) {
+      return false;
+    }
+
+    const threshold =
+      p.min_stock_alert !== null && p.min_stock_alert !== undefined && p.min_stock_alert > 0
+        ? p.min_stock_alert
+        : defaultMinAlert;
+
+    if (statusFilter === "in_stock") return p.stock_units > threshold;
+    if (statusFilter === "low_stock") return p.stock_units > 0 && p.stock_units <= threshold;
+    if (statusFilter === "out_of_stock") return p.stock_units <= 0;
+    if (statusFilter === "active") return p.status === "active";
+    if (statusFilter === "draft") return p.status !== "active";
+    if (statusFilter === "expiring") {
+      if (!p.expiry_date) return false;
+      const exp = new Date(p.expiry_date);
+      const thirtyDays = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      return exp <= thirtyDays;
+    }
+
+    return true;
+  });
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((p) => selectedIds.includes(p.id));
+  const someFilteredSelected = filtered.some((p) => selectedIds.includes(p.id)) && !allFilteredSelected;
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !filtered.some((p) => p.id === id)));
+    } else {
+      const filteredIds = filtered.map((p) => p.id);
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...filteredIds])));
+    }
+  };
 
   const kpis = [
     { label: "Total Products", value: used, icon: BoxesIcon, color: "text-sky-500 bg-sky-500/15" },
@@ -254,14 +362,126 @@ const UserInventory = () => {
         ))}
       </div>
 
-      {/* Search */}
-      <div className="relative mb-6">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products by name, SKU or barcode..." className="w-full h-12 pl-11 pr-4 bg-card border border-border rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+      {/* Search & Filter Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search products by name, SKU or barcode..."
+            className="w-full h-11 pl-11 pr-4 bg-card border border-border rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+
+        {/* Category Filter */}
+        <div className="w-full sm:w-48 shrink-0">
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="w-full h-11 px-3 bg-card border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="all">All Categories</option>
+            {allCategories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Status Filter */}
+        <div className="w-full sm:w-44 shrink-0">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full h-11 px-3 bg-card border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="all">All Statuses</option>
+            <option value="in_stock">In Stock</option>
+            <option value="low_stock">Low Stock (Alert)</option>
+            <option value="out_of_stock">Out of Stock</option>
+            <option value="expiring">Expiring Soon (30d)</option>
+            <option value="active">Active Only</option>
+            <option value="draft">Draft Only</option>
+          </select>
+        </div>
+
+        {(search || categoryFilter !== "all" || statusFilter !== "all") && (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setSearch("");
+              setCategoryFilter("all");
+              setStatusFilter("all");
+            }}
+            className="h-11 px-3 text-xs text-muted-foreground hover:text-foreground shrink-0 rounded-xl"
+          >
+            Reset Filters
+          </Button>
+        )}
       </div>
 
+      {/* Bulk Selection Action Bar */}
+      {selectedIds.length > 0 && (
+        <div className="bg-sky-500/10 border border-sky-500/30 rounded-2xl p-3.5 mb-4 flex items-center justify-between gap-3 flex-wrap animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-2.5">
+            <div className="h-7 w-7 rounded-lg bg-sky-500 text-white flex items-center justify-center font-bold text-xs">
+              {selectedIds.length}
+            </div>
+            <span className="text-xs font-bold text-foreground">
+              {selectedIds.length} product(s) selected
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setTargetBulkStatus("active");
+                setBulkStatusModalOpen(true);
+              }}
+              className="h-8 text-xs font-bold rounded-lg border-border hover:bg-background"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5 text-emerald-500" />
+              Set Active
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setTargetBulkStatus("draft");
+                setBulkStatusModalOpen(true);
+              }}
+              className="h-8 text-xs font-bold rounded-lg border-border hover:bg-background"
+            >
+              <FileText className="h-3.5 w-3.5 mr-1.5 text-amber-500" />
+              Set Draft
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setBulkDeleteModalOpen(true)}
+              className="h-8 text-xs font-bold rounded-lg"
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              Delete Selected
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedIds([])}
+              className="h-8 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-xs">
         {bizLoading || loading ? (
           <div className="p-12 text-center text-muted-foreground">Loading inventory...</div>
         ) : !active ? (
@@ -274,19 +494,30 @@ const UserInventory = () => {
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center">
             <Package className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
-            <p className="font-bold">{search ? "No matching products" : "No products yet"}</p>
-            <p className="text-sm text-muted-foreground mt-1">{search ? "Try a different search." : "Add your first product to start tracking stock, batches and pricing."}</p>
+            <p className="font-bold">{search || categoryFilter !== "all" || statusFilter !== "all" ? "No matching products" : "No products yet"}</p>
+            <p className="text-sm text-muted-foreground mt-1">{search || categoryFilter !== "all" || statusFilter !== "all" ? "Try adjusting your filters or search." : "Add your first product to start tracking stock, batches and pricing."}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="text-[10px] font-bold tracking-widest text-muted-foreground border-b border-border">
-                  <th className="text-left px-6 py-4">PRODUCT / SKU</th>
-                  <th className="text-left px-6 py-4">CATEGORY</th>
-                  <th className="text-left px-6 py-4">PRICING</th>
-                  <th className="text-left px-6 py-4">STOCK</th>
-                  <th className="text-left px-6 py-4">STATUS</th>
+                <tr className="text-[10px] font-bold tracking-widest text-muted-foreground border-b border-border bg-muted/20">
+                  <th className="w-10 px-4 py-4 text-center">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someFilteredSelected;
+                      }}
+                      onChange={toggleSelectAll}
+                      className="rounded border-border text-sky-500 focus:ring-sky-500 cursor-pointer h-4 w-4"
+                    />
+                  </th>
+                  <th className="text-left px-4 py-4">PRODUCT / SKU</th>
+                  <th className="text-left px-4 py-4">CATEGORY</th>
+                  <th className="text-left px-4 py-4">PRICING</th>
+                  <th className="text-left px-4 py-4">STOCK</th>
+                  <th className="text-left px-4 py-4">STATUS</th>
                   <th className="text-right px-6 py-4">ACTIONS</th>
                 </tr>
               </thead>
@@ -298,6 +529,7 @@ const UserInventory = () => {
                   const out = p.stock_units <= 0;
                   const low = !out && p.stock_units <= threshold;
                   const margin = Number(p.retail_price) > 0 ? Math.round(((Number(p.retail_price) - Number(p.purchase_cost)) / Number(p.retail_price)) * 100) : 0;
+                  const isSelected = selectedIds.includes(p.id);
                   
                   // Batch and expiry checks
                   const isExpired = p.expiry_date ? new Date(p.expiry_date) < new Date() : false;
@@ -306,39 +538,87 @@ const UserInventory = () => {
                     : false;
 
                   return (
-                    <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                      <td className="px-6 py-4">
+                    <tr
+                      key={p.id}
+                      className={`border-b border-border last:border-0 transition-colors ${
+                        isSelected ? "bg-sky-500/5 hover:bg-sky-500/10" : "hover:bg-muted/30"
+                      }`}
+                    >
+                      <td className="w-10 px-4 py-4 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectProduct(p.id)}
+                          className="rounded border-border text-sky-500 focus:ring-sky-500 cursor-pointer h-4 w-4"
+                        />
+                      </td>
+                      <td className="px-4 py-4">
                         <div className="flex items-center gap-3">
                           {p.images && p.images[0]
                             ? <img src={p.images[0]} alt="" className="h-10 w-10 rounded-xl object-cover border border-border" />
-                            : <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center"><Package className="h-4 w-4" /></div>}
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="font-bold text-sm">{p.name}</p>
+                            : <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"><Package className="h-4 w-4" /></div>}
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-bold text-sm truncate text-foreground">{p.name}</p>
                               {isExpired && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-destructive/15 text-destructive">EXPIRED</span>
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-destructive/15 text-destructive shrink-0">EXPIRED</span>
                               )}
                               {isExpiringSoon && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/15 text-amber-500">EXPIRING SOON</span>
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/15 text-amber-500 shrink-0">EXPIRING SOON</span>
                               )}
                             </div>
-                            <p className="text-[10px] text-muted-foreground tracking-wider">
+                            <p className="text-[10px] text-muted-foreground tracking-wider truncate mt-0.5">
                               {p.internal_sku || p.barcode || "—"}
                               {p.batch_number ? ` · Batch: ${p.batch_number}` : ""}
                             </p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4"><span className="text-xs text-muted-foreground">{catName(p.category_id)}</span></td>
-                      <td className="px-6 py-4">
-                        <p className="font-bold text-sm">{fmt(Number(p.discount_price ?? p.retail_price))}</p>
-                        <p className="text-[10px] text-muted-foreground">cost {fmt(Number(p.purchase_cost))} · <span className={margin >= 0 ? "text-emerald-500" : "text-rose-500"}>{margin}% margin</span></p>
+                      <td className="px-4 py-4"><span className="text-xs text-muted-foreground">{catName(p.category_id)}</span></td>
+                      <td className="px-4 py-4">
+                        {(() => {
+                          const parsed = parseProductUOM(p.name, p.description || "");
+                          const isScaled = parsed.packSize > 1;
+                          const retail = Number(p.discount_price ?? p.retail_price);
+                          return (
+                            <div>
+                              <p className="font-bold text-sm">
+                                {fmt(retail)}
+                                <span className="text-xs font-normal text-muted-foreground ml-1">/{parsed.uomLabel}</span>
+                              </p>
+                              {isScaled && (
+                                <p className="text-[10px] text-muted-foreground">
+                                  ~{fmt(retail / parsed.packSize)}/{parsed.subUnitName}
+                                </p>
+                              )}
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                cost {fmt(Number(p.purchase_cost))} · <span className={margin >= 0 ? "text-emerald-500 font-semibold" : "text-rose-500 font-semibold"}>{margin}% margin</span>
+                              </p>
+                            </div>
+                          );
+                        })()}
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`text-lg font-bold ${out ? "text-rose-500" : low ? "text-amber-500" : "text-foreground"}`}>{p.stock_units}</span>
-                        <p className="text-[10px] text-muted-foreground tracking-wider">alert ≤ {threshold}</p>
+                      <td className="px-4 py-4">
+                        {(() => {
+                          const parsed = parseProductUOM(p.name, p.description || "");
+                          const isScaled = parsed.packSize > 1;
+                          const packCount = isScaled ? Math.floor(p.stock_units / parsed.packSize) : p.stock_units;
+                          return (
+                            <div className="flex flex-col">
+                              <span className={`text-base font-extrabold ${out ? "text-rose-500" : low ? "text-amber-500" : "text-foreground"}`}>
+                                {isScaled ? `${packCount} ${parsed.uomLabel}s` : `${p.stock_units} ${parsed.uomLabel}s`}
+                              </span>
+                              {isScaled && (
+                                <span className="text-[11px] font-semibold text-muted-foreground">
+                                  {p.stock_units} {parsed.subUnitName}s ({parsed.packSize}/{parsed.uomLabel})
+                                </span>
+                              )}
+                              <p className="text-[10px] text-muted-foreground tracking-wider mt-0.5">alert ≤ {threshold}</p>
+                            </div>
+                          );
+                        })()}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-4">
                         <span className={`text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full ${out ? "bg-rose-500/15 text-rose-500" : low ? "bg-amber-500/15 text-amber-500" : p.status !== "active" ? "bg-muted text-muted-foreground" : "bg-emerald-500/15 text-emerald-500"}`}>
                           {p.status !== "active" ? p.status.toUpperCase() : out ? "OUT OF STOCK" : low ? "LOW STOCK" : "IN STOCK"}
                         </span>
@@ -366,6 +646,69 @@ const UserInventory = () => {
           </div>
         )}
       </div>
+
+      {/* Bulk Delete Modal */}
+      <Dialog open={bulkDeleteModalOpen} onOpenChange={setBulkDeleteModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" /> Delete {selectedIds.length} Products
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete {selectedIds.length} selected product(s)? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0 mt-4">
+            <Button variant="outline" onClick={() => setBulkDeleteModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={bulkDeleting}
+              onClick={handleBulkDelete}
+            >
+              {bulkDeleting ? "Deleting..." : `Delete ${selectedIds.length} Products`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Status Modal */}
+      <Dialog open={bulkStatusModalOpen} onOpenChange={setBulkStatusModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Status for {selectedIds.length} Products</DialogTitle>
+            <DialogDescription>
+              Change the status of all {selectedIds.length} selected products to {targetBulkStatus.toUpperCase()}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <label className="text-xs font-bold text-muted-foreground uppercase block mb-1.5">
+              Select Target Status
+            </label>
+            <select
+              value={targetBulkStatus}
+              onChange={(e) => setTargetBulkStatus(e.target.value)}
+              className="w-full h-10 px-3 bg-card border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="active">Active (Available in POS &amp; Catalog)</option>
+              <option value="draft">Draft (Hidden / Inactive)</option>
+            </select>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0 mt-4">
+            <Button variant="outline" onClick={() => setBulkStatusModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={bulkUpdatingStatus}
+              onClick={() => handleBulkStatusChange(targetBulkStatus)}
+              className="bg-sky-500 hover:bg-sky-600 text-white font-bold"
+            >
+              {bulkUpdatingStatus ? "Updating..." : "Apply Status"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {active && userId && (
         <ProductDialog open={dialogOpen} onOpenChange={setDialogOpen} businessId={active.id} ownerUserId={userId} product={editing} prefill={prefill} onSaved={load} />

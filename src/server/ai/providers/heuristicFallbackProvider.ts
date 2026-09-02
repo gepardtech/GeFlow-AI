@@ -127,8 +127,20 @@ export class HeuristicFallbackProvider implements AIProviderInterface {
     }
 
     // 5. Contradiction Detection
-    // e.g. input contains "capsule" but candidate says "tablet"
-    if (originalInput.includes("capsule") && candidateUom === "tablet") {
+    const isFoodOrBakeryOrSnack = /\b(biscuit|biscuits|buscit|biscut|cookie|cookies|cracker|crackers|wafer|wafers|rusk|snack|snacks|chip|chips|crisp|crisps|candy|candies|chocolate|chocolates|cake|cakes|bread|bun|buns|noodles|pasta|cereal)\b/i.test(originalInput);
+    if (isFoodOrBakeryOrSnack && (candidateUom === "tablet" || candidateUom === "capsule" || candidateUom === "strip" || candidateUom === "vial")) {
+      contradictions.push({
+        field: "stock_unit",
+        originalInput: "food/bakery item",
+        candidateValue: candidateUom,
+        suggestedCorrection: "pack",
+        reason: "Product is a food, bakery, snack, or confectionery item which uses 'pack' or 'piece' rather than pharmaceutical dosage units.",
+      });
+      corrections["stock_unit"] = "pack";
+      notes.push("UOM contradiction detected: food/bakery item cannot have pharmaceutical dosage unit. Corrected to 'pack'.");
+      uncertain.push("stock_unit");
+      uomStatus = "uncertain";
+    } else if (originalInput.includes("capsule") && candidateUom === "tablet") {
       contradictions.push({
         field: "stock_unit",
         originalInput: "capsule",

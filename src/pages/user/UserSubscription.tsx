@@ -114,8 +114,23 @@ export const UserSubscription = () => {
   const [savingCard, setSavingCard] = useState(false);
 
   // Manage Subscription State
-  const [autoRenew, setAutoRenew] = useState(true);
+  const [autoRenew, setAutoRenew] = useState(() => {
+    const saved = localStorage.getItem("geflow_autorenew");
+    return saved !== null ? saved === "true" : true;
+  });
   const [savingManage, setSavingManage] = useState(false);
+  const [expiryNotificationDismissed, setExpiryNotificationDismissed] = useState(false);
+
+  const handleToggleAutoRenew = (val: boolean) => {
+    setAutoRenew(val);
+    localStorage.setItem("geflow_autorenew", String(val));
+    toast({
+      title: val ? "Auto-Renew Enabled" : "Auto-Renew Paused",
+      description: val
+        ? "Your plan will automatically renew on the next billing date."
+        : "Your plan will not auto-charge. You will be alerted 7 days before expiry.",
+    });
+  };
 
   // Load real subscription & invoice records from Supabase
   const loadSubscriptionData = useCallback(async () => {
@@ -558,6 +573,40 @@ export const UserSubscription = () => {
     <UserPanelGate pageTitle="Subscription" module="subscription">
       <div className="w-full space-y-10 min-w-0 pb-16">
         {/* ========================================================================= */}
+        {/* 1-WEEK EXPIRY & RENEWAL NOTIFICATION SYSTEM                               */}
+        {/* ========================================================================= */}
+        {!expiryNotificationDismissed && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs flex items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 font-bold">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-foreground text-sm">Subscription Renewal Notification</span>
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                    7 Days Notice
+                  </span>
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  Your <strong className="text-foreground capitalize">{currentPlanNormalized} Plan</strong> billing cycle renews on <strong className="text-foreground">{nextAuditDate}</strong>. Auto-renew is currently <span className={autoRenew ? "text-emerald-500 font-bold" : "text-rose-500 font-bold"}>{autoRenew ? "ENABLED" : "PAUSED"}</span>.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setExpiryNotificationDismissed(true)}
+                className="h-8 text-xs font-bold rounded-xl"
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
         {/* TOP ACTIVE SUBSCRIPTION BANNER CARD                                       */}
         {/* ========================================================================= */}
         <div className="p-6 sm:p-8 rounded-3xl bg-card border border-border/80 shadow-xs relative overflow-hidden">
@@ -593,8 +642,8 @@ export const UserSubscription = () => {
                 </span>
               </p>
 
-              {/* Action Buttons */}
-              <div className="flex flex-wrap items-center gap-3 pt-2">
+              {/* Auto-Renew Switch Bar & Action Buttons */}
+              <div className="flex flex-wrap items-center gap-4 pt-2">
                 <Button
                   onClick={() => openUpgradeModal("premium")}
                   className="h-11 px-5 rounded-2xl text-xs font-extrabold uppercase tracking-wider bg-sky-400 hover:bg-sky-500 text-slate-950 shadow-md shadow-sky-400/20 border-0 flex items-center gap-1.5 transition-all active:scale-[0.98]"
@@ -609,6 +658,18 @@ export const UserSubscription = () => {
                 >
                   Manage Subscription
                 </Button>
+
+                {/* Direct Auto-Renew Toggle */}
+                <div className="flex items-center gap-2.5 px-4 py-2 rounded-2xl bg-muted/40 border border-border">
+                  <Switch
+                    id="auto-renew-banner-toggle"
+                    checked={autoRenew}
+                    onCheckedChange={handleToggleAutoRenew}
+                  />
+                  <Label htmlFor="auto-renew-banner-toggle" className="text-xs font-bold cursor-pointer">
+                    Auto-Renew {autoRenew ? <span className="text-emerald-500">(On)</span> : <span className="text-muted-foreground">(Off)</span>}
+                  </Label>
+                </div>
               </div>
             </div>
 

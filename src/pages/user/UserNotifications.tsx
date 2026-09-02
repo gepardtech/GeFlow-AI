@@ -3,9 +3,10 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import UserPanelGate from "@/components/UserPanelGate";
 import {
-  Bell, Loader2, Megaphone, LifeBuoy, PackageX, Search, Filter, ExternalLink, Sparkles, Truck,
+  Bell, Loader2, Megaphone, LifeBuoy, PackageX, Search, Filter, ExternalLink, Sparkles, Truck, Trash2, CheckCheck
 } from "lucide-react";
 import { getStoredAIReports, getStoredRestockReports } from "@/lib/aiReportSchedulerService";
+import { useToast } from "@/hooks/use-toast";
 
 type Kind = "announcement" | "ticket" | "stock" | "ai_report" | "ai_restock";
 interface Item {
@@ -22,8 +23,11 @@ const kindMeta: Record<Kind, { icon: typeof Bell; label: string; cls: string }> 
 };
 
 const SEEN_KEY = "geflow.notifications.seenAt";
+const CLEARED_KEY = "geflow.notifications.clearedAt";
+const DISMISSED_KEY = "geflow.notifications.dismissedIds";
 
 const UserNotifications = () => {
+  const { toast } = useToast();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -31,6 +35,14 @@ const UserNotifications = () => {
 
   const load = useCallback(async () => {
     const seenAt = Number(localStorage.getItem(SEEN_KEY) || 0);
+    const clearedAt = Number(localStorage.getItem(CLEARED_KEY) || 0);
+    let dismissedIds: string[] = [];
+    try {
+      dismissedIds = JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]");
+    } catch {
+      dismissedIds = [];
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
 
     const [anns, tickets, lowStock, businesses] = await Promise.all([
@@ -102,7 +114,13 @@ const UserNotifications = () => {
           createdAt: p.updated_at, unread: +new Date(p.updated_at) > seenAt,
           to: Number(p.stock_units) === 0 ? "/dashboard/out-of-stock" : "/dashboard/low-stock",
         })),
-    ].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+    ]
+      .filter((item) => {
+        if (dismissedIds.includes(item.id)) return false;
+        if (clearedAt && +new Date(item.createdAt) <= clearedAt) return false;
+        return true;
+      })
+      .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
 
     setItems(rows);
     setLoading(false);
@@ -121,7 +139,54 @@ const UserNotifications = () => {
   const markAllRead = () => {
     localStorage.setItem(SEEN_KEY, String(Date.now()));
     window.dispatchEvent(new CustomEvent("geflow:notifications-seen"));
+    toast({
+      title: "All Caught Up",
+      description: "All unread notifications marked as read.",
+    });
     load();
+  };
+
+  const clearAllNotifications = async () => {
+    const now = Date.now();
+    localStorage.setItem(CLEARED_KEY, String(now));
+    localStorage.setItem(SEEN_KEY, String(now));
+    localStorage.removeItem(DISMISSED_KEY);
+    
+    // Also try to record clearance in user metadata
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.auth.updateUser({
+          data: { notifications_cleared_at: now }
+        });
+      }
+    } catch {
+      /* ignore auth update failure */
+    }
+
+    setItems([]);
+    window.dispatchEvent(new CustomEvent("geflow:notifications-seen"));
+    toast({
+      title: "Notifications Cleared 🧹",
+      description: "All active notifications and audit alert entries have been cleared.",
+    });
+  };
+
+  const dismissSingle = (id: string) => {
+    try {
+      const dismissedIds: string[] = JSON.parse(localStorage.getItem(DISMISSED_KEY) || "[]");
+      if (!dismissedIds.includes(id)) {
+        dismissedIds.push(id);
+        localStorage.setItem(DISMISSED_KEY, JSON.stringify(dismissedIds));
+      }
+    } catch {
+      localStorage.setItem(DISMISSED_KEY, JSON.stringify([id]));
+    }
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    toast({
+      title: "Notification Dismissed",
+      description: "Notification removed from your workspace feed.",
+    });
   };
 
   const filtered = useMemo(() => items.filter((i) => {
@@ -138,15 +203,22 @@ const UserNotifications = () => {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl md:text-4xl font-bold mb-1">Notifications</h1>
-          <p className="text-sm text-muted-foreground">Announcements, support replies and inventory alerts for your workspace.</p>
+          <p className="text-sm text-muted-foreground">Announcements, support replies, AI reports and inventory alerts for your workspace.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Link to="/dashboard/announcements" className="h-10 px-4 rounded-xl border border-border text-xs font-bold inline-flex items-center gap-2 hover:bg-muted transition-colors">
             <Megaphone className="h-4 w-4" /> Announcements
           </Link>
-          <button onClick={markAllRead} className="h-10 px-4 rounded-xl bg-sky-400 hover:bg-sky-500 text-white text-xs font-bold transition-colors">
-            Mark all read
-          </button>
+          {items.length > 0 && (
+            <>
+              <button onClick={markAllRead} className="h-10 px-4 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/30 text-xs font-bold transition-colors inline-flex items-center gap-1.5">
+                <CheckCheck className="w-4 h-4" /> Mark all read
+              </button>
+              <button onClick={clearAllNotifications} className="h-10 px-4 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 text-xs font-bold transition-colors inline-flex items-center gap-1.5">
+                <Trash2 className="w-4 h-4" /> Clear all
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -171,12 +243,12 @@ const UserNotifications = () => {
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search notifications..."
               className="w-full h-10 pl-10 pr-4 bg-muted/40 border-0 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <Filter className="h-4 w-4 text-muted-foreground" />
-            {(["all", "announcement", "ticket", "stock"] as const).map((f) => (
+            {(["all", "announcement", "ticket", "stock", "ai_report", "ai_restock"] as const).map((f) => (
               <button key={f} onClick={() => setFilter(f)}
-                className={`h-9 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors ${filter === f ? "bg-sky-400 text-white" : "bg-muted/50 text-muted-foreground hover:text-foreground"}`}>
-                {f === "all" ? "All" : kindMeta[f].label}
+                className={`h-9 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors ${filter === f ? "bg-sky-500 text-white" : "bg-muted/50 text-muted-foreground hover:text-foreground"}`}>
+                {f === "all" ? "All" : kindMeta[f]?.label || f}
               </button>
             ))}
           </div>
@@ -193,7 +265,7 @@ const UserNotifications = () => {
         ) : (
           <ul className="divide-y divide-border">
             {filtered.map((n) => {
-              const meta = kindMeta[n.kind];
+              const meta = kindMeta[n.kind] || { icon: Bell, label: "Notification", cls: "bg-muted text-foreground" };
               const Icon = meta.icon;
               return (
                 <li key={n.id} className={`p-4 flex gap-4 hover:bg-muted/40 transition-colors ${n.unread ? "bg-sky-400/5" : ""}`}>
@@ -201,10 +273,19 @@ const UserNotifications = () => {
                     <Icon className="h-4 w-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-bold text-sm">{n.title}</p>
-                      <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${meta.cls}`}>{meta.label}</span>
-                      {n.unread && <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-destructive/15 text-destructive border border-destructive/30">New</span>}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-sm">{n.title}</p>
+                        <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${meta.cls}`}>{meta.label}</span>
+                        {n.unread && <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-destructive/15 text-destructive border border-destructive/30">New</span>}
+                      </div>
+                      <button
+                        onClick={() => dismissSingle(n.id)}
+                        className="text-muted-foreground hover:text-rose-500 p-1.5 rounded-lg hover:bg-muted transition"
+                        title="Dismiss notification"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{n.description}</p>
                     <div className="flex items-center gap-3 mt-2">

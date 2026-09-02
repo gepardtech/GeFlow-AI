@@ -52,16 +52,11 @@ import {
 import { ActionRecommendationModal } from "@/components/reports/ActionRecommendationModal";
 import { ReportsPdfDialog } from "@/components/reports/ReportsPdfDialog";
 import { RecordDetailModal, LedgerItemDetail } from "@/components/reports/RecordDetailModal";
-import { AIReportScheduleModal } from "@/components/reports/AIReportScheduleModal";
-import { AIReportDetailModal } from "@/components/reports/AIReportDetailModal";
 import { AIRestockDetailModal } from "@/components/reports/AIRestockDetailModal";
 import {
-  getStoredAIReports,
   getStoredRestockReports,
-  GeneratedAIReport,
   SupplierRecommendationReport,
   generateAutoRestockRecommendation,
-  saveStoredRestockReport,
 } from "@/lib/aiReportSchedulerService";
 
 interface DailyTrend {
@@ -102,24 +97,19 @@ export const UserReports = () => {
   const [ledgerStatusFilter, setLedgerStatusFilter] = useState<"all" | "verified" | "pending">("all");
   const [showFilterBar, setShowFilterBar] = useState(false);
 
-  // Audit Tab: "ledger" (live entries), "ai_reports" (scheduled AI audits), "ai_restock" (procurement sheets)
-  const [auditTab, setAuditTab] = useState<"ledger" | "ai_reports" | "ai_restock">(() => {
+  // Audit Tab: "ledger" (live entries), "ai_restock" (procurement sheets)
+  const [auditTab, setAuditTab] = useState<"ledger" | "ai_restock">(() => {
     const v = searchParams.get("view");
     if (v === "ai_restock") return "ai_restock";
-    if (v === "ai_reports") return "ai_reports";
     return "ledger";
   });
 
-  // AI Dialogs & Modals
-  const [aiScheduleOpen, setAiScheduleOpen] = useState(false);
-  const [selectedAIReport, setSelectedAIReport] = useState<GeneratedAIReport | null>(null);
-  const [aiReportDetailOpen, setAiReportDetailOpen] = useState(false);
+  // AI Restock & Procurement Modals
   const [selectedRestockReport, setSelectedRestockReport] = useState<SupplierRecommendationReport | null>(null);
   const [aiRestockDetailOpen, setAiRestockDetailOpen] = useState(false);
   const [generatingRestock, setGeneratingRestock] = useState(false);
 
   // AI Persistent Collections
-  const [storedAIReports, setStoredAIReports] = useState<GeneratedAIReport[]>([]);
   const [storedRestockReports, setStoredRestockReports] = useState<SupplierRecommendationReport[]>([]);
 
   // Dialogs & Modals
@@ -139,17 +129,14 @@ export const UserReports = () => {
 
   const loadAICollections = useCallback(() => {
     if (!active?.id) return;
-    setStoredAIReports(getStoredAIReports(active.id));
     setStoredRestockReports(getStoredRestockReports(active.id));
   }, [active?.id]);
 
   useEffect(() => {
     loadAICollections();
     const handleUpdate = () => loadAICollections();
-    window.addEventListener("geflow:ai-report-created", handleUpdate);
     window.addEventListener("geflow:ai-restock-created", handleUpdate);
     return () => {
-      window.removeEventListener("geflow:ai-report-created", handleUpdate);
       window.removeEventListener("geflow:ai-restock-created", handleUpdate);
     };
   }, [loadAICollections]);
@@ -763,15 +750,6 @@ export const UserReports = () => {
           <div className="flex items-center gap-2.5 flex-wrap">
             <Button
               variant="outline"
-              onClick={() => setAiScheduleOpen(true)}
-              className="h-10 px-3.5 rounded-xl text-xs font-bold border-sky-500/30 bg-sky-500/5 hover:bg-sky-500/10 text-sky-600 dark:text-sky-400 shadow-xs flex items-center gap-1.5"
-            >
-              <Clock className="w-4 h-4 text-sky-500" />
-              <span>Settings</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20">AI</span>
-            </Button>
-            <Button
-              variant="outline"
               onClick={handleExportCSV}
               className="h-10 px-4 rounded-xl text-xs font-bold border-border bg-card hover:bg-muted text-foreground shadow-xs"
             >
@@ -1059,22 +1037,6 @@ export const UserReports = () => {
 
               <button
                 type="button"
-                onClick={() => setAuditTab("ai_reports")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  auditTab === "ai_reports"
-                    ? "bg-background text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-sky-500" />
-                <span>AI Scheduled Reports</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-violet-500/10 text-violet-500">
-                  {storedAIReports.length}
-                </span>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => setAuditTab("ai_restock")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                   auditTab === "ai_restock"
@@ -1253,143 +1215,7 @@ export const UserReports = () => {
             </div>
           )}
 
-          {/* TAB 2: AI SCHEDULED REPORTS */}
-          {auditTab === "ai_reports" && (
-            <div className="space-y-4 animate-in fade-in-50">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-sky-500/5 border border-sky-500/20">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-sky-500/10 text-sky-500 flex items-center justify-center font-bold">
-                    <Sparkles className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-foreground">
-                      Automated AI Performance & Audit Ledgers
-                    </h4>
-                    <p className="text-[11px] text-muted-foreground">
-                      6-pillar intelligence digests: Profit, Inventory, Out of Stock, Low Stock, Bestsellers, and Issues.
-                    </p>
-                  </div>
-                </div>
-
-                <Button
-                  size="sm"
-                  onClick={() => setAiScheduleOpen(true)}
-                  className="rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-600 text-white h-8 self-start sm:self-auto"
-                >
-                  <Clock className="w-3.5 h-3.5 mr-1.5" /> Configure Schedule
-                </Button>
-              </div>
-
-              {/* Reports Table */}
-              <div className="overflow-x-auto rounded-xl border border-border">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="bg-muted/40 border-b border-border text-[10px] font-bold uppercase text-muted-foreground tracking-widest">
-                      <th className="py-3 px-3">REPORT TITLE & DATE</th>
-                      <th className="py-3 px-3 text-center">FREQUENCY</th>
-                      <th className="py-3 px-3 text-center">NET PROFIT / REVENUE</th>
-                      <th className="py-3 px-3 text-center">STOCK ALERTS</th>
-                      <th className="py-3 px-3 text-center">ISSUES DETECTED</th>
-                      <th className="py-3 px-3 text-center">ACTIONS</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {storedAIReports.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="py-12 text-center text-muted-foreground">
-                          <div className="flex flex-col items-center justify-center gap-2">
-                            <Sparkles className="w-8 h-8 text-sky-500/40" />
-                            <p className="font-bold text-sm text-foreground">No scheduled AI reports generated yet</p>
-                            <p className="text-xs text-muted-foreground max-w-md">
-                              Click "Settings" in the top bar to set up your Daily, Weekly, or Monthly automated AI audit timeline.
-                            </p>
-                            <Button
-                              size="sm"
-                              onClick={() => setAiScheduleOpen(true)}
-                              className="mt-2 rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-600 text-white"
-                            >
-                              <Clock className="w-3.5 h-3.5 mr-1.5" /> Setup Report Time
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      storedAIReports.map((rep) => (
-                        <tr
-                          key={rep.id}
-                          onClick={() => {
-                            setSelectedAIReport(rep);
-                            setAiReportDetailOpen(true);
-                          }}
-                          className="hover:bg-sky-500/5 cursor-pointer transition-colors group"
-                        >
-                          <td className="py-3 px-3">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 rounded-lg bg-violet-500/10 text-violet-500 flex items-center justify-center font-bold text-xs shrink-0">
-                                AI
-                              </div>
-                              <div>
-                                <span className="font-bold text-foreground block">{rep.title}</span>
-                                <span className="text-[10px] text-muted-foreground">
-                                  {new Date(rep.createdAt).toLocaleString()}
-                                </span>
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="py-3 px-3 text-center">
-                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-sky-500/10 text-sky-500 border border-sky-500/20">
-                              {rep.frequency}
-                            </span>
-                          </td>
-
-                          <td className="py-3 px-3 text-center">
-                            <span className="font-bold text-emerald-500 font-mono block">
-                              {fmt(rep.sections.profit.profit)}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground font-mono">
-                              Rev: {fmt(rep.sections.profit.revenue)}
-                            </span>
-                          </td>
-
-                          <td className="py-3 px-3 text-center font-mono">
-                            <span className="text-rose-500 font-bold">
-                              {rep.sections.outOfStock.count} Out
-                            </span>
-                            <span className="text-muted-foreground text-[10px] block">
-                              {rep.sections.lowStock.count} Low
-                            </span>
-                          </td>
-
-                          <td className="py-3 px-3 text-center font-mono">
-                            <span
-                              className={`font-bold ${
-                                rep.sections.issueProducts.count > 0 ? "text-amber-500" : "text-emerald-500"
-                              }`}
-                            >
-                              {rep.sections.issueProducts.count} Items
-                            </span>
-                          </td>
-
-                          <td className="py-3 px-3 text-center">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2.5 rounded-lg text-xs font-semibold text-sky-500 hover:bg-sky-500/10"
-                            >
-                              <Eye className="w-3.5 h-3.5 mr-1" /> View Full
-                            </Button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: AI RESTOCK & SUPPLIER ORDERS */}
+          {/* TAB 2: AI RESTOCK & SUPPLIER ORDERS */}
           {auditTab === "ai_restock" && (
             <div className="space-y-4 animate-in fade-in-50">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20">

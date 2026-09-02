@@ -26,28 +26,45 @@ export interface StaffRoleState {
 export const isPathAllowedForRole = (role: StaffRole, path: string): boolean => {
   const cleanPath = path.toLowerCase().split("?")[0].replace(/\/$/, "");
 
-  // Owner, Manager, and Platform Admin have full access
-  if (role === "owner" || role === "admin" || role === "manager") {
+  // Owner and Platform Admin have unrestricted access
+  if (role === "owner" || role === "admin") {
     return true;
   }
 
-  // Inventory Clerk: ONLY Inventory, Low & Out of Stock pages
-  if (role === "inventory") {
+  // Manager: Full operational access across POS, Inventory, Purchases & Reports
+  if (role === "manager") {
     const allowed = [
+      "/dashboard",
+      "/dashboard/pos",
       "/dashboard/inventory",
       "/dashboard/low-stock",
       "/dashboard/out-of-stock",
+      "/dashboard/purchases",
+      "/dashboard/reports",
+      "/dashboard/analytics",
+      "/dashboard/announcements",
       "/dashboard/support",
     ];
     return allowed.some((p) => cleanPath === p || cleanPath.startsWith(p + "/"));
   }
 
-  // Cashier: POS, Dashboard, Analytics, Reports, Announcements, Support
+  // Inventory Clerk: Stock intake (Purchases), SKU catalog (Inventory, Low stock, Out of stock)
+  if (role === "inventory") {
+    const allowed = [
+      "/dashboard/inventory",
+      "/dashboard/low-stock",
+      "/dashboard/out-of-stock",
+      "/dashboard/purchases",
+      "/dashboard/announcements",
+      "/dashboard/support",
+    ];
+    return allowed.some((p) => cleanPath === p || cleanPath.startsWith(p + "/"));
+  }
+
+  // Cashier: POS terminal checkout, receipt dispatch, and daily sales counter
   if (role === "cashier") {
     const allowed = [
       "/dashboard/pos",
-      "/dashboard",
-      "/dashboard/analytics",
       "/dashboard/reports",
       "/dashboard/announcements",
       "/dashboard/support",
@@ -60,9 +77,19 @@ export const isPathAllowedForRole = (role: StaffRole, path: string): boolean => 
 
 export const useStaffRole = (): StaffRoleState => {
   const { isAdmin } = useIsAdmin();
-  const [role, setRole] = useState<StaffRole>("owner");
+  const [role, setRole] = useState<StaffRole>(() => {
+    try {
+      const cached = localStorage.getItem("geflow_cached_staff_role");
+      if (cached === "manager" || cached === "cashier" || cached === "inventory" || cached === "admin" || cached === "owner") {
+        return cached as StaffRole;
+      }
+    } catch {
+      /* ignore storage errors */
+    }
+    return "owner";
+  });
   const [isActive, setIsActive] = useState<boolean>(true);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
 
   const fetchRole = useCallback(async () => {
     try {
@@ -84,26 +111,71 @@ export const useStaffRole = (): StaffRoleState => {
         return;
       }
 
-      // Check support_team_members for assigned operational role
-      const { data: teamMember, error } = await supabase
-        .from("support_team_members")
-        .select("role, is_active")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      const activeBizId = localStorage.getItem("geflow.activeBusinessId");
+      let currentMode = localStorage.getItem("geflow.workspaceMode") || "business";
 
-      if (!error && teamMember) {
-        const rawRole = (teamMember.role || "").toLowerCase().trim();
-        if (rawRole === "manager") setRole("manager");
-        else if (rawRole === "cashier") setRole("cashier");
-        else if (rawRole === "inventory") setRole("inventory");
-        else if (rawRole === "admin") setRole("manager"); // Map store admin to manager at user level
-        else setRole("cashier");
+      // Check support_team_members and owned businesses
+      const [teamMembersRes, ownedRes] = await Promise.all([
+        supabase
+          .from("support_team_members")
+          .select("appointed_by_user_id, role, is_active")
+          .eq("user_id", user.id),
+        supabase
+          .from("businesses")
+          .select("id, owner_user_id")
+          .eq("owner_user_id", user.id)
+          .limit(1),
+      ]);
 
-        setIsActive(teamMember.is_active !== false);
-      } else {
-        // If not listed as a team member, this user is the primary workspace owner
+      const teamMembers = teamMembersRes.data || [];
+      const hasOwnedBusinesses = (ownedRes.data?.length ?? 0) > 0;
+
+      // If user has no owned businesses but has team memberships, force employee mode
+      if (!hasOwnedBusinesses && teamMembers.length > 0) {
+        currentMode = "employee";
+        localStorage.setItem("geflow.workspaceMode", "employee");
+      }
+
+      // If user is in "business" mode and actually owns stores:
+      if (currentMode === "business" && hasOwnedBusinesses) {
         setRole("owner");
         setIsActive(true);
+        localStorage.setItem("geflow_cached_staff_role", "owner");
+        setLoading(false);
+        return;
+      }
+
+      // In employee mode, find membership for the active store
+      if (currentMode === "employee" && teamMembers.length > 0) {
+        let matchingMembership = teamMembers[0];
+
+        if (activeBizId) {
+          const { data: activeBiz } = await supabase
+            .from("businesses")
+            .select("owner_user_id")
+            .eq("id", activeBizId)
+            .maybeSingle();
+
+          if (activeBiz?.owner_user_id) {
+            const match = teamMembers.find((m) => m.appointed_by_user_id === activeBiz.owner_user_id);
+            if (match) matchingMembership = match;
+          }
+        }
+
+        const rawRole = (matchingMembership.role || "").toLowerCase().trim();
+        let resolved: StaffRole = "cashier";
+        if (rawRole === "manager" || rawRole === "admin") resolved = "manager";
+        else if (rawRole === "inventory" || rawRole.includes("inventory")) resolved = "inventory";
+        else resolved = "cashier";
+
+        setRole(resolved);
+        setIsActive(matchingMembership.is_active !== false);
+        localStorage.setItem("geflow_cached_staff_role", resolved);
+      } else {
+        // Fallback to owner
+        setRole("owner");
+        setIsActive(true);
+        localStorage.setItem("geflow_cached_staff_role", "owner");
       }
     } catch (err) {
       console.error("Failed to resolve user staff role:", err);
@@ -116,6 +188,10 @@ export const useStaffRole = (): StaffRoleState => {
   useEffect(() => {
     fetchRole();
 
+    const onModeChange = () => fetchRole();
+    window.addEventListener("geflow:mode-changed", onModeChange);
+    window.addEventListener("geflow:business-changed", onModeChange);
+
     const channel = supabase
       .channel(`staff_role_realtime_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "support_team_members" }, () => {
@@ -127,6 +203,8 @@ export const useStaffRole = (): StaffRoleState => {
       .subscribe();
 
     return () => {
+      window.removeEventListener("geflow:mode-changed", onModeChange);
+      window.removeEventListener("geflow:business-changed", onModeChange);
       supabase.removeChannel(channel);
     };
   }, [fetchRole]);

@@ -116,8 +116,8 @@ const loadBusinessMoney = async () => {
         }
       }
 
-      const effectiveCurrency = (row as any).currency || (row as any).base_currency || userCurrency || catCurrency || null;
-      const effectiveBaseCurrency = (row as any).base_currency || (row as any).currency || effectiveCurrency;
+      const effectiveCurrency = (row as any).currency || userCurrency || catCurrency || (row as any).base_currency || "USD";
+      const effectiveBaseCurrency = effectiveCurrency;
       const effectiveTax = (row as any).default_tax !== undefined && (row as any).default_tax !== null
         ? Number((row as any).default_tax)
         : (userTax !== null ? userTax : (catTax !== null ? catTax : 0));
@@ -128,9 +128,10 @@ const loadBusinessMoney = async () => {
         taxRate: effectiveTax,
       };
     } else {
+      const fallbackCur = userCurrency || "USD";
       cache = {
-        currency: userCurrency,
-        baseCurrency: userCurrency,
+        currency: fallbackCur,
+        baseCurrency: fallbackCur,
         taxRate: userTax ?? 0,
       };
     }
@@ -176,16 +177,16 @@ export const useBusinessMoney = (): BizMoney => {
 
 export interface MoneyOptions {
   /**
-   * "auto"     – use the active business currency when available, else platform (default)
-   * "platform" – always the platform base currency (landing pricing, checkout, invoices)
+   * "auto"     – use the active business currency for business records without USD conversion (default)
+   * "platform" – always converts from platform base USD currency (landing pricing, checkout, subscriptions)
    */
   scope?: "auto" | "platform";
 }
 
 /**
  * Reactive money + tax helpers.
- * Platform settings drive public pages; the active business category drives
- * the user workspace. Both update live without a refresh.
+ * Platform scope converts platform plan USD pricing to chosen currency.
+ * Auto / business scope formats native store data (products, POS, inventory) directly in the business currency.
  */
 export const useMoney = (options: MoneyOptions = {}) => {
   const { scope = "auto" } = options;
@@ -203,15 +204,16 @@ export const useMoney = (options: MoneyOptions = {}) => {
   const invoicePrefix = ((settings?.invoice_prefix as string) ?? "INV").trim().replace(/-+$/, "") || "INV";
 
   /**
-   * Platform/plan amounts are authored in USD. Business amounts are stored in
-   * the business's base currency. Either way we convert live to `code`, so a
-   * currency switch instantly re-prices every screen at today's FX rate.
+   * For platform scope (e.g. subscription pricing tiers authored in USD):
+   * We convert from USD to the selected currency.
+   * For business/store operations (products, inventory, POS sales, carts, purchases):
+   * Numbers are authored directly in the store's currency (e.g. 20 PKR is 20 PKR, not converted).
    */
-  const from = scope === "platform" ? "USD" : (biz.baseCurrency ?? code).toUpperCase();
-  const rate = fxRate(code) / (fxRate(from) || 1);
-  const convert = (n: number) => Number(n || 0) * rate;
+  const isPlatform = scope === "platform";
+  const rate = isPlatform ? (fxRate(code) / (fxRate("USD") || 1)) : 1;
+  const convert = (n: number) => (isPlatform ? Number(n || 0) * rate : Number(n || 0));
 
-  const decimals = rate >= 50 || fxRate(code) >= 50 ? 0 : 2;
+  const decimals = 2;
 
   const format = (n: number) =>
     `${sym}${convert(n).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;

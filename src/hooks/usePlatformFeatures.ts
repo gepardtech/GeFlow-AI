@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getLocalFeatureCatalog, FeatureModuleDefinition } from "@/lib/featureCatalog";
 
 export interface PublicFeatureModule {
   id: string;
@@ -15,19 +16,26 @@ export interface PublicFeatureModule {
 
 /**
  * Live platform-wide Feature Control (admin → Features).
- * Reads the sanitized public mirror so any global/plan toggle the admin flips
- * hides or reveals the matching module in the user panel within a second.
+ * Reads Supabase with local fallback so any global/plan toggle the admin flips
+ * updates instantaneously across the app.
  */
 export const usePlatformFeatures = (planId?: string) => {
-  const [rows, setRows] = useState<PublicFeatureModule[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState<PublicFeatureModule[]>(() => {
+    return getLocalFeatureCatalog() as unknown as PublicFeatureModule[];
+  });
+  const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const { data } = await supabase.from("public_feature_modules").select("*");
-      setRows((data ?? []) as unknown as PublicFeatureModule[]);
+      const { data, error } = await supabase.from("public_feature_modules").select("*");
+      if (!error && data && data.length > 0) {
+        setRows(data as unknown as PublicFeatureModule[]);
+      } else {
+        setRows(getLocalFeatureCatalog() as unknown as PublicFeatureModule[]);
+      }
     } catch (err) {
-      console.warn("Failed to load platform features:", err);
+      console.warn("Failed to load platform features from DB, using catalog:", err);
+      setRows(getLocalFeatureCatalog() as unknown as PublicFeatureModule[]);
     } finally {
       setLoading(false);
     }
@@ -35,11 +43,20 @@ export const usePlatformFeatures = (planId?: string) => {
 
   useEffect(() => {
     load();
+    const handleStorage = () => {
+      setRows(getLocalFeatureCatalog() as unknown as PublicFeatureModule[]);
+    };
+    window.addEventListener("storage", handleStorage);
+
     const ch = supabase
       .channel(`public_feature_modules_rt_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "public_feature_modules" }, () => load())
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      supabase.removeChannel(ch);
+    };
   }, [load]);
 
   /** Feature codes that are globally off, or off for the given plan. */
@@ -56,10 +73,17 @@ export const usePlatformFeatures = (planId?: string) => {
   const isEnabled = (code?: string | null) => {
     if (!code) return true;
     const c = code.toLowerCase();
-    // Unknown codes are allowed — only explicitly configured modules are gated.
-    if (!rows.some((r) => (r.module_code ?? "").toLowerCase() === c)) return true;
-    return !disabledCodes.includes(c);
+    // Check by module_code or matching name/id
+    const matched = rows.find(
+      (r) =>
+        (r.module_code ?? "").toLowerCase() === c ||
+        r.id.toLowerCase() === c ||
+        r.name.toLowerCase().replace(/\s+/g, "_") === c
+    );
+    if (!matched) return true;
+    return !disabledCodes.includes(matched.module_code.toLowerCase());
   };
 
   return { rows, loading, disabledCodes, isEnabled, reload: load };
 };
+

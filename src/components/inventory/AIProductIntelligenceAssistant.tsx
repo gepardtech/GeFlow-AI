@@ -82,7 +82,7 @@ export const AIProductIntelligenceAssistant = forwardRef<AIProductIntelligenceAs
       uom: true,
       packaging: true,
       strength: true,
-      pricing: false, // Default pricing to opt-in so user prices are not overwritten
+      pricing: true, // Enabled by default to populate purchase & retail prices
     });
 
     // Editable preview values inside the Review pane
@@ -209,6 +209,10 @@ export const AIProductIntelligenceAssistant = forwardRef<AIProductIntelligenceAs
             finalSuggestion.extracted_business_data?.retail_price != null
               ? String(finalSuggestion.extracted_business_data.retail_price)
               : "",
+          stock_units:
+            finalSuggestion.extracted_business_data?.stock_units != null
+              ? String(finalSuggestion.extracted_business_data.stock_units)
+              : "",
           description: finalSuggestion.identification?.description || "",
         });
 
@@ -296,11 +300,15 @@ export const AIProductIntelligenceAssistant = forwardRef<AIProductIntelligenceAs
           purchase_cost:
             fieldsToApply.pricing && editableValues.purchase_cost
               ? Number(editableValues.purchase_cost)
-              : null,
+              : (suggestion.extracted_business_data?.purchase_cost ?? null),
           retail_price:
             fieldsToApply.pricing && editableValues.retail_price
               ? Number(editableValues.retail_price)
-              : null,
+              : (suggestion.extracted_business_data?.retail_price ?? null),
+          stock_units:
+            editableValues.stock_units
+              ? Number(editableValues.stock_units)
+              : (suggestion.extracted_business_data?.stock_units ?? null),
           user_supplied: false,
         },
       };

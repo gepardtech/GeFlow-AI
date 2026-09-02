@@ -25,11 +25,14 @@ interface AnalysisInput {
  * Common packaging / stock unit mappings
  */
 const UNIT_KEYWORDS: Array<{ match: RegExp; unit: string; type: ProductUnitType }> = [
+  { match: /\b(biscuit|biscuits|buscit|biscut|cookie|cookies|cracker|crackers|wafer|wafers|rusk|rusks|snack|snacks|chip|chips|crisp|crisps|candy|candies|chocolate|chocolates|bar|bars|cake|cakes|bread|buns|bun|noodles|pasta|cereal)\b/i, unit: "pack", type: "quantity" },
+  { match: /\b(packet|packets|pkt|pkts)\b/i, unit: "pack", type: "quantity" },
+  { match: /\b(pack|packs|pk|pks)\b/i, unit: "pack", type: "quantity" },
   { match: /\b(tablet|tab|tablets|tabs)\b/i, unit: "tablet", type: "quantity" },
   { match: /\b(capsule|capsules|cap|caps)\b/i, unit: "capsule", type: "quantity" },
   { match: /\b(strip|strips)\b/i, unit: "strip", type: "quantity" },
   { match: /\b(bottle|bottles|btl|btls)\b/i, unit: "bottle", type: "quantity" },
-  { match: /\b(box|boxes|bx|pk|pack|packs|packet|packets)\b/i, unit: "box", type: "quantity" },
+  { match: /\b(box|boxes|bx)\b/i, unit: "box", type: "quantity" },
   { match: /\b(can|cans|tin|tins)\b/i, unit: "can", type: "quantity" },
   { match: /\b(vial|vials|ampoule|ampoules)\b/i, unit: "vial", type: "quantity" },
   { match: /\b(tube|tubes)\b/i, unit: "tube", type: "quantity" },
@@ -71,13 +74,19 @@ export async function analyzeProductInput({
   const strengthMatch = text.match(/(\d+(?:\.\d+)?\s*(?:mg(?:\/\d+ml)?|g|mcg|iu|ml|l|w|v|mah|ah|kg))\b/i);
   const strength = strengthMatch ? strengthMatch[1].trim() : null;
 
-  // 2. Extract Pack Size (e.g. "pack of 20", "20 tablets", "x10", "10pcs", "box of 100")
+  // 2. Extract Pack Size / Scale (e.g. "20 tablets per box", "pack of 20", "20 tablets", "x10", "10pcs", "box of 100")
   let packSize: number | null = null;
-  const packMatch = text.match(/(?:pack\s+of|box\s+of|strip\s+of|\bx)\s*(\d+)\b/i) ||
+  const perBoxMatch = text.match(/(\d+)\s*(?:tablets?|tabs?|capsules?|caps?|pieces?|pcs?|units?|items?|sachets?|strips?)\s*(?:per|\/|in\s*(?:a|each|1))\s*(?:box|pack|carton|strip|dozen)?/i);
+  const packMatch = text.match(/(?:pack\s+of|box\s+of|strip\s+of|carton\s+of|\bx)\s*(\d+)\b/i) ||
                     text.match(/(\d+)\s*(?:tablets|tabs|capsules|caps|pieces|pcs|count|ct|sachets)\b/i);
-  if (packMatch && packMatch[1]) {
+  if (perBoxMatch && perBoxMatch[1]) {
+    const num = parseInt(perBoxMatch[1], 10);
+    if (!isNaN(num) && num > 0 && num <= 50000) {
+      packSize = num;
+    }
+  } else if (packMatch && packMatch[1]) {
     const num = parseInt(packMatch[1], 10);
-    if (!isNaN(num) && num > 0 && num <= 5000) {
+    if (!isNaN(num) && num > 0 && num <= 50000) {
       packSize = num;
     }
   }
@@ -103,26 +112,42 @@ export async function analyzeProductInput({
     weight = { value: parseFloat(wtMatch[1]), unit };
   }
 
-  // 4. Detect Unit of Measure & Stock Unit
+  // 4. Detect Primary Packaging / Stock Unit
   let stockUnit = "piece";
   let unitType: ProductUnitType = "quantity";
-  for (const item of UNIT_KEYWORDS) {
-    if (item.match.test(text)) {
-      stockUnit = item.unit;
-      unitType = item.type;
-      break;
+  if (/\b(?:box|boxes|bx)\b/i.test(text)) {
+    stockUnit = "box";
+  } else if (/\b(?:carton|cartons|ctn)\b/i.test(text)) {
+    stockUnit = "carton";
+  } else if (/\b(?:pack|packs|packet|packets|pkt|pkts)\b/i.test(text)) {
+    stockUnit = "pack";
+  } else if (/\b(?:strip|strips)\b/i.test(text)) {
+    stockUnit = "strip";
+  } else if (/\b(?:bottle|bottles|btl)\b/i.test(text)) {
+    stockUnit = "bottle";
+  } else {
+    for (const item of UNIT_KEYWORDS) {
+      if (item.match.test(text)) {
+        stockUnit = item.unit;
+        unitType = item.type;
+        break;
+      }
     }
   }
 
   // 5. Detect Physical Form
   let form: string | null = null;
-  if (/\b(tablet|tabs)\b/i.test(text)) form = "tablet";
+  if (/\b(biscuit|biscuits|buscit|biscut|cookie|cookies|cracker|crackers|wafer|wafers|rusk)\b/i.test(text)) form = "biscuit / bakery";
+  else if (/\b(snack|snacks|chip|chips|crisp|crisps|popcorn)\b/i.test(text)) form = "snack";
+  else if (/\b(candy|candies|chocolate|chocolates|toffee|chewing gum|sweet|sweets)\b/i.test(text)) form = "confectionery";
+  else if (/\b(tablet|tabs)\b/i.test(text)) form = "tablet";
   else if (/\b(capsule|caps)\b/i.test(text)) form = "capsule";
   else if (/\b(syrup|liquid|suspension|drops)\b/i.test(text)) form = "syrup";
   else if (/\b(injection|vial|ampoule)\b/i.test(text)) form = "injectable";
   else if (/\b(cream|ointment|gel)\b/i.test(text)) form = "topical gel";
   else if (/\b(powder|granules)\b/i.test(text)) form = "powder";
   else if (/\b(spray|aerosol)\b/i.test(text)) form = "spray";
+  else if (/\b(soap|shampoo|facewash|detergent)\b/i.test(text)) form = "personal care";
 
   // 6. Detect Brand
   let detectedBrand: string | null = null;
@@ -137,27 +162,58 @@ export async function analyzeProductInput({
   const barcodeMatch = text.match(/\b(\d{8}|\d{12}|\d{13}|\d{14})\b/);
   const detectedBarcode = barcodeMatch ? barcodeMatch[1] : null;
 
-  // 8. Extract Pricing if user included explicit cost/price keywords
+  // 8. Extract Pricing & Stock Units if user included explicit cost/price keywords
   let purchaseCost: number | null = null;
   let retailPrice: number | null = null;
   let stockUnits: number | null = null;
 
-  const buyMatch = text.match(/(?:buy|cost|cp|purchase|pur)\s*[:=]?\s*(\d+(?:\.\d+)?)/i);
+  const buyMatch = text.match(/(?:buy|cost|cp|purchase\s*price|purchase\s*cost|purchase|pur|bought\s*for)\s*(?:is|at|:|=)?\s*(?:rs\.?|pkr|inr|\$|€|£)?\s*(\d+(?:\.\d+)?)/i);
   if (buyMatch) purchaseCost = parseFloat(buyMatch[1]);
 
-  const sellMatch = text.match(/(?:sell|price|sp|retail|mrp)\s*[:=]?\s*(\d+(?:\.\d+)?)/i);
+  const sellMatch = text.match(/(?:sell|selling\s*price|selling|price|sp|retail\s*price|retail|mrp|sale)\s*(?:is|at|:|=)?\s*(?:rs\.?|pkr|inr|\$|€|£)?\s*(\d+(?:\.\d+)?)/i);
   if (sellMatch) retailPrice = parseFloat(sellMatch[1]);
 
-  const stockMatch = text.match(/(?:qty|stock|quantity|units|count)\s*[:=]?\s*(\d+)/i);
-  if (stockMatch) stockUnits = parseInt(stockMatch[1], 10);
+  // If retailPrice is still null, look for explicit currency tags
+  if (retailPrice === null) {
+    const currencySuffixMatch = text.match(/\b(\d+(?:\.\d+)?)\s*(?:rs|pkr|inr|rupees?|\/-)\b/i);
+    const currencyPrefixMatch = text.match(/(?:rs\.?|pkr|inr|\$|€|£)\s*(\d+(?:\.\d+)?)\b/i);
+
+    if (currencySuffixMatch) {
+      const val = parseFloat(currencySuffixMatch[1]);
+      if (!isNaN(val) && val !== purchaseCost) {
+        retailPrice = val;
+      }
+    } else if (currencyPrefixMatch) {
+      const val = parseFloat(currencyPrefixMatch[1]);
+      if (!isNaN(val) && val !== purchaseCost) {
+        retailPrice = val;
+      }
+    }
+  }
+
+  // Extract total quantity / boxes
+  const stockMatch = text.match(/(?:qty|stock|quantity|inventory|count)\s*(?:is|at|:|=)?\s*(\d+)/i) ||
+                     text.match(/\b(\d+)\s*(?:box|boxes|carton|cartons|packs?|bottles?|strips?|pieces?|pcs)\b/i);
+  if (stockMatch) {
+    const rawQty = parseInt(stockMatch[1], 10);
+    if (!isNaN(rawQty) && rawQty > 0) {
+      // If user specified e.g. 10 Box and 20 Tablets Per Box, stockUnits = 10 * 20 = 200 (or rawQty)
+      stockUnits = packSize && packSize > 1 ? rawQty * packSize : rawQty;
+    }
+  }
 
   // 9. Normalize Clean Product Title
   let cleanName = text
-    .replace(/(?:buy|cost|cp|purchase|pur)\s*[:=]?\s*\d+(?:\.\d+)?/gi, "")
-    .replace(/(?:sell|price|sp|retail|mrp)\s*[:=]?\s*\d+(?:\.\d+)?/gi, "")
+    .replace(/(?:buy|cost|cp|purchase\s*price|purchase\s*cost|purchase|pur|bought\s*for)\s*(?:is|at|:|=)?\s*(?:rs\.?|pkr|inr|\$|€|£)?\s*\d+(?:\.\d+)?(?:\s*(?:per|\/)\s*(?:box|pack|piece|unit|item))?/gi, "")
+    .replace(/(?:sell|selling\s*price|selling|price|sp|retail\s*price|retail|mrp|sale)\s*(?:is|at|:|=)?\s*(?:rs\.?|pkr|inr|\$|€|£)?\s*\d+(?:\.\d+)?(?:\s*(?:per|\/)\s*(?:box|pack|piece|unit|item))?/gi, "")
+    .replace(/\b\d+\s*(?:tablets?|tabs?|capsules?|caps?|pieces?|pcs?|units?|items?|sachets?|strips?)\s*(?:per|\/|in\s*(?:a|each|1))\s*(?:box|pack|carton|strip|dozen)?/gi, "")
+    .replace(/\b\d+\s*(?:box|boxes|bx|carton|cartons|ctn|packs?|packet|packets|pkt|pkts|bottles?|strips?|pieces?|pcs)\b/gi, "")
+    .replace(/\b\d+(?:\.\d+)?\s*(?:rs|pkr|inr|rupees?|\/-)\b/gi, "")
+    .replace(/(?:rs\.?|pkr|inr|\$|€|£)\s*\d+(?:\.\d+)?\b/gi, "")
+    .replace(/(?:pack\s+of|box\s+of|strip\s+of|carton\s+of)\s*\d+\s*(?:pack|packs|packet|packets|pcs|pieces|tabs|tablets|caps|capsules|units)?/gi, "")
     .replace(/(?:qty|stock|quantity|units|count)\s*[:=]?\s*\d+/gi, "")
     .replace(/\b(\d{8}|\d{12}|\d{13}|\d{14})\b/g, "")
-    .replace(/[,;]+/g, " ")
+    .replace(/[,;:]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -199,7 +255,12 @@ export async function analyzeProductInput({
         },
       },
       fmcg: {
-        parentKeywords: ["fmcg", "grocery", "groceries", "food", "supermarket", "packaged"],
+        parentKeywords: ["fmcg", "grocery", "groceries", "food", "supermarket", "packaged", "bakery", "snack"],
+        subKeywords: {
+          bakery: ["biscuit", "biscuits", "buscit", "cookie", "cookies", "cracker", "cake", "bread", "rusk"],
+          snacks: ["snack", "chips", "crisps", "lays", "popcorn"],
+          confectionery: ["chocolate", "candy", "toffee", "sweet"],
+        },
       },
     };
 
@@ -219,7 +280,8 @@ export async function analyzeProductInput({
       for (const [domainKey, domainData] of Object.entries(domainAssociations)) {
         const matchesDomainText =
           (domainKey === "pharma" && /\b(paracetamol|panadol|ibuprofen|amoxicillin|aspirin|antibiotic|capsule|tablet|mg|syrup|vial)\b/i.test(lowerText)) ||
-          (domainKey === "beverage" && /\b(coca|cola|pepsi|sprite|fanta|drink|juice|soda|tea|coffee|bottle|can|1\.5l|500ml|beverage)\b/i.test(lowerText));
+          (domainKey === "beverage" && /\b(coca|cola|pepsi|sprite|fanta|drink|juice|soda|tea|coffee|bottle|can|1\.5l|500ml|beverage)\b/i.test(lowerText)) ||
+          (domainKey === "fmcg" && /\b(biscuit|biscuits|buscit|biscut|cookie|cookies|cracker|crackers|wafer|snack|chips|crisp|candy|chocolate|cake|bread|grocery|food|noodles|pasta|cereal)\b/i.test(lowerText));
 
         if (matchesDomainText) {
           bestParent = categoryContext.allowedPrimaryCategories.find((cat) => {
@@ -261,6 +323,12 @@ export async function analyzeProductInput({
           bestSub = subcats.find((s) => /antibiotic/i.test(s.name) || /antibiotic/i.test(s.slug || ""));
         } else if (/\b(coca|cola|pepsi|sprite|soda)\b/i.test(lowerText)) {
           bestSub = subcats.find((s) => /soda|carbonated/i.test(s.name) || /soda|carbonated/i.test(s.slug || ""));
+        } else if (/\b(biscuit|biscuits|buscit|cookie|cookies|cracker|cake|bread|rusk|wafer)\b/i.test(lowerText)) {
+          bestSub = subcats.find((s) => /bakery|biscuit|cookie|snack/i.test(s.name) || /bakery|biscuit|cookie|snack/i.test(s.slug || ""));
+        } else if (/\b(snack|chips|crisps|popcorn|lays)\b/i.test(lowerText)) {
+          bestSub = subcats.find((s) => /snack|chips/i.test(s.name) || /snack|chips/i.test(s.slug || ""));
+        } else if (/\b(chocolate|candy|toffee|sweet)\b/i.test(lowerText)) {
+          bestSub = subcats.find((s) => /confectionery|candy|chocolate|sweet/i.test(s.name) || /confectionery|candy|chocolate|sweet/i.test(s.slug || ""));
         }
       }
 

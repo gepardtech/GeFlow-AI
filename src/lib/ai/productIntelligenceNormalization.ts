@@ -82,15 +82,23 @@ export function normalizeToProductSuggestion(
   };
 
   // 5. Explicit User Supplied Business Context (never invented by AI)
-  if (raw.extracted_business_data && typeof raw.extracted_business_data === "object") {
+  const bData = (raw.extracted_business_data && typeof raw.extracted_business_data === "object")
+    ? raw.extracted_business_data
+    : raw;
+
+  const rawPurchaseCost = typeof bData.purchase_cost === "number" ? bData.purchase_cost : (typeof raw.purchase_cost === "number" ? raw.purchase_cost : null);
+  const rawRetailPrice = typeof bData.retail_price === "number" ? bData.retail_price : (typeof raw.retail_price === "number" ? raw.retail_price : null);
+  const rawStockUnits = typeof bData.stock_units === "number" ? bData.stock_units : (typeof raw.stock_units === "number" ? raw.stock_units : null);
+
+  if (rawPurchaseCost !== null || rawRetailPrice !== null || rawStockUnits !== null || raw.extracted_business_data) {
     base.extracted_business_data = {
-      purchase_cost: typeof raw.extracted_business_data.purchase_cost === "number" ? raw.extracted_business_data.purchase_cost : null,
-      retail_price: typeof raw.extracted_business_data.retail_price === "number" ? raw.extracted_business_data.retail_price : null,
-      stock_units: typeof raw.extracted_business_data.stock_units === "number" ? raw.extracted_business_data.stock_units : null,
-      min_stock_alert: typeof raw.extracted_business_data.min_stock_alert === "number" ? raw.extracted_business_data.min_stock_alert : null,
-      batch_number: raw.extracted_business_data.batch_number ? String(raw.extracted_business_data.batch_number) : null,
-      expiry_date: raw.extracted_business_data.expiry_date ? String(raw.extracted_business_data.expiry_date) : null,
-      user_supplied: true,
+      purchase_cost: rawPurchaseCost,
+      retail_price: rawRetailPrice,
+      stock_units: rawStockUnits,
+      min_stock_alert: typeof bData.min_stock_alert === "number" ? bData.min_stock_alert : null,
+      batch_number: bData.batch_number ? String(bData.batch_number) : null,
+      expiry_date: bData.expiry_date ? String(bData.expiry_date) : null,
+      user_supplied: !!(rawPurchaseCost !== null || rawRetailPrice !== null || rawStockUnits !== null),
     };
   }
 

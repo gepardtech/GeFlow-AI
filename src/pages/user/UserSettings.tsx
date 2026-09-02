@@ -46,6 +46,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { CURRENCIES } from "@/lib/currencies";
 import { refreshBusinessMoney } from "@/lib/currency";
+import { saveUserSettingsOverrides } from "@/lib/settingsHierarchy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

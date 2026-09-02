@@ -61,12 +61,14 @@ const SetupBusiness = () => {
     if (!name.trim()) { toast({ title: "Business name required", variant: "destructive" }); return; }
     if (!categoryId) { toast({ title: "Please select a category", variant: "destructive" }); return; }
     setBusy(true);
+    const chosenCurrency = (currency || categories.find((c) => c.id === categoryId)?.currency || "USD").toUpperCase();
     const { error } = await supabase.from("businesses").insert({
       owner_user_id: user.id,
       business_name: name.trim(),
       business_address: address.trim() || null,
       category_id: categoryId,
-      currency: currency || categories.find((c) => c.id === categoryId)?.currency || "USD",
+      currency: chosenCurrency,
+      base_currency: chosenCurrency,
     });
     setBusy(false);
     if (error) { toast({ title: "Could not create business", description: error.message, variant: "destructive" }); return; }

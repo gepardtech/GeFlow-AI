@@ -497,10 +497,10 @@ const UserPOS = () => {
 
   return (
     <UserPanelGate pageTitle="POS Terminal" module="pos">
-      <div className="flex flex-col xl:flex-row gap-4 sm:gap-6 xl:h-[calc(100vh-11rem)] min-w-0 pb-10 xl:pb-0">
+      <div className="flex flex-col xl:flex-row items-start gap-4 sm:gap-6 min-w-0 pb-16">
         {/* Product selection */}
-        <div className="flex-1 min-w-0 flex flex-col">
-          {/* Search / Scan bar */}
+        <div className="flex-1 min-w-0 w-full flex flex-col">
+          {/* Search / Scan / Image bar */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-card border border-border rounded-2xl p-2 mb-3 sm:mb-4 min-w-0">
             <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -512,14 +512,17 @@ const UserPOS = () => {
                 className="w-full h-10 pl-10 pr-3 bg-transparent text-xs sm:text-sm focus:outline-none"
               />
             </div>
-            <button
-              onClick={() => setScanMode((v) => !v)}
-              className={`h-9 sm:h-10 px-3.5 sm:px-4 rounded-xl text-xs font-bold tracking-wider inline-flex items-center justify-center gap-2 transition-all shrink-0 ${
-                scanMode ? "bg-sky-500 text-white shadow-xs" : "bg-muted/60 text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <ScanLine className="h-4 w-4" /> SCAN MODE
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setScanMode((v) => !v)}
+                className={`h-9 sm:h-10 px-3 sm:px-3.5 rounded-xl text-xs font-bold tracking-wider inline-flex items-center justify-center gap-1.5 transition-all shrink-0 ${
+                  scanMode ? "bg-sky-500 text-white shadow-xs" : "bg-muted/60 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <ScanLine className="h-3.5 w-3.5" /> SCAN
+              </button>
+            </div>
           </div>
 
           {/* Barcode Testing / Hardware Scanner Assist */}
@@ -606,15 +609,19 @@ const UserPOS = () => {
                             )}
                           </div>
 
-                          {/* UOM Badge */}
+                          {/* UOM & Stock Badges */}
                           <div className="flex items-center gap-1.5 flex-wrap justify-end">
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-muted text-foreground border border-border uppercase">
-                              {parsed.packSize > 1 ? `${parsed.packSize} ${parsed.subUnitName}` : parsed.uomLabel}
+                              {parsed.packSize > 1 ? `${parsed.packSize} ${parsed.subUnitName}s/${parsed.uomLabel}` : parsed.uomLabel}
                             </span>
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ${
                               out ? "bg-rose-500/15 text-rose-500" : low ? "bg-amber-500/15 text-amber-500" : "bg-emerald-500/15 text-emerald-500"
                             }`}>
-                              {p.stock_units} IN STOCK
+                              {out
+                                ? "OUT OF STOCK"
+                                : parsed.packSize > 1
+                                ? `${Math.floor(p.stock_units / parsed.packSize)} ${parsed.uomLabel}s (${p.stock_units} ${parsed.subUnitName}s)`
+                                : `${p.stock_units} in stock`}
                             </span>
                           </div>
                         </div>
@@ -659,22 +666,22 @@ const UserPOS = () => {
         </div>
 
         {/* Cart panel */}
-        <div className="w-full xl:w-96 flex-shrink-0 bg-card border border-border/80 rounded-2xl flex flex-col overflow-hidden shadow-xs min-w-0">
+        <div className="w-full xl:w-[400px] 2xl:w-[440px] flex-shrink-0 bg-card border border-border rounded-2xl flex flex-col overflow-hidden shadow-xl min-w-0 xl:sticky xl:top-4 h-auto xl:h-[calc(100vh-6rem)]">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-border">
+          <div className="flex items-center justify-between p-3.5 border-b border-border flex-shrink-0 bg-card">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-sky-500 text-white flex items-center justify-center shadow-xs">
+              <div className="h-9 w-9 rounded-xl bg-sky-500 text-white flex items-center justify-center shadow-xs">
                 <ShoppingCart className="h-5 w-5" />
               </div>
               <div>
-                <p className="font-extrabold leading-tight">Order Items</p>
+                <p className="font-extrabold text-sm leading-tight text-foreground">Order Cart</p>
                 <p className="text-[10px] font-bold tracking-widest text-muted-foreground">REGISTER TERMINAL #01</p>
               </div>
             </div>
             <button
               onClick={clearCart}
               disabled={cart.length === 0}
-              className="h-9 w-9 rounded-xl hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-rose-500 disabled:opacity-40 transition"
+              className="h-8 w-8 rounded-xl hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-rose-500 disabled:opacity-40 transition cursor-pointer"
               title="Clear Cart & Reset Customer"
             >
               <Trash2 className="h-4 w-4" />
@@ -682,7 +689,7 @@ const UserPOS = () => {
           </div>
 
           {/* Customer / Patient Quick Details Header */}
-          <div className="p-3 border-b border-border bg-muted/20">
+          <div className="p-3 border-b border-border bg-muted/20 flex-shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0">
                 <div className="h-7 w-7 rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
@@ -700,7 +707,7 @@ const UserPOS = () => {
               <button
                 type="button"
                 onClick={() => setShowCustomerForm((v) => !v)}
-                className="text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:underline px-2 py-1 rounded-md hover:bg-sky-500/10 transition"
+                className="text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:underline px-2 py-1 rounded-md hover:bg-sky-500/10 transition cursor-pointer"
               >
                 {showCustomerForm ? "Done" : customerName || customerPhone ? "Edit Details" : "+ Add Buyer / Rx"}
               </button>
@@ -727,7 +734,7 @@ const UserPOS = () => {
                         Phone / WhatsApp
                       </label>
                       <span className="text-[9px] text-sky-600 dark:text-sky-400 font-semibold">
-                        Auto: {detectedCountry.flag} {detectedCountry.name}
+                        {detectedCountry.flag} {detectedCountry.name}
                       </span>
                     </div>
                     <div className="flex gap-1.5">
@@ -735,11 +742,10 @@ const UserPOS = () => {
                         value={customerPhoneCode || detectedCountry.phoneCode}
                         onChange={(e) => setCustomerPhoneCode(e.target.value)}
                         className="h-8 px-1.5 rounded-lg bg-background border border-border text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-sky-500 shrink-0 w-[94px] cursor-pointer"
-                        title="International Dial Code (Auto-matched to registered business location)"
                       >
                         {COUNTRIES.map((c) => (
                           <option key={c.code} value={c.phoneCode}>
-                            {c.flag} {c.phoneCode} ({c.code})
+                            {c.flag} {c.phoneCode}
                           </option>
                         ))}
                       </select>
@@ -747,25 +753,7 @@ const UserPOS = () => {
                         type="tel"
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value)}
-                        placeholder={
-                          (customerPhoneCode || detectedCountry.phoneCode) === "+1"
-                            ? "(555) 019-2834"
-                            : (customerPhoneCode || detectedCountry.phoneCode) === "+44"
-                            ? "7911 123456"
-                            : (customerPhoneCode || detectedCountry.phoneCode) === "+971"
-                            ? "50 123 4567"
-                            : (customerPhoneCode || detectedCountry.phoneCode) === "+966"
-                            ? "50 123 4567"
-                            : (customerPhoneCode || detectedCountry.phoneCode) === "+61"
-                            ? "412 345 678"
-                            : (customerPhoneCode || detectedCountry.phoneCode) === "+49"
-                            ? "170 1234567"
-                            : (customerPhoneCode || detectedCountry.phoneCode) === "+92"
-                            ? "300 1234567"
-                            : (customerPhoneCode || detectedCountry.phoneCode) === "+91"
-                            ? "98765 43210"
-                            : "123 456 7890"
-                        }
+                        placeholder="Phone number"
                         className="w-full h-8 px-2.5 rounded-lg bg-background border border-border text-xs font-mono focus:outline-none focus:ring-1 focus:ring-sky-500"
                       />
                     </div>
@@ -787,17 +775,18 @@ const UserPOS = () => {
             )}
           </div>
 
-          {/* Items / empty state */}
-          <div className="flex-1 overflow-y-auto min-h-[140px]">
+          {/* Items scrollable list */}
+          <div className="flex-1 overflow-y-auto min-h-[140px] max-h-[300px] xl:max-h-none">
             {cart.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center py-12 text-muted-foreground/60">
-                <ShoppingCart className="h-14 w-14 mb-3" strokeWidth={1.2} />
-                <p className="text-xs font-bold tracking-widest">CART IS EMPTY</p>
+              <div className="h-full flex flex-col items-center justify-center py-10 text-muted-foreground/60">
+                <ShoppingCart className="h-12 w-12 mb-2" strokeWidth={1.2} />
+                <p className="text-xs font-bold tracking-widest uppercase">Cart is Empty</p>
+                <p className="text-[11px] text-muted-foreground mt-1">Select items from catalog to start sale</p>
               </div>
             ) : (
               <ul className="p-3 space-y-2">
                 {cart.map((l) => (
-                  <li key={l.lineId} className="flex flex-col gap-2 rounded-xl border border-border p-2.5 bg-card">
+                  <li key={l.lineId} className="flex flex-col gap-2 rounded-xl border border-border p-2.5 bg-card hover:border-sky-500/30 transition">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold truncate leading-tight text-foreground">{l.name}</p>
@@ -805,7 +794,7 @@ const UserPOS = () => {
                           <button
                             type="button"
                             onClick={() => openUOMCalculatorForCartLine(l)}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 text-[10px] font-bold border border-sky-500/20 transition"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 text-[10px] font-bold border border-sky-500/20 transition cursor-pointer"
                             title="Edit sub-unit or dose"
                           >
                             <Sparkles className="w-2.5 h-2.5" />
@@ -818,7 +807,7 @@ const UserPOS = () => {
                       </div>
                       <button
                         onClick={() => removeLine(l.lineId)}
-                        className="h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-rose-500 shrink-0"
+                        className="h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-rose-500 shrink-0 cursor-pointer"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -828,14 +817,14 @@ const UserPOS = () => {
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => changeQty(l.lineId, -1)}
-                          className="h-6 w-6 rounded-md bg-muted hover:bg-muted/70 flex items-center justify-center"
+                          className="h-6 w-6 rounded-md bg-muted hover:bg-muted/70 flex items-center justify-center cursor-pointer"
                         >
                           <Minus className="h-3 w-3" />
                         </button>
                         <span className="w-6 text-center text-sm font-bold">{l.qty}</span>
                         <button
                           onClick={() => changeQty(l.lineId, 1)}
-                          className="h-6 w-6 rounded-md bg-muted hover:bg-muted/70 flex items-center justify-center"
+                          className="h-6 w-6 rounded-md bg-muted hover:bg-muted/70 flex items-center justify-center cursor-pointer"
                         >
                           <Plus className="h-3 w-3" />
                         </button>
@@ -848,73 +837,79 @@ const UserPOS = () => {
             )}
           </div>
 
-          {/* Financial summary + payment */}
-          <div className="border-t border-border p-4 space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Subtotal</span>
+          {/* Financial summary + payment (Always pinned footer) */}
+          <div className="border-t border-border p-3.5 space-y-2.5 flex-shrink-0 bg-card shadow-2xl z-20 mt-auto">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Subtotal ({cart.length} items)</span>
               <span className="font-bold">{fmt(subtotal)}</span>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">GST ({taxRate}%)</span>
-              <span className="font-bold">{fmt(gst)}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">% Discount</span>
+            {taxRate > 0 && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Tax ({taxRate}%)</span>
+                <span className="font-bold">{fmt(gst)}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Discount %</span>
               <input
                 type="number"
                 min="0"
                 max="100"
                 value={discountPct}
                 onChange={(e) => setDiscountPct(e.target.value)}
-                className="w-20 h-8 px-2 text-right bg-muted/50 border border-border rounded-lg text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-16 h-7 px-2 text-right bg-muted/50 border border-border rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-sky-500"
               />
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-border">
-              <span className="text-lg font-extrabold">Grand Total</span>
-              <span className="text-2xl font-extrabold text-sky-500">{fmt(grandTotal)}</span>
+              <span className="text-sm font-extrabold text-foreground">Grand Total</span>
+              <span className="text-xl font-black text-sky-500">{fmt(grandTotal)}</span>
             </div>
 
             {/* Payment toggle */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
               <button
+                type="button"
                 onClick={() => setPayMethod("cash")}
-                className={`h-11 rounded-xl text-sm font-bold inline-flex items-center justify-center gap-2 transition ${
-                  payMethod === "cash" ? "bg-foreground text-background" : "bg-muted/60 text-muted-foreground hover:text-foreground"
+                className={`h-9 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                  payMethod === "cash" ? "bg-foreground text-background shadow-xs" : "bg-muted/60 text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Banknote className="h-4 w-4" /> Cash
+                <Banknote className="h-3.5 w-3.5" /> Cash
               </button>
               <button
+                type="button"
                 onClick={() => setPayMethod("card")}
-                className={`h-11 rounded-xl text-sm font-bold inline-flex items-center justify-center gap-2 transition ${
-                  payMethod === "card" ? "bg-foreground text-background" : "bg-muted/60 text-muted-foreground hover:text-foreground"
+                className={`h-9 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                  payMethod === "card" ? "bg-foreground text-background shadow-xs" : "bg-muted/60 text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <CreditCard className="h-4 w-4" /> Card
+                <CreditCard className="h-3.5 w-3.5" /> Card / POS
               </button>
             </div>
 
             {payMethod === "cash" && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-bold tracking-widest text-muted-foreground">AMOUNT PAID</span>
-                  <span className="text-[10px] font-bold tracking-widest text-muted-foreground">RETURN: {fmt(changeDue)}</span>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-[10px] font-bold tracking-wider text-muted-foreground">
+                  <span>CASH RECEIVED</span>
+                  <span className={changeDue > 0 ? "text-emerald-500 font-extrabold" : ""}>
+                    CHANGE: {fmt(changeDue)}
+                  </span>
                 </div>
                 <input
                   type="number"
                   min="0"
                   value={cashGiven}
                   onChange={(e) => setCashGiven(e.target.value)}
-                  placeholder="Enter customer cash..."
-                  className="w-full h-11 px-3 bg-muted/50 border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="Enter cash received..."
+                  className="w-full h-8 px-2.5 bg-muted/50 border border-border rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-sky-500"
                 />
                 {quickCashOptions.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <div className="flex items-center gap-1 flex-wrap pt-0.5">
                     <button
                       type="button"
                       onClick={() => setCashGiven(grandTotal.toFixed(2))}
-                      className="px-2.5 py-1 rounded-lg bg-muted text-[10px] font-bold hover:bg-muted/80 text-foreground transition"
+                      className="px-2 py-0.5 rounded-lg bg-muted text-[10px] font-bold hover:bg-muted/80 text-foreground transition cursor-pointer"
                     >
                       Exact
                     </button>
@@ -923,7 +918,7 @@ const UserPOS = () => {
                         key={amt}
                         type="button"
                         onClick={() => setCashGiven(amt.toString())}
-                        className="px-2.5 py-1 rounded-lg bg-muted text-[10px] font-bold hover:bg-muted/80 text-foreground transition"
+                        className="px-2 py-0.5 rounded-lg bg-muted text-[10px] font-bold hover:bg-muted/80 text-foreground transition cursor-pointer"
                       >
                         {fmt(amt)}
                       </button>
@@ -933,13 +928,15 @@ const UserPOS = () => {
               </div>
             )}
 
+            {/* Complete Transaction CTA Button - ALWAYS VISIBLE */}
             <Button
+              id="pos-complete-sale-cta"
               onClick={completeTransaction}
               disabled={cart.length === 0 || processing}
-              className="w-full h-12 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-base disabled:opacity-50 shadow-md"
+              className="w-full h-12 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-extrabold text-sm disabled:opacity-40 shadow-lg shadow-sky-500/25 transition-all active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
             >
-              {processing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Zap className="h-4 w-4 mr-2" />}
-              Complete Transaction
+              {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+              Complete Sale &bull; {fmt(grandTotal)}
             </Button>
           </div>
         </div>

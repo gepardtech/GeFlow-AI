@@ -36,11 +36,36 @@ import {
   getRequiredPlanForMode,
 } from "@/lib/aiAssistantService";
 
-const MODES: { id: AIMode; label: string; icon: typeof BarChart3; desc: string; color: string }[] = [
-  { id: "analyst", label: "Analyst", icon: BarChart3, desc: "Sales, profit & inventory analysis", color: "text-sky-500 bg-sky-500/10" },
-  { id: "operator", label: "Operator", icon: Settings2, desc: "Reports, orders & drafts", color: "text-violet-500 bg-violet-500/10" },
-  { id: "knowledge", label: "Knowledge", icon: BookOpen, desc: "How to use GeFlow", color: "text-emerald-500 bg-emerald-500/10" },
-  { id: "advisor", label: "Advisor", icon: Lightbulb, desc: "Strategy & recommendations", color: "text-amber-500 bg-amber-500/10" },
+interface ModeMeta {
+  id: AIMode;
+  label: string;
+  icon: typeof BarChart3;
+  desc: string;
+  color: string;
+  versionBadge: string;
+  isV1Active: boolean;
+  roadmapStage?: string;
+}
+
+const MODES: ModeMeta[] = [
+  {
+    id: "analyst",
+    label: "Analyst",
+    icon: BarChart3,
+    desc: "Basic sales, profit & inventory Q&A",
+    color: "text-sky-500 bg-sky-500/10",
+    versionBadge: "Live",
+    isV1Active: true,
+  },
+  {
+    id: "knowledge",
+    label: "Knowledge",
+    icon: BookOpen,
+    desc: "How to use GeFlow system FAQs",
+    color: "text-emerald-500 bg-emerald-500/10",
+    versionBadge: "Live",
+    isV1Active: true,
+  },
 ];
 
 const STARTERS: Record<AIMode, string[]> = {
@@ -139,6 +164,14 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
   };
 
   const handleSelectMode = (selectedMode: AIMode) => {
+    const meta = MODES.find((m) => m.id === selectedMode);
+    if (meta && !meta.isV1Active) {
+      toast({
+        title: `${meta.label} Model (${meta.versionBadge})`,
+        description: meta.roadmapStage || `This feature is part of the ${meta.versionBadge} roadmap.`,
+      });
+      return;
+    }
     const isAllowed = isModeAllowedForPlan(selectedMode, planId);
     if (!isAllowed) {
       const { label } = getRequiredPlanForMode(selectedMode);
@@ -248,22 +281,22 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
           e.preventDefault();
         }}
       >
-        <DialogTitle className="sr-only">GeFlow AI Assistant</DialogTitle>
+        <DialogTitle className="sr-only">Maryam AI Assistant</DialogTitle>
         <DialogDescription className="sr-only">
-          Real-time business intelligence, profit calculations, inventory analysis, and operations assistant.
+          Maryam AI — Real-time business intelligence, live profit calculations, inventory analysis, and operations assistant.
         </DialogDescription>
 
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500 to-sky-400 flex items-center justify-center text-white flex-shrink-0 shadow-sm">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-600 to-sky-500 flex items-center justify-center text-white flex-shrink-0 shadow-sm">
               <Sparkles className="h-5 w-5" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-extrabold text-sm sm:text-base leading-tight text-foreground">AI Store Assistant</p>
+                <p className="font-extrabold text-sm sm:text-base leading-tight text-foreground">Maryam AI</p>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                  Basic AI • v1.0
+                  Live Version • v1.0
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
                   <Crown className="w-3 h-3 text-primary" />
@@ -273,7 +306,7 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
               <p className="text-[11px] text-muted-foreground flex items-center gap-2 truncate mt-0.5">
                 <span className="flex items-center gap-1 font-medium truncate">
                   <Building2 className="h-3 w-3 text-sky-500 flex-shrink-0" />
-                  {activeBiz?.business_name ?? "Workspace Business"}
+                  {activeBiz?.business_name ?? "Workspace Store"}
                 </span>
                 {liveAnalytics?.business && (
                   <span className="hidden sm:inline-flex items-center gap-1.5 text-[10px] text-muted-foreground/80">
@@ -320,21 +353,26 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
                 className={`relative flex flex-col items-start gap-1 rounded-xl p-2.5 border text-left transition-all ${
                   on
                     ? "border-primary bg-primary/10 shadow-sm"
-                    : isAllowed
+                    : m.isV1Active
                     ? "border-border/60 bg-card hover:bg-muted/50"
-                    : "border-border/40 bg-muted/40 opacity-70 hover:opacity-90"
+                    : "border-border/40 bg-muted/40 opacity-75 hover:opacity-100"
                 }`}
               >
-                {!isAllowed && (
-                  <span className="absolute top-2 right-2 flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded bg-muted-foreground/10 text-muted-foreground border border-border">
-                    <Lock className="w-2.5 h-2.5" />
-                    {reqLabel}
+                <div className="w-full flex items-center justify-between">
+                  <span className={`h-7 w-7 rounded-lg flex items-center justify-center ${m.color}`}>
+                    <Icon className="h-4 w-4" />
                   </span>
-                )}
-                <span className={`h-7 w-7 rounded-lg flex items-center justify-center ${m.color}`}>
-                  <Icon className="h-4 w-4" />
-                </span>
-                <span className="text-xs font-bold text-foreground flex items-center gap-1">
+                  <span
+                    className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-md border ${
+                      m.isV1Active
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                        : "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
+                    }`}
+                  >
+                    {m.versionBadge}
+                  </span>
+                </div>
+                <span className="text-xs font-bold text-foreground flex items-center gap-1 mt-0.5">
                   {m.label}
                 </span>
                 <span className="text-[10px] text-muted-foreground leading-tight hidden sm:block truncate w-full">

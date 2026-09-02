@@ -101,13 +101,13 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   premium: {
     id: "premium",
     label: "Premium",
-    tagline: "Complete retail powerhouse with Team Hub, deep analytics & 10 branches.",
+    tagline: "Complete retail powerhouse with Team Hub, deep analytics & up to 7 stores.",
     badgeClass: "bg-violet-400/15 text-violet-500",
     limits: {
       productsMax: "unlimited",
       lowStockMax: "unlimited",
       outOfStockMax: "unlimited",
-      branchesMax: 10,
+      branchesMax: 7,
       businessCategoriesMax: "unlimited",
       reportsWindowDays: "lifetime",
     },
@@ -153,13 +153,13 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   lifetime: {
     id: "lifetime",
     label: "Lifetime VIP",
-    tagline: "Permanent VIP access, unlimited branches & priority AI engine.",
+    tagline: "Permanent VIP access, up to 10 branches & priority AI engine.",
     badgeClass: "bg-amber-400/15 text-amber-500",
     limits: {
       productsMax: "unlimited",
       lowStockMax: "unlimited",
       outOfStockMax: "unlimited",
-      branchesMax: "unlimited",
+      branchesMax: 10,
       businessCategoriesMax: "unlimited",
       reportsWindowDays: "lifetime",
     },

@@ -90,6 +90,8 @@ const emptyForm = {
   category_id: "",
   subcategory_id: "",
   uom: "piece",
+  measurement_scale: "1",
+  pack_qty: "",
   purchase_cost: "",
   retail_price: "",
   discount_price: "",
@@ -214,16 +216,35 @@ const ProductDialog = ({
     return categorySettings?.stock_alert_limit ? String(categorySettings.stock_alert_limit) : "10";
   }, [categorySettings]);
 
-  // Extract UOM if stored in description
-  const extractUOMFromDescription = (desc: string | null): { cleanDesc: string; uom: string | null } => {
-    if (!desc) return { cleanDesc: "", uom: null };
-    const uomMatch = desc.match(/\[UOM:\s*([^\]]+)\]/i);
+  // Extract UOM and Measurement Scale if stored in description
+  const extractUOMFromDescription = (desc: string | null): { cleanDesc: string; uom: string | null; scale: string | null; packQty: string | null } => {
+    if (!desc) return { cleanDesc: "", uom: null, scale: null, packQty: null };
+    let cleanDesc = desc;
+    let uom: string | null = null;
+    let scale: string | null = null;
+    let packQty: string | null = null;
+
+    const uomMatch = cleanDesc.match(/\[UOM:\s*([^\]]+)\]/i);
     if (uomMatch && uomMatch[1]) {
-      const uom = uomMatch[1].trim();
-      const cleanDesc = desc.replace(/\[UOM:\s*[^\]]+\]/i, "").trim();
-      return { cleanDesc, uom };
+      uom = uomMatch[1].trim();
+      cleanDesc = cleanDesc.replace(/\[UOM:\s*[^\]]+\]/i, "").trim();
     }
-    return { cleanDesc: desc, uom: null };
+
+    const scaleMatch = cleanDesc.match(/\[(?:SCALE|PACK_SIZE):\s*([^\]]+)\]/i);
+    if (scaleMatch && scaleMatch[1]) {
+      scale = scaleMatch[1].trim();
+      cleanDesc = cleanDesc.replace(/\[(?:SCALE|PACK_SIZE):\s*[^\]]+\]/i, "").trim();
+    }
+
+    const packQtyMatch = cleanDesc.match(/\[PACK_QTY:\s*([^\]]+)\]/i);
+    if (packQtyMatch && packQtyMatch[1]) {
+      packQty = packQtyMatch[1].trim();
+      cleanDesc = cleanDesc.replace(/\[PACK_QTY:\s*[^\]]+\]/i, "").trim();
+    }
+
+    cleanDesc = cleanDesc.replace(/\[BASE_QTY:\s*[^\]]+\]/i, "").trim();
+
+    return { cleanDesc, uom, scale, packQty };
   };
 
   useEffect(() => {
@@ -233,7 +254,11 @@ const ProductDialog = ({
     setFieldAIStatuses({});
 
     if (product) {
-      const { cleanDesc, uom } = extractUOMFromDescription(product.description);
+      const { cleanDesc, uom, scale, packQty } = extractUOMFromDescription(product.description);
+      const totalUnits = product.stock_units !== null && product.stock_units !== undefined ? String(product.stock_units) : "";
+      const scaleNum = Number(scale) || 1;
+      const initialPackQty = packQty || (scaleNum > 1 && totalUnits ? String(Math.floor(Number(totalUnits) / scaleNum)) : totalUnits);
+
       setForm({
         name: product.name ?? "",
         internal_sku: product.internal_sku ?? "",
@@ -241,10 +266,12 @@ const ProductDialog = ({
         category_id: product.category_id ?? "",
         subcategory_id: product.subcategory_id ?? "",
         uom: uom || "piece",
+        measurement_scale: scale || (uom === "pack" || uom === "box" || uom === "carton" || uom === "dozen" ? "12" : "1"),
+        pack_qty: initialPackQty,
         purchase_cost: product.purchase_cost !== null && product.purchase_cost !== undefined ? String(product.purchase_cost) : "",
         retail_price: product.retail_price !== null && product.retail_price !== undefined ? String(product.retail_price) : "",
         discount_price: product.discount_price != null ? String(product.discount_price) : "",
-        stock_units: product.stock_units !== null && product.stock_units !== undefined ? String(product.stock_units) : "",
+        stock_units: totalUnits,
         min_stock_alert: String(product.min_stock_alert ?? defaultMinAlert),
         batch_number: product.batch_number ?? "",
         expiry_date: product.expiry_date ?? "",
@@ -256,6 +283,9 @@ const ProductDialog = ({
       setForm({
         ...emptyForm,
         min_stock_alert: defaultMinAlert,
+        measurement_scale: "1",
+        pack_qty: "",
+        stock_units: "",
         ...(prefill ?? {}),
       });
       setImages([]);
@@ -285,6 +315,14 @@ const ProductDialog = ({
     if (errors[k as keyof FormErrors]) {
       setErrors((prev) => ({ ...prev, [k]: undefined }));
     }
+  };
+
+  const generateAutoSku = (nameInput?: string) => {
+    const cleanName = (nameInput || form.name || "PRD").replace(/[^a-zA-Z0-9]/g, "").slice(0, 3).toUpperCase() || "SKU";
+    const randNum = Math.floor(100000 + Math.random() * 900000);
+    const sku = `${cleanName}-${randNum}`;
+    set("internal_sku", sku);
+    return sku;
   };
 
   const markTouched = (field: string) => {
@@ -377,6 +415,9 @@ const ProductDialog = ({
       if (appliedFields.uom && s.uom?.stock_unit) {
         next.uom = s.uom.stock_unit.toLowerCase();
       }
+      if (s.uom?.pack_size && s.uom.pack_size > 1) {
+        next.measurement_scale = String(s.uom.pack_size);
+      }
       if (s.identification?.barcode) {
         next.barcode = s.identification.barcode;
       }
@@ -393,6 +434,21 @@ const ProductDialog = ({
         s.extracted_business_data?.retail_price !== undefined
       ) {
         next.retail_price = String(s.extracted_business_data.retail_price);
+      }
+      if (
+        s.extracted_business_data?.stock_units !== null &&
+        s.extracted_business_data?.stock_units !== undefined
+      ) {
+        next.stock_units = String(s.extracted_business_data.stock_units);
+        const scaleNum = Number(next.measurement_scale) || 1;
+        if (scaleNum > 1) {
+          next.pack_qty = String(Math.floor(s.extracted_business_data.stock_units / scaleNum));
+        } else {
+          next.pack_qty = String(s.extracted_business_data.stock_units);
+        }
+      }
+      if (s.extracted_business_data?.min_stock_alert !== null && s.extracted_business_data?.min_stock_alert !== undefined) {
+        next.min_stock_alert = String(s.extracted_business_data.min_stock_alert);
       }
       return next;
     });
@@ -590,26 +646,38 @@ const ProductDialog = ({
       }
     }
 
-    // Format description with UOM tag to preserve unit metadata safely without schema alterations
+    // Format description with UOM and Measurement Scale tags to preserve unit metadata safely without schema alterations
     let finalDescription = form.description.trim();
-    if (form.uom) {
+    const scaleNum = Number(form.measurement_scale) || 1;
+    const packQtyNum = Number(form.pack_qty) || 0;
+    const finalStockUnits = parseInt(form.stock_units, 10) || (packQtyNum > 0 ? packQtyNum * scaleNum : 0);
+
+    const tags: string[] = [];
+    if (form.uom) tags.push(`[UOM: ${form.uom}]`);
+    if (scaleNum > 1) tags.push(`[SCALE: ${scaleNum}]`);
+    if (packQtyNum > 0) tags.push(`[PACK_QTY: ${packQtyNum}]`);
+    tags.push(`[BASE_QTY: ${finalStockUnits}]`);
+
+    if (tags.length > 0) {
       finalDescription = finalDescription
-        ? `${finalDescription}\n[UOM: ${form.uom}]`
-        : `[UOM: ${form.uom}]`;
+        ? `${finalDescription}\n${tags.join(" ")}`
+        : tags.join(" ");
     }
+
+    const finalSku = form.internal_sku.trim() || generateAutoSku(form.name);
 
     const payload = {
       business_id: businessId,
       owner_user_id: ownerUserId,
       name: form.name.trim(),
-      internal_sku: form.internal_sku.trim() || null,
+      internal_sku: finalSku,
       description: finalDescription || null,
       category_id: form.category_id || null,
       subcategory_id: form.subcategory_id || null,
       purchase_cost: Number(form.purchase_cost) || 0,
       retail_price: Number(form.retail_price) || 0,
       discount_price: form.discount_price ? Number(form.discount_price) : null,
-      stock_units: parseInt(form.stock_units, 10) || 0,
+      stock_units: finalStockUnits,
       min_stock_alert: parseInt(form.min_stock_alert, 10) || 10,
       batch_number: form.batch_number.trim() || null,
       expiry_date: form.expiry_date || null,
@@ -821,9 +889,18 @@ const ProductDialog = ({
               </div>
 
               <div>
-                <FieldLabel htmlFor="product-sku-input">
-                  Internal SKU (Optional)
-                </FieldLabel>
+                <div className="flex items-center justify-between gap-1 mb-1">
+                  <FieldLabel htmlFor="product-sku-input" className="mb-0">
+                    Internal SKU (Auto/Custom)
+                  </FieldLabel>
+                  <button
+                    type="button"
+                    onClick={() => generateAutoSku()}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-600 dark:text-sky-400 hover:text-sky-700 bg-sky-500/10 hover:bg-sky-500/20 px-2 py-0.5 rounded-md border border-sky-500/20 transition cursor-pointer"
+                  >
+                    ⚡ Generate SKU
+                  </button>
+                </div>
                 <Input
                   id="product-sku-input"
                   value={form.internal_sku}
@@ -831,7 +908,7 @@ const ProductDialog = ({
                   placeholder="e.g. SKU-88402 (leave blank for auto-gen)"
                 />
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  Optional business catalog code. Auto-generated if left empty.
+                  Unique store identifier. Click Generate SKU or leave blank to auto-create.
                 </p>
               </div>
             </div>
@@ -865,7 +942,7 @@ const ProductDialog = ({
               icon={Layers}
             />
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {/* Primary Category */}
               <div>
                 <FieldLabel
@@ -960,208 +1037,351 @@ const ProductDialog = ({
                     : "Filtered by primary category"}
                 </p>
               </div>
-
-              {/* Unit of Measure (UOM) */}
-              <div>
-                <FieldLabel
-                  required
-                  aiInfo={fieldAIStatuses.uom}
-                  suggestedValue={fieldAIStatuses.uom?.suggested}
-                  onApplySuggestion={(val) => set("uom", String(val))}
-                >
-                  Unit of Measure (UOM)
-                </FieldLabel>
-                <UOMSelect
-                  id="uom-select-field"
-                  value={form.uom}
-                  onChange={(val) => {
-                    set("uom", val);
-                    markTouched("uom");
-                  }}
-                  industryType={industryType}
-                  categoryName={categoryName}
-                  hasError={!!(errors.uom && touched.uom)}
-                />
-                {errors.uom && touched.uom && (
-                  <p className="text-[11px] text-destructive flex items-center gap-1 mt-1 font-medium">
-                    <AlertCircle className="w-3 h-3 shrink-0" />
-                    {errors.uom}
-                  </p>
-                )}
-              </div>
             </div>
           </div>
 
-          {/* SECTION 3: Pricing & Stock */}
-          <div className="space-y-3 sm:space-y-4 pt-1 sm:pt-2">
+          {/* SECTION 3: Pricing, UoM & Stock Inventory */}
+          <div className="space-y-4 pt-1 sm:pt-2">
             <SectionHeader
               number={3}
-              title="Pricing &amp; Stock"
-              description="Cost, retail price, stock inventory count, and deficit safety alerts"
+              title="Pricing, Unit of Measure (UoM) &amp; Stock"
+              description="Cost, retail price, packaging scale, listing stock, and base units"
               icon={DollarSign}
             />
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-              {/* Purchase Cost */}
-              <div>
-                <FieldLabel
-                  htmlFor="purchase-cost-input"
-                  aiInfo={fieldAIStatuses.purchase_cost}
-                  suggestedValue={fieldAIStatuses.purchase_cost?.suggested}
-                  onApplySuggestion={(val) => set("purchase_cost", String(val))}
-                >
-                  Purchase Cost ({symbol})
-                </FieldLabel>
-                <div className="relative">
-                  <Input
-                    id="purchase-cost-input"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.purchase_cost}
-                    onChange={(e) => set("purchase_cost", e.target.value)}
-                    onBlur={() => markTouched("purchase_cost")}
-                    placeholder="0.00"
-                    className={errors.purchase_cost && touched.purchase_cost ? "border-destructive" : ""}
-                  />
-                </div>
-                {errors.purchase_cost && touched.purchase_cost && (
-                  <p className="text-[11px] text-destructive flex items-center gap-1 mt-1 font-medium">
-                    <AlertCircle className="w-3 h-3 shrink-0" />
-                    {errors.purchase_cost}
-                  </p>
+            {/* Pricing Section */}
+            <div className="p-4 rounded-2xl bg-card border border-border space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+                  Product Pricing &amp; Profitability
+                </span>
+                {Number(form.retail_price) > 0 && (
+                  <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                    (Number(form.retail_price) - Number(form.purchase_cost || 0)) >= 0
+                      ? "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                      : "text-rose-600 dark:text-rose-400 bg-rose-500/10 border-rose-500/20"
+                  }`}>
+                    Margin: {Math.round(((Number(form.retail_price) - Number(form.purchase_cost || 0)) / Number(form.retail_price)) * 100)}% 
+                    ({symbol}{(Number(form.retail_price) - Number(form.purchase_cost || 0)).toFixed(2)} profit/{form.uom || "unit"})
+                  </span>
                 )}
               </div>
 
-              {/* Retail Price */}
-              <div>
-                <FieldLabel
-                  htmlFor="retail-price-input"
-                  required
-                  aiInfo={fieldAIStatuses.retail_price}
-                  suggestedValue={fieldAIStatuses.retail_price?.suggested}
-                  onApplySuggestion={(val) => set("retail_price", String(val))}
-                >
-                  Retail Price ({symbol})
-                </FieldLabel>
-                <div className="relative">
-                  <Input
-                    id="retail-price-input"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.retail_price}
-                    onChange={(e) => set("retail_price", e.target.value)}
-                    onBlur={() => markTouched("retail_price")}
-                    placeholder="0.00"
-                    className={
-                      errors.retail_price && touched.retail_price
-                        ? "border-destructive focus-visible:ring-destructive/30"
-                        : ""
-                    }
-                  />
-                </div>
-                {errors.retail_price && touched.retail_price && (
-                  <p className="text-[11px] text-destructive flex items-center gap-1 mt-1 font-medium">
-                    <AlertCircle className="w-3 h-3 shrink-0" />
-                    {errors.retail_price}
-                  </p>
-                )}
-              </div>
-
-              {/* Discount Price */}
-              {showDiscount ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Purchase Cost */}
                 <div>
-                  <FieldLabel htmlFor="discount-price-input">
-                    Discount Price ({symbol})
+                  <FieldLabel
+                    htmlFor="purchase-cost-input"
+                    aiInfo={fieldAIStatuses.purchase_cost}
+                    suggestedValue={fieldAIStatuses.purchase_cost?.suggested}
+                    onApplySuggestion={(val) => set("purchase_cost", String(val))}
+                  >
+                    Purchase Cost ({symbol})
                   </FieldLabel>
-                  <Input
-                    id="discount-price-input"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.discount_price}
-                    onChange={(e) => set("discount_price", e.target.value)}
-                    onBlur={() => markTouched("discount_price")}
-                    placeholder="Optional promotional price"
-                    className={errors.discount_price && touched.discount_price ? "border-destructive" : ""}
-                  />
-                  {errors.discount_price && touched.discount_price && (
+                  <div className="relative">
+                    <Input
+                      id="purchase-cost-input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.purchase_cost}
+                      onChange={(e) => set("purchase_cost", e.target.value)}
+                      onBlur={() => markTouched("purchase_cost")}
+                      placeholder="0.00"
+                      className={errors.purchase_cost && touched.purchase_cost ? "border-destructive" : ""}
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Your wholesale/supplier cost per {form.uom || "unit"}.
+                  </p>
+                  {errors.purchase_cost && touched.purchase_cost && (
                     <p className="text-[11px] text-destructive flex items-center gap-1 mt-1 font-medium">
                       <AlertCircle className="w-3 h-3 shrink-0" />
-                      {errors.discount_price}
+                      {errors.purchase_cost}
                     </p>
                   )}
                 </div>
-              ) : (
-                <div className="hidden sm:block" />
-              )}
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              {/* Stock Units (works with selected UOM) */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
+                {/* Retail Price */}
+                <div>
                   <FieldLabel
-                    htmlFor="stock-units-input"
+                    htmlFor="retail-price-input"
                     required
-                    aiStatus={fieldAIStatuses.stock_units?.status}
-                    suggestedValue={fieldAIStatuses.stock_units?.suggested}
-                    onApplySuggestion={(val) => set("stock_units", String(val))}
+                    aiInfo={fieldAIStatuses.retail_price}
+                    suggestedValue={fieldAIStatuses.retail_price?.suggested}
+                    onApplySuggestion={(val) => set("retail_price", String(val))}
                   >
-                    Stock Units
+                    Retail Price ({symbol})
                   </FieldLabel>
-                  {form.stock_units && (
-                    <span className="text-[11px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-full">
-                      {formatStockWithUOM(form.stock_units, form.uom)}
-                    </span>
+                  <div className="relative">
+                    <Input
+                      id="retail-price-input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.retail_price}
+                      onChange={(e) => set("retail_price", e.target.value)}
+                      onBlur={() => markTouched("retail_price")}
+                      placeholder="0.00"
+                      className={
+                        errors.retail_price && touched.retail_price
+                          ? "border-destructive focus-visible:ring-destructive/30"
+                          : ""
+                      }
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Selling price charged per {form.uom || "unit"}.
+                  </p>
+                  {errors.retail_price && touched.retail_price && (
+                    <p className="text-[11px] text-destructive flex items-center gap-1 mt-1 font-medium">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      {errors.retail_price}
+                    </p>
                   )}
                 </div>
-                <Input
-                  id="stock-units-input"
-                  type="number"
-                  min="0"
-                  value={form.stock_units}
-                  onChange={(e) => set("stock_units", e.target.value)}
-                  onBlur={() => markTouched("stock_units")}
-                  placeholder="0"
-                  className={
-                    errors.stock_units && touched.stock_units
-                      ? "border-destructive focus-visible:ring-destructive/30"
-                      : ""
-                  }
-                />
-                {errors.stock_units && touched.stock_units && (
-                  <p className="text-[11px] text-destructive flex items-center gap-1 mt-1 font-medium">
-                    <AlertCircle className="w-3 h-3 shrink-0" />
-                    {errors.stock_units}
-                  </p>
+
+                {/* Discount Price */}
+                {showDiscount ? (
+                  <div>
+                    <FieldLabel htmlFor="discount-price-input">
+                      Discount Price ({symbol})
+                    </FieldLabel>
+                    <Input
+                      id="discount-price-input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.discount_price}
+                      onChange={(e) => set("discount_price", e.target.value)}
+                      onBlur={() => markTouched("discount_price")}
+                      placeholder="Optional promotional price"
+                      className={errors.discount_price && touched.discount_price ? "border-destructive" : ""}
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Promotional sale price (optional).
+                    </p>
+                    {errors.discount_price && touched.discount_price && (
+                      <p className="text-[11px] text-destructive flex items-center gap-1 mt-1 font-medium">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        {errors.discount_price}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="hidden sm:block" />
                 )}
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Current on-hand inventory measured in {form.uom || "units"}.
-                </p>
+              </div>
+            </div>
+
+            {/* Packaging, UoM & Stock Conversion Card */}
+            <div className="p-4 rounded-2xl bg-muted/40 border border-border/80 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-sky-500" />
+                  Unit of Measure (UoM) &amp; Stock Scale Conversion
+                </span>
+                <span className="text-[11px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2.5 py-0.5 rounded-full border border-sky-500/20">
+                  Current Packaging: {form.uom ? form.uom.toUpperCase() : "PIECE"}
+                </span>
               </div>
 
-              {/* Min Stock Alert */}
-              {showAlert && (
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                {/* 1. Unit of Measure (UOM) */}
                 <div>
-                  <FieldLabel htmlFor="min-stock-alert-input">
-                    Min Stock Alert
+                  <FieldLabel htmlFor="uom-scale-type-select" required>
+                    Unit of Measure (UoM)
                   </FieldLabel>
-                  <Input
-                    id="min-stock-alert-input"
-                    type="number"
-                    min="0"
-                    value={form.min_stock_alert}
-                    onChange={(e) => set("min_stock_alert", e.target.value)}
-                    placeholder={defaultMinAlert}
-                  />
+                  <Select
+                    value={form.uom ? form.uom.toLowerCase() : "piece"}
+                    onValueChange={(val) => {
+                      set("uom", val);
+                      markTouched("uom");
+                      if (val === "box") {
+                        if (!form.measurement_scale || form.measurement_scale === "1") {
+                          set("measurement_scale", "20");
+                          const q = Number(form.pack_qty) || 1;
+                          set("stock_units", String(q * 20));
+                        }
+                      } else if (val === "strip") {
+                        if (!form.measurement_scale || form.measurement_scale === "1") {
+                          set("measurement_scale", "10");
+                          const q = Number(form.pack_qty) || 1;
+                          set("stock_units", String(q * 10));
+                        }
+                      } else if (val === "dozen") {
+                        set("measurement_scale", "12");
+                        const q = Number(form.pack_qty) || 1;
+                        set("stock_units", String(q * 12));
+                      } else if (val === "carton") {
+                        if (!form.measurement_scale || form.measurement_scale === "1") {
+                          set("measurement_scale", "24");
+                          const q = Number(form.pack_qty) || 1;
+                          set("stock_units", String(q * 24));
+                        }
+                      } else if (val === "pack") {
+                        if (!form.measurement_scale || form.measurement_scale === "1") {
+                          set("measurement_scale", "10");
+                          const q = Number(form.pack_qty) || 1;
+                          set("stock_units", String(q * 10));
+                        }
+                      } else if (val === "kg") {
+                        set("measurement_scale", "1000");
+                        const q = Number(form.pack_qty) || 1;
+                        set("stock_units", String(q * 1000));
+                      } else if (val === "piece") {
+                        set("measurement_scale", "1");
+                        const q = Number(form.pack_qty) || Number(form.stock_units) || 1;
+                        set("stock_units", String(q));
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="uom-scale-type-select" className="h-10 text-xs">
+                      <SelectValue placeholder="Select UOM" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="box">📦 Box (e.g. 20 tablets per box)</SelectItem>
+                      <SelectItem value="pack">🛍️ Pack (e.g. 10 items per pack)</SelectItem>
+                      <SelectItem value="carton">📦 Carton (e.g. 24 units per carton)</SelectItem>
+                      <SelectItem value="strip">💊 Strip (e.g. 10 pills per strip)</SelectItem>
+                      <SelectItem value="dozen">🥚 Dozen (12 items per dozen)</SelectItem>
+                      <SelectItem value="bottle">🧴 Bottle (e.g. 100ml / syrup)</SelectItem>
+                      <SelectItem value="kg">⚖️ Kilogram (1000g per kg)</SelectItem>
+                      <SelectItem value="piece">🧩 Piece / Single Unit (1:1)</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Triggers low stock warning when inventory drops to or below this threshold.
+                    Primary wholesale/sale unit.
                   </p>
                 </div>
-              )}
+
+                {/* 2. Units Per 1 Box/Pack (Scale) */}
+                <div>
+                  <FieldLabel htmlFor="measurement-scale-input">
+                    Units per 1 {form.uom ? form.uom.toUpperCase() : "Pack"}
+                  </FieldLabel>
+                  <Input
+                    id="measurement-scale-input"
+                    type="number"
+                    min="1"
+                    value={form.measurement_scale}
+                    onChange={(e) => {
+                      const newScale = e.target.value;
+                      set("measurement_scale", newScale);
+                      const s = Number(newScale) || 1;
+                      const q = Number(form.pack_qty) || 0;
+                      if (q > 0) {
+                        set("stock_units", String(q * s));
+                      }
+                    }}
+                    placeholder="20"
+                    className="h-10 text-xs font-semibold"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Tablets/items inside 1 {form.uom || "box"}.
+                  </p>
+                </div>
+
+                {/* 3. Product Listing Stock (Stock on Hand in Boxes/Packs) */}
+                <div>
+                  <FieldLabel htmlFor="pack-qty-input">
+                    Stock in {form.uom ? form.uom.toUpperCase() + "s" : "Boxes"}
+                  </FieldLabel>
+                  <Input
+                    id="pack-qty-input"
+                    type="number"
+                    min="0"
+                    value={form.pack_qty}
+                    onChange={(e) => {
+                      const newPackQty = e.target.value;
+                      set("pack_qty", newPackQty);
+                      const q = Number(newPackQty) || 0;
+                      const s = Number(form.measurement_scale) || 1;
+                      set("stock_units", String(q * s));
+                    }}
+                    placeholder="10"
+                    className="h-10 text-xs font-semibold"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Physical {form.uom || "box"} count on hand.
+                  </p>
+                </div>
+
+                {/* 4. Total Single Base Units */}
+                <div>
+                  <FieldLabel htmlFor="stock-units-input" required>
+                    Total Base Units ({form.uom === "box" || form.uom === "strip" ? "Tablets" : "Pieces"})
+                  </FieldLabel>
+                  <Input
+                    id="stock-units-input"
+                    type="number"
+                    min="0"
+                    value={form.stock_units}
+                    onChange={(e) => {
+                      const total = e.target.value;
+                      set("stock_units", total);
+                      const s = Number(form.measurement_scale) || 1;
+                      if (s > 1 && total) {
+                        set("pack_qty", String(Math.floor(Number(total) / s)));
+                      } else {
+                        set("pack_qty", total);
+                      }
+                    }}
+                    onBlur={() => markTouched("stock_units")}
+                    placeholder="200"
+                    className={`h-10 text-xs font-bold text-sky-600 dark:text-sky-400 ${
+                      errors.stock_units && touched.stock_units
+                        ? "border-destructive focus-visible:ring-destructive/30"
+                        : "border-sky-500/30 bg-sky-500/5"
+                    }`}
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Total individual items tracked.
+                  </p>
+                </div>
+              </div>
+
+              {/* Dynamic Live Formula Bar */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-background border border-border/80 text-xs flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-muted-foreground font-semibold">📦 Live Stock Formula:</span>
+                  <span className="font-mono font-bold text-foreground">
+                    {form.pack_qty || 0} {form.uom || "pack"}(s) &times; {form.measurement_scale || 1} units/pack
+                  </span>
+                  <span className="text-muted-foreground">=</span>
+                  <span className="font-mono font-extrabold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
+                    {form.stock_units || (Number(form.pack_qty || 0) * Number(form.measurement_scale || 1))} Total Single Pieces
+                  </span>
+                </div>
+                {Number(form.measurement_scale) > 1 && Number(form.retail_price) > 0 && (
+                  <span className="text-[11px] font-semibold text-muted-foreground">
+                    Sub-unit rate: ~{symbol}{(Number(form.retail_price) / Number(form.measurement_scale)).toFixed(2)} / piece
+                  </span>
+                )}
+              </div>
             </div>
+
+            {/* Min Stock Alert */}
+            {showAlert && (
+              <div className="p-3 bg-muted/20 border border-border rounded-xl">
+                <FieldLabel htmlFor="min-stock-alert-input">
+                  Low Stock Safety Alert Threshold (in Base Units)
+                </FieldLabel>
+                <Input
+                  id="min-stock-alert-input"
+                  type="number"
+                  min="0"
+                  value={form.min_stock_alert}
+                  onChange={(e) => set("min_stock_alert", e.target.value)}
+                  placeholder={defaultMinAlert}
+                  className="h-10 text-xs mt-1"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Triggers low stock warning when inventory drops to or below this single piece threshold.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* SECTION 4: Batch & Expiry */}

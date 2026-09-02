@@ -28,22 +28,44 @@ export const useBusinessModules = (): BusinessModulesState => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setModules(null); setFeatures([]); setLoading(false); return; }
 
-    const { data: bizRows } = await supabase
-      .from("businesses")
-      .select("id, category_id, created_at")
-      .eq("owner_user_id", user.id)
-      .order("created_at", { ascending: true });
-
-    const rows = bizRows ?? [];
     const saved = localStorage.getItem(LS_KEY);
-    const activeBiz = rows.find((r) => r.id === saved) ?? rows[0];
+    let categoryId: string | null = null;
 
-    if (!activeBiz?.category_id) { setModules(null); setFeatures([]); setLoading(false); return; }
+    if (saved) {
+      const { data: directBiz } = await supabase
+        .from("businesses")
+        .select("id, category_id")
+        .eq("id", saved)
+        .maybeSingle();
+
+      if (directBiz) {
+        categoryId = directBiz.category_id;
+      }
+    }
+
+    if (!categoryId) {
+      const { data: bizRows } = await supabase
+        .from("businesses")
+        .select("id, category_id, created_at")
+        .eq("owner_user_id", user.id)
+        .order("created_at", { ascending: true });
+
+      const rows = bizRows ?? [];
+      const activeBiz = rows.find((r) => r.id === saved) ?? rows[0];
+      categoryId = activeBiz?.category_id ?? null;
+    }
+
+    if (!categoryId) {
+      setModules(null);
+      setFeatures([]);
+      setLoading(false);
+      return;
+    }
 
     const { data: cat } = await supabase
       .from("business_categories")
       .select("enabled_modules, enabled_features")
-      .eq("id", activeBiz.category_id)
+      .eq("id", categoryId)
       .maybeSingle();
 
     setModules((cat?.enabled_modules as string[]) ?? []);

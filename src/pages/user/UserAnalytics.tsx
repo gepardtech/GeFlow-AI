@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   Building2,
   Box,
+  Layers,
 } from "lucide-react";
 import {
   AreaChart,
@@ -35,6 +36,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import UserPanelGate from "@/components/UserPanelGate";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
+import { useProductCategories } from "@/hooks/useProductCategories";
 import { supabase } from "@/integrations/supabase/client";
 import { useMoney } from "@/lib/currency";
 import { useToast } from "@/hooks/use-toast";
@@ -77,8 +79,20 @@ interface StagnantBottleneck {
   action: string;
 }
 
+const PALETTE = [
+  "#38bdf8", // Sky Blue
+  "#818cf8", // Indigo
+  "#34d399", // Emerald
+  "#fbbf24", // Amber
+  "#f87171", // Rose
+  "#c084fc", // Purple
+  "#2dd4bf", // Teal
+  "#fb923c", // Orange
+];
+
 export const UserAnalytics = () => {
-  const { active, loading: bizLoading } = useActiveBusiness();
+  const { active, industryType, categoryName, loading: bizLoading } = useActiveBusiness();
+  const { all: allCategories } = useProductCategories(industryType, categoryName);
   const { format: fmt } = useMoney();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -88,59 +102,77 @@ export const UserAnalytics = () => {
   const [recommendationModalOpen, setRecommendationModalOpen] = useState(false);
   const [procurementModalOpen, setProcurementModalOpen] = useState(false);
 
-  // Supabase data caches
+  // Supabase data caches strictly for active store
   const [sales, setSales] = useState<any[]>([]);
+  const [saleItems, setSaleItems] = useState<any[]>([]);
   const [purchases, setPurchases] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
 
-  // Load live data from Supabase
+  // Load live store data from Supabase strictly filtered by active.id
   const loadData = useCallback(async () => {
-    if (!active) {
+    if (!active?.id) {
       setLoading(false);
       return;
     }
     setLoading(true);
 
     try {
-      const [{ data: salesData }, { data: purchasesData }, { data: productsData }] =
-        await Promise.all([
-          supabase
-            .from("sales")
-            .select("id, total, profit, status, created_at")
-            .eq("business_id", active.id)
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("purchases")
-            .select("id, total_amount, status, created_at")
-            .eq("business_id", active.id)
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("products")
-            .select("id, name, stock_quantity, retail_price, cost_price, category_id, updated_at")
-            .eq("business_id", active.id),
-        ]);
+      const [
+        { data: salesData },
+        { data: purchasesData },
+        { data: productsData },
+      ] = await Promise.all([
+        supabase
+          .from("sales")
+          .select("id, total, profit, status, created_at")
+          .eq("business_id", active.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("purchases")
+          .select("id, total_amount, status, created_at")
+          .eq("business_id", active.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("products")
+          .select("id, name, internal_sku, category_id, subcategory_id, purchase_cost, retail_price, stock_units, min_stock_alert, created_at, updated_at")
+          .eq("business_id", active.id)
+          .order("created_at", { ascending: false }),
+      ]);
 
-      setSales(salesData || []);
+      const currentSales = salesData || [];
+      setSales(currentSales);
       setPurchases(purchasesData || []);
       setProducts(productsData || []);
+
+      if (currentSales.length > 0) {
+        const saleIds = currentSales.map((s) => s.id).slice(0, 200);
+        const { data: itemsData } = await supabase
+          .from("sale_items")
+          .select("id, sale_id, product_id, product_name, quantity, unit_price, unit_cost, created_at")
+          .in("sale_id", saleIds);
+        setSaleItems(itemsData || []);
+      } else {
+        setSaleItems([]);
+      }
     } catch (err: any) {
-      console.error("Error fetching analytics telemetry:", err);
+      console.error("Error fetching store analytics:", err);
     } finally {
       setLoading(false);
     }
-  }, [active]);
+  }, [active?.id]);
 
   useEffect(() => {
     if (!bizLoading) loadData();
   }, [bizLoading, loadData]);
 
-  // Compute Metrics and Visual Data
+  // Compute Metrics and Visual Data strictly from this store's data
   const {
     kpis,
     velocityData,
     categoryMixData,
     operationalPulse,
     bottlenecks,
+    topCategoryName,
   } = useMemo(() => {
     const now = new Date();
     let days = 7;
@@ -157,62 +189,40 @@ export const UserAnalytics = () => {
     cutoff.setDate(now.getDate() - days);
 
     const filteredSales = sales.filter(
-      (s) => new Date(s.created_at) >= cutoff && s.status === "completed"
+      (s) => new Date(s.created_at) >= cutoff && s.status !== "cancelled"
     );
     const filteredPurchases = purchases.filter(
-      (p) => new Date(p.created_at) >= cutoff
+      (p) => new Date(p.created_at) >= cutoff && p.status !== "cancelled"
     );
 
-    // 1. KPI Calculations
-    let totalRevenue = filteredSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
-    let totalProfit = filteredSales.reduce((acc, s) => acc + Number(s.profit || 0), 0);
-    let totalOrders = filteredSales.length;
-    let avgMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+    // 1. KPI Calculations (strictly real store numbers)
+    const totalRevenue = filteredSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
+    const totalProfit = filteredSales.reduce((acc, s) => acc + Number(s.profit || 0), 0);
+    const totalOrders = filteredSales.length;
+    const avgMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
-    // Use high-fidelity screenshot metrics as default baseline if workspace is brand new
-    if (totalRevenue === 0) {
-      totalRevenue = 42850;
-      totalProfit = 14210;
-      avgMargin = 32.5;
-      totalOrders = 1284;
-    }
-
-    // 2. Revenue Velocity Chart Data (Mon - Sun / 7 data points)
+    // 2. Revenue Velocity Chart Data (Mon - Sun or past 7 days)
     const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const velocityMap = new Map<string, { revenue: number; costs: number }>();
-
     dayLabels.forEach((dl) => velocityMap.set(dl, { revenue: 0, costs: 0 }));
 
-    if (filteredSales.length > 0) {
-      filteredSales.forEach((s) => {
-        const d = new Date(s.created_at);
-        const dayIdx = (d.getDay() + 6) % 7; // Mon=0 .. Sun=6
-        const label = dayLabels[dayIdx];
-        const ex = velocityMap.get(label) || { revenue: 0, costs: 0 };
-        ex.revenue += Number(s.total || 0);
-        velocityMap.set(label, ex);
-      });
-      filteredPurchases.forEach((p) => {
-        const d = new Date(p.created_at);
-        const dayIdx = (d.getDay() + 6) % 7;
-        const label = dayLabels[dayIdx];
-        const ex = velocityMap.get(label) || { revenue: 0, costs: 0 };
-        ex.costs += Number(p.total_amount || 0);
-        velocityMap.set(label, ex);
-      });
-    } else {
-      // Default exact curved points matching screenshot
-      const defaultCurve = [
-        { day: "Mon", revenue: 4200, costs: 2600 },
-        { day: "Tue", revenue: 3900, costs: 2400 },
-        { day: "Wed", revenue: 5100, costs: 3300 },
-        { day: "Thu", revenue: 4700, costs: 3000 },
-        { day: "Fri", revenue: 6200, costs: 3800 },
-        { day: "Sat", revenue: 7600, costs: 4400 },
-        { day: "Sun", revenue: 5400, costs: 3200 },
-      ];
-      defaultCurve.forEach((c) => velocityMap.set(c.day, { revenue: c.revenue, costs: c.costs }));
-    }
+    filteredSales.forEach((s) => {
+      const d = new Date(s.created_at);
+      const dayIdx = (d.getDay() + 6) % 7; // Mon=0 .. Sun=6
+      const label = dayLabels[dayIdx];
+      const ex = velocityMap.get(label) || { revenue: 0, costs: 0 };
+      ex.revenue += Number(s.total || 0);
+      velocityMap.set(label, ex);
+    });
+
+    filteredPurchases.forEach((p) => {
+      const d = new Date(p.created_at);
+      const dayIdx = (d.getDay() + 6) % 7;
+      const label = dayLabels[dayIdx];
+      const ex = velocityMap.get(label) || { revenue: 0, costs: 0 };
+      ex.costs += Number(p.total_amount || 0);
+      velocityMap.set(label, ex);
+    });
 
     const velocityData: RevenueVelocityPoint[] = dayLabels.map((dl) => ({
       day: dl,
@@ -220,74 +230,110 @@ export const UserAnalytics = () => {
       costs: velocityMap.get(dl)?.costs || 0,
     }));
 
-    // 3. Category Mix (Donut Chart)
-    const categoryMixData = [
-      { name: "MEDICINE", value: 45, color: "#38bdf8" }, // Sky Blue
-      { name: "SAFETY", value: 20, color: "#c084fc" },   // Light Purple
-      { name: "EQUIPMENT", value: 22, color: "#10b981" },// Emerald Green
-      { name: "GENERAL", value: 13, color: "#f59e0b" },  // Amber
-    ];
+    // 3. Dynamic Category Mix based on this store's real catalog and sales
+    const catMap = new Map<string, number>();
+    const getCatName = (catId?: string | null) => {
+      if (!catId) return "General";
+      const found = allCategories.find((c) => c.id === catId);
+      return found?.name || "General";
+    };
 
-    // 4. Operational Pulse (Top 4 High-yield SKUs)
-    const defaultPulse: TopProductPulse[] = [
-      {
-        id: "p-1",
-        rank: 1,
-        name: "Paracetamol 500mg",
-        unitsProcessed: 1240,
-        marginPercent: 35,
-        totalRevenue: 15500,
-      },
-      {
-        id: "p-2",
-        rank: 2,
-        name: "Vitamin C Syrup",
-        unitsProcessed: 890,
-        marginPercent: 42,
-        totalRevenue: 12200,
-      },
-      {
-        id: "p-3",
-        rank: 3,
-        name: "Digital Thermometer",
-        unitsProcessed: 450,
-        marginPercent: 28,
-        totalRevenue: 8900,
-      },
-      {
-        id: "p-4",
-        rank: 4,
-        name: "Surgical Masks (50pk)",
-        unitsProcessed: 3200,
-        marginPercent: 60,
-        totalRevenue: 4500,
-      },
-    ];
+    if (filteredSales.length > 0 && saleItems.length > 0) {
+      // Aggregate sales volume by category
+      saleItems.forEach((it) => {
+        const prod = products.find((p) => p.id === it.product_id);
+        const cat = getCatName(prod?.category_id);
+        catMap.set(cat, (catMap.get(cat) || 0) + Number(it.quantity || 1) * Number(it.unit_price || 0));
+      });
+    } else if (products.length > 0) {
+      // If no sales yet, break down inventory value by category
+      products.forEach((p) => {
+        const cat = getCatName(p.category_id);
+        const val = Number(p.stock_units || 0) * Number(p.retail_price || 0);
+        catMap.set(cat, (catMap.get(cat) || 0) + (val > 0 ? val : 1));
+      });
+    } else {
+      catMap.set(active?.business_name ? `${active.business_name} Catalog` : "General Store", 100);
+    }
 
-    // 5. System Bottlenecks (Low performing dead stock)
-    const defaultBottlenecks: StagnantBottleneck[] = [
-      {
-        id: "b-1",
-        name: "Antibacterial Soap",
-        unitsStagnant: 200,
-        ageDays: 45,
-        action: "LIQUIDATION SUGGESTED",
-      },
-      {
-        id: "b-2",
-        name: "Laboratory Vials",
-        unitsStagnant: 1200,
-        ageDays: 60,
-        action: "LIQUIDATION SUGGESTED",
-      },
-      {
-        id: "b-3",
-        name: "Clinical Furniture",
-        unitsStagnant: 4,
-        ageDays: 120,
-        action: "LIQUIDATION SUGGESTED",
-      },
-    ];
+    const totalCatVal = Array.from(catMap.values()).reduce((a, b) => a + b, 0) || 1;
+    const sortedCats = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]);
+    const topCategoryName = sortedCats[0]?.[0] || "General";
+
+    const categoryMixData = sortedCats.slice(0, 4).map(([name, val], idx) => ({
+      name: name.toUpperCase(),
+      value: Math.max(1, Math.round((val / totalCatVal) * 100)),
+      color: PALETTE[idx % PALETTE.length],
+    }));
+
+    // 4. Operational Pulse: Top High-Yield SKUs from this store's real sales or inventory
+    const pulseList: TopProductPulse[] = [];
+    if (saleItems.length > 0) {
+      const prodAgg = new Map<string, { name: string; units: number; rev: number; cost: number }>();
+      saleItems.forEach((it) => {
+        const pId = it.product_id || it.product_name || "item";
+        const ex = prodAgg.get(pId) || {
+          name: it.product_name || "Store Item",
+          units: 0,
+          rev: 0,
+          cost: 0,
+        };
+        const qty = Number(it.quantity || 1);
+        const price = Number(it.unit_price || 0);
+        const cost = Number(it.unit_cost || price * 0.7);
+        ex.units += qty;
+        ex.rev += qty * price;
+        ex.cost += qty * cost;
+        prodAgg.set(pId, ex);
+      });
+
+      const sortedProds = Array.from(prodAgg.entries()).sort((a, b) => b[1].rev - a[1].rev);
+      sortedProds.slice(0, 4).forEach(([id, data], idx) => {
+        const margin = data.rev > 0 ? Math.round(((data.rev - data.cost) / data.rev) * 100) : 30;
+        pulseList.push({
+          id,
+          rank: idx + 1,
+          name: data.name,
+          unitsProcessed: data.units,
+          marginPercent: Math.max(5, margin),
+          totalRevenue: data.rev,
+        });
+      });
+    } else if (products.length > 0) {
+      // If no sales, show top registered inventory items for this store
+      products.slice(0, 4).forEach((p, idx) => {
+        const retail = Number(p.retail_price || 0);
+        const cost = Number(p.purchase_cost || 0);
+        const margin = retail > 0 ? Math.round(((retail - cost) / retail) * 100) : 25;
+        pulseList.push({
+          id: p.id,
+          rank: idx + 1,
+          name: p.name,
+          unitsProcessed: Number(p.stock_units || 0),
+          marginPercent: Math.max(5, margin),
+          totalRevenue: retail * Math.max(1, Number(p.stock_units || 0)),
+        });
+      });
+    }
+
+    // 5. System Bottlenecks: Real stagnant or low stock items from this store
+    const bottleneckList: StagnantBottleneck[] = [];
+    if (products.length > 0) {
+      // Check products with high stock units or 0 sales
+      const stagnantProds = products.filter((p) => Number(p.stock_units || 0) > 0);
+      stagnantProds.slice(0, 3).forEach((p, idx) => {
+        const daysOld = p.created_at
+          ? Math.max(1, Math.floor((now.getTime() - new Date(p.created_at).getTime()) / (1000 * 60 * 60 * 24)))
+          : 14 + idx * 7;
+        bottleneckList.push({
+          id: p.id,
+          name: p.name,
+          unitsStagnant: Number(p.stock_units || 0),
+          ageDays: daysOld,
+          action: Number(p.stock_units || 0) > 20 ? "PROMO BUNDLE SUGGESTED" : "MONITOR TURNOVER",
+        });
+      });
+    }
 
     return {
       kpis: {
@@ -298,17 +344,19 @@ export const UserAnalytics = () => {
       },
       velocityData,
       categoryMixData,
-      operationalPulse: defaultPulse,
-      bottlenecks: defaultBottlenecks,
+      operationalPulse: pulseList,
+      bottlenecks: bottleneckList,
+      topCategoryName,
     };
-  }, [sales, purchases, dateRange]);
+  }, [sales, purchases, products, saleItems, dateRange, allCategories, active?.business_name]);
 
   // Export Intelligence Action
   const handleExportIntelligence = () => {
     let csv = "Section,Metric,Value,Date Range\n";
+    csv += `Store,${active?.business_name || "My Store"},${dateRange}\n`;
     csv += `KPIs,Total Revenue,${kpis.totalRevenue},${dateRange}\n`;
     csv += `KPIs,Net Profit,${kpis.totalProfit},${dateRange}\n`;
-    csv += `KPIs,Average Margin,${kpis.avgMargin}%,${dateRange}\n`;
+    csv += `KPIs,Average Margin,${kpis.avgMargin.toFixed(1)}%,${dateRange}\n`;
     csv += `KPIs,Order Volume,${kpis.totalOrders},${dateRange}\n\n`;
 
     csv += "Operational Pulse - High Yield SKUs\nRank,Product Name,Units Processed,Margin %,Total Revenue\n";
@@ -316,7 +364,7 @@ export const UserAnalytics = () => {
       csv += `${p.rank},"${p.name}",${p.unitsProcessed},${p.marginPercent}%,${p.totalRevenue}\n`;
     });
 
-    csv += "\nSystem Bottlenecks - Dead Stock Risk\nProduct Name,Units Stagnant,Age (Days),Suggested Action\n";
+    csv += "\nSystem Bottlenecks - Stock Aging Risk\nProduct Name,Units Stagnant,Age (Days),Suggested Action\n";
     bottlenecks.forEach((b) => {
       csv += `"${b.name}",${b.unitsStagnant},${b.ageDays},"${b.action}"\n`;
     });
@@ -325,13 +373,13 @@ export const UserAnalytics = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `business_intelligence_${dateRange}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `${active?.business_name || "store"}_intelligence_${dateRange}_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
 
     toast({
       title: "Intelligence Exported",
-      description: "Business telemetry and operational pulse downloaded successfully.",
+      description: `Store telemetry downloaded for ${active?.business_name || "active business"}.`,
     });
   };
 
@@ -346,13 +394,13 @@ export const UserAnalytics = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `operational_pulse_audit_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `${active?.business_name || "store"}_sku_audit_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
 
     toast({
       title: "Audit Ledger Downloaded",
-      description: "SKU performance audit exported as CSV.",
+      description: "Store SKU performance audit exported as CSV.",
     });
   };
 
@@ -364,11 +412,18 @@ export const UserAnalytics = () => {
         {/* ========================================================================= */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-              Business Intelligence
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+                Store Intelligence
+              </h1>
+              {active?.business_name && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                  {active.business_name}
+                </span>
+              )}
+            </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-              Real-time telemetry and growth velocity across all modules.
+              Live telemetry, sales velocity, and profit margins for {active?.business_name || "your active store"}.
             </p>
           </div>
 
@@ -398,7 +453,7 @@ export const UserAnalytics = () => {
               onClick={handleExportIntelligence}
               className="h-10 px-4 rounded-xl text-xs font-bold bg-card hover:bg-muted text-foreground border border-border shadow-xs"
             >
-              <Download className="w-4 h-4 mr-2" /> Export Intelligence
+              <Download className="w-4 h-4 mr-2" /> Export Store Report
             </Button>
           </div>
         </div>
@@ -413,8 +468,8 @@ export const UserAnalytics = () => {
               <div className="w-9 h-9 rounded-xl bg-sky-500/10 dark:bg-sky-500/15 text-sky-500 flex items-center justify-center font-bold text-sm">
                 $
               </div>
-              <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                <ArrowUpRight className="w-3 h-3" /> +12.4%
+              <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400">
+                {dateRange}
               </span>
             </div>
             <div>
@@ -434,7 +489,7 @@ export const UserAnalytics = () => {
                 <TrendingUp className="w-4 h-4" />
               </div>
               <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                <ArrowUpRight className="w-3 h-3" /> +18.2%
+                Net Profit
               </span>
             </div>
             <div>
@@ -453,8 +508,8 @@ export const UserAnalytics = () => {
               <div className="w-9 h-9 rounded-xl bg-purple-500/10 dark:bg-purple-500/15 text-purple-500 flex items-center justify-center">
                 <Target className="w-4 h-4" />
               </div>
-              <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400">
-                <TrendingDown className="w-3 h-3" /> -1.2%
+              <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                Store Margin
               </span>
             </div>
             <div>
@@ -473,13 +528,13 @@ export const UserAnalytics = () => {
               <div className="w-9 h-9 rounded-xl bg-amber-500/10 dark:bg-amber-500/15 text-amber-500 flex items-center justify-center">
                 <ShoppingCart className="w-4 h-4" />
               </div>
-              <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                <ArrowUpRight className="w-3 h-3" /> +5.4%
+              <span className="flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                Orders
               </span>
             </div>
             <div>
               <p className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
-                ORDER VOL
+                ORDER VOLUME
               </p>
               <p className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-0.5">
                 {kpis.totalOrders.toLocaleString()}
@@ -497,10 +552,10 @@ export const UserAnalytics = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <h3 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
-                  Revenue Velocity
+                  Revenue &amp; Cost Velocity
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Visual correlation between daily sales and procurement costs.
+                  Visual correlation between daily sales and procurement expenses.
                 </p>
               </div>
 
@@ -512,7 +567,7 @@ export const UserAnalytics = () => {
                 </div>
                 <div className="flex items-center gap-1.5 text-purple-400">
                   <span className="w-2 h-2 rounded-full bg-purple-400" />
-                  <span>COSTS</span>
+                  <span>PROCUREMENT</span>
                 </div>
               </div>
             </div>
@@ -555,8 +610,6 @@ export const UserAnalytics = () => {
                     axisLine={false}
                     tick={{ fontSize: 10, fill: "currentColor" }}
                     className="text-muted-foreground font-medium"
-                    ticks={[0, 2000, 4000, 6000, 8000]}
-                    domain={[0, 8500]}
                   />
                   <Tooltip
                     content={({ active, payload, label }) => {
@@ -567,9 +620,9 @@ export const UserAnalytics = () => {
                           <div className="bg-popover border border-border p-3 rounded-xl shadow-lg text-xs space-y-1">
                             <p className="font-bold text-foreground">{label}</p>
                             <p className="text-sky-500 font-semibold">Revenue: {fmt(rev)}</p>
-                            <p className="text-purple-400 font-semibold">Costs: {fmt(cost)}</p>
+                            <p className="text-purple-400 font-semibold">Purchases: {fmt(cost)}</p>
                             <p className="text-[10px] text-emerald-500 font-semibold border-t border-border pt-1">
-                              Net Margin: {fmt(rev - cost)}
+                              Net: {fmt(rev - cost)}
                             </p>
                           </div>
                         );
@@ -602,7 +655,6 @@ export const UserAnalytics = () => {
           <div className="lg:col-span-4 flex flex-col gap-5">
             {/* Intelligent Discovery Card */}
             <div className="p-5 sm:p-6 rounded-2xl bg-sky-500/5 dark:bg-sky-950/20 border border-sky-500/20 shadow-xs relative overflow-hidden space-y-4">
-              {/* Decorative Watermark */}
               <Sparkles className="w-16 h-16 text-sky-500/10 absolute top-2 right-2 pointer-events-none" />
 
               <div className="flex items-center gap-2">
@@ -610,16 +662,18 @@ export const UserAnalytics = () => {
                   <Zap className="w-3.5 h-3.5" />
                 </div>
                 <span className="text-[10px] font-extrabold tracking-widest text-sky-500 uppercase">
-                  INTELLIGENT DISCOVERY
+                  STORE INTELLIGENCE
                 </span>
               </div>
 
               <div className="space-y-1">
                 <h4 className="text-base sm:text-lg font-bold text-foreground">
-                  Expanding Margins
+                  {topCategoryName} Optimization
                 </h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Your PPE category margins have improved by 12% this month due to lower supplier acquisition costs.
+                  {kpis.totalRevenue > 0
+                    ? `Your ${topCategoryName} items are driving steady sales volume. Maintain healthy stock to capture demand.`
+                    : `Registered ${products.length} catalog products in ${active?.business_name || "store"}. Process transactions at POS to record live velocity.`}
                 </p>
               </div>
 
@@ -628,20 +682,20 @@ export const UserAnalytics = () => {
                 <div className="flex items-center justify-between p-2.5 rounded-xl bg-card/80 dark:bg-card/50 border border-border/80">
                   <div className="flex items-center gap-2 text-muted-foreground font-semibold">
                     <ArrowUpRight className="w-4 h-4 text-emerald-500" />
-                    <span>Projected ROI</span>
+                    <span>Est. Margin Health</span>
                   </div>
                   <span className="font-bold text-emerald-500 font-mono">
-                    +$2,450
+                    {kpis.avgMargin > 0 ? `+${kpis.avgMargin.toFixed(1)}%` : "Ready"}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between p-2.5 rounded-xl bg-card/80 dark:bg-card/50 border border-border/80">
                   <div className="flex items-center gap-2 text-muted-foreground font-semibold">
                     <Clock className="w-4 h-4 text-amber-500" />
-                    <span>Next Restock</span>
+                    <span>Catalog SKUs</span>
                   </div>
-                  <span className="font-bold text-amber-500">
-                    In 4 days
+                  <span className="font-bold text-amber-500 font-mono">
+                    {products.length} Products
                   </span>
                 </div>
               </div>
@@ -651,7 +705,7 @@ export const UserAnalytics = () => {
                 onClick={() => setRecommendationModalOpen(true)}
                 className="w-full h-10 rounded-xl bg-card hover:bg-muted text-foreground font-bold text-xs border border-border shadow-xs"
               >
-                Review Recommendation
+                Review Recommendations
               </Button>
             </div>
 
@@ -662,7 +716,7 @@ export const UserAnalytics = () => {
                   Category Mix
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Revenue contribution by group.
+                  Store distribution across your categories.
                 </p>
               </div>
 
@@ -704,7 +758,7 @@ export const UserAnalytics = () => {
                       className="w-2 h-2 rounded-full shrink-0"
                       style={{ backgroundColor: cat.color }}
                     />
-                    <span>{cat.name}</span>
+                    <span className="truncate">{cat.name}</span>
                   </div>
                 ))}
               </div>
@@ -724,64 +778,76 @@ export const UserAnalytics = () => {
                   Operational Pulse
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Identifying high-yield and bottleneck SKUs.
+                  Top performing and high-yield store SKUs.
                 </p>
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDownloadAudit}
-                className="h-8 px-3 rounded-lg text-[10px] font-extrabold uppercase tracking-wider border-border bg-background hover:bg-muted text-foreground"
-              >
-                DOWNLOAD AUDIT
-              </Button>
+              {operationalPulse.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadAudit}
+                  className="h-8 px-3 rounded-lg text-[10px] font-extrabold uppercase tracking-wider border-border bg-background hover:bg-muted text-foreground"
+                >
+                  DOWNLOAD AUDIT
+                </Button>
+              )}
             </div>
 
-            {/* List of 4 Ranked High-Yield Items */}
+            {/* List of Ranked High-Yield Items */}
             <div className="space-y-2.5 pt-1">
-              {operationalPulse.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between p-3.5 rounded-xl bg-muted/20 hover:bg-muted/30 border border-border/70 transition-colors gap-3"
-                >
-                  {/* Left: Rank Badge + Name + Units */}
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-sky-500/10 text-sky-500 flex items-center justify-center font-bold text-xs shrink-0">
-                      {item.rank}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-xs sm:text-sm text-foreground truncate">
-                        {item.name}
-                      </p>
-                      <p className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase mt-0.5">
-                        {item.unitsProcessed.toLocaleString()} UNITS PROCESSED
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Right: Margin % + Total Revenue */}
-                  <div className="flex items-center gap-6 sm:gap-8 shrink-0 text-right">
-                    <div>
-                      <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
-                        MARGIN
-                      </p>
-                      <p className="text-xs sm:text-sm font-extrabold text-emerald-500 mt-0.5">
-                        {item.marginPercent}%
-                      </p>
-                    </div>
-
-                    <div className="min-w-[70px]">
-                      <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
-                        TOTAL REV
-                      </p>
-                      <p className="text-xs sm:text-sm font-extrabold text-foreground font-mono mt-0.5">
-                        {fmt(item.totalRevenue)}
-                      </p>
-                    </div>
-                  </div>
+              {operationalPulse.length === 0 ? (
+                <div className="py-10 text-center text-muted-foreground">
+                  <Package className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+                  <p className="font-semibold text-sm text-foreground">No product sales recorded yet</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Start processing transactions at POS to view live SKU yields.
+                  </p>
                 </div>
-              ))}
+              ) : (
+                operationalPulse.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-3.5 rounded-xl bg-muted/20 hover:bg-muted/30 border border-border/70 transition-colors gap-3"
+                  >
+                    {/* Left: Rank Badge + Name + Units */}
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-sky-500/10 text-sky-500 flex items-center justify-center font-bold text-xs shrink-0">
+                        {item.rank}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-xs sm:text-sm text-foreground truncate">
+                          {item.name}
+                        </p>
+                        <p className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase mt-0.5">
+                          {item.unitsProcessed.toLocaleString()} UNITS IN STOCK / SOLD
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Right: Margin % + Total Revenue */}
+                    <div className="flex items-center gap-6 sm:gap-8 shrink-0 text-right">
+                      <div>
+                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+                          MARGIN
+                        </p>
+                        <p className="text-xs sm:text-sm font-extrabold text-emerald-500 mt-0.5">
+                          {item.marginPercent}%
+                        </p>
+                      </div>
+
+                      <div className="min-w-[70px]">
+                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+                          TOTAL VAL
+                        </p>
+                        <p className="text-xs sm:text-sm font-extrabold text-foreground font-mono mt-0.5">
+                          {fmt(item.totalRevenue)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -789,44 +855,52 @@ export const UserAnalytics = () => {
           <div className="lg:col-span-4 p-5 sm:p-6 rounded-2xl bg-card border border-border shadow-xs flex flex-col justify-between space-y-4">
             <div>
               <h3 className="text-lg font-bold tracking-tight text-foreground">
-                System Bottlenecks
+                Inventory Aging &amp; Alerts
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Low performing items (dead stock risk).
+                Stagnant or low-turnover store stock.
               </p>
             </div>
 
             {/* Dead Stock Items */}
             <div className="space-y-3">
-              {bottlenecks.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between p-3 rounded-xl bg-muted/20 border border-border/70 text-xs gap-2"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0">
-                      <Box className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-bold text-xs text-foreground truncate">
-                        {item.name}
-                      </p>
-                      <p className="text-[9px] font-bold tracking-wider text-muted-foreground uppercase">
-                        {item.unitsStagnant} UNITS STAGNANT
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="text-right shrink-0">
-                    <p className="text-[10px] font-extrabold text-rose-500">
-                      Age: {item.ageDays} days
-                    </p>
-                    <p className="text-[8px] font-bold tracking-widest text-muted-foreground uppercase mt-0.5">
-                      {item.action}
-                    </p>
-                  </div>
+              {bottlenecks.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground">
+                  <ShieldCheck className="w-8 h-8 mx-auto text-emerald-500/40 mb-1" />
+                  <p className="text-xs font-semibold text-foreground">Inventory Turnover Healthy</p>
+                  <p className="text-[11px] text-muted-foreground">No dead stock alerts detected.</p>
                 </div>
-              ))}
+              ) : (
+                bottlenecks.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-muted/20 border border-border/70 text-xs gap-2"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0">
+                        <Box className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-xs text-foreground truncate">
+                          {item.name}
+                        </p>
+                        <p className="text-[9px] font-bold tracking-wider text-muted-foreground uppercase">
+                          {item.unitsStagnant} UNITS HELD
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <p className="text-[10px] font-extrabold text-rose-500">
+                        Age: {item.ageDays}d
+                      </p>
+                      <p className="text-[8px] font-bold tracking-widest text-muted-foreground uppercase mt-0.5">
+                        {item.action}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
 
             {/* Bottom Link CTA */}
@@ -855,44 +929,46 @@ export const UserAnalytics = () => {
               </div>
               <div>
                 <span className="text-[10px] font-bold tracking-widest text-sky-500 uppercase">
-                  INTELLIGENT DISCOVERY
+                  STORE INTELLIGENCE
                 </span>
                 <DialogTitle className="text-lg font-bold">
-                  PPE Category Margin Optimization
+                  {topCategoryName} Performance Optimization
                 </DialogTitle>
               </div>
             </div>
             <DialogDescription className="text-xs text-muted-foreground pt-1">
-              Automated cost reduction detected across active medical supplies &amp; safety apparel contracts.
+              Automated margin analysis and replenishment suggestions for {active?.business_name || "your store"}.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2 text-xs">
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3.5 rounded-xl bg-muted/40 border border-border">
-                <p className="text-[10px] font-bold uppercase text-muted-foreground">Projected Margin Lift</p>
-                <p className="text-xl font-bold text-emerald-500 mt-1">+12.0%</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Through tiered supplier rebates</p>
+                <p className="text-[10px] font-bold uppercase text-muted-foreground">Store Margin Average</p>
+                <p className="text-xl font-bold text-emerald-500 mt-1">
+                  {kpis.avgMargin > 0 ? `${kpis.avgMargin.toFixed(1)}%` : "Healthy"}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Based on recorded transaction margins</p>
               </div>
               <div className="p-3.5 rounded-xl bg-muted/40 border border-border">
-                <p className="text-[10px] font-bold uppercase text-muted-foreground">Estimated Net ROI</p>
-                <p className="text-xl font-bold text-sky-500 mt-1">+$2,450</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Calculated over 30-day restock cycle</p>
+                <p className="text-[10px] font-bold uppercase text-muted-foreground">Active Catalog</p>
+                <p className="text-xl font-bold text-sky-500 mt-1">{products.length} SKUs</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Registered in current store workspace</p>
               </div>
             </div>
 
             <div className="p-4 rounded-xl bg-sky-500/10 border border-sky-500/20 space-y-2">
               <h4 className="font-bold text-sm text-foreground flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-sky-500" /> Recommended Action Items
+                <ShieldCheck className="w-4 h-4 text-sky-500" /> Store Action Items
               </h4>
               <ul className="space-y-1.5 text-xs text-foreground/90 pl-1">
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-sky-500 mt-1.5 shrink-0" />
-                  <span>Consolidate batch procurement with primary vendor to lock in 14% wholesale tier.</span>
+                  <span>Maintain stock safety buffers for high turnover items to prevent POS stockouts.</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-sky-500 mt-1.5 shrink-0" />
-                  <span>Maintain target restock buffer in 4 days before peak autumn demand cycle.</span>
+                  <span>Review supplier invoices in Purchases module to ensure accurate unit costs.</span>
                 </li>
               </ul>
             </div>
@@ -934,12 +1010,12 @@ export const UserAnalytics = () => {
                   PROCUREMENT INTELLIGENCE
                 </span>
                 <DialogTitle className="text-lg font-bold">
-                  Dead Stock Liquidation &amp; Inventory Aging
+                  Inventory Aging &amp; Stock Turnover
                 </DialogTitle>
               </div>
             </div>
             <DialogDescription className="text-xs text-muted-foreground pt-1">
-              Detailed breakdown of stagnant SKUs exceeding normal holding periods.
+              Breakdown of inventory holding periods for {active?.business_name || "this store"}.
             </DialogDescription>
           </DialogHeader>
 
@@ -949,32 +1025,40 @@ export const UserAnalytics = () => {
                 <thead>
                   <tr className="border-b border-border bg-muted/50 text-[10px] font-bold uppercase text-muted-foreground">
                     <th className="py-2.5 px-3">Item Name</th>
-                    <th className="py-2.5 px-3 text-center">Stagnant Stock</th>
-                    <th className="py-2.5 px-3 text-center">Holding Age</th>
-                    <th className="py-2.5 px-3 text-right">Liquidation Strategy</th>
+                    <th className="py-2.5 px-3 text-center">Stock Held</th>
+                    <th className="py-2.5 px-3 text-center">Age (Days)</th>
+                    <th className="py-2.5 px-3 text-right">Turnover Strategy</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {bottlenecks.map((b) => (
-                    <tr key={b.id}>
-                      <td className="py-2.5 px-3 font-bold text-foreground">{b.name}</td>
-                      <td className="py-2.5 px-3 text-center font-mono font-bold">{b.unitsStagnant} units</td>
-                      <td className="py-2.5 px-3 text-center text-rose-500 font-bold">{b.ageDays} days</td>
-                      <td className="py-2.5 px-3 text-right">
-                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-500/15 text-amber-600">
-                          Bundle Promo 20%
-                        </span>
+                  {bottlenecks.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                        No aging inventory bottlenecks found.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    bottlenecks.map((b) => (
+                      <tr key={b.id}>
+                        <td className="py-2.5 px-3 font-bold text-foreground">{b.name}</td>
+                        <td className="py-2.5 px-3 text-center font-mono font-bold">{b.unitsStagnant} units</td>
+                        <td className="py-2.5 px-3 text-center text-rose-500 font-bold">{b.ageDays}d</td>
+                        <td className="py-2.5 px-3 text-right">
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-500/15 text-amber-600">
+                            {b.action}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
 
             <div className="p-3.5 rounded-xl bg-muted/30 border border-border text-muted-foreground">
-              <p className="font-semibold text-foreground mb-1">Recommended Corrective Actions:</p>
-              <p>1. Apply automated bundle discounts at checkout POS for stagnant items.</p>
-              <p>2. Pause new procurement reorders for Laboratory Vials until stock dips below 300 units.</p>
+              <p className="font-semibold text-foreground mb-1">Recommended Actions for {active?.business_name}:</p>
+              <p>1. Track real-time inventory counts and configure low-stock alerts.</p>
+              <p>2. Create purchase orders directly from the Purchases module when stock reaches reorder levels.</p>
             </div>
           </div>
 

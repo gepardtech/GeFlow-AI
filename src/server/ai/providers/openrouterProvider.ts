@@ -76,6 +76,16 @@ export class OpenRouterProvider implements AIProviderInterface {
 
     const systemPrompt = `You are GeFlow AI's Product Intelligence Engine running via OpenRouter.
 Extract product name, brand, dosage/strength, stock unit, pack size, category IDs, volume/weight, and financials from raw text.
+
+RULES:
+- For bakery / biscuits / cookies / snacks / confectionery / grocery (e.g. "biscuit", "buscit", "oreo", "cookie", "cake", "chips", "crisps", "rusk", "chocolate", "candy"): stock_unit MUST be "pack", "packet", "box", or "piece" (STRICTLY FORBIDDEN to use "tablet", "capsule", "strip", or "vial").
+- For beverages / drinks / juices / sodas: stock_unit is "bottle", "can", or "pack".
+- ONLY for pharmaceutical medicines / drugs in pharmacy businesses (e.g. Panadol, Paracetamol 500mg, Amoxicillin pills): stock_unit may be "tablet", "capsule", "strip", "bottle", "vial", or "box".
+- For general merchandise: "piece", "box", "set", "pair", or "pack".
+- Packaging & Pack size: "box of 16 pack", "pack of 12", "20 tablets", "x10" represent pack_size. In "box of 16 pack", pack_size is 16, stock_unit is "pack" or "box".
+- PRICING: If user provides prices like "20RS", "20 RS", "Rs 20", "PKR 20", "20/-", "$20", "20 rupees" without specifying cost/buy, assign this value directly to retail_price (e.g. 20). Never assign pack size (like 16 pack) to price or cost!
+- WEIGHT & MASS: 1 Kilogram (kg) = 1,000 grams (g). 500 grams (500g) = 0.5 kg (Half a kg). 1 Mann = 40 kg = 40,000 grams. If input has "500g" or "250g", weight is {"value": 500, "unit": "g"}. NEVER set unit to "kg" with value 500!
+
 Return strictly JSON matching:
 {
   "product_name": string,

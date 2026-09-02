@@ -314,11 +314,12 @@ export const CreateBusinessWizard = ({
       }
 
       // Check branch limit based on current user plan
-      const maxBranches = plan?.limits?.branchesMax ?? (planId === "free" ? 1 : planId === "standard" ? 5 : 10);
+      const maxBranches = plan?.limits?.branchesMax ?? (planId === "free" ? 1 : planId === "standard" ? 3 : planId === "premium" ? 7 : 10);
       if (typeof maxBranches === "number") {
         const { count: currentBizCount, error: countErr } = await supabase
           .from("businesses")
-          .select("id", { count: "exact", head: true });
+          .select("id", { count: "exact", head: true })
+          .eq("owner_user_id", user.id);
 
         if (!countErr && typeof currentBizCount === "number" && currentBizCount >= maxBranches) {
           toast({

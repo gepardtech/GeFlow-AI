@@ -27,13 +27,13 @@ const UserPurchases = () => {
   const [rows, setRows] = useState<PurchaseRecord[]>([]);
   const [products, setProducts] = useState<PurchaseProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [userId, setUserId] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [architectOpen, setArchitectOpen] = useState(false);
   const [ledger, setLedger] = useState<PurchaseRecord | null>(null);
   const [deleteRow, setDeleteRow] = useState<PurchaseRecord | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!active) { setLoading(false); return; }
@@ -250,6 +250,7 @@ const UserPurchases = () => {
           onSaved={load}
         />
       )}
+
       <PurchaseLedgerDialog
         purchase={ledger}
         onOpenChange={(v) => !v && setLedger(null)}

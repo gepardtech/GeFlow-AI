@@ -80,7 +80,7 @@ const Stat = ({
 const Dashboard = () => {
   const navigate = useNavigate();
   const { plan, planId, fullName, loading: planLoading } = usePlan();
-  const { active, loading: bizLoading } = useActiveBusiness();
+  const { active, businesses, staffBusinesses, hasLoaded, loading: bizLoading } = useActiveBusiness();
   const { isCashier, isInventoryClerk, isManager, isOwner } = useStaffRole();
 
   const [loading, setLoading] = useState(true);
@@ -280,13 +280,15 @@ const Dashboard = () => {
   }, [active, navigate]);
 
   useEffect(() => {
-    if (bizLoading) return;
-    if (!active) {
+    if (bizLoading || !hasLoaded) return;
+    if (!active && businesses.length === 0 && staffBusinesses.length === 0) {
       navigate("/setup/business");
       return;
     }
-    load();
-  }, [bizLoading, active, load, navigate]);
+    if (active) {
+      load();
+    }
+  }, [bizLoading, hasLoaded, active, businesses.length, staffBusinesses.length, load, navigate]);
 
   // Realtime
   useEffect(() => {

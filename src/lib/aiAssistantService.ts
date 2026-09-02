@@ -391,20 +391,20 @@ export function generateLocalBusinessAnalysis(
       }
 
       return [
-        `${notice}### Monthly Profit & Margin Analysis for **${ctx.business.name}**`,
-        `• **Last 30 Days Profit:** **${fmt(ctx.sales.monthProfit)}** on **${fmt(ctx.sales.monthRevenue)}** revenue`,
-        `• **Net Profit Margin:** **${ctx.sales.netProfitMargin.toFixed(1)}%**`,
-        `• **Monthly Completed Orders:** **${ctx.sales.monthTransactions} transactions**`,
-        `• **Average Order Value:** **${fmt(ctx.sales.averageOrderValue)}**`,
+        `${notice}### Monthly Profit & Margin Analysis: ${ctx.business.name}`,
+        `• **Last 30 Days Profit:** ${fmt(ctx.sales.monthProfit)} on ${fmt(ctx.sales.monthRevenue)} revenue`,
+        `• **Net Profit Margin:** ${ctx.sales.netProfitMargin.toFixed(1)}%`,
+        `• **Monthly Completed Orders:** ${ctx.sales.monthTransactions} transactions`,
+        `• **Average Order Value:** ${fmt(ctx.sales.averageOrderValue)}`,
         ``,
-        `*Upgrade to Standard or Premium to unlock real-time Daily and 7-Day Weekly profit trends.*`
+        `Upgrade to Standard or Premium to unlock real-time Daily and 7-Day Weekly profit trends.`
       ].join("\n");
     }
 
     // Plan restriction on Standard Plan (Monthly & Weekly, not daily breakdown)
     if (isStandard) {
       const notice = asksDaily
-        ? `📅 *Plan Notice: Daily real-time tracking is exclusive to the Premium Plan. Showing Weekly & Monthly Profit Performance:*\n\n`
+        ? `📅 Plan Notice: Daily real-time tracking is exclusive to the Premium Plan. Showing Weekly & Monthly Profit Performance:\n\n`
         : "";
 
       if (lang === "roman_urdu") {
@@ -414,18 +414,18 @@ export function generateLocalBusinessAnalysis(
           `• **Pichle 30 Din Ka Munafa:** ${fmt(ctx.sales.monthProfit)} (Sales: ${fmt(ctx.sales.monthRevenue)}, ${ctx.sales.monthTransactions} orders)`,
           `• **Net Profit Margin:** ${ctx.sales.netProfitMargin.toFixed(1)}%`,
           ``,
-          `💡 *Standard Plan Info:* Real-time daily reports aur lifetime deep audit Premium plan par dastiyab hain.`
+          `💡 Standard Plan Info: Real-time daily reports aur lifetime deep audit Premium plan par dastiyab hain.`
         ].join("\n");
       }
 
       return [
-        `${notice}### Weekly & Monthly Profit Analysis for **${ctx.business.name}**`,
-        `• **Last 7 Days (Weekly) Profit:** **${fmt(ctx.sales.weekProfit)}** on **${fmt(ctx.sales.weekRevenue)}** revenue (${ctx.sales.weekTransactions} orders)`,
-        `• **Last 30 Days (Monthly) Profit:** **${fmt(ctx.sales.monthProfit)}** on **${fmt(ctx.sales.monthRevenue)}** revenue (${ctx.sales.monthTransactions} orders)`,
-        `• **Net Profit Margin:** **${ctx.sales.netProfitMargin.toFixed(1)}%**`,
-        `• **Average Order Value:** **${fmt(ctx.sales.averageOrderValue)}**`,
+        `${notice}### Weekly & Monthly Profit Analysis: ${ctx.business.name}`,
+        `• **Last 7 Days (Weekly) Profit:** ${fmt(ctx.sales.weekProfit)} on ${fmt(ctx.sales.weekRevenue)} revenue (${ctx.sales.weekTransactions} orders)`,
+        `• **Last 30 Days (Monthly) Profit:** ${fmt(ctx.sales.monthProfit)} on ${fmt(ctx.sales.monthRevenue)} revenue (${ctx.sales.monthTransactions} orders)`,
+        `• **Net Profit Margin:** ${ctx.sales.netProfitMargin.toFixed(1)}%`,
+        `• **Average Order Value:** ${fmt(ctx.sales.averageOrderValue)}`,
         ``,
-        `*Upgrade to Premium to unlock full Daily real-time tracking, lifetime reports, and AI strategic advisors.*`
+        `Upgrade to Premium to unlock full Daily real-time tracking, lifetime reports, and AI strategic advisors.`
       ].join("\n");
     }
 
@@ -439,7 +439,7 @@ export function generateLocalBusinessAnalysis(
         `• **Net Profit Margin:** ${ctx.sales.netProfitMargin.toFixed(1)}%`,
         `• **Overall Lifetime Profit:** ${fmt(ctx.sales.totalProfit)} across ${ctx.sales.totalTransactions} transactions`,
         ``,
-        `💡 *Premium Strategy:* Margin behtar karne ke liye top-selling items ki wholesale bulk purchasing karein.`
+        `💡 Premium Strategy: Margin behtar karne ke liye top-selling items ki wholesale bulk purchasing karein.`
       ].join("\n");
     }
 
@@ -466,14 +466,14 @@ export function generateLocalBusinessAnalysis(
     }
 
     return [
-      `### Complete Profit & Margin Audit for **${ctx.business.name}** *(Premium Access)*`,
-      `• **Today's Net Profit (Daily):** **${fmt(ctx.sales.todayProfit)}** on **${fmt(ctx.sales.todayRevenue)}** revenue (${ctx.sales.todayTransactions} orders)`,
-      `• **Last 7 Days (Weekly):** **${fmt(ctx.sales.weekProfit)}** profit on **${fmt(ctx.sales.weekRevenue)}** revenue`,
-      `• **Last 30 Days (Monthly):** **${fmt(ctx.sales.monthProfit)}** profit on **${fmt(ctx.sales.monthRevenue)}** revenue`,
-      `• **Net Profit Margin:** **${ctx.sales.netProfitMargin.toFixed(1)}%**`,
-      `• **All-Time Lifetime Profit:** **${fmt(ctx.sales.totalProfit)}** across ${ctx.sales.totalTransactions} transactions`,
+      `### Complete Profit & Margin Audit: ${ctx.business.name}`,
+      `• **Today's Net Profit (Daily):** ${fmt(ctx.sales.todayProfit)} on ${fmt(ctx.sales.todayRevenue)} revenue (${ctx.sales.todayTransactions} orders)`,
+      `• **Last 7 Days (Weekly):** ${fmt(ctx.sales.weekProfit)} profit on ${fmt(ctx.sales.weekRevenue)} revenue`,
+      `• **Last 30 Days (Monthly):** ${fmt(ctx.sales.monthProfit)} profit on ${fmt(ctx.sales.monthRevenue)} revenue`,
+      `• **Net Profit Margin:** ${ctx.sales.netProfitMargin.toFixed(1)}%`,
+      `• **All-Time Lifetime Profit:** ${fmt(ctx.sales.totalProfit)} across ${ctx.sales.totalTransactions} transactions`,
       ``,
-      `**Executive Recommendation:** Your average order value is **${fmt(ctx.sales.averageOrderValue)}**. Fast-moving items yield strong returns—consider restocking high margin items.`
+      `**Executive Recommendation:** Your average order value is ${fmt(ctx.sales.averageOrderValue)}. Fast-moving items yield strong returns—consider restocking high margin items.`
     ].join("\n");
   }
 
@@ -481,7 +481,7 @@ export function generateLocalBusinessAnalysis(
   if (q.includes("sale") || q.includes("revenue") || q.includes("bikri") || q.includes("becha") || q.includes("ventas") || q.includes("مبيعات")) {
     if (isFree) {
       const notice = (asksDaily || asksWeekly)
-        ? `📅 *Plan Notice: Daily and Weekly breakdown reports are available on Standard & Premium. Showing Monthly Performance:*\n\n`
+        ? `📅 Plan Notice: Daily and Weekly breakdown reports are available on Standard & Premium. Showing Monthly Performance:\n\n`
         : "";
 
       if (lang === "roman_urdu") {
@@ -494,18 +494,18 @@ export function generateLocalBusinessAnalysis(
       }
 
       return [
-        `${notice}### Monthly Sales Summary for **${ctx.business.name}**`,
-        `• **Last 30 Days Revenue:** **${fmt(ctx.sales.monthRevenue)}** (${ctx.sales.monthTransactions} orders)`,
-        `• **Average Order Value (AOV):** **${fmt(ctx.sales.averageOrderValue)}**`,
-        `• **Catalog Size:** **${ctx.inventory.activeProducts} products**`,
+        `${notice}### Monthly Sales Summary: ${ctx.business.name}`,
+        `• **Last 30 Days Revenue:** ${fmt(ctx.sales.monthRevenue)} (${ctx.sales.monthTransactions} orders)`,
+        `• **Average Order Value (AOV):** ${fmt(ctx.sales.averageOrderValue)}`,
+        `• **Catalog Size:** ${ctx.inventory.activeProducts} products`,
         ``,
-        `*Upgrade to Standard or Premium to view 7-Day Weekly and Real-time Daily sales logs.*`
+        `Upgrade to Standard or Premium to view 7-Day Weekly and Real-time Daily sales logs.`
       ].join("\n");
     }
 
     if (isStandard) {
       const notice = asksDaily
-        ? `📅 *Plan Notice: Daily live logs are exclusive to the Premium Plan. Showing Weekly & Monthly Sales:*\n\n`
+        ? `📅 Plan Notice: Daily live logs are exclusive to the Premium Plan. Showing Weekly & Monthly Sales:\n\n`
         : "";
 
       if (lang === "roman_urdu") {
@@ -518,12 +518,12 @@ export function generateLocalBusinessAnalysis(
       }
 
       return [
-        `${notice}### Weekly & Monthly Sales Summary for **${ctx.business.name}**`,
-        `• **Last 7 Days (Weekly):** **${fmt(ctx.sales.weekRevenue)}** (${ctx.sales.weekTransactions} orders)`,
-        `• **Last 30 Days (Monthly):** **${fmt(ctx.sales.monthRevenue)}** (${ctx.sales.monthTransactions} orders)`,
-        `• **Average Order Value (AOV):** **${fmt(ctx.sales.averageOrderValue)}**`,
+        `${notice}### Weekly & Monthly Sales Summary: ${ctx.business.name}`,
+        `• **Last 7 Days (Weekly):** ${fmt(ctx.sales.weekRevenue)} (${ctx.sales.weekTransactions} orders)`,
+        `• **Last 30 Days (Monthly):** ${fmt(ctx.sales.monthRevenue)} (${ctx.sales.monthTransactions} orders)`,
+        `• **Average Order Value (AOV):** ${fmt(ctx.sales.averageOrderValue)}`,
         ``,
-        `*Upgrade to Premium to unlock daily breakdown logs, lifetime analytics, and AI Strategic Advisor.*`
+        `Upgrade to Premium to unlock daily breakdown logs, lifetime analytics, and AI Strategic Advisor.`
       ].join("\n");
     }
 
@@ -540,12 +540,12 @@ export function generateLocalBusinessAnalysis(
     }
 
     return [
-      `### Full Sales & Revenue Audit for **${ctx.business.name}** *(Premium Access)*`,
-      `• **Today's Revenue (Daily):** **${fmt(ctx.sales.todayRevenue)}** (${ctx.sales.todayTransactions} order(s))`,
-      `• **Last 7 Days (Weekly):** **${fmt(ctx.sales.weekRevenue)}** (${ctx.sales.weekTransactions} orders)`,
-      `• **Last 30 Days (Monthly):** **${fmt(ctx.sales.monthRevenue)}** (${ctx.sales.monthTransactions} orders)`,
-      `• **Average Order Value (AOV):** **${fmt(ctx.sales.averageOrderValue)}**`,
-      `• **Total Lifetime Revenue:** **${fmt(ctx.sales.totalRevenue)}** from ${ctx.sales.totalTransactions} completed transactions.`
+      `### Full Sales & Revenue Audit: ${ctx.business.name}`,
+      `• **Today's Revenue (Daily):** ${fmt(ctx.sales.todayRevenue)} (${ctx.sales.todayTransactions} order(s))`,
+      `• **Last 7 Days (Weekly):** ${fmt(ctx.sales.weekRevenue)} (${ctx.sales.weekTransactions} orders)`,
+      `• **Last 30 Days (Monthly):** ${fmt(ctx.sales.monthRevenue)} (${ctx.sales.monthTransactions} orders)`,
+      `• **Average Order Value (AOV):** ${fmt(ctx.sales.averageOrderValue)}`,
+      `• **Total Lifetime Revenue:** ${fmt(ctx.sales.totalRevenue)} from ${ctx.sales.totalTransactions} completed transactions.`
     ].join("\n");
   }
 
@@ -571,19 +571,19 @@ export function generateLocalBusinessAnalysis(
         lowStockDetails,
         `• **Expiring within 30 days:** ${ctx.inventory.expiringCount} items`,
         ``,
-        `💡 *Next Step:* Purchases tab se restock order create karein.`
+        `💡 Next Step: Purchases tab se restock order create karein.`
       ].join("\n");
     }
 
     return [
-      `### Inventory & Stock Health for **${ctx.business.name}**`,
-      `• **Total Active Catalog:** **${ctx.inventory.activeProducts} products** (${ctx.inventory.totalUnitsInStock} total units on shelves)`,
-      `• **Inventory Valuation:** **${fmt(ctx.inventory.inventoryCostValue)}** (Cost) | **${fmt(ctx.inventory.inventoryRetailValue)}** (Retail)`,
-      `• **Out of Stock:** **${ctx.inventory.outOfStockCount} products**`,
+      `### Inventory & Stock Health: ${ctx.business.name}`,
+      `• **Total Active Catalog:** ${ctx.inventory.activeProducts} products (${ctx.inventory.totalUnitsInStock} total units on shelves)`,
+      `• **Inventory Valuation:** ${fmt(ctx.inventory.inventoryCostValue)} (Cost) | ${fmt(ctx.inventory.inventoryRetailValue)} (Retail)`,
+      `• **Out of Stock:** ${ctx.inventory.outOfStockCount} products`,
       oosDetails,
-      `• **Low Stock Alerts (Threshold: ≤ ${ctx.business.stockAlertLimit} units):** **${ctx.inventory.lowStockCount} products**`,
+      `• **Low Stock Alerts (Threshold: ≤ ${ctx.business.stockAlertLimit} units):** ${ctx.inventory.lowStockCount} products`,
       lowStockDetails,
-      `• **Expiring soon (< 30 days):** **${ctx.inventory.expiringCount} products**`,
+      `• **Expiring soon (< 30 days):** ${ctx.inventory.expiringCount} products`,
       ``,
       `**Action Item:** Navigate to **Inventory → Low Stock** or **Purchases** to trigger restocking orders.`
     ].join("\n");
@@ -612,6 +612,77 @@ export function generateLocalBusinessAnalysis(
       `• **Operating Status:** **${ctx.business.status.toUpperCase()}**`,
       ``,
       `All transactions, POS receipts, and inventory alerts strictly apply these resolved settings.`
+    ].join("\n");
+  }
+
+  // 4.5. LIVE GEFLOW SYSTEM KNOWLEDGE & FAQS
+  if (q.includes("maryam") || q.includes("who are you") || q.includes("kaun ho") || q.includes("ap kaun") || q.includes("introduce")) {
+    if (lang === "roman_urdu") {
+      return [
+        `👋 **Salam! Main hoon Maryam AI — aapki dedicated GeFlow Live Store Assistant.**`,
+        `Main aapke active store (${ctx.business.name}) ke live sales, real-time profits, low-stock inventory alerts, aur configuration settings ki mukammal maloomat rakhti hoon.`,
+        ``,
+        `**Live Version Features jin par main madad kar sakti hoon:**`,
+        `• **POS Terminal**: Barcode scanning, discount calculation, split payments aur 80mm thermal receipts.`,
+        `• **Inventory**: Auto SKU generator, low stock alerts, aur quick product purchase.`,
+        `• **Team Hub**: Staff roles (Manager, Cashier, Inventory) aur secure invite links.`,
+        `• **Analytics**: Aapke active store ka real-time profit, revenue aur order trends.`,
+      ].join("\n");
+    }
+    return [
+      `👋 **Hello! I am Maryam AI — your dedicated GeFlow Live Store Assistant.**`,
+      `I have real-time access to your active store (**${ctx.business.name}**) metrics, inventory stock, sales ledger, and operational configurations.`,
+      ``,
+      `**Live System Capabilities I support:**`,
+      `• **POS & Checkout**: Fast barcode scanning, multi-mode payments (Cash/Card/Split), and ESC/POS thermal receipts.`,
+      `• **Inventory & Procurement**: One-click SKU generation, threshold alerts, and supplier purchase orders with quick-add.`,
+      `• **Team & Workspace**: Multi-business switching and granular staff roles (Manager, Cashier, Inventory).`,
+      `• **Store Analytics**: Live profit margins, order velocity, and cost valuation strictly scoped to your active store.`,
+    ].join("\n");
+  }
+
+  // Quick Add Product in Purchase Dialog
+  if (q.includes("purchase") && (q.includes("new product") || q.includes("quick add") || q.includes("unlisted") || q.includes("naya product") || q.includes("add product"))) {
+    return [
+      `📦 **Adding New Products during Purchase in GeFlow (Live Version):**`,
+      `1. Open **Purchases** from the navigation sidebar and click **New Purchase** (or Purchase Architect).`,
+      `2. In the item selection row, click the **+ Quick Add Product** button or choose '+ Add New Product' from the dropdown.`,
+      `3. Enter the product title, purchase cost, retail selling price, and category in the popup.`,
+      `4. Once saved, it is immediately listed in the purchase order and added to your store's inventory catalog!`,
+    ].join("\n");
+  }
+
+  // SKU Generation in Inventory
+  if (q.includes("sku") || (q.includes("inventory") && q.includes("code"))) {
+    return [
+      `🏷️ **Auto SKU Generation in GeFlow (Live Version):**`,
+      `1. Navigate to **Inventory** in your store panel.`,
+      `2. Click **Add Product** (or edit an existing item).`,
+      `3. Next to the SKU field, click the **Auto SKU** button. GeFlow will instantly generate a unique 8-character SKU code (e.g. \`SKU-XXXX-XX\`).`,
+      `4. You can also print barcode labels directly from the inventory product actions.`,
+    ].join("\n");
+  }
+
+  // Business Limit according to plan
+  if (q.includes("limit") || q.includes("kitne business") || q.includes("store limit") || q.includes("how many business")) {
+    return [
+      `🏢 **GeFlow Store Registration Limits by Subscription Plan:**`,
+      `• **Free Plan:** 1 Business / Store`,
+      `• **Standard Plan:** Up to 3 Businesses / Stores`,
+      `• **Premium Plan:** Up to 7 Businesses / Stores`,
+      `• **Lifetime Plan:** Up to 10 Businesses / Stores (Enterprise capacity)`,
+      ``,
+      `You can register and switch between your owned stores from the **Workspace Switcher** in the top-left sidebar.`,
+    ].join("\n");
+  }
+
+  // Scheduled reports / future feature explanation
+  if (q.includes("schedule") || q.includes("scheduled report") || q.includes("email report") || q.includes("shedule")) {
+    return [
+      `📊 **Reports & Analytics (Live Release):**`,
+      `In the current live release of GeFlow, you have full access to on-demand sales, profit, and inventory analytics scoped strictly to your active store.`,
+      ``,
+      `*Note: Automated AI scheduled email reporting is an upcoming future roadmap feature and is not included in the current live build.*`,
     ].join("\n");
   }
 

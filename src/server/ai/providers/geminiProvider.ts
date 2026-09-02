@@ -63,11 +63,24 @@ Your job is to parse raw product titles, descriptions, supplier invoices, or bar
 
 RULES:
 1. NEVER invent barcodes or SKUs. If not present in the input, return null.
-2. Distinguish stock_unit (e.g. tablet, bottle, box, strip, can, piece) from volume/weight (e.g. 1.5L, 500g) and formulation strength (e.g. 500mg).
-3. Do NOT set stock_unit to "liter" just because the product is 1.5 liters. The stock unit is "bottle" or "pack".
-4. Pack size (e.g., 20 tablets per pack) must only be set if clearly specified or deduced. Otherwise return null.
-5. Match primary_category_name and subcategory_name ONLY from the allowed catalog list below when relevant. If none match confidently, return null.
-6. Extract pricing and stock counts ONLY if explicitly provided in the input (e.g. "buy:2.5 sell:5.0 qty:100"). Never invent prices or stock.
+2. Contextually determine stock_unit (e.g. piece, pack, packet, box, bottle, can, strip, tablet, capsule, kg, g, liter):
+   - For bakery / biscuits / cookies / snacks / confectionery / grocery (e.g. "biscuit", "buscit", "oreo", "cookie", "cake", "chips", "crisps", "rusk", "chocolate", "candy", "noodles", "pasta"): stock_unit MUST be "pack", "packet", "box", or "piece" (STRICTLY FORBIDDEN to use "tablet", "capsule", "strip", or "vial").
+   - For beverages / drinks / juices / sodas: stock_unit is "bottle", "can", or "pack".
+   - ONLY for pharmaceutical medicines / drugs in pharmacy businesses (e.g. Panadol, Paracetamol 500mg, Amoxicillin pills): stock_unit may be "tablet", "capsule", "strip", "bottle", "vial", or "box".
+   - For general merchandise / electronics / apparel / hardware: "piece", "box", "set", "pair", or "pack".
+3. Distinguish stock_unit from volume/weight (e.g. 1.5L, 500g, 100ml) and formulation strength (e.g. 500mg).
+4. Do NOT set stock_unit to "liter" just because the product is 1.5 liters. The stock unit is "bottle" or "pack".
+5. Packaging and Pack size: "box of 16 pack", "pack of 12", "20 tablets", "x10" represent packaging counts (pack_size). In "box of 16 pack", pack_size is 16, stock_unit is "pack" or "box". NEVER confuse pack size with price or purchase cost!
+6. Match primary_category_name and subcategory_name ONLY from the allowed catalog list below when relevant. If none match confidently, return null.
+7. PRICING EXTRACTION:
+   - If user provides currency prices (e.g. "20RS", "20 RS", "Rs 20", "PKR 20", "20/-", "$20", "20 rupees", "price: 20", "sell: 20") without specifying cost/buy, assign this value directly to retail_price (e.g. 20).
+   - If user explicitly writes "buy: 15" or "cost: 15", assign to purchase_cost.
+   - Never confuse packaging counts (like "box of 16 pack") with purchase cost or retail price! Example: "Sooper biscuit 20RS box of 16 pack" -> product_name: "Sooper Biscuit", retail_price: 20, pack_size: 16, purchase_cost: null, stock_unit: "pack".
+8. WEIGHT & MASS UNITS:
+   - 1 Kilogram (kg) = 1,000 grams (g).
+   - 500 grams (500g) = 0.5 kg (Half kg). It is NOT 500 kg, NOT 1 Mann, and NOT more than 1 kg!
+   - 1 Mann (Maund) = 40 kg = 40,000 grams.
+   - If input has "500g" or "250g", weight is {"value": 500, "unit": "g"}. NEVER set unit to "kg" with value 500!
 
 BUSINESS CATALOG CONTEXT:
 - Business: "${businessName}" (Industry: ${industryType || "General Retail/Pharmacy"})
