@@ -4,7 +4,7 @@ import {
   ShoppingCart, Search, ScanLine, Trash2, Package, Plus, Minus,
   Banknote, CreditCard, Zap, Loader2, X, Sparkles, Scale, Pill, Droplets,
   Layers, ChevronRight, User, Phone, FileText, Barcode, Check, RotateCcw,
-  FlaskConical, UserPlus, Globe,
+  FlaskConical, UserPlus, Globe, Clock, PauseCircle,
 } from "lucide-react";
 import UserPanelGate from "@/components/UserPanelGate";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
@@ -19,7 +19,17 @@ import {
   SmartUOMProductInfo,
   AppliedFractionalSelection,
 } from "@/components/pos/SmartUOMCalculatorModal";
-import { parseProductUOM } from "@/lib/uomRegistry";
+import {
+  HeldOrdersModal,
+  HeldOrderRecord,
+} from "@/components/pos/HeldOrdersModal";
+import {
+  fetchHeldOrders,
+  saveHeldOrder,
+  deleteHeldOrder,
+} from "@/lib/heldOrdersService";
+import { recordStockMovement } from "@/lib/stockMovementService";
+import { parseProductUOM, computeProductStock } from "@/lib/uomRegistry";
 import { COUNTRIES, detectDefaultCountry } from "@/lib/countries";
 
 export interface POSProduct {
@@ -34,6 +44,9 @@ export interface POSProduct {
   purchase_cost: number;
   stock_units: number;
   min_stock_alert: number;
+  uom?: string | null;
+  units_per_uom?: number | null;
+  base_unit?: string | null;
 }
 
 export interface CartLine extends POSProduct {
@@ -41,7 +54,7 @@ export interface CartLine extends POSProduct {
   qty: number;
   unit: number;
   fractionOfPack: number;
-  stockUnitsDeducted: number;
+  stockUnitsDeducted: number; // Base units deducted per 1 unit of this line (e.g. 12 for 1 box, 1 for 1 tablet)
   displayUnitLabel: string;
   proportionalCost: number;
 }
@@ -107,6 +120,24 @@ const UserPOS = () => {
   const [calcInitialFraction, setCalcInitialFraction] = useState<number>(1);
   const [editingCartLineId, setEditingCartLineId] = useState<string | null>(null);
 
+  // Held Orders State
+  const [heldOrdersModalOpen, setHeldOrdersModalOpen] = useState(false);
+  const [heldOrders, setHeldOrders] = useState<HeldOrderRecord[]>([]);
+  const [activeHeldOrderId, setActiveHeldOrderId] = useState<string | null>(null);
+
+  const refreshHeldOrders = useCallback(async () => {
+    if (!active?.id) {
+      setHeldOrders([]);
+      return;
+    }
+    const list = await fetchHeldOrders(active.id);
+    setHeldOrders(list);
+  }, [active?.id]);
+
+  useEffect(() => {
+    refreshHeldOrders();
+  }, [refreshHeldOrders]);
+
   const taxRate = Number(active?.default_tax ?? 0);
   const catName = useCallback(
     (id: string | null) => categories.find((c) => c.id === id)?.name ?? "General",
@@ -132,12 +163,24 @@ const UserPOS = () => {
   const load = useCallback(async () => {
     if (!active) { setLoading(false); return; }
     setLoading(true);
-    const { data } = await supabase
+    const { data: initialData, error } = await supabase
       .from("products")
-      .select("id, name, description, internal_sku, barcode, category_id, retail_price, discount_price, purchase_cost, stock_units, min_stock_alert")
+      .select("id, name, description, internal_sku, barcode, category_id, retail_price, discount_price, purchase_cost, stock_units, min_stock_alert, uom, units_per_uom, base_unit")
       .eq("business_id", active.id)
       .eq("status", "active")
       .order("name");
+
+    let data = initialData;
+    if (error) {
+      // Resilient fallback if table has not migrated explicit columns yet
+      const fallback = await supabase
+        .from("products")
+        .select("id, name, description, internal_sku, barcode, category_id, retail_price, discount_price, purchase_cost, stock_units, min_stock_alert")
+        .eq("business_id", active.id)
+        .eq("status", "active")
+        .order("name");
+      data = fallback.data as any;
+    }
     setProducts((data as POSProduct[]) ?? []);
     setLoading(false);
   }, [active]);
@@ -175,23 +218,51 @@ const UserPOS = () => {
   }, [products, search, catName]);
 
   const addToCart = (p: POSProduct) => {
-    if (p.stock_units <= 0) {
+    const stockInfo = computeProductStock(p.stock_units, p.name, p.description, p.uom, p.units_per_uom, p.base_unit);
+    if (stockInfo.totalSubUnits <= 0) {
       toast({ title: "Out of stock", description: p.name, variant: "destructive" });
       return;
     }
+
+    // If stock remaining is less than 1 full pack, open the Smart UoM calculator to sell loose units!
+    if (stockInfo.totalSubUnits < stockInfo.packSize && stockInfo.packSize > 1) {
+      toast({
+        title: "Loose stock only",
+        description: `Only ${stockInfo.displayText} left. Opening Dose & UOM Calculator to sell loose ${stockInfo.subUnitName.toLowerCase()}s.`,
+      });
+      openUOMCalculatorForProduct(p);
+      return;
+    }
+
     const price = unitPrice(p);
-    const parsed = parseProductUOM(p.name, p.description || "");
+    const parsed = parseProductUOM(p.name, p.description || "", p.uom, p.units_per_uom, p.base_unit);
 
     setCart((prev) => {
       // Find full-pack line if exists
       const existing = prev.find((l) => l.id === p.id && l.fractionOfPack === 1);
       if (existing) {
-        if (existing.qty >= p.stock_units) {
-          toast({ title: "Stock limit reached", description: `Only ${p.stock_units} in stock.`, variant: "destructive" });
+        const totalBaseRequired = (existing.qty + 1) * stockInfo.packSize;
+        const otherLinesBaseUnits = prev
+          .filter((l) => l.id === p.id && l.lineId !== existing.lineId)
+          .reduce((s, l) => s + (l.qty * l.stockUnitsDeducted), 0);
+
+        if (totalBaseRequired + otherLinesBaseUnits > stockInfo.totalSubUnits) {
+          toast({ title: "Stock limit reached", description: `Only ${stockInfo.displayText} in stock.`, variant: "destructive" });
           return prev;
         }
         return prev.map((l) => (l.lineId === existing.lineId ? { ...l, qty: l.qty + 1 } : l));
       }
+
+      // Check if other lines of same product already exceed stock
+      const otherLinesBaseUnits = prev
+        .filter((l) => l.id === p.id)
+        .reduce((s, l) => s + (l.qty * l.stockUnitsDeducted), 0);
+
+      if (stockInfo.packSize + otherLinesBaseUnits > stockInfo.totalSubUnits) {
+        toast({ title: "Stock limit reached", description: `Only ${stockInfo.displayText} in stock.`, variant: "destructive" });
+        return prev;
+      }
+
       return [
         ...prev,
         {
@@ -200,7 +271,7 @@ const UserPOS = () => {
           qty: 1,
           unit: price,
           fractionOfPack: 1,
-          stockUnitsDeducted: 1,
+          stockUnitsDeducted: stockInfo.packSize, // Base units deducted per 1 full box (e.g. 12 tablets)
           displayUnitLabel: `Full ${parsed.uomLabel}`,
           proportionalCost: Number(p.purchase_cost) || 0,
         },
@@ -220,6 +291,9 @@ const UserPOS = () => {
       discount_price: p.discount_price,
       purchase_cost: p.purchase_cost,
       stock_units: p.stock_units,
+      uom: p.uom,
+      units_per_uom: p.units_per_uom,
+      base_unit: p.base_unit,
     });
     setCalcInitialFraction(1);
     setEditingCartLineId(null);
@@ -237,6 +311,9 @@ const UserPOS = () => {
       discount_price: line.discount_price,
       purchase_cost: line.purchase_cost,
       stock_units: line.stock_units,
+      uom: line.uom,
+      units_per_uom: line.units_per_uom,
+      base_unit: line.base_unit,
     });
     setCalcInitialFraction(line.fractionOfPack);
     setEditingCartLineId(line.lineId);
@@ -246,6 +323,11 @@ const UserPOS = () => {
   const handleApplyFractional = (selection: AppliedFractionalSelection) => {
     const p = products.find((x) => x.id === selection.productId);
     if (!p) return;
+    const stockInfo = computeProductStock(p.stock_units, p.name, p.description, p.uom, p.units_per_uom, p.base_unit);
+    // Base units per single item: e.g. 1 for 1 tablet, 2 for 2 tablets, 12 for 1 box
+    const baseUnitsPerQty = selection.subQuantity > 0
+      ? selection.subQuantity
+      : Math.max(1, Math.round(selection.fractionOfPack * stockInfo.packSize));
 
     if (editingCartLineId) {
       // Update existing cart line
@@ -257,7 +339,7 @@ const UserPOS = () => {
                 unit: selection.unitPrice,
                 proportionalCost: selection.purchaseCost,
                 fractionOfPack: selection.fractionOfPack,
-                stockUnitsDeducted: selection.stockUnitsDeducted,
+                stockUnitsDeducted: baseUnitsPerQty,
                 displayUnitLabel: selection.displayUnitLabel,
               }
             : l
@@ -278,7 +360,7 @@ const UserPOS = () => {
           unit: selection.unitPrice,
           proportionalCost: selection.purchaseCost,
           fractionOfPack: selection.fractionOfPack,
-          stockUnitsDeducted: selection.stockUnitsDeducted,
+          stockUnitsDeducted: baseUnitsPerQty,
           displayUnitLabel: selection.displayUnitLabel,
         },
       ]);
@@ -295,9 +377,14 @@ const UserPOS = () => {
         if (l.lineId !== lineId) return [l];
         const next = l.qty + delta;
         if (next <= 0) return [];
-        const requiredStock = next * l.stockUnitsDeducted;
-        if (requiredStock > l.stock_units) {
-          toast({ title: "Stock limit reached", description: `Only ${l.stock_units} in stock.`, variant: "destructive" });
+        const stockInfo = computeProductStock(l.stock_units, l.name, l.description, l.uom, l.units_per_uom, l.base_unit);
+        const otherLinesBaseUnits = prev
+          .filter((other) => other.id === l.id && other.lineId !== lineId)
+          .reduce((sum, other) => sum + (other.qty * other.stockUnitsDeducted), 0);
+        const thisLineBaseUnits = next * l.stockUnitsDeducted;
+
+        if (otherLinesBaseUnits + thisLineBaseUnits > stockInfo.totalSubUnits) {
+          toast({ title: "Stock limit reached", description: `Only ${stockInfo.displayText} in stock.`, variant: "destructive" });
           return [l];
         }
         return [{ ...l, qty: next }];
@@ -420,30 +507,57 @@ const UserPOS = () => {
     }));
     await supabase.from("sale_items").insert(items);
 
-    // Group stock deductions per product to ensure accurate atomic updates
-    const productDeductions: Record<string, { product: POSProduct; totalDeducted: number }> = {};
+    // Group stock deductions in BASE UNITS per product to ensure accurate atomic updates
+    const productDeductions: Record<string, { product: POSProduct; totalBaseUnitsDeducted: number; summaryLabels: string[] }> = {};
     for (const l of cart) {
-      const deduction = l.stockUnitsDeducted * l.qty;
+      const deduction = (l.stockUnitsDeducted || 1) * l.qty;
       if (!productDeductions[l.id]) {
-        productDeductions[l.id] = { product: l, totalDeducted: 0 };
+        productDeductions[l.id] = { product: l, totalBaseUnitsDeducted: 0, summaryLabels: [] };
       }
-      productDeductions[l.id].totalDeducted += deduction;
+      productDeductions[l.id].totalBaseUnitsDeducted += deduction;
+      productDeductions[l.id].summaryLabels.push(`${l.qty}x ${l.displayUnitLabel}`);
     }
 
     for (const pid of Object.keys(productDeductions)) {
-      const { product: p, totalDeducted } = productDeductions[pid];
-      const newStock = Math.max(+(p.stock_units - totalDeducted).toFixed(3), 0);
+      const { product: p, totalBaseUnitsDeducted, summaryLabels } = productDeductions[pid];
+      const stockInfo = computeProductStock(p.stock_units, p.name, p.description, p.uom, p.units_per_uom, p.base_unit);
+      const newBaseStock = Math.max(Math.round(stockInfo.totalSubUnits - totalBaseUnitsDeducted), 0);
 
-      await supabase.from("products").update({ stock_units: newStock }).eq("id", pid);
-      await supabase.from("stock_movements").insert({
+      const updatePayload: { stock_units: number; description?: string } = {
+        stock_units: newBaseStock,
+      };
+
+      if (p.description) {
+        let updatedDesc = p.description;
+        const newPackQty = stockInfo.packSize > 0 ? +(newBaseStock / stockInfo.packSize).toFixed(2) : newBaseStock;
+        if (updatedDesc.includes("[PACK_QTY:")) {
+          updatedDesc = updatedDesc.replace(/\[PACK_QTY:\s*[^\]]+\]/i, `[PACK_QTY: ${newPackQty}]`);
+        }
+        if (updatedDesc.includes("[BASE_QTY:")) {
+          updatedDesc = updatedDesc.replace(/\[BASE_QTY:\s*[^\]]+\]/i, `[BASE_QTY: ${newBaseStock}]`);
+        }
+        updatePayload.description = updatedDesc;
+      }
+
+      await supabase.from("products").update(updatePayload).eq("id", pid);
+      await recordStockMovement({
         business_id: active.id,
         owner_user_id: userId,
         product_id: pid,
-        quantity: -totalDeducted,
-        type: "sale",
-        reason: "POS sale (UOM fractional accurate)",
-        note: `Sale ${sale.id.slice(0, 8)}`,
+        quantity: -totalBaseUnitsDeducted,
+        type: "out",
+        reason: "POS sale (UOM accurate)",
+        note: `Sale ${sale.id.slice(0, 8)} · Sold: ${summaryLabels.join(", ")} (-${totalBaseUnitsDeducted} ${stockInfo.subUnitName.toLowerCase()}s)`,
+        reference_id: sale.id,
+        reference_type: "pos_sale",
+        created_by: userId,
       });
+    }
+
+    if (activeHeldOrderId) {
+      await deleteHeldOrder(activeHeldOrderId, active.id);
+      setActiveHeldOrderId(null);
+      refreshHeldOrders();
     }
 
     setProcessing(false);
@@ -493,6 +607,70 @@ const UserPOS = () => {
     });
     clearCart();
     load();
+  };
+
+  const handleHoldCart = async () => {
+    if (!active?.id || cart.length === 0) return;
+    try {
+      await saveHeldOrder({
+        business_id: active.id,
+        owner_user_id: active.owner_user_id,
+        customer_name: customerName.trim() || null,
+        customer_phone: fullCustomerPhone || null,
+        customer_note: customerNote.trim() || null,
+        cart_data: cart,
+        total_amount: grandTotal,
+        item_count: cart.reduce((sum, item) => sum + item.qty, 0),
+      });
+
+      toast({
+        title: "Order placed on hold",
+        description: `Saved ${cart.length} item(s) to Held Orders. You can resume anytime.`,
+      });
+
+      clearCart();
+      setActiveHeldOrderId(null);
+      refreshHeldOrders();
+    } catch {
+      toast({
+        title: "Failed to hold order",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleResumeHeldOrder = (order: HeldOrderRecord) => {
+    if (cart.length > 0) {
+      if (!window.confirm("Resuming this order will replace your current cart. Continue?")) {
+        return;
+      }
+    }
+
+    setCart(order.cart_data || []);
+    if (order.customer_name) setCustomerName(order.customer_name);
+    if (order.customer_phone) setCustomerPhone(order.customer_phone);
+    if (order.customer_note) setCustomerNote(order.customer_note);
+    setActiveHeldOrderId(order.id);
+    setHeldOrdersModalOpen(false);
+
+    toast({
+      title: "Held order resumed",
+      description: `Loaded ${order.item_count || order.cart_data?.length || 0} item(s) back into cart.`,
+    });
+  };
+
+  const handleDeleteHeldOrder = async (orderId: string) => {
+    if (!active?.id) return;
+    await deleteHeldOrder(orderId, active.id);
+    if (activeHeldOrderId === orderId) {
+      setActiveHeldOrderId(null);
+    }
+    refreshHeldOrders();
+    toast({
+      title: "Held order removed",
+      description: "Order has been removed from the queue.",
+    });
   };
 
   return (
@@ -581,9 +759,10 @@ const UserPOS = () => {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4 min-w-0">
                 {filtered.map((p) => {
-                  const out = p.stock_units <= 0;
-                  const low = !out && p.stock_units <= p.min_stock_alert;
-                  const parsed = parseProductUOM(p.name, p.description || "");
+                  const stockInfo = computeProductStock(p.stock_units, p.name, p.description, p.uom, p.units_per_uom, p.base_unit);
+                  const out = stockInfo.totalSubUnits <= 0;
+                  const low = !out && stockInfo.listingStock <= p.min_stock_alert;
+                  const parsed = parseProductUOM(p.name, p.description || "", p.uom, p.units_per_uom, p.base_unit);
                   const hasSubUnits = parsed.packSize > 1 || parsed.isBulkWeight || parsed.isLiquidVolume || parsed.isPharmaPack;
                   const subUnitPrice = parsed.packSize > 1 ? unitPrice(p) / parsed.packSize : null;
 
@@ -619,9 +798,7 @@ const UserPOS = () => {
                             }`}>
                               {out
                                 ? "OUT OF STOCK"
-                                : parsed.packSize > 1
-                                ? `${Math.floor(p.stock_units / parsed.packSize)} ${parsed.uomLabel}s (${p.stock_units} ${parsed.subUnitName}s)`
-                                : `${p.stock_units} in stock`}
+                                : stockInfo.displayText}
                             </span>
                           </div>
                         </div>
@@ -678,15 +855,66 @@ const UserPOS = () => {
                 <p className="text-[10px] font-bold tracking-widest text-muted-foreground">REGISTER TERMINAL #01</p>
               </div>
             </div>
-            <button
-              onClick={clearCart}
-              disabled={cart.length === 0}
-              className="h-8 w-8 rounded-xl hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-rose-500 disabled:opacity-40 transition cursor-pointer"
-              title="Clear Cart & Reset Customer"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+
+            <div className="flex items-center gap-1.5">
+              {/* Held Orders Queue Button */}
+              <button
+                type="button"
+                id="pos-held-orders-queue-btn"
+                onClick={() => setHeldOrdersModalOpen(true)}
+                className="relative h-8 px-2.5 rounded-xl border border-border/80 bg-muted/30 hover:bg-muted/70 text-xs font-bold flex items-center gap-1.5 text-foreground transition cursor-pointer"
+                title="View Held Orders Queue"
+              >
+                <Clock className="h-3.5 w-3.5 text-amber-500" />
+                <span className="hidden sm:inline">Held</span>
+                {heldOrders.length > 0 && (
+                  <span className="h-4 min-w-4 px-1 rounded-full bg-amber-500 text-white text-[9px] font-extrabold flex items-center justify-center">
+                    {heldOrders.length}
+                  </span>
+                )}
+              </button>
+
+              {/* Hold Current Cart Button */}
+              <button
+                type="button"
+                id="pos-hold-cart-btn"
+                disabled={cart.length === 0}
+                onClick={handleHoldCart}
+                className="h-8 px-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-bold flex items-center gap-1.5 disabled:opacity-40 transition cursor-pointer"
+                title="Hold current cart & customer"
+              >
+                <PauseCircle className="h-3.5 w-3.5" />
+                <span>Hold</span>
+              </button>
+
+              {/* Clear Cart */}
+              <button
+                onClick={clearCart}
+                disabled={cart.length === 0}
+                className="h-8 w-8 rounded-xl hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-rose-500 disabled:opacity-40 transition cursor-pointer"
+                title="Clear Cart & Reset Customer"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
           </div>
+
+          {/* Resumed Order Banner */}
+          {activeHeldOrderId && (
+            <div className="px-3 py-1.5 bg-amber-500/15 border-b border-amber-500/25 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-200 font-bold">
+                <Clock className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
+                <span>Resumed Held Order (Auto-clears on sale)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveHeldOrderId(null)}
+                className="text-[10px] text-muted-foreground hover:text-foreground underline cursor-pointer"
+              >
+                Detach
+              </button>
+            </div>
+          )}
 
           {/* Customer / Patient Quick Details Header */}
           <div className="p-3 border-b border-border bg-muted/20 flex-shrink-0">
@@ -949,6 +1177,16 @@ const UserPOS = () => {
         product={selectedProductForCalc}
         initialFraction={calcInitialFraction}
         onApply={handleApplyFractional}
+      />
+
+      {/* Held Orders Modal */}
+      <HeldOrdersModal
+        open={heldOrdersModalOpen}
+        onOpenChange={setHeldOrdersModalOpen}
+        orders={heldOrders}
+        onResume={handleResumeHeldOrder}
+        onDelete={handleDeleteHeldOrder}
+        formatMoney={fmt}
       />
 
       <SaleReceiptDialog

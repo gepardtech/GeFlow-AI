@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { resolveSettingsHierarchy, getCachedUserMetadata } from "./settingsHierarchy";
 import { currencySymbol } from "./currency";
 import { PlanId } from "./plans";
+import { computeProductStock, parseProductUOM } from "./uomRegistry";
 
 export const formatCurrency = (val: number, code: string = "USD") => {
   const sym = currencySymbol(code);
@@ -61,13 +62,34 @@ export interface BusinessAnalyticsContext {
     outOfStockCount: number;
     lowStockCount: number;
     expiringCount: number;
+    expiring30Count: number;
+    expiring60Count: number;
     totalUnitsInStock: number;
     inventoryCostValue: number;
     inventoryRetailValue: number;
     estimatedGrossProfitMargin: number;
     outOfStockItems: string[];
-    lowStockItems: { name: string; units: number; threshold: number }[];
-    expiringItems: { name: string; expiryDate: string; units: number }[];
+    lowStockItems: {
+      name: string;
+      units: number;
+      threshold: number;
+      packsDisplay: string;
+      uom: string;
+    }[];
+    expiringItems: {
+      name: string;
+      expiryDate: string;
+      daysRemaining: number;
+      units: number;
+      packsDisplay: string;
+    }[];
+    expiring60Items: {
+      name: string;
+      expiryDate: string;
+      daysRemaining: number;
+      units: number;
+      packsDisplay: string;
+    }[];
   };
   sales: {
     todayRevenue: number;
@@ -143,11 +165,28 @@ export async function fetchLiveBusinessAnalytics(businessId: string): Promise<Bu
 
     const now = new Date();
     const in30Days = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
-    const expiringList = activeProds.filter((p) => {
+    const in60Days = new Date(now.getTime() + 60 * 24 * 3600 * 1000);
+
+    const expiring30List = activeProds.filter((p) => {
       if (!p.expiry_date) return false;
       const exp = new Date(p.expiry_date);
       return exp >= now && exp <= in30Days;
     });
+
+    const expiring60List = activeProds.filter((p) => {
+      if (!p.expiry_date) return false;
+      const exp = new Date(p.expiry_date);
+      return exp > in30Days && exp <= in60Days;
+    });
+
+    const formatDualStock = (p: any, baseUnits: number): string => {
+      const parsed = parseProductUOM(p.name, p.uom, p.units_per_uom, p.base_unit);
+      const info = computeProductStock(baseUnits, parsed);
+      if (info.packSize > 1) {
+        return `${info.packs} ${info.uomLabel}${info.packs !== 1 ? "s" : ""} (${info.baseUnits} ${info.subUnitName}${info.baseUnits !== 1 ? "s" : ""})`;
+      }
+      return `${info.baseUnits} ${info.uomLabel}${info.baseUnits !== 1 ? "s" : ""}`;
+    };
 
     const totalUnits = activeProds.reduce((acc, p) => acc + (Number(p.stock_units) || 0), 0);
     const costVal = activeProds.reduce(
@@ -238,22 +277,48 @@ export async function fetchLiveBusinessAnalytics(businessId: string): Promise<Bu
         activeProducts: activeProds.length,
         outOfStockCount: outOfStockList.length,
         lowStockCount: lowStockList.length,
-        expiringCount: expiringList.length,
+        expiringCount: expiring30List.length,
+        expiring30Count: expiring30List.length,
+        expiring60Count: expiring60List.length,
         totalUnitsInStock: totalUnits,
         inventoryCostValue: costVal,
         inventoryRetailValue: retailVal,
         estimatedGrossProfitMargin: estMargin,
         outOfStockItems: outOfStockList.slice(0, 10).map((p) => p.name),
-        lowStockItems: lowStockList.slice(0, 10).map((p) => ({
-          name: p.name,
-          units: Number(p.stock_units),
-          threshold: Number(p.min_stock_alert) || stockThresholdDefault,
-        })),
-        expiringItems: expiringList.slice(0, 10).map((p) => ({
-          name: p.name,
-          expiryDate: p.expiry_date!,
-          units: Number(p.stock_units),
-        })),
+        lowStockItems: lowStockList.slice(0, 10).map((p) => {
+          const u = Number(p.stock_units);
+          return {
+            name: p.name,
+            units: u,
+            threshold: Number(p.min_stock_alert) || stockThresholdDefault,
+            packsDisplay: formatDualStock(p, u),
+            uom: p.uom || "piece",
+          };
+        }),
+        expiringItems: expiring30List.slice(0, 10).map((p) => {
+          const u = Number(p.stock_units);
+          const exp = new Date(p.expiry_date!);
+          const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 3600 * 24));
+          return {
+            name: p.name,
+            expiryDate: p.expiry_date!,
+            daysRemaining: diffDays,
+            units: u,
+            packsDisplay: formatDualStock(p, u),
+          };
+        }),
+        expiring60Items: expiring60List.slice(0, 10).map((p) => {
+          const u = Number(p.stock_units);
+          const exp = new Date(p.expiry_date!);
+          const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 3600 * 24));
+          return {
+            name: p.name,
+            expiryDate: p.expiry_date!,
+            daysRemaining: diffDays,
+            units: u,
+            packsDisplay: formatDualStock(p, u),
+          };
+        }),
       },
       sales: {
         todayRevenue: sumTotal(todaySales),
@@ -549,10 +614,43 @@ export function generateLocalBusinessAnalysis(
     ].join("\n");
   }
 
+  // 2.5. NEAR EXPIRY & SHELF-LIFE AUDIT QUERIES
+  if (q.includes("expir") || q.includes("tareekh") || q.includes("shelf") || q.includes("khatam hone") || q.includes("صلاحية")) {
+    const expiring30Details = ctx.inventory.expiringItems.length > 0
+      ? ctx.inventory.expiringItems.map((i) => `  - 🔴 **${i.name}**: ${i.packsDisplay} — expires in **${i.daysRemaining} days** (${i.expiryDate})`).join("\n")
+      : "  - No products expiring within 30 days.";
+
+    const expiring60Details = (ctx.inventory.expiring60Items || []).length > 0
+      ? ctx.inventory.expiring60Items.map((i) => `  - 🟡 **${i.name}**: ${i.packsDisplay} — expires in **${i.daysRemaining} days** (${i.expiryDate})`).join("\n")
+      : "  - No products expiring in 31–60 days.";
+
+    if (lang === "roman_urdu") {
+      return [
+        `🚨 **${ctx.business.name} ka Expiry & Shelf-Life Watchlist:**`,
+        `• **Urgent Expiry (< 30 Din):** ${ctx.inventory.expiring30Count} items`,
+        expiring30Details,
+        `• **Moderate Alert (31–60 Din):** ${ctx.inventory.expiring60Count} items`,
+        expiring60Details,
+        ``,
+        `💡 **Tadbeer:** Urgent items ko POS par promotional clearance discount de kar jaldi sell karein ya vendor ko return batch issue karein.`
+      ].join("\n");
+    }
+
+    return [
+      `### 🛡️ Product Expiry & Shelf-Life Audit: ${ctx.business.name}`,
+      `• **Urgent Expiry (< 30 Days):** ${ctx.inventory.expiring30Count} product(s) requiring immediate attention`,
+      expiring30Details,
+      `• **Upcoming Expiry (31–60 Days Watchlist):** ${ctx.inventory.expiring60Count} product(s)`,
+      expiring60Details,
+      ``,
+      `**Recommended Action:** Apply clearance pricing in POS terminal or coordinate return-to-vendor / credit note for near-expiry batches.`
+    ].join("\n");
+  }
+
   // 3. INVENTORY / STOCK / LOW STOCK / OUT OF STOCK QUERIES
   if (q.includes("stock") || q.includes("inventory") || q.includes("product") || q.includes("reorder") || q.includes("maal") || q.includes("kam") || q.includes("khatam") || q.includes("مخزون")) {
     const lowStockDetails = ctx.inventory.lowStockItems.length > 0
-      ? ctx.inventory.lowStockItems.map((i) => `  - **${i.name}**: ${i.units} units remaining (alert at ${i.threshold})`).join("\n")
+      ? ctx.inventory.lowStockItems.map((i) => `  - **${i.name}**: ${i.packsDisplay} remaining (alert threshold: ${i.threshold})`).join("\n")
       : "  - No items currently below low stock threshold.";
 
     const oosDetails = ctx.inventory.outOfStockItems.length > 0
@@ -569,7 +667,8 @@ export function generateLocalBusinessAnalysis(
         oosDetails,
         `• **Low Stock Alert (≤ ${ctx.business.stockAlertLimit} units):** ${ctx.inventory.lowStockCount} items`,
         lowStockDetails,
-        `• **Expiring within 30 days:** ${ctx.inventory.expiringCount} items`,
+        `• **Expiring within 30 days:** ${ctx.inventory.expiring30Count} items`,
+        `• **Expiring in 31–60 days:** ${ctx.inventory.expiring60Count} items`,
         ``,
         `💡 Next Step: Purchases tab se restock order create karein.`
       ].join("\n");
@@ -583,7 +682,8 @@ export function generateLocalBusinessAnalysis(
       oosDetails,
       `• **Low Stock Alerts (Threshold: ≤ ${ctx.business.stockAlertLimit} units):** ${ctx.inventory.lowStockCount} products`,
       lowStockDetails,
-      `• **Expiring soon (< 30 days):** ${ctx.inventory.expiringCount} products`,
+      `• **Expiring within 30 days:** ${ctx.inventory.expiring30Count} products`,
+      `• **Expiring in 31–60 days:** ${ctx.inventory.expiring60Count} products`,
       ``,
       `**Action Item:** Navigate to **Inventory → Low Stock** or **Purchases** to trigger restocking orders.`
     ].join("\n");

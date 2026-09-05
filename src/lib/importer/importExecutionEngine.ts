@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { ImportResultSummary, NormalizedProduct } from "./types";
+import { recordStockMovement } from "@/lib/stockMovementService";
+import { parseProductUOM } from "@/lib/uomRegistry";
 
 export interface ImportExecutionParams {
   products: NormalizedProduct[];
@@ -106,7 +108,7 @@ export const executeProductImport = async ({
       // Safe numeric conversions
       const purchaseCost = Math.max(0, Number(item.canonical.purchase_cost) || 0);
       const retailPrice = Math.max(0, Number(item.canonical.retail_price) || 0);
-      const stockUnits = Math.max(0, parseInt(String(item.canonical.stock_units), 10) || 0);
+      const rawInputStock = Math.max(0, parseInt(String(item.canonical.stock_units), 10) || 0);
       const minStockAlert = Math.max(1, parseInt(String(item.canonical.min_stock_alert), 10) || 10);
       const discountPrice =
         item.canonical.discount_price !== null &&
@@ -114,6 +116,24 @@ export const executeProductImport = async ({
         !isNaN(Number(item.canonical.discount_price))
           ? Math.max(0, Number(item.canonical.discount_price))
           : null;
+
+      // Intelligent UoM & Base Units calculation
+      let packSize = Math.max(1, Number(item.canonical.pack_size) || 1);
+      let detectedBaseUnit = "piece";
+      let uomName = (item.canonical.stock_unit || item.canonical.package_type || "").trim().toLowerCase();
+
+      // If pack_size is 1 or unset, detect from product name or unit string (e.g. "Panadol 20s", "Pack of 12", "10x10")
+      if (packSize === 1) {
+        const parsed = parseProductUOM(cleanName, uomName);
+        if (parsed.packSize > 1) {
+          packSize = parsed.packSize;
+          detectedBaseUnit = parsed.subUnitName.toLowerCase();
+          if (!uomName) uomName = parsed.uomLabel.toLowerCase();
+        }
+      }
+
+      // Convert quantity to base unit (smallest unit) for products.stock_units
+      const baseStockUnits = rawInputStock * packSize;
 
       // Clean date
       let cleanExpiry: string | null = null;
@@ -135,14 +155,13 @@ export const executeProductImport = async ({
         finalSubcategoryId = null;
       }
 
-      // Format description with UOM tag to preserve unit metadata
+      // Format description with UOM tags to preserve unit metadata
       let finalDescription = (item.canonical.description || "").trim();
-      if (item.canonical.stock_unit) {
-        if (!finalDescription.includes("[UOM:")) {
-          finalDescription = finalDescription
-            ? `${finalDescription}\n[UOM: ${item.canonical.stock_unit}]`
-            : `[UOM: ${item.canonical.stock_unit}]`;
-        }
+      const uomTag = uomName || "piece";
+      if (!finalDescription.includes("[UOM:")) {
+        finalDescription = finalDescription
+          ? `${finalDescription}\n[UOM: ${uomTag}] [PACK_SIZE: ${packSize}] [PACK_QTY: ${rawInputStock}] [BASE_QTY: ${baseStockUnits}]`
+          : `[UOM: ${uomTag}] [PACK_SIZE: ${packSize}] [PACK_QTY: ${rawInputStock}] [BASE_QTY: ${baseStockUnits}]`;
       }
 
       // Handle duplicate actions
@@ -154,9 +173,9 @@ export const executeProductImport = async ({
 
         if (item.duplicateAction === "add_stock") {
           try {
-            const addedStock = stockUnits;
+            const addedBaseStock = baseStockUnits;
             const currentStock = item.existingProductData?.stock_units ?? 0;
-            const newStock = Math.max(0, currentStock + addedStock);
+            const newStock = Math.max(0, currentStock + addedBaseStock);
 
             const { error: updateErr } = await supabase
               .from("products")
@@ -169,16 +188,21 @@ export const executeProductImport = async ({
 
             if (updateErr) throw updateErr;
 
-            // Record stock movement
-            if (addedStock > 0 && resolvedUserId) {
-              await supabase.from("stock_movements").insert({
+            // Record stock movement (in base units)
+            if (addedBaseStock > 0 && resolvedUserId) {
+              await recordStockMovement({
                 business_id: businessId,
                 owner_user_id: resolvedUserId,
                 product_id: item.existingProductId,
-                quantity: addedStock,
+                quantity: addedBaseStock,
                 type: "in",
                 reason: `Bulk import stock addition (${batchId})`,
-                note: `Spreadsheet row ${item.rowIndex} [Batch: ${batchId}]`,
+                note: packSize > 1
+                  ? `Spreadsheet row ${item.rowIndex}: Added ${rawInputStock} ${uomTag}(s) × ${packSize} = ${addedBaseStock} base units [Batch: ${batchId}]`
+                  : `Spreadsheet row ${item.rowIndex} [Batch: ${batchId}]`,
+                reference_id: batchId,
+                reference_type: "bulk_import",
+                created_by: resolvedUserId,
               });
             }
 
@@ -209,7 +233,7 @@ export const executeProductImport = async ({
                 purchase_cost: purchaseCost,
                 retail_price: retailPrice,
                 discount_price: discountPrice,
-                stock_units: stockUnits,
+                stock_units: baseStockUnits,
                 min_stock_alert: minStockAlert,
                 batch_number: item.canonical.batch_number?.trim() || null,
                 expiry_date: cleanExpiry,
@@ -240,7 +264,7 @@ export const executeProductImport = async ({
 
       // Handle insertion of new product
       try {
-        const insertPayload = {
+        const insertPayload: Record<string, any> = {
           business_id: businessId,
           owner_user_id: resolvedUserId,
           name: cleanName,
@@ -251,13 +275,16 @@ export const executeProductImport = async ({
           purchase_cost: purchaseCost,
           retail_price: retailPrice,
           discount_price: discountPrice,
-          stock_units: stockUnits,
+          stock_units: baseStockUnits,
           min_stock_alert: minStockAlert,
           batch_number: item.canonical.batch_number?.trim() || null,
           expiry_date: cleanExpiry,
           barcode: item.canonical.barcode?.trim() || null,
           status: item.canonical.status || "active",
           images: item.canonical.images || [],
+          uom: uomTag,
+          units_per_uom: packSize,
+          base_unit: detectedBaseUnit,
         };
 
         const { data: inserted, error: insertErr } = await supabase
@@ -268,16 +295,21 @@ export const executeProductImport = async ({
 
         if (insertErr) throw insertErr;
 
-        // Record initial stock movement if quantity > 0
-        if (inserted?.id && stockUnits > 0 && resolvedUserId) {
-          await supabase.from("stock_movements").insert({
+        // Record initial stock movement in base units if quantity > 0
+        if (inserted?.id && baseStockUnits > 0 && resolvedUserId) {
+          await recordStockMovement({
             business_id: businessId,
             owner_user_id: resolvedUserId,
             product_id: inserted.id,
-            quantity: stockUnits,
+            quantity: baseStockUnits,
             type: "in",
             reason: `Initial bulk import (${batchId})`,
-            note: `Spreadsheet row ${item.rowIndex} [Batch: ${batchId}]`,
+            note: packSize > 1
+              ? `Spreadsheet row ${item.rowIndex}: Received ${rawInputStock} ${uomTag}(s) × ${packSize} = ${baseStockUnits} base units [Batch: ${batchId}]`
+              : `Spreadsheet row ${item.rowIndex} [Batch: ${batchId}]`,
+            reference_id: batchId,
+            reference_type: "bulk_import",
+            created_by: resolvedUserId,
           });
         }
 

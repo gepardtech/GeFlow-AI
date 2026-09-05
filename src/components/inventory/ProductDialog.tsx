@@ -41,7 +41,7 @@ import { AIProductIntelligenceAssistant, AIProductIntelligenceAssistantRef } fro
 import { ProductSuggestion, FieldConfidenceDetail, ConfidenceLevel, FieldSource } from "@/types/aiProductIntelligence";
 import { UOMSelect } from "./UOMSelect";
 import { AIFieldStatusBadge, AIFieldStatus } from "./AIFieldStatusBadge";
-import { formatStockWithUOM } from "@/lib/uomRegistry";
+import { formatStockWithUOM, formatUomPlural, getDefaultBaseUnit } from "@/lib/uomRegistry";
 
 export interface FieldAIStatusInfo {
   status?: AIFieldStatus;
@@ -70,6 +70,9 @@ export interface ProductRecord {
   barcode: string | null;
   status: string;
   images?: string[] | null;
+  uom?: string | null;
+  units_per_uom?: number | null;
+  base_unit?: string | null;
 }
 
 interface Props {
@@ -89,14 +92,18 @@ const emptyForm = {
   description: "",
   category_id: "",
   subcategory_id: "",
-  uom: "piece",
-  measurement_scale: "1",
-  pack_qty: "",
+  uom: "box",
+  units_per_uom: "12",
+  base_unit: "tablet",
+  opening_stock_boxes: "0",
+  // Compatibility mirror fields
+  measurement_scale: "12",
+  pack_qty: "0",
+  stock_units: "0",
   purchase_cost: "",
   retail_price: "",
   discount_price: "",
-  stock_units: "",
-  min_stock_alert: "10",
+  min_stock_alert: "5",
   batch_number: "",
   expiry_date: "",
   barcode: "",
@@ -216,13 +223,14 @@ const ProductDialog = ({
     return categorySettings?.stock_alert_limit ? String(categorySettings.stock_alert_limit) : "10";
   }, [categorySettings]);
 
-  // Extract UOM and Measurement Scale if stored in description
-  const extractUOMFromDescription = (desc: string | null): { cleanDesc: string; uom: string | null; scale: string | null; packQty: string | null } => {
-    if (!desc) return { cleanDesc: "", uom: null, scale: null, packQty: null };
+  // Extract UOM, Scale, Base Unit, and Pack Qty if stored in description
+  const extractUOMFromDescription = (desc: string | null): { cleanDesc: string; uom: string | null; scale: string | null; packQty: string | null; baseUnitTag: string | null } => {
+    if (!desc) return { cleanDesc: "", uom: null, scale: null, packQty: null, baseUnitTag: null };
     let cleanDesc = desc;
     let uom: string | null = null;
     let scale: string | null = null;
     let packQty: string | null = null;
+    let baseUnitTag: string | null = null;
 
     const uomMatch = cleanDesc.match(/\[UOM:\s*([^\]]+)\]/i);
     if (uomMatch && uomMatch[1]) {
@@ -230,10 +238,16 @@ const ProductDialog = ({
       cleanDesc = cleanDesc.replace(/\[UOM:\s*[^\]]+\]/i, "").trim();
     }
 
-    const scaleMatch = cleanDesc.match(/\[(?:SCALE|PACK_SIZE):\s*([^\]]+)\]/i);
+    const scaleMatch = cleanDesc.match(/\[(?:SCALE|PACK_SIZE|UNITS_PER_UOM):\s*([^\]]+)\]/i);
     if (scaleMatch && scaleMatch[1]) {
       scale = scaleMatch[1].trim();
-      cleanDesc = cleanDesc.replace(/\[(?:SCALE|PACK_SIZE):\s*[^\]]+\]/i, "").trim();
+      cleanDesc = cleanDesc.replace(/\[(?:SCALE|PACK_SIZE|UNITS_PER_UOM):\s*([^\]]+)\]/i, "").trim();
+    }
+
+    const baseUnitMatch = cleanDesc.match(/\[BASE_UNIT:\s*([^\]]+)\]/i);
+    if (baseUnitMatch && baseUnitMatch[1]) {
+      baseUnitTag = baseUnitMatch[1].trim();
+      cleanDesc = cleanDesc.replace(/\[BASE_UNIT:\s*[^\]]+\]/i, "").trim();
     }
 
     const packQtyMatch = cleanDesc.match(/\[PACK_QTY:\s*([^\]]+)\]/i);
@@ -244,7 +258,7 @@ const ProductDialog = ({
 
     cleanDesc = cleanDesc.replace(/\[BASE_QTY:\s*[^\]]+\]/i, "").trim();
 
-    return { cleanDesc, uom, scale, packQty };
+    return { cleanDesc, uom, scale, packQty, baseUnitTag };
   };
 
   useEffect(() => {
@@ -254,10 +268,28 @@ const ProductDialog = ({
     setFieldAIStatuses({});
 
     if (product) {
-      const { cleanDesc, uom, scale, packQty } = extractUOMFromDescription(product.description);
-      const totalUnits = product.stock_units !== null && product.stock_units !== undefined ? String(product.stock_units) : "";
-      const scaleNum = Number(scale) || 1;
-      const initialPackQty = packQty || (scaleNum > 1 && totalUnits ? String(Math.floor(Number(totalUnits) / scaleNum)) : totalUnits);
+      const { cleanDesc, uom, scale, packQty, baseUnitTag } = extractUOMFromDescription(product.description);
+      const rawStock = product.stock_units !== null && product.stock_units !== undefined ? Number(product.stock_units) : 0;
+      
+      const resolvedUom = (product.uom || uom || "box").toLowerCase();
+      const resolvedUnitsPerUom = product.units_per_uom !== null && product.units_per_uom !== undefined && Number(product.units_per_uom) > 0
+        ? Number(product.units_per_uom)
+        : (Number(scale) || (resolvedUom === "box" ? 12 : resolvedUom === "strip" ? 10 : 1));
+      const resolvedBaseUnit = (product.base_unit || baseUnitTag || getDefaultBaseUnit(resolvedUom, industryType)).toLowerCase();
+
+      // Determine initial opening stock in Boxes
+      // In the new architecture, stock_units is stored in base units (e.g. 120 tablets).
+      // So opening stock in boxes = rawStock / resolvedUnitsPerUom (120 / 12 = 10 boxes).
+      // If legacy product where stock_units was saved as boxes (e.g. stock_units == packQty), use packQty.
+      let initialBoxes = 0;
+      const packQtyMatch = (product.description || "").match(/\[PACK_QTY:\s*([0-9.]+)\]/i);
+      if (packQtyMatch && Math.abs(Number(packQtyMatch[1]) - rawStock) < 0.001) {
+        initialBoxes = Number(packQtyMatch[1]);
+      } else if (resolvedUnitsPerUom > 1) {
+        initialBoxes = +(rawStock / resolvedUnitsPerUom).toFixed(2);
+      } else {
+        initialBoxes = rawStock;
+      }
 
       setForm({
         name: product.name ?? "",
@@ -265,13 +297,16 @@ const ProductDialog = ({
         description: cleanDesc,
         category_id: product.category_id ?? "",
         subcategory_id: product.subcategory_id ?? "",
-        uom: uom || "piece",
-        measurement_scale: scale || (uom === "pack" || uom === "box" || uom === "carton" || uom === "dozen" ? "12" : "1"),
-        pack_qty: initialPackQty,
+        uom: resolvedUom,
+        units_per_uom: String(resolvedUnitsPerUom),
+        base_unit: resolvedBaseUnit,
+        opening_stock_boxes: String(initialBoxes),
+        measurement_scale: String(resolvedUnitsPerUom),
+        pack_qty: String(initialBoxes),
+        stock_units: String(rawStock),
         purchase_cost: product.purchase_cost !== null && product.purchase_cost !== undefined ? String(product.purchase_cost) : "",
         retail_price: product.retail_price !== null && product.retail_price !== undefined ? String(product.retail_price) : "",
         discount_price: product.discount_price != null ? String(product.discount_price) : "",
-        stock_units: totalUnits,
         min_stock_alert: String(product.min_stock_alert ?? defaultMinAlert),
         batch_number: product.batch_number ?? "",
         expiry_date: product.expiry_date ?? "",
@@ -283,14 +318,16 @@ const ProductDialog = ({
       setForm({
         ...emptyForm,
         min_stock_alert: defaultMinAlert,
-        measurement_scale: "1",
-        pack_qty: "",
-        stock_units: "",
+        units_per_uom: "12",
+        measurement_scale: "12",
+        opening_stock_boxes: "0",
+        pack_qty: "0",
+        stock_units: "0",
         ...(prefill ?? {}),
       });
       setImages([]);
     }
-  }, [open, product, prefill, defaultMinAlert]);
+  }, [open, product, prefill, defaultMinAlert, industryType]);
 
   const set = (k: keyof typeof emptyForm, v: string) => {
     setForm((f) => {
@@ -414,8 +451,10 @@ const ProductDialog = ({
       }
       if (appliedFields.uom && s.uom?.stock_unit) {
         next.uom = s.uom.stock_unit.toLowerCase();
+        next.base_unit = s.uom.base_unit || getDefaultBaseUnit(next.uom, industryType);
       }
-      if (s.uom?.pack_size && s.uom.pack_size > 1) {
+      if (s.uom?.pack_size && s.uom.pack_size > 0) {
+        next.units_per_uom = String(s.uom.pack_size);
         next.measurement_scale = String(s.uom.pack_size);
       }
       if (s.identification?.barcode) {
@@ -439,13 +478,11 @@ const ProductDialog = ({
         s.extracted_business_data?.stock_units !== null &&
         s.extracted_business_data?.stock_units !== undefined
       ) {
-        next.stock_units = String(s.extracted_business_data.stock_units);
-        const scaleNum = Number(next.measurement_scale) || 1;
-        if (scaleNum > 1) {
-          next.pack_qty = String(Math.floor(s.extracted_business_data.stock_units / scaleNum));
-        } else {
-          next.pack_qty = String(s.extracted_business_data.stock_units);
-        }
+        const uomUnits = Number(next.units_per_uom) || 1;
+        const boxes = String(s.extracted_business_data.stock_units);
+        next.opening_stock_boxes = boxes;
+        next.pack_qty = boxes;
+        next.stock_units = String(Math.round(Number(boxes) * uomUnits));
       }
       if (s.extracted_business_data?.min_stock_alert !== null && s.extracted_business_data?.min_stock_alert !== undefined) {
         next.min_stock_alert = String(s.extracted_business_data.min_stock_alert);
@@ -586,10 +623,11 @@ const ProductDialog = ({
       errs.retail_price = "Retail price must be greater than or equal to 0.";
     }
 
-    if (form.stock_units === "" || isNaN(Number(form.stock_units))) {
-      errs.stock_units = "Stock units must be greater than or equal to 0.";
-    } else if (Number(form.stock_units) < 0) {
-      errs.stock_units = "Stock units must be greater than or equal to 0.";
+    const effectiveStock = form.opening_stock_boxes !== "" ? form.opening_stock_boxes : (form.pack_qty !== "" ? form.pack_qty : form.stock_units);
+    if (effectiveStock === "" || isNaN(Number(effectiveStock))) {
+      errs.stock_units = "Opening stock must be greater than or equal to 0.";
+    } else if (Number(effectiveStock) < 0) {
+      errs.stock_units = "Opening stock cannot be negative.";
     }
 
     if (form.purchase_cost !== "" && Number(form.purchase_cost) < 0) {
@@ -646,17 +684,24 @@ const ProductDialog = ({
       }
     }
 
-    // Format description with UOM and Measurement Scale tags to preserve unit metadata safely without schema alterations
-    let finalDescription = form.description.trim();
-    const scaleNum = Number(form.measurement_scale) || 1;
-    const packQtyNum = Number(form.pack_qty) || 0;
-    const finalStockUnits = parseInt(form.stock_units, 10) || (packQtyNum > 0 ? packQtyNum * scaleNum : 0);
+    // stock_units is ALWAYS stored in Base Unit (smallest unit e.g. tablets, pieces, ml)
+    const openingBoxes = Number(form.opening_stock_boxes !== "" ? form.opening_stock_boxes : (form.pack_qty !== "" ? form.pack_qty : form.stock_units)) || 0;
+    const unitsPerUom = Math.max(1, Number(form.units_per_uom || form.measurement_scale) || 1);
+    const totalBaseUnits = Math.round(openingBoxes * unitsPerUom);
+    const resolvedUom = (form.uom || "box").toLowerCase().trim();
+    const resolvedBaseUnit = (form.base_unit || getDefaultBaseUnit(resolvedUom, industryType)).toLowerCase().trim();
 
+    // Format description with UOM metadata tags as backward-compatible fallback
+    let finalDescription = form.description.trim();
     const tags: string[] = [];
-    if (form.uom) tags.push(`[UOM: ${form.uom}]`);
-    if (scaleNum > 1) tags.push(`[SCALE: ${scaleNum}]`);
-    if (packQtyNum > 0) tags.push(`[PACK_QTY: ${packQtyNum}]`);
-    tags.push(`[BASE_QTY: ${finalStockUnits}]`);
+    if (resolvedUom) tags.push(`[UOM: ${resolvedUom}]`);
+    if (unitsPerUom > 1) {
+      tags.push(`[SCALE: ${unitsPerUom}]`);
+      tags.push(`[UNITS_PER_UOM: ${unitsPerUom}]`);
+    }
+    tags.push(`[BASE_UNIT: ${resolvedBaseUnit}]`);
+    tags.push(`[PACK_QTY: ${openingBoxes}]`);
+    tags.push(`[BASE_QTY: ${totalBaseUnits}]`);
 
     if (tags.length > 0) {
       finalDescription = finalDescription
@@ -666,7 +711,7 @@ const ProductDialog = ({
 
     const finalSku = form.internal_sku.trim() || generateAutoSku(form.name);
 
-    const payload = {
+    const payloadWithColumns: Record<string, any> = {
       business_id: businessId,
       owner_user_id: ownerUserId,
       name: form.name.trim(),
@@ -677,8 +722,11 @@ const ProductDialog = ({
       purchase_cost: Number(form.purchase_cost) || 0,
       retail_price: Number(form.retail_price) || 0,
       discount_price: form.discount_price ? Number(form.discount_price) : null,
-      stock_units: finalStockUnits,
-      min_stock_alert: parseInt(form.min_stock_alert, 10) || 10,
+      stock_units: totalBaseUnits, // ALWAYS in Base Unit (e.g. 120 tablets for 10 boxes of 12)
+      uom: resolvedUom,
+      units_per_uom: unitsPerUom,
+      base_unit: resolvedBaseUnit,
+      min_stock_alert: parseInt(form.min_stock_alert, 10) || 5,
       batch_number: form.batch_number.trim() || null,
       expiry_date: form.expiry_date || null,
       barcode: form.barcode.trim() || null,
@@ -686,11 +734,44 @@ const ProductDialog = ({
       images,
     };
 
-    let error;
+    let error: any = null;
     if (isEdit && product) {
-      ({ error } = await supabase.from("products").update(payload).eq("id", product.id));
+      const res = await supabase.from("products").update(payloadWithColumns).eq("id", product.id);
+      error = res.error;
     } else {
-      ({ error } = await supabase.from("products").insert(payload));
+      const res = await supabase.from("products").insert(payloadWithColumns);
+      error = res.error;
+    }
+
+    // Resilient fallback if the new columns (uom, units_per_uom, base_unit) have not yet been migrated in Supabase (Postgres 42703)
+    if (error && (error.code === "42703" || String(error.message).toLowerCase().includes("column"))) {
+      console.warn("Retrying save without new column properties (tags preserved in description):", error.message);
+      const legacyPayload = {
+        business_id: businessId,
+        owner_user_id: ownerUserId,
+        name: form.name.trim(),
+        internal_sku: finalSku,
+        description: finalDescription || null,
+        category_id: form.category_id || null,
+        subcategory_id: form.subcategory_id || null,
+        purchase_cost: Number(form.purchase_cost) || 0,
+        retail_price: Number(form.retail_price) || 0,
+        discount_price: form.discount_price ? Number(form.discount_price) : null,
+        stock_units: totalBaseUnits, // ALWAYS in Base Units!
+        min_stock_alert: parseInt(form.min_stock_alert, 10) || 5,
+        batch_number: form.batch_number.trim() || null,
+        expiry_date: form.expiry_date || null,
+        barcode: form.barcode.trim() || null,
+        status: form.status || "active",
+        images,
+      };
+      if (isEdit && product) {
+        const res = await supabase.from("products").update(legacyPayload).eq("id", product.id);
+        error = res.error;
+      } else {
+        const res = await supabase.from("products").insert(legacyPayload);
+        error = res.error;
+      }
     }
 
     setSaving(false);
@@ -1176,64 +1257,60 @@ const ProductDialog = ({
             </div>
 
             {/* Packaging, UoM & Stock Conversion Card */}
-            <div className="p-4 rounded-2xl bg-muted/40 border border-border/80 space-y-3">
+            <div className="p-4 sm:p-5 rounded-2xl bg-muted/40 border border-border/80 space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-sky-500" />
-                  Unit of Measure (UoM) &amp; Stock Scale Conversion
+                  <Layers className="w-4 h-4 text-sky-500" />
+                  Packaging &amp; Stock Configuration
                 </span>
                 <span className="text-[11px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2.5 py-0.5 rounded-full border border-sky-500/20">
-                  Current Packaging: {form.uom ? form.uom.toUpperCase() : "PIECE"}
+                  Selling Unit: {form.uom ? form.uom.toUpperCase() : "BOX"}
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                {/* 1. Unit of Measure (UOM) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                {/* 1. Selling Unit (UoM) */}
                 <div>
                   <FieldLabel htmlFor="uom-scale-type-select" required>
-                    Unit of Measure (UoM)
+                    Selling Unit (UoM)
                   </FieldLabel>
                   <Select
-                    value={form.uom ? form.uom.toLowerCase() : "piece"}
+                    value={form.uom ? form.uom.toLowerCase() : "box"}
                     onValueChange={(val) => {
                       set("uom", val);
                       markTouched("uom");
                       if (val === "box") {
-                        if (!form.measurement_scale || form.measurement_scale === "1") {
-                          set("measurement_scale", "20");
-                          const q = Number(form.pack_qty) || 1;
-                          set("stock_units", String(q * 20));
-                        }
-                      } else if (val === "strip") {
-                        if (!form.measurement_scale || form.measurement_scale === "1") {
-                          set("measurement_scale", "10");
-                          const q = Number(form.pack_qty) || 1;
-                          set("stock_units", String(q * 10));
-                        }
-                      } else if (val === "dozen") {
+                        set("units_per_uom", "12");
+                        set("base_unit", "tablet");
                         set("measurement_scale", "12");
-                        const q = Number(form.pack_qty) || 1;
-                        set("stock_units", String(q * 12));
+                      } else if (val === "strip") {
+                        set("units_per_uom", "10");
+                        set("base_unit", "tablet");
+                        set("measurement_scale", "10");
+                      } else if (val === "dozen") {
+                        set("units_per_uom", "12");
+                        set("base_unit", "piece");
+                        set("measurement_scale", "12");
                       } else if (val === "carton") {
-                        if (!form.measurement_scale || form.measurement_scale === "1") {
-                          set("measurement_scale", "24");
-                          const q = Number(form.pack_qty) || 1;
-                          set("stock_units", String(q * 24));
-                        }
+                        set("units_per_uom", "24");
+                        set("base_unit", "piece");
+                        set("measurement_scale", "24");
                       } else if (val === "pack") {
-                        if (!form.measurement_scale || form.measurement_scale === "1") {
-                          set("measurement_scale", "10");
-                          const q = Number(form.pack_qty) || 1;
-                          set("stock_units", String(q * 10));
-                        }
+                        set("units_per_uom", "10");
+                        set("base_unit", "piece");
+                        set("measurement_scale", "10");
+                      } else if (val === "bottle") {
+                        set("units_per_uom", "100");
+                        set("base_unit", "ml");
+                        set("measurement_scale", "100");
                       } else if (val === "kg") {
+                        set("units_per_uom", "1000");
+                        set("base_unit", "g");
                         set("measurement_scale", "1000");
-                        const q = Number(form.pack_qty) || 1;
-                        set("stock_units", String(q * 1000));
                       } else if (val === "piece") {
+                        set("units_per_uom", "1");
+                        set("base_unit", "piece");
                         set("measurement_scale", "1");
-                        const q = Number(form.pack_qty) || Number(form.stock_units) || 1;
-                        set("stock_units", String(q));
                       }
                     }}
                   >
@@ -1241,95 +1318,64 @@ const ProductDialog = ({
                       <SelectValue placeholder="Select UOM" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="box">📦 Box (e.g. 20 tablets per box)</SelectItem>
+                      <SelectItem value="box">📦 Box (e.g. 12 or 20 tablets per box)</SelectItem>
+                      <SelectItem value="strip">💊 Strip (e.g. 10 pills per strip)</SelectItem>
                       <SelectItem value="pack">🛍️ Pack (e.g. 10 items per pack)</SelectItem>
                       <SelectItem value="carton">📦 Carton (e.g. 24 units per carton)</SelectItem>
-                      <SelectItem value="strip">💊 Strip (e.g. 10 pills per strip)</SelectItem>
-                      <SelectItem value="dozen">🥚 Dozen (12 items per dozen)</SelectItem>
+                      <SelectItem value="dozen">🥚 Dozen (12 pieces per dozen)</SelectItem>
                       <SelectItem value="bottle">🧴 Bottle (e.g. 100ml / syrup)</SelectItem>
                       <SelectItem value="kg">⚖️ Kilogram (1000g per kg)</SelectItem>
                       <SelectItem value="piece">🧩 Piece / Single Unit (1:1)</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Primary wholesale/sale unit.
+                    Primary unit sold over the counter.
                   </p>
                 </div>
 
-                {/* 2. Units Per 1 Box/Pack (Scale) */}
+                {/* 2. Pieces / Units per Box */}
                 <div>
-                  <FieldLabel htmlFor="measurement-scale-input">
-                    Units per 1 {form.uom ? form.uom.toUpperCase() : "Pack"}
+                  <FieldLabel htmlFor="units-per-uom-input" required>
+                    Pieces / Units per {form.uom ? form.uom.charAt(0).toUpperCase() + form.uom.slice(1) : "Box"}
                   </FieldLabel>
                   <Input
-                    id="measurement-scale-input"
+                    id="units-per-uom-input"
                     type="number"
                     min="1"
-                    value={form.measurement_scale}
+                    value={form.units_per_uom}
                     onChange={(e) => {
-                      const newScale = e.target.value;
-                      set("measurement_scale", newScale);
-                      const s = Number(newScale) || 1;
-                      const q = Number(form.pack_qty) || 0;
-                      if (q > 0) {
-                        set("stock_units", String(q * s));
-                      }
+                      const val = e.target.value;
+                      set("units_per_uom", val);
+                      set("measurement_scale", val);
                     }}
-                    placeholder="20"
+                    placeholder="12"
                     className="h-10 text-xs font-semibold"
                   />
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Tablets/items inside 1 {form.uom || "box"}.
+                    Smallest {form.base_unit || "pieces"} inside 1 {form.uom || "box"}.
                   </p>
                 </div>
 
-                {/* 3. Product Listing Stock (Stock on Hand in Boxes/Packs) */}
+                {/* 3. Opening Stock in Boxes */}
                 <div>
-                  <FieldLabel htmlFor="pack-qty-input">
-                    Stock in {form.uom ? form.uom.toUpperCase() + "s" : "Boxes"}
+                  <FieldLabel htmlFor="opening-stock-boxes-input" required>
+                    Opening Stock in {form.uom ? formatUomPlural(form.uom.charAt(0).toUpperCase() + form.uom.slice(1), 2) : "Boxes"}
                   </FieldLabel>
                   <Input
-                    id="pack-qty-input"
+                    id="opening-stock-boxes-input"
                     type="number"
                     min="0"
-                    value={form.pack_qty}
+                    step="any"
+                    value={form.opening_stock_boxes}
                     onChange={(e) => {
-                      const newPackQty = e.target.value;
-                      set("pack_qty", newPackQty);
-                      const q = Number(newPackQty) || 0;
-                      const s = Number(form.measurement_scale) || 1;
-                      set("stock_units", String(q * s));
-                    }}
-                    placeholder="10"
-                    className="h-10 text-xs font-semibold"
-                  />
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Physical {form.uom || "box"} count on hand.
-                  </p>
-                </div>
-
-                {/* 4. Total Single Base Units */}
-                <div>
-                  <FieldLabel htmlFor="stock-units-input" required>
-                    Total Base Units ({form.uom === "box" || form.uom === "strip" ? "Tablets" : "Pieces"})
-                  </FieldLabel>
-                  <Input
-                    id="stock-units-input"
-                    type="number"
-                    min="0"
-                    value={form.stock_units}
-                    onChange={(e) => {
-                      const total = e.target.value;
-                      set("stock_units", total);
-                      const s = Number(form.measurement_scale) || 1;
-                      if (s > 1 && total) {
-                        set("pack_qty", String(Math.floor(Number(total) / s)));
-                      } else {
-                        set("pack_qty", total);
-                      }
+                      const val = e.target.value;
+                      set("opening_stock_boxes", val);
+                      set("pack_qty", val);
+                      const totalUnits = Number(val || 0) * Number(form.units_per_uom || 1);
+                      set("stock_units", String(totalUnits));
                     }}
                     onBlur={() => markTouched("stock_units")}
-                    placeholder="200"
+                    placeholder="10"
                     className={`h-10 text-xs font-bold text-sky-600 dark:text-sky-400 ${
                       errors.stock_units && touched.stock_units
                         ? "border-destructive focus-visible:ring-destructive/30"
@@ -1337,26 +1383,35 @@ const ProductDialog = ({
                     }`}
                   />
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Total individual items tracked.
+                    Physical {form.uom || "box"} count currently on hand.
                   </p>
                 </div>
               </div>
 
-              {/* Dynamic Live Formula Bar */}
-              <div className="flex items-center justify-between p-3 rounded-xl bg-background border border-border/80 text-xs flex-wrap gap-2">
+              {/* Dynamic Live Preview Banner */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-background border border-sky-500/20 text-xs flex-wrap gap-2 shadow-sm">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-muted-foreground font-semibold">📦 Live Stock Formula:</span>
-                  <span className="font-mono font-bold text-foreground">
-                    {form.pack_qty || 0} {form.uom || "pack"}(s) &times; {form.measurement_scale || 1} units/pack
+                  <span className="text-sky-600 dark:text-sky-400 font-bold flex items-center gap-1">
+                    💡 Live Preview:
                   </span>
-                  <span className="text-muted-foreground">=</span>
-                  <span className="font-mono font-extrabold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
-                    {form.stock_units || (Number(form.pack_qty || 0) * Number(form.measurement_scale || 1))} Total Single Pieces
+                  <span className="font-semibold text-foreground">
+                    You are adding{" "}
+                    <strong className="font-bold text-sky-600 dark:text-sky-400">
+                      {form.opening_stock_boxes || "0"} {formatUomPlural(form.uom ? form.uom.charAt(0).toUpperCase() + form.uom.slice(1) : "Box", Number(form.opening_stock_boxes || 0))}
+                    </strong>{" "}
+                    ={" "}
+                    <strong className="font-extrabold text-foreground px-2 py-0.5 rounded-md bg-sky-500/10 border border-sky-500/20">
+                      {+(Number(form.opening_stock_boxes || 0) * Number(form.units_per_uom || 1)).toFixed(2)}{" "}
+                      {formatUomPlural(form.base_unit ? form.base_unit.charAt(0).toUpperCase() + form.base_unit.slice(1) : "Tablet", +(Number(form.opening_stock_boxes || 0) * Number(form.units_per_uom || 1)))}
+                    </strong>
+                  </span>
+                  <span className="text-[11px] text-muted-foreground font-normal">
+                    (Automatically saved in database as Base Units)
                   </span>
                 </div>
-                {Number(form.measurement_scale) > 1 && Number(form.retail_price) > 0 && (
-                  <span className="text-[11px] font-semibold text-muted-foreground">
-                    Sub-unit rate: ~{symbol}{(Number(form.retail_price) / Number(form.measurement_scale)).toFixed(2)} / piece
+                {Number(form.units_per_uom) > 1 && Number(form.retail_price) > 0 && (
+                  <span className="text-[11px] font-semibold text-muted-foreground bg-muted/60 px-2 py-1 rounded-md border border-border/60">
+                    Single {form.base_unit || "piece"} price: ~{symbol}{(Number(form.retail_price) / Number(form.units_per_uom)).toFixed(2)} / {form.base_unit || "unit"}
                   </span>
                 )}
               </div>

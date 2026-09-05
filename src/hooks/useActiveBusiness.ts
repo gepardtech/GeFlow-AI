@@ -29,20 +29,34 @@ const LS_MODE_KEY = "geflow.workspaceMode";
  * Loads businesses owned by the current user or invited as employee.
  * Supports switching between "business" (Owner) and "employee" (Staff) workspaces.
  */
-// Shared in-memory cache to prevent layout flicker and flinching across multi-mounts
 let globalCachedOwned: BusinessRow[] = [];
 let globalCachedStaff: BusinessRow[] = [];
 let globalCachedActiveId: string | null = null;
 let globalHasLoaded = false;
 
+const DEMO_EMPLOYEE_STORE: BusinessRow = {
+  id: "emp_retail_store_demo",
+  business_name: "Retail Store",
+  business_address: "Retail Plaza, Sector 4",
+  status: "active",
+  currency: "USD",
+  base_currency: "USD",
+  default_tax: 5,
+  stock_alert_limit: 10,
+  category_id: null,
+  owner_user_id: "demo_retail_owner",
+  is_staff: true,
+  staff_role: "cashier",
+};
+
 export const useActiveBusiness = () => {
   const [businesses, setBusinesses] = useState<BusinessRow[]>(() => {
     const mode = (localStorage.getItem(LS_MODE_KEY) as "business" | "employee") || "business";
-    if (mode === "employee" && globalCachedStaff.length > 0) return globalCachedStaff;
-    return globalCachedOwned.length > 0 ? globalCachedOwned : globalCachedStaff;
+    if (mode === "employee") return globalCachedStaff.length > 0 ? globalCachedStaff : [DEMO_EMPLOYEE_STORE];
+    return globalCachedOwned;
   });
   const [ownedBusinesses, setOwnedBusinesses] = useState<BusinessRow[]>(globalCachedOwned);
-  const [staffBusinesses, setStaffBusinesses] = useState<BusinessRow[]>(globalCachedStaff);
+  const [staffBusinesses, setStaffBusinesses] = useState<BusinessRow[]>(globalCachedStaff.length > 0 ? globalCachedStaff : [DEMO_EMPLOYEE_STORE]);
   const [workspaceMode, setWorkspaceModeState] = useState<"business" | "employee">(() => {
     return (localStorage.getItem(LS_MODE_KEY) as "business" | "employee") || "business";
   });
@@ -60,15 +74,19 @@ export const useActiveBusiness = () => {
   const setWorkspaceMode = useCallback((mode: "business" | "employee") => {
     localStorage.setItem(LS_MODE_KEY, mode);
     setWorkspaceModeState(mode);
-    const pool = mode === "employee" ? (globalCachedStaff.length > 0 ? globalCachedStaff : globalCachedOwned) : (globalCachedOwned.length > 0 ? globalCachedOwned : globalCachedStaff);
+    const pool = mode === "employee" 
+      ? (globalCachedStaff.length > 0 ? globalCachedStaff : [DEMO_EMPLOYEE_STORE]) 
+      : globalCachedOwned;
     setBusinesses(pool);
-    if (pool.length > 0 && (!activeId || !pool.some((b) => b.id === activeId))) {
-      const newChosen = pool[0].id;
+    if (pool.length > 0) {
+      const stillThere = pool.find((b) => b.id === activeId);
+      const newChosen = stillThere ? stillThere.id : pool[0].id;
       localStorage.setItem(LS_KEY, newChosen);
       globalCachedActiveId = newChosen;
       setActiveId(newChosen);
     }
     window.dispatchEvent(new CustomEvent("geflow:mode-changed", { detail: { mode } }));
+    window.dispatchEvent(new CustomEvent("geflow:business-changed", { detail: { businessId: pool[0]?.id || null } }));
   }, [activeId]);
 
   const load = useCallback(async (isSilent = false) => {
@@ -121,10 +139,12 @@ export const useActiveBusiness = () => {
         }
       }
 
+      const effectiveStaffRows = staffRows.length > 0 ? staffRows : [DEMO_EMPLOYEE_STORE];
+
       globalCachedOwned = ownedRows;
-      globalCachedStaff = staffRows;
+      globalCachedStaff = effectiveStaffRows;
       setOwnedBusinesses(ownedRows);
-      setStaffBusinesses(staffRows);
+      setStaffBusinesses(effectiveStaffRows);
 
       // Determine current mode
       let currentMode: "business" | "employee" = (localStorage.getItem(LS_MODE_KEY) as "business" | "employee") || "business";
@@ -134,7 +154,7 @@ export const useActiveBusiness = () => {
         setWorkspaceModeState("employee");
       }
 
-      const activePool = currentMode === "employee" ? (staffRows.length > 0 ? staffRows : ownedRows) : (ownedRows.length > 0 ? ownedRows : staffRows);
+      const activePool = currentMode === "employee" ? effectiveStaffRows : ownedRows;
 
       setBusinesses(activePool);
 

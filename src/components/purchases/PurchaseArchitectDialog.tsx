@@ -4,7 +4,8 @@ import { Truck, Package, Plus, Trash2, ArrowRight, Loader2, Scale, Layers, Spark
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useMoney } from "@/lib/currency";
-import { ALL_STANDARD_UOMS, parseProductUOM } from "@/lib/uomRegistry";
+import { ALL_STANDARD_UOMS, parseProductUOM, computeProductStock } from "@/lib/uomRegistry";
+import { recordStockMovement } from "@/lib/stockMovementService";
 
 export interface PurchaseProduct {
   id: string;
@@ -13,6 +14,9 @@ export interface PurchaseProduct {
   stock_units: number;
   purchase_cost: number;
   retail_price: number;
+  uom?: string | null;
+  units_per_uom?: number | null;
+  base_unit?: string | null;
 }
 
 interface LineItem {
@@ -94,20 +98,52 @@ const PurchaseArchitectDialog = ({
 
   useEffect(() => {
     if (open && businessId) {
-      // Load active categories without filtering by business_id to include all store & industry categories
-      supabase
-        .from("product_categories")
-        .select("id, name, parent_id, status")
-        .eq("status", "active")
-        .order("name", { ascending: true })
-        .then(({ data }) => {
-          if (data && data.length > 0) {
-            const parents = data.filter((c: any) => !c.parent_id);
-            const subs = data.filter((c: any) => !!c.parent_id);
-            setCategories(parents.length > 0 ? parents : data);
+      // Load active categories without restrictive status filter to ensure all categories show
+      const loadCategories = async () => {
+        try {
+          const { data: catData } = await supabase
+            .from("product_categories")
+            .select("id, name, parent_id, status")
+            .order("name", { ascending: true });
+
+          if (catData && catData.length > 0) {
+            const parents = catData.filter((c: any) => !c.parent_id);
+            const subs = catData.filter((c: any) => !!c.parent_id);
+            setCategories(parents.length > 0 ? parents : catData);
             setAllSubcategories(subs);
+          } else {
+            // Fallback to business categories or standard default catalog
+            const { data: bCat } = await supabase
+              .from("business_categories")
+              .select("id, name");
+            if (bCat && bCat.length > 0) {
+              setCategories(bCat.map((b: any) => ({ id: b.id, name: b.name, parent_id: null })));
+            } else {
+              const defaults = [
+                { id: "cat-pharmacy-meds", name: "Medicines & Pharmaceuticals", parent_id: null },
+                { id: "cat-health-care", name: "Health & Personal Care", parent_id: null },
+                { id: "cat-grocery-staples", name: "Grocery & Staples", parent_id: null },
+                { id: "cat-beverages-drinks", name: "Beverages & Drinks", parent_id: null },
+                { id: "cat-dairy-bakery", name: "Dairy & Bakery", parent_id: null },
+                { id: "cat-general-store", name: "General Retail & FMCG", parent_id: null },
+              ];
+              setCategories(defaults);
+              setAllSubcategories([
+                { id: "sub-tablets", name: "Tablets & Capsules", parent_id: "cat-pharmacy-meds" },
+                { id: "sub-syrups", name: "Syrups & Liquids", parent_id: "cat-pharmacy-meds" },
+                { id: "sub-injections", name: "Injections & Vials", parent_id: "cat-pharmacy-meds" },
+                { id: "sub-skin-care", name: "Skincare & Topicals", parent_id: "cat-health-care" },
+                { id: "sub-snacks", name: "Snacks & Confectionery", parent_id: "cat-grocery-staples" },
+                { id: "sub-cold-drinks", name: "Juices & Cold Drinks", parent_id: "cat-beverages-drinks" },
+              ]);
+            }
           }
-        });
+        } catch (err) {
+          console.warn("Category load error in purchase architect:", err);
+        }
+      };
+
+      loadCategories();
 
       // Load known past suppliers
       supabase
@@ -254,10 +290,16 @@ const PurchaseArchitectDialog = ({
     const retail = Number(newProdRetail) || (cost > 0 ? cost * 1.25 : 0);
     const scaleNum = Number(newProdScale) || 1;
 
+    const { data: { user } } = await supabase.auth.getUser();
+    const effectiveUserId = user?.id || userId;
+
     const descTags = [`[UOM: ${newProdUom}]`];
     if (scaleNum > 1) {
       descTags.push(`[SCALE: ${scaleNum}]`);
+      descTags.push(`[PIECES_PER_PACK: ${scaleNum}]`);
     }
+    descTags.push(`[PACK_QTY: 0]`);
+    descTags.push(`[BASE_QTY: 0]`);
     if (newProdSupplier.trim()) {
       descTags.push(`[SUPPLIER: ${newProdSupplier.trim()}]`);
       if (!supplier) {
@@ -269,7 +311,7 @@ const PurchaseArchitectDialog = ({
       .from("products")
       .insert({
         business_id: businessId,
-        owner_user_id: userId,
+        owner_user_id: effectiveUserId,
         name: newProdName.trim(),
         internal_sku: autoSku,
         category_id: newProdCategory || null,
@@ -362,107 +404,148 @@ const PurchaseArchitectDialog = ({
   );
 
   const commit = async () => {
-    if (!businessId || !userId) return;
-    const valid = lines.filter((l) => l.product_id && (Number(l.qty) || 0) > 0);
+    if (!businessId) {
+      toast({ title: "Business context missing", description: "Please select an active business.", variant: "destructive" });
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const effectiveUserId = user?.id || userId;
+    if (!effectiveUserId) {
+      toast({ title: "Authentication required", description: "Please sign in to record purchases.", variant: "destructive" });
+      return;
+    }
+
+    const valid = lines.filter((l) => l.product_id && l.product_id !== "__NEW_PRODUCT__" && (Number(l.qty) || 0) > 0);
     if (valid.length === 0) {
       toast({
         title: "Nothing to commit",
-        description: "Add at least one product with quantity.",
+        description: "Please select at least one product with quantity greater than 0.",
         variant: "destructive",
       });
       return;
     }
     setSaving(true);
 
-    const { data: purchase, error: perr } = await supabase
-      .from("purchases")
-      .insert({
-        business_id: businessId,
-        owner_user_id: userId,
-        supplier_name: supplier || "Unspecified Supplier",
-        invoice_ref: invoiceRef || null,
-        entry_date: entryDate,
-        total: grandTotal,
-        status: "completed",
-      })
-      .select("id")
-      .single();
+    try {
+      const { data: purchase, error: perr } = await supabase
+        .from("purchases")
+        .insert({
+          business_id: businessId,
+          owner_user_id: effectiveUserId,
+          supplier_name: (supplier || "General Supplier").trim(),
+          invoice_ref: invoiceRef?.trim() || null,
+          entry_date: entryDate || new Date().toISOString().slice(0, 10),
+          total: +(grandTotal).toFixed(2),
+          status: "completed",
+        })
+        .select("id")
+        .single();
 
-    if (perr || !purchase) {
-      setSaving(false);
+      if (perr || !purchase) {
+        throw new Error(perr?.message || "Failed to create purchase record");
+      }
+
+      for (const l of valid) {
+        const p = localProducts.find((x) => x.id === l.product_id) || products.find((x) => x.id === l.product_id);
+        const pkgQty = Number(l.qty) || 0;
+        const multiplier = Number(l.multiplier) || 1;
+        const purchasePricePerPkg = Number(l.purchase) || 0;
+        const salePricePerPkg = Number(l.sale) || 0;
+
+        const uomObj = ALL_STANDARD_UOMS.find((u) => u.id === l.uom);
+        const uomLabel = uomObj ? uomObj.name : l.uom;
+        const itemTitle = multiplier > 1
+          ? `${p?.name ?? "Product"} (${pkgQty} ${uomLabel} @ ${multiplier} units)`
+          : (p?.name ?? "Product");
+
+        // Column `quantity` in purchase_items is integer
+        const integerQty = Math.max(1, Math.round(pkgQty));
+        const sanitizedExpiry = l.expiry && l.expiry.trim() ? l.expiry.trim() : null;
+
+        const { error: itemErr } = await supabase.from("purchase_items").insert({
+          purchase_id: purchase.id,
+          owner_user_id: effectiveUserId,
+          product_id: l.product_id,
+          product_name: itemTitle,
+          quantity: integerQty,
+          purchase_price: purchasePricePerPkg,
+          sale_price: salePricePerPkg,
+          batch_number: l.batch?.trim() || null,
+          expiry_date: sanitizedExpiry,
+        });
+        if (itemErr) {
+          console.warn("Purchase item insert error:", itemErr);
+        }
+
+        // Increase product stock in BASE UNITS (tablets, pieces, ml, etc.)
+        const currentStockInfo = computeProductStock(p?.stock_units, p?.name, p?.description, p?.uom, p?.units_per_uom, p?.base_unit);
+        const effectiveMultiplier = multiplier > 1
+          ? multiplier
+          : (currentStockInfo.packSize > 1 ? currentStockInfo.packSize : 1);
+        const totalBaseUnitsAdded = Math.round(pkgQty * effectiveMultiplier);
+        const newStock = Math.round(currentStockInfo.totalSubUnits + totalBaseUnitsAdded);
+
+        const update: {
+          stock_units: number;
+          purchase_cost: number;
+          retail_price?: number;
+          batch_number?: string;
+          expiry_date?: string;
+          description?: string;
+        } = {
+          stock_units: newStock,
+          purchase_cost: purchasePricePerPkg,
+        };
+        if (salePricePerPkg > 0) update.retail_price = salePricePerPkg;
+        if (l.batch?.trim()) update.batch_number = l.batch.trim();
+        if (sanitizedExpiry) update.expiry_date = sanitizedExpiry;
+
+        if (p?.description) {
+          let updatedDesc = p.description;
+          const newPackQty = currentStockInfo.packSize > 0 ? +(newStock / currentStockInfo.packSize).toFixed(2) : newStock;
+          if (updatedDesc.includes("[PACK_QTY:")) {
+            updatedDesc = updatedDesc.replace(/\[PACK_QTY:\s*[^\]]+\]/i, `[PACK_QTY: ${newPackQty}]`);
+          }
+          if (updatedDesc.includes("[BASE_QTY:")) {
+            updatedDesc = updatedDesc.replace(/\[BASE_QTY:\s*[^\]]+\]/i, `[BASE_QTY: ${newStock}]`);
+          }
+          update.description = updatedDesc;
+        }
+
+        await supabase.from("products").update(update).eq("id", l.product_id);
+
+        // Record stock movement (quantity is in base units)
+        await recordStockMovement({
+          business_id: businessId,
+          owner_user_id: effectiveUserId,
+          product_id: l.product_id,
+          quantity: totalBaseUnitsAdded,
+          type: "in",
+          reason: "purchase intake",
+          note: `PO: PUR-${purchase.id.slice(0, 8)} · Received: ${pkgQty} ${uomLabel} (+${totalBaseUnitsAdded} ${currentStockInfo.subUnitName.toLowerCase()}s)${supplier ? ` · ${supplier}` : ""}`,
+          reference_id: purchase.id,
+          reference_type: "purchase_intake",
+          created_by: effectiveUserId,
+        });
+      }
+
+      toast({
+        title: "Purchase successfully recorded",
+        description: `PUR-${purchase.id.slice(0, 8).toUpperCase()}: ${valid.length} item(s) received · ${fmt(grandTotal)}.`,
+      });
+      onSaved();
+      onOpenChange(false);
+    } catch (err: any) {
+      console.error("Purchase commit error:", err);
       toast({
         title: "Could not record purchase",
-        description: perr?.message,
+        description: err.message || "Database error while committing purchase.",
         variant: "destructive",
       });
-      return;
+    } finally {
+      setSaving(false);
     }
-
-    for (const l of valid) {
-      const p = localProducts.find((x) => x.id === l.product_id) || products.find((x) => x.id === l.product_id);
-      const pkgQty = Number(l.qty) || 0;
-      const multiplier = Number(l.multiplier) || 1;
-      const totalStockUnitsAdded = +(pkgQty * multiplier).toFixed(3);
-      const purchasePricePerPkg = Number(l.purchase) || 0;
-      const salePricePerPkg = Number(l.sale) || 0;
-
-      // Unit prices per single stock unit
-      const unitPurchaseCost = multiplier > 1 ? +(purchasePricePerPkg / multiplier).toFixed(2) : purchasePricePerPkg;
-      const unitRetailPrice = multiplier > 1 ? +(salePricePerPkg / multiplier).toFixed(2) : salePricePerPkg;
-
-      const uomObj = ALL_STANDARD_UOMS.find((u) => u.id === l.uom);
-      const uomLabel = uomObj ? uomObj.name : l.uom;
-      const itemTitle = multiplier > 1
-        ? `${p?.name ?? "Product"} (${pkgQty} ${uomLabel} @ ${multiplier} units)`
-        : (p?.name ?? "Product");
-
-      await supabase.from("purchase_items").insert({
-        purchase_id: purchase.id,
-        owner_user_id: userId,
-        product_id: l.product_id,
-        product_name: itemTitle,
-        quantity: totalStockUnitsAdded,
-        purchase_price: purchasePricePerPkg,
-        sale_price: salePricePerPkg,
-        batch_number: l.batch || null,
-        expiry_date: l.expiry || null,
-      });
-
-      // Increase stock and refresh pricing/batch on product
-      const update: {
-        stock_units: number;
-        purchase_cost: number;
-        retail_price?: number;
-        batch_number?: string;
-        expiry_date?: string;
-      } = {
-        stock_units: +( (p?.stock_units ?? 0) + totalStockUnitsAdded ).toFixed(3),
-        purchase_cost: purchasePricePerPkg,
-      };
-      if (salePricePerPkg > 0) update.retail_price = salePricePerPkg;
-      if (l.batch) update.batch_number = l.batch;
-      if (l.expiry) update.expiry_date = l.expiry;
-
-      await supabase.from("products").update(update).eq("id", l.product_id);
-
-      await supabase.from("stock_movements").insert({
-        business_id: businessId,
-        owner_user_id: userId,
-        product_id: l.product_id,
-        quantity: totalStockUnitsAdded,
-        type: "in",
-        reason: "purchase (UOM pack aware)",
-        note: `Purchase ${purchase.id.slice(0, 8)} · ${pkgQty} ${uomLabel} (x${multiplier})${supplier ? ` · ${supplier}` : ""}`,
-      });
-    }
-
-    setSaving(false);
-    toast({
-      title: "Purchase committed",
-      description: `${valid.length} line(s) · ${fmt(grandTotal)} · ${totalItems} stock units added.`,
-    });
-    onSaved();
-    onOpenChange(false);
   };
 
   const inputCls =

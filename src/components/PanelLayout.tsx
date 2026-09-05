@@ -18,6 +18,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import AnnouncementBar from "@/components/AnnouncementBar";
 import AIAssistant from "@/components/ai/AIAssistant";
 import { usePlatformSettings } from "@/components/PlatformSettingsProvider";
+import { TopBusinessEmployeeDropdown } from "@/components/TopBusinessEmployeeDropdown";
 
 export interface NavChild { label: string; to: string; }
 export interface NavItem { label: string; to: string; icon: LucideIcon; children?: NavChild[]; }
@@ -253,131 +254,9 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
 
   const WorkspaceSwitcher = ({ mini = false }: { mini?: boolean }) => {
     if (isPathAdmin) return null;
-
     return (
-      <div className={`p-2 ${mini ? "px-1.5" : "px-3"} border-b border-border/80 bg-muted/20`}>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className={`w-full flex items-center gap-2.5 p-2 rounded-xl border border-border/60 bg-card hover:bg-muted/80 text-left transition-all ${
-                mini ? "justify-center px-2" : "justify-between"
-              }`}
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 font-black text-xs ${
-                  workspaceMode === "business"
-                    ? "bg-sky-500/10 text-sky-500 border border-sky-500/20"
-                    : "bg-purple-500/10 text-purple-500 border border-purple-500/20"
-                }`}>
-                  {workspaceMode === "business" ? <Store className="w-4 h-4" /> : <Briefcase className="w-4 h-4" />}
-                </div>
-                {!mini && (
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">
-                        {workspaceMode === "business" ? "Business" : "Employee"}
-                      </span>
-                      <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase ${
-                        workspaceMode === "business" ? "bg-sky-500/15 text-sky-600 dark:text-sky-400" : "bg-purple-500/15 text-purple-600 dark:text-purple-400"
-                      }`}>
-                        {workspaceMode === "business" ? "Owner" : (activeBusiness?.staff_role || "Staff")}
-                      </span>
-                    </div>
-                    <p className="text-xs font-bold truncate text-foreground leading-snug">
-                      {activeBusiness?.business_name || "Select Store"}
-                    </p>
-                  </div>
-                )}
-              </div>
-              {!mini && <ChevronsUpDown className="w-4 h-4 text-muted-foreground shrink-0" />}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64 p-2 space-y-2">
-            <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground px-2 py-1">
-                Select Workspace Mode
-              </p>
-              <div className="grid grid-cols-2 gap-1 p-1 bg-muted/60 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setWorkspaceMode("business")}
-                  className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-extrabold transition-all ${
-                    workspaceMode === "business"
-                      ? "bg-background text-foreground shadow-xs border border-border"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Store className="w-3.5 h-3.5 text-sky-500" />
-                  Business
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setWorkspaceMode("employee")}
-                  className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-extrabold transition-all ${
-                    workspaceMode === "employee"
-                      ? "bg-background text-foreground shadow-xs border border-border"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Briefcase className="w-3.5 h-3.5 text-purple-500" />
-                  Employee
-                </button>
-              </div>
-            </div>
-
-            <DropdownMenuSeparator />
-
-            <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground px-2 py-1">
-                {workspaceMode === "business" ? "My Registered Stores (Owner)" : "Invited Stores (Staff Role)"}
-              </p>
-              <div className="max-h-48 overflow-y-auto space-y-1 py-1">
-                {businesses.map((biz) => {
-                  const isSelected = biz.id === activeId;
-                  return (
-                    <button
-                      key={biz.id}
-                      type="button"
-                      onClick={() => setActive(biz.id)}
-                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left text-xs transition-colors ${
-                        isSelected
-                          ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold border border-sky-500/20"
-                          : "hover:bg-muted text-foreground"
-                      }`}
-                    >
-                      <div className="min-w-0 pr-2">
-                        <p className="truncate font-bold">{biz.business_name}</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          {workspaceMode === "business" ? "Owner Workspace" : (biz.staff_role || "Staff")} · {biz.currency || "USD"}
-                        </p>
-                      </div>
-                      {isSelected && <Check className="w-4 h-4 text-sky-500 shrink-0" />}
-                    </button>
-                  );
-                })}
-                {businesses.length === 0 && (
-                  <div className="p-3 text-center text-xs text-muted-foreground">
-                    {workspaceMode === "business" ? "No owned stores registered" : "No invited staff memberships found"}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {workspaceMode === "business" && (
-              <>
-                <DropdownMenuSeparator />
-                <button
-                  type="button"
-                  onClick={() => navigate("/dashboard/businesses")}
-                  className="w-full flex items-center gap-2 p-2 rounded-xl text-xs font-bold text-sky-500 hover:bg-sky-500/10 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Register / Manage Stores
-                </button>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div className="p-2.5 border-b border-border/80 bg-muted/10">
+        <TopBusinessEmployeeDropdown variant="sidebar" collapsed={mini} />
       </div>
     );
   };
@@ -431,7 +310,13 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
             <Menu className="h-5 w-5" />
           </button>
 
-          <div className="flex-1 max-w-xl relative hidden sm:block">
+          {!isPathAdmin && (
+            <div className="shrink-0">
+              <TopBusinessEmployeeDropdown variant="header" />
+            </div>
+          )}
+
+          <div className="flex-1 max-w-xl relative hidden md:block">
             <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"

@@ -180,45 +180,55 @@ export interface ParsedProductUOM {
   isPharmaPack: boolean;
 }
 
-export function parseProductUOM(productName: string = "", description: string = ""): ParsedProductUOM {
+export function parseProductUOM(
+  productName: string = "",
+  description: string = "",
+  explicitUom?: string | null,
+  explicitUnitsPerUom?: number | null,
+  explicitBaseUnit?: string | null
+): ParsedProductUOM {
   const desc = description || "";
   const name = productName || "";
   const fullText = `${name} ${desc}`.toLowerCase();
   const isFoodOrBakeryOrSnack = /\b(biscuit|biscuits|buscit|biscut|cookie|cookies|cracker|crackers|wafer|wafers|rusk|snack|snacks|chip|chips|crisp|crisps|candy|candies|chocolate|chocolates|cake|cakes|bread|bun|buns|noodles|pasta|cereal)\b/i.test(fullText);
 
-  // 1. Check explicit [UOM: xyz] tag
+  // 1. Resolve Selling Unit (UoM)
   let uom = "piece";
-  const uomTagMatch = desc.match(/\[UOM:\s*([^\]]+)\]/i);
-  if (uomTagMatch && uomTagMatch[1]) {
-    uom = uomTagMatch[1].trim().toLowerCase();
+  if (explicitUom && explicitUom.trim()) {
+    uom = explicitUom.trim().toLowerCase();
   } else {
-    // Infer contextually from text
-    if (isFoodOrBakeryOrSnack) {
-      if (fullText.includes("box") || fullText.includes("carton")) uom = "box";
-      else if (fullText.includes("packet") || fullText.includes("pkt")) uom = "pack";
-      else uom = "pack";
-    } else if (fullText.includes("tablet") || /\b(tabs?)\b/i.test(fullText)) {
-      uom = "tablet";
-    } else if (fullText.includes("capsule") || /\b(caps?)\b/i.test(fullText)) {
-      uom = "capsule";
-    } else if (fullText.includes("strip")) {
-      uom = "strip";
-    } else if (fullText.includes("syrup") || fullText.includes("suspension") || fullText.includes("bottle") || fullText.includes("drop")) {
-      uom = "bottle";
-    } else if (fullText.includes("box") || fullText.includes("pk 20") || fullText.includes("pack 20")) {
-      uom = "box";
-    } else if (fullText.includes("pack") || fullText.includes("packet")) {
-      uom = "pack";
-    } else if (/\b(mann|maund|40\s*kg|40kg)\b/i.test(fullText)) {
-      uom = "mann";
-    } else if (/\b(\d+(?:\.\d+)?)\s*(g|gm|gram|grams)\b/i.test(fullText) && !/\b(mg|mcg)\b/i.test(fullText)) {
-      uom = "g";
-    } else if (/\b(\d+(?:\.\d+)?)\s*(kg|kilo|kilogram|kilograms)\b/i.test(fullText) || /\b(kilo|kilogram|kilograms)\b/i.test(fullText)) {
-      uom = "kg";
-    } else if (/\b(liter|litre|liters|litres)\b/i.test(fullText) || /\b(\d+(?:\.\d+)?)\s*l\b/i.test(fullText)) {
-      uom = "l";
-    } else if (/\b(ml|milliliter|milliliters)\b/i.test(fullText)) {
-      uom = "bottle";
+    const uomTagMatch = desc.match(/\[UOM:\s*([^\]]+)\]/i);
+    if (uomTagMatch && uomTagMatch[1]) {
+      uom = uomTagMatch[1].trim().toLowerCase();
+    } else {
+      // Infer contextually from text
+      if (isFoodOrBakeryOrSnack) {
+        if (fullText.includes("box") || fullText.includes("carton")) uom = "box";
+        else if (fullText.includes("packet") || fullText.includes("pkt")) uom = "pack";
+        else uom = "pack";
+      } else if (fullText.includes("tablet") || /\b(tabs?)\b/i.test(fullText)) {
+        uom = "tablet";
+      } else if (fullText.includes("capsule") || /\b(caps?)\b/i.test(fullText)) {
+        uom = "capsule";
+      } else if (fullText.includes("strip")) {
+        uom = "strip";
+      } else if (fullText.includes("syrup") || fullText.includes("suspension") || fullText.includes("bottle") || fullText.includes("drop")) {
+        uom = "bottle";
+      } else if (fullText.includes("box") || fullText.includes("pk 20") || fullText.includes("pack 20")) {
+        uom = "box";
+      } else if (fullText.includes("pack") || fullText.includes("packet")) {
+        uom = "pack";
+      } else if (/\b(mann|maund|40\s*kg|40kg)\b/i.test(fullText)) {
+        uom = "mann";
+      } else if (/\b(\d+(?:\.\d+)?)\s*(g|gm|gram|grams)\b/i.test(fullText) && !/\b(mg|mcg)\b/i.test(fullText)) {
+        uom = "g";
+      } else if (/\b(\d+(?:\.\d+)?)\s*(kg|kilo|kilogram|kilograms)\b/i.test(fullText) || /\b(kilo|kilogram|kilograms)\b/i.test(fullText)) {
+        uom = "kg";
+      } else if (/\b(liter|litre|liters|litres)\b/i.test(fullText) || /\b(\d+(?:\.\d+)?)\s*l\b/i.test(fullText)) {
+        uom = "l";
+      } else if (/\b(ml|milliliter|milliliters)\b/i.test(fullText)) {
+        uom = "bottle";
+      }
     }
   }
 
@@ -227,57 +237,66 @@ export function parseProductUOM(productName: string = "", description: string = 
   let baseUnit = "piece";
   let subUnitName = "Piece";
 
-  // Check explicit [SCALE: 20] or [PACK_SIZE: 20] or [PACK: 20] or [VOLUME: 100ml]
-  const scaleTagMatch = desc.match(/\[(?:SCALE|PACK_SIZE|UNITS_PER_PACK):\s*([0-9.]+)\s*([a-zA-Z]*)\]/i);
-  const subUnitTagMatch = desc.match(/\[SUB_UNIT:\s*([^\]]+)\]/i);
-  const packMatch = desc.match(/\[(PACK|VOLUME):\s*([0-9.]+)\s*([a-zA-Z]*)\]/i);
-
-  if (scaleTagMatch && scaleTagMatch[1]) {
-    packSize = parseFloat(scaleTagMatch[1]) || 1;
-    if (scaleTagMatch[2]) subUnitName = scaleTagMatch[2];
-    if (subUnitTagMatch && subUnitTagMatch[1]) subUnitName = subUnitTagMatch[1].trim();
-  } else if (packMatch && packMatch[2]) {
-    packSize = parseFloat(packMatch[2]) || 1;
-    if (packMatch[3]) subUnitName = packMatch[3];
+  if (explicitUnitsPerUom !== null && explicitUnitsPerUom !== undefined && Number(explicitUnitsPerUom) > 0) {
+    packSize = Number(explicitUnitsPerUom);
   } else {
-    // Look for patterns like "box of 16 pack", "10 kg", "500 g", "20 tab", "100 ml", "60 ml", "10 strips", "40 kg", "24 pcs"
-    const boxOfPacksMatch = fullText.match(/(?:box\s+of|pack\s+of|carton\s+of)\s*([0-9]+)\s*(?:pack|packs|packet|packets|pcs|pieces)?/i);
-    const weightMatch = fullText.match(/([0-9.]+)\s*(kg|kilo|kilogram|kilograms)/i);
-    const gramMatch = fullText.match(/([0-9.]+)\s*(g|gm|gram|grams)/i);
-    const mlMatch = fullText.match(/([0-9.]+)\s*(ml|milliliter|milliliters)/i);
-    const tabMatch = fullText.match(/([0-9]+)\s*(tab|tablet|tablets|cap|capsule|capsules|pill|pills)/i);
-    const stripMatch = fullText.match(/([0-9]+)\s*(strip|strips)/i);
-    const boxMatch = fullText.match(/box\s*([0-9]+)|([0-9]+)\s*per box|([0-9]+)\s*in box/i);
+    // Check explicit [SCALE: 20] or [UNITS_PER_UOM: 20] or [PACK_SIZE: 20] or [PACK: 20] or [VOLUME: 100ml]
+    const scaleTagMatch = desc.match(/\[(?:SCALE|UNITS_PER_UOM|PACK_SIZE|UNITS_PER_PACK):\s*([0-9.]+)\s*([a-zA-Z]*)\]/i);
+    const subUnitTagMatch = desc.match(/\[(?:SUB_UNIT|BASE_UNIT):\s*([^\]]+)\]/i);
+    const packMatch = desc.match(/\[(PACK|VOLUME):\s*([0-9.]+)\s*([a-zA-Z]*)\]/i);
 
-    if (boxOfPacksMatch && isFoodOrBakeryOrSnack) {
-      packSize = parseInt(boxOfPacksMatch[1], 10) || 1;
-      baseUnit = "pack";
-      subUnitName = "Pack";
-    } else if (weightMatch) {
-      packSize = parseFloat(weightMatch[1]) || 1;
-      baseUnit = "kg";
-      subUnitName = "kg";
-    } else if (gramMatch && !fullText.includes("mg")) {
-      packSize = parseFloat(gramMatch[1]) || 1;
-      baseUnit = "g";
-      subUnitName = "g";
-    } else if (mlMatch) {
-      packSize = parseFloat(mlMatch[1]) || 100;
-      baseUnit = "ml";
-      subUnitName = "ml";
-    } else if (tabMatch) {
-      packSize = parseInt(tabMatch[1], 10) || 20;
-      baseUnit = "tablet";
-      subUnitName = "Tablet";
-    } else if (stripMatch) {
-      packSize = parseInt(stripMatch[1], 10) || 10;
-      baseUnit = "strip";
-      subUnitName = "Strip";
-    } else if (boxMatch) {
-      packSize = parseInt(boxMatch[1] || boxMatch[2] || boxMatch[3], 10) || 20;
-      baseUnit = isFoodOrBakeryOrSnack ? "pack" : "piece";
-      subUnitName = isFoodOrBakeryOrSnack ? "Pack" : "Piece";
+    if (scaleTagMatch && scaleTagMatch[1]) {
+      packSize = parseFloat(scaleTagMatch[1]) || 1;
+      if (scaleTagMatch[2]) subUnitName = scaleTagMatch[2];
+      if (subUnitTagMatch && subUnitTagMatch[1]) subUnitName = subUnitTagMatch[1].trim();
+    } else if (packMatch && packMatch[2]) {
+      packSize = parseFloat(packMatch[2]) || 1;
+      if (packMatch[3]) subUnitName = packMatch[3];
+    } else {
+      // Look for patterns like "box of 16 pack", "10 kg", "500 g", "20 tab", "100 ml", "60 ml", "10 strips", "40 kg", "24 pcs"
+      const boxOfPacksMatch = fullText.match(/(?:box\s+of|pack\s+of|carton\s+of)\s*([0-9]+)\s*(?:pack|packs|packet|packets|pcs|pieces)?/i);
+      const weightMatch = fullText.match(/([0-9.]+)\s*(kg|kilo|kilogram|kilograms)/i);
+      const gramMatch = fullText.match(/([0-9.]+)\s*(g|gm|gram|grams)/i);
+      const mlMatch = fullText.match(/([0-9.]+)\s*(ml|milliliter|milliliters)/i);
+      const tabMatch = fullText.match(/([0-9]+)\s*(tab|tablet|tablets|cap|capsule|capsules|pill|pills)/i);
+      const stripMatch = fullText.match(/([0-9]+)\s*(strip|strips)/i);
+      const boxMatch = fullText.match(/box\s*([0-9]+)|([0-9]+)\s*per box|([0-9]+)\s*in box/i);
+
+      if (boxOfPacksMatch && isFoodOrBakeryOrSnack) {
+        packSize = parseInt(boxOfPacksMatch[1], 10) || 1;
+        baseUnit = "pack";
+        subUnitName = "Pack";
+      } else if (weightMatch) {
+        packSize = parseFloat(weightMatch[1]) || 1;
+        baseUnit = "kg";
+        subUnitName = "kg";
+      } else if (gramMatch && !fullText.includes("mg")) {
+        packSize = parseFloat(gramMatch[1]) || 1;
+        baseUnit = "g";
+        subUnitName = "g";
+      } else if (mlMatch) {
+        packSize = parseFloat(mlMatch[1]) || 100;
+        baseUnit = "ml";
+        subUnitName = "ml";
+      } else if (tabMatch) {
+        packSize = parseInt(tabMatch[1], 10) || 20;
+        baseUnit = "tablet";
+        subUnitName = "Tablet";
+      } else if (stripMatch) {
+        packSize = parseInt(stripMatch[1], 10) || 10;
+        baseUnit = "strip";
+        subUnitName = "Strip";
+      } else if (boxMatch) {
+        packSize = parseInt(boxMatch[1] || boxMatch[2] || boxMatch[3], 10) || 20;
+        baseUnit = isFoodOrBakeryOrSnack ? "pack" : "piece";
+        subUnitName = isFoodOrBakeryOrSnack ? "Pack" : "Piece";
+      }
     }
+  }
+
+  if (explicitBaseUnit && explicitBaseUnit.trim()) {
+    baseUnit = explicitBaseUnit.trim().toLowerCase();
+    subUnitName = explicitBaseUnit.trim().charAt(0).toUpperCase() + explicitBaseUnit.trim().slice(1);
   }
 
   // Defaults per UOM
@@ -364,12 +383,15 @@ export function getSmartSubUnitOptions(
   productName: string,
   description: string,
   retailPrice: number,
-  purchaseCost: number
+  purchaseCost: number,
+  explicitUom?: string | null,
+  explicitUnitsPerUom?: number | null,
+  explicitBaseUnit?: string | null
 ): {
   parsed: ParsedProductUOM;
   presets: SubUnitPreset[];
 } {
-  const parsed = parseProductUOM(productName, description);
+  const parsed = parseProductUOM(productName, description, explicitUom, explicitUnitsPerUom, explicitBaseUnit);
   const presets: SubUnitPreset[] = [];
 
   // 1. Full Package
@@ -844,3 +866,183 @@ export function formatStockWithUOM(stock: number | string, uomNameOrId?: string 
 
   return `${displayCount} ${label}`;
 }
+
+/**
+ * Calculates display representations for product stock:
+ * In the GeFlow architecture:
+ * stock_units is ALWAYS stored in BASE UNITS (tablets, pieces, ml, grams).
+ * listingStock: e.g. 10 Boxes (stock_units / units_per_uom)
+ * totalSubUnits: e.g. 120 Tablets (stock_units in base units)
+ * packSize / units_per_uom: e.g. 12 Tablets/Box
+ */
+export interface ProductStockBreakdown {
+  listingStock: number; // e.g. 10 (boxes on hand)
+  packSize: number; // e.g. 12 (tablets per box)
+  totalSubUnits: number; // e.g. 120 (tablets in base units)
+  fullPacks: number; // e.g. 10
+  looseSubUnits: number; // e.g. 0 or 6
+  hasFractions: boolean;
+  uom: string; // e.g. "box"
+  uomLabel: string; // e.g. "Box"
+  baseUnit: string; // e.g. "tablet"
+  subUnitName: string; // e.g. "Tablet"
+  displayText: string; // e.g. "10 Boxes (120 tablets)" or "10 Boxes + 6 tablets"
+  subText: string; // e.g. "120 tablets · 12 per box"
+}
+
+export function getDefaultBaseUnit(uom: string, industryType?: string | null): string {
+  const norm = (uom || "").trim().toLowerCase();
+  const matched = ALL_STANDARD_UOMS.find((u) => u.id === norm);
+  if (matched?.baseUnit) {
+    if (matched.id === "box" && (industryType === "pharmacy" || industryType === "medical" || !industryType)) {
+      return "tablet";
+    }
+    return matched.baseUnit;
+  }
+  if (norm === "box" || norm === "strip") return "tablet";
+  if (norm === "bottle" || norm === "vial") return "ml";
+  if (norm === "kg" || norm === "mann") return "g";
+  return "piece";
+}
+
+export function formatUomPlural(label: string, count: number): string {
+  if (count === 1) return label;
+  const l = label.toLowerCase();
+  if (l === "box") return "Boxes";
+  if (l === "carton") return "Cartons";
+  if (l === "dozen") return "Dozens";
+  if (l === "strip") return "Strips";
+  if (l === "pack") return "Packs";
+  if (l === "bottle") return "Bottles";
+  if (l === "piece") return "Pieces";
+  if (l === "unit") return "Units";
+  if (l === "tablet") return "Tablets";
+  if (l === "capsule") return "Capsules";
+  if (l === "can" || l === "can / tin") return "Cans";
+  if (l === "sachet" || l === "sachet / pouch") return "Sachets";
+  if (l.endsWith("s")) return label;
+  return `${label}s`;
+}
+
+export function computeProductStock(
+  stockUnits: number | string | null | undefined,
+  productName: string = "",
+  description?: string | null,
+  explicitUom?: string | null,
+  explicitUnitsPerUom?: number | null,
+  explicitBaseUnit?: string | null
+): ProductStockBreakdown {
+  const parsed = parseProductUOM(productName, description || "", explicitUom, explicitUnitsPerUom, explicitBaseUnit);
+  const desc = description || "";
+
+  // 1. Resolve Selling Unit (UOM)
+  const rawUom = (explicitUom || parsed.uom || "piece").toLowerCase().trim();
+  const matchedOpt = ALL_STANDARD_UOMS.find(
+    (u) => u.id.toLowerCase() === rawUom || u.name.toLowerCase() === rawUom
+  );
+  const uomLabel = matchedOpt ? matchedOpt.name : rawUom.charAt(0).toUpperCase() + rawUom.slice(1);
+
+  // 2. Resolve Units per UOM (pack size)
+  const packSize = explicitUnitsPerUom !== null && explicitUnitsPerUom !== undefined && Number(explicitUnitsPerUom) > 0
+    ? Number(explicitUnitsPerUom)
+    : parsed.packSize > 0
+    ? parsed.packSize
+    : 1;
+
+  // 3. Resolve Base Unit (smallest unit)
+  let baseUnit = (explicitBaseUnit || parsed.baseUnit || "piece").toLowerCase().trim();
+  let subUnitName = parsed.subUnitName || baseUnit.charAt(0).toUpperCase() + baseUnit.slice(1);
+
+  if (rawUom === "box" && (baseUnit === "piece" || !explicitBaseUnit)) {
+    if (parsed.isPharmaPack || productName.toLowerCase().includes("tablet") || productName.toLowerCase().includes("capsule")) {
+      baseUnit = "tablet";
+      subUnitName = "Tablet";
+    }
+  }
+
+  // 4. Resolve Stock in Base Units
+  let rawBaseStock = stockUnits !== null && stockUnits !== undefined ? Number(stockUnits) : 0;
+  if (isNaN(rawBaseStock)) rawBaseStock = 0;
+
+  // Handle backward compatibility for legacy products where stock_units was saved as Boxes instead of Base Units
+  const packQtyMatch = desc.match(/\[PACK_QTY:\s*([0-9.]+)\]/i);
+  const baseQtyMatch = desc.match(/\[BASE_QTY:\s*([0-9.]+)\]/i);
+  if (
+    packSize > 1 &&
+    packQtyMatch &&
+    baseQtyMatch &&
+    Math.abs(Number(packQtyMatch[1]) - rawBaseStock) < 0.001
+  ) {
+    // This was stored in boxes! Convert to true base units
+    rawBaseStock = Number(baseQtyMatch[1]) || (rawBaseStock * packSize);
+  }
+
+  const totalSubUnits = +rawBaseStock.toFixed(2);
+  const listingStock = packSize > 0 ? +(totalSubUnits / packSize).toFixed(3) : totalSubUnits;
+  const fullPacks = Math.floor(listingStock);
+  const looseSubUnits = Math.round(+(totalSubUnits - fullPacks * packSize).toFixed(2));
+  const hasFractions = looseSubUnits > 0 || (listingStock - fullPacks > 0.001);
+
+  let displayText = "";
+  if (totalSubUnits <= 0) {
+    displayText = "Out of Stock";
+  } else if (packSize <= 1) {
+    displayText = `${totalSubUnits} ${formatUomPlural(uomLabel, totalSubUnits)}`;
+  } else {
+    // Pack size > 1 (e.g. 10 Boxes of 12 tablets = 120 tablets)
+    if (looseSubUnits === 0) {
+      // Exactly full boxes
+      const packPlural = formatUomPlural(uomLabel, fullPacks);
+      const subPlural = formatUomPlural(subUnitName, totalSubUnits);
+      displayText = `${fullPacks} ${packPlural} (${totalSubUnits} ${subPlural.toLowerCase()})`;
+    } else if (fullPacks > 0) {
+      // Mixed: e.g. "10 Boxes + 6 tablets (126 tablets)"
+      const packPlural = formatUomPlural(uomLabel, fullPacks);
+      const subPlural = formatUomPlural(subUnitName, looseSubUnits);
+      displayText = `${fullPacks} ${packPlural} + ${looseSubUnits} ${subPlural.toLowerCase()} (${totalSubUnits} total)`;
+    } else {
+      // Less than 1 box: e.g. "6 tablets (0.5 Boxes)"
+      const subPlural = formatUomPlural(subUnitName, looseSubUnits);
+      displayText = `${looseSubUnits} ${subPlural} (${listingStock} ${uomLabel})`;
+    }
+  }
+
+  const subText = packSize > 1
+    ? `${totalSubUnits} ${formatUomPlural(subUnitName, totalSubUnits).toLowerCase()} · ${packSize} per ${uomLabel}`
+    : `${totalSubUnits} ${formatUomPlural(uomLabel, totalSubUnits).toLowerCase()}`;
+
+  return {
+    listingStock,
+    packSize,
+    totalSubUnits,
+    fullPacks,
+    looseSubUnits,
+    hasFractions,
+    uom: rawUom,
+    uomLabel,
+    baseUnit,
+    subUnitName,
+    displayText,
+    subText,
+  };
+}
+
+export function resolveProductUnits(p: {
+  stock_units?: number | string | null;
+  name?: string | null;
+  description?: string | null;
+  uom?: string | null;
+  units_per_uom?: number | null;
+  base_unit?: string | null;
+}): ProductStockBreakdown {
+  return computeProductStock(
+    p.stock_units,
+    p.name || "",
+    p.description,
+    p.uom,
+    p.units_per_uom,
+    p.base_unit
+  );
+}
+
+

@@ -72,7 +72,7 @@ const STARTERS: Record<AIMode, string[]> = {
   analyst: [
     "What is my net profit and sales performance this month?",
     "Which products are low in stock or out of stock?",
-    "Mera profit aur sales kaisa chal raha hai?",
+    "Which items are expiring in the next 30 or 60 days?",
     "What is my inventory total cost and retail valuation?",
   ],
   operator: [

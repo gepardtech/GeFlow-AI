@@ -53,6 +53,8 @@ import { ActionRecommendationModal } from "@/components/reports/ActionRecommenda
 import { ReportsPdfDialog } from "@/components/reports/ReportsPdfDialog";
 import { RecordDetailModal, LedgerItemDetail } from "@/components/reports/RecordDetailModal";
 import { AIRestockDetailModal } from "@/components/reports/AIRestockDetailModal";
+import { AIReportScheduleModal } from "@/components/reports/AIReportScheduleModal";
+import { AIReportDetailModal } from "@/components/reports/AIReportDetailModal";
 import {
   getStoredRestockReports,
   SupplierRecommendationReport,

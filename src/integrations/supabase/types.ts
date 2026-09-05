@@ -848,6 +848,7 @@ export type Database = {
       products: {
         Row: {
           barcode: string | null
+          base_unit: string | null
           batch_number: string | null
           business_id: string
           category_id: string | null
@@ -866,10 +867,13 @@ export type Database = {
           status: string
           stock_units: number
           subcategory_id: string | null
+          units_per_uom: number | null
+          uom: string | null
           updated_at: string
         }
         Insert: {
           barcode?: string | null
+          base_unit?: string | null
           batch_number?: string | null
           business_id: string
           category_id?: string | null
@@ -888,10 +892,13 @@ export type Database = {
           status?: string
           stock_units?: number
           subcategory_id?: string | null
+          units_per_uom?: number | null
+          uom?: string | null
           updated_at?: string
         }
         Update: {
           barcode?: string | null
+          base_unit?: string | null
           batch_number?: string | null
           business_id?: string
           category_id?: string | null
@@ -910,6 +917,8 @@ export type Database = {
           status?: string
           stock_units?: number
           subcategory_id?: string | null
+          units_per_uom?: number | null
+          uom?: string | null
           updated_at?: string
         }
         Relationships: [

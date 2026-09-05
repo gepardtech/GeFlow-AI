@@ -1,5 +1,5 @@
 import { ReactNode, useMemo } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, Navigate } from "react-router-dom";
 import PanelLayout from "@/components/PanelLayout";
 import { userNavForPlanAndModules } from "@/lib/panelNav";
 import { usePlan } from "@/hooks/usePlan";
@@ -51,7 +51,7 @@ const UserPanelGate = ({ children, pageTitle }: Props) => {
   // Filter sidebar navigation items based on active staff role
   const filteredNavItems = useMemo(() => {
     const baseNav = userNavForPlanAndModules(planId, modules, isEnabled);
-    if (staffRole === "owner" || staffRole === "admin" || staffRole === "manager") {
+    if (staffRole === "owner" || staffRole === "admin") {
       return baseNav;
     }
     return baseNav.filter((item) => isPathAllowedForRole(staffRole, item.to));
@@ -77,9 +77,27 @@ const UserPanelGate = ({ children, pageTitle }: Props) => {
     return <MaintenanceScreen />;
   }
 
+  // Auto redirect cashier directly to POS Terminal if landing on /dashboard
+  if (!roleLoading && isCashier && (location.pathname === "/dashboard" || location.pathname === "/dashboard/")) {
+    return <Navigate to="/dashboard/pos" replace />;
+  }
+
+  // Auto redirect inventory clerk directly to Inventory if landing on /dashboard
+  if (!roleLoading && isInventoryClerk && (location.pathname === "/dashboard" || location.pathname === "/dashboard/")) {
+    return <Navigate to="/dashboard/inventory" replace />;
+  }
+
   return (
     <PanelLayout
-      sidebarLabel={isCashier ? "POS WORKSPACE" : isInventoryClerk ? "INVENTORY WORKSPACE" : "BUSINESS WORKSPACE"}
+      sidebarLabel={
+        isCashier
+          ? "POS WORKSPACE (CASHIER)"
+          : isInventoryClerk
+          ? "INVENTORY WORKSPACE"
+          : staffRole === "manager"
+          ? "MANAGER WORKSPACE"
+          : "BUSINESS WORKSPACE (OWNER)"
+      }
       navItems={filteredNavItems}
       identityName={`${isCashier ? "Cashier" : isInventoryClerk ? "Clerk" : plan?.label || "Workspace"} ${firstName}`}
       identityRole={roleBadgeLabel}

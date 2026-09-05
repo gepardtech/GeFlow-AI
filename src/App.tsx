@@ -118,6 +118,9 @@ const App = () => (
           <Route path="/dashboard/pos" element={<AuthGuard><UserPOS /></AuthGuard>} />
           <Route path="/dashboard/purchases" element={<AuthGuard><UserPurchases /></AuthGuard>} />
           <Route path="/dashboard/reports" element={<AuthGuard><UserReports /></AuthGuard>} />
+          <Route path="/dashboard/report" element={<AuthGuard><UserReports /></AuthGuard>} />
+          <Route path="/reports" element={<AuthGuard><UserReports /></AuthGuard>} />
+          <Route path="/report" element={<AuthGuard><UserReports /></AuthGuard>} />
           <Route path="/dashboard/analytics" element={<AuthGuard><UserAnalytics /></AuthGuard>} />
           <Route path="/dashboard/team" element={<AuthGuard><UserTeam /></AuthGuard>} />
           <Route path="/dashboard/subscription" element={<AuthGuard><UserSubscription /></AuthGuard>} />

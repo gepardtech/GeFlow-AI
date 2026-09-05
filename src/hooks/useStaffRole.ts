@@ -41,6 +41,7 @@ export const isPathAllowedForRole = (role: StaffRole, path: string): boolean => 
       "/dashboard/out-of-stock",
       "/dashboard/purchases",
       "/dashboard/reports",
+      "/dashboard/report",
       "/dashboard/analytics",
       "/dashboard/announcements",
       "/dashboard/support",
@@ -66,6 +67,7 @@ export const isPathAllowedForRole = (role: StaffRole, path: string): boolean => 
     const allowed = [
       "/dashboard/pos",
       "/dashboard/reports",
+      "/dashboard/report",
       "/dashboard/announcements",
       "/dashboard/support",
     ];
@@ -136,8 +138,8 @@ export const useStaffRole = (): StaffRoleState => {
         localStorage.setItem("geflow.workspaceMode", "employee");
       }
 
-      // If user is in "business" mode and actually owns stores:
-      if (currentMode === "business" && hasOwnedBusinesses) {
+      // If user is in "business" mode (Owner):
+      if (currentMode === "business") {
         setRole("owner");
         setIsActive(true);
         localStorage.setItem("geflow_cached_staff_role", "owner");
@@ -145,34 +147,46 @@ export const useStaffRole = (): StaffRoleState => {
         return;
       }
 
-      // In employee mode, find membership for the active store
-      if (currentMode === "employee" && teamMembers.length > 0) {
-        let matchingMembership = teamMembers[0];
+      // In employee mode:
+      if (currentMode === "employee") {
+        let resolved: StaffRole = "cashier";
+        let activeStatus = true;
 
-        if (activeBizId) {
-          const { data: activeBiz } = await supabase
-            .from("businesses")
-            .select("owner_user_id")
-            .eq("id", activeBizId)
-            .maybeSingle();
+        if (teamMembers.length > 0) {
+          let matchingMembership = teamMembers[0];
 
-          if (activeBiz?.owner_user_id) {
-            const match = teamMembers.find((m) => m.appointed_by_user_id === activeBiz.owner_user_id);
-            if (match) matchingMembership = match;
+          if (activeBizId) {
+            const { data: activeBiz } = await supabase
+              .from("businesses")
+              .select("owner_user_id")
+              .eq("id", activeBizId)
+              .maybeSingle();
+
+            if (activeBiz?.owner_user_id) {
+              const match = teamMembers.find((m) => m.appointed_by_user_id === activeBiz.owner_user_id);
+              if (match) matchingMembership = match;
+            }
+          }
+
+          const rawRole = (matchingMembership.role || "").toLowerCase().trim();
+          if (rawRole === "manager" || rawRole === "admin") resolved = "manager";
+          else if (rawRole === "inventory" || rawRole.includes("inventory")) resolved = "inventory";
+          else resolved = "cashier";
+          activeStatus = matchingMembership.is_active !== false;
+        } else {
+          // Employee mode default (e.g. Retail Store Cashier)
+          const storedRole = (localStorage.getItem("geflow_employee_role") || "cashier").toLowerCase().trim();
+          if (storedRole === "manager" || storedRole === "inventory") {
+            resolved = storedRole as StaffRole;
+          } else {
+            resolved = "cashier";
           }
         }
 
-        const rawRole = (matchingMembership.role || "").toLowerCase().trim();
-        let resolved: StaffRole = "cashier";
-        if (rawRole === "manager" || rawRole === "admin") resolved = "manager";
-        else if (rawRole === "inventory" || rawRole.includes("inventory")) resolved = "inventory";
-        else resolved = "cashier";
-
         setRole(resolved);
-        setIsActive(matchingMembership.is_active !== false);
+        setIsActive(activeStatus);
         localStorage.setItem("geflow_cached_staff_role", resolved);
       } else {
-        // Fallback to owner
         setRole("owner");
         setIsActive(true);
         localStorage.setItem("geflow_cached_staff_role", "owner");

@@ -38,10 +38,12 @@ const UserPurchases = () => {
   const load = useCallback(async () => {
     if (!active) { setLoading(false); return; }
     setLoading(true);
-    const [{ data: pr }, { data: pd }] = await Promise.all([
-      supabase.from("purchases").select("*").eq("business_id", active.id).order("created_at", { ascending: false }),
-      supabase.from("products").select("id, name, description, stock_units, purchase_cost, retail_price").eq("business_id", active.id).eq("status", "active").order("name"),
-    ]);
+    let pdRes = await supabase.from("products").select("id, name, description, stock_units, purchase_cost, retail_price, uom, units_per_uom, base_unit").eq("business_id", active.id).eq("status", "active").order("name");
+    if (pdRes.error) {
+      pdRes = await supabase.from("products").select("id, name, description, stock_units, purchase_cost, retail_price").eq("business_id", active.id).eq("status", "active").order("name");
+    }
+    const { data: pr } = await supabase.from("purchases").select("*").eq("business_id", active.id).order("created_at", { ascending: false });
+    const pd = pdRes.data;
     setRows((pr as PurchaseRecord[]) ?? []);
     setProducts((pd as PurchaseProduct[]) ?? []);
     setLoading(false);

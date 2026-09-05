@@ -51,6 +51,9 @@ export interface SmartUOMProductInfo {
   discount_price?: number | null;
   purchase_cost: number;
   stock_units: number;
+  uom?: string | null;
+  units_per_uom?: number | null;
+  base_unit?: string | null;
 }
 
 export interface AppliedFractionalSelection {

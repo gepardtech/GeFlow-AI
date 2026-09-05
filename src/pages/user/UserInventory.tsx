@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   Package, Plus, Lock, Search, MoreVertical, Eye, ArrowRightLeft, Boxes as BoxesIcon,
   Pencil, Trash2, DollarSign, AlertTriangle, XCircle, ChevronDown, Download, Upload,
-  ScanLine, Barcode, PackagePlus, TriangleAlert, CheckCircle2, FileText,
+  ScanLine, Barcode, PackagePlus, TriangleAlert, CheckCircle2, FileText, Clock, History,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import UserPanelGate from "@/components/UserPanelGate";
@@ -31,8 +31,9 @@ import ExportLedgerDialog from "@/components/inventory/ExportLedgerDialog";
 import BulkImportDialog from "@/components/inventory/BulkImportDialog";
 import BarcodeLookupDialog from "@/components/inventory/BarcodeLookupDialog";
 import RestockWorkflowDialog from "@/components/inventory/RestockWorkflowDialog";
+import { StockLedgerModal } from "@/components/inventory/StockLedgerModal";
 import { useMoney } from "@/lib/currency";
-import { parseProductUOM } from "@/lib/uomRegistry";
+import { parseProductUOM, computeProductStock } from "@/lib/uomRegistry";
 
 const UserInventory = () => {
   const { plan } = usePlan();
@@ -67,6 +68,7 @@ const UserInventory = () => {
   const [importOpen, setImportOpen] = useState(false);
   const [barcode, setBarcode] = useState<"manual" | "scanner" | null>(null);
   const [restockOpen, setRestockOpen] = useState(false);
+  const [stockLedgerOpen, setStockLedgerOpen] = useState(false);
 
   const activeId = active?.id;
   const ownerUserId = active?.owner_user_id;
@@ -80,13 +82,24 @@ const UserInventory = () => {
       setLoading(true);
     }
     try {
-      const { data, error } = await supabase
+      const { data: initialData, error } = await supabase
         .from("products")
-        .select("id, name, internal_sku, description, category_id, subcategory_id, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, barcode, status, images")
+        .select("id, name, internal_sku, description, category_id, subcategory_id, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, barcode, status, images, uom, units_per_uom, base_unit")
         .eq("business_id", activeId)
         .order("created_at", { ascending: false });
       
-      if (!error && data) {
+      let data = initialData;
+      if (error) {
+        // Resilient fallback if columns not yet migrated
+        const fallback = await supabase
+          .from("products")
+          .select("id, name, internal_sku, description, category_id, subcategory_id, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, barcode, status, images")
+          .eq("business_id", activeId)
+          .order("created_at", { ascending: false });
+        data = fallback.data as any;
+      }
+
+      if (data) {
         setProducts(data as ProductRecord[]);
       }
     } catch (err) {
@@ -225,15 +238,45 @@ const UserInventory = () => {
     if (statusFilter === "out_of_stock") return p.stock_units <= 0;
     if (statusFilter === "active") return p.status === "active";
     if (statusFilter === "draft") return p.status !== "active";
+    if (statusFilter === "expiring_30") {
+      if (!p.expiry_date) return false;
+      const exp = new Date(p.expiry_date).getTime();
+      const now = Date.now();
+      return exp >= now && exp <= now + 30 * 86400000;
+    }
+    if (statusFilter === "expiring_60") {
+      if (!p.expiry_date) return false;
+      const exp = new Date(p.expiry_date).getTime();
+      const now = Date.now();
+      return exp > now + 30 * 86400000 && exp <= now + 60 * 86400000;
+    }
     if (statusFilter === "expiring") {
       if (!p.expiry_date) return false;
-      const exp = new Date(p.expiry_date);
-      const thirtyDays = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-      return exp <= thirtyDays;
+      const exp = new Date(p.expiry_date).getTime();
+      const sixtyDays = Date.now() + 60 * 86400000;
+      return exp <= sixtyDays;
     }
 
     return true;
   });
+
+  const expiring30Items = useMemo(() => {
+    const now = Date.now();
+    return products.filter((p) => {
+      if (!p.expiry_date) return false;
+      const t = new Date(p.expiry_date).getTime();
+      return t >= now && t <= now + 30 * 86400000;
+    });
+  }, [products]);
+
+  const expiring60Items = useMemo(() => {
+    const now = Date.now();
+    return products.filter((p) => {
+      if (!p.expiry_date) return false;
+      const t = new Date(p.expiry_date).getTime();
+      return t > now + 30 * 86400000 && t <= now + 60 * 86400000;
+    });
+  }, [products]);
 
   const allFilteredSelected = filtered.length > 0 && filtered.every((p) => selectedIds.includes(p.id));
   const someFilteredSelected = filtered.some((p) => selectedIds.includes(p.id)) && !allFilteredSelected;
@@ -277,6 +320,13 @@ const UserInventory = () => {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <Button
+            variant="outline"
+            onClick={() => setStockLedgerOpen(true)}
+            className="h-9 sm:h-10 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold border-sky-500/30 text-sky-600 dark:text-sky-400 bg-sky-500/5 hover:bg-sky-500/15"
+          >
+            <History className="h-4 w-4 mr-1.5" /> Stock Ledger
+          </Button>
           <Button variant="outline" onClick={() => setExportOpen(true)} className="h-9 sm:h-10 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold">
             <Download className="h-4 w-4 mr-1.5" /> Export Ledger
           </Button>
@@ -349,6 +399,50 @@ const UserInventory = () => {
         </div>
       )}
 
+      {/* Near Expiry Alert Bar (30 & 60 Days) */}
+      {(expiring30Items.length > 0 || expiring60Items.length > 0) && (
+        <div className="flex items-center justify-between gap-3 flex-wrap rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 mb-6 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <Clock className="h-5 w-5 text-rose-500 shrink-0" />
+            <div className="text-xs sm:text-sm text-rose-700 dark:text-rose-300">
+              <span className="font-bold">Near Expiry Alert: </span>
+              {expiring30Items.length > 0 && (
+                <span className="font-semibold text-rose-600 dark:text-rose-400 mr-2">
+                  🔴 {expiring30Items.length} product(s) expiring within 30 days
+                </span>
+              )}
+              {expiring60Items.length > 0 && (
+                <span className="font-semibold text-amber-600 dark:text-amber-400">
+                  🟡 {expiring60Items.length} product(s) expiring in 31–60 days
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {expiring30Items.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setStatusFilter("expiring_30")}
+                className="bg-background/80 hover:bg-background text-rose-600 dark:text-rose-400 border-rose-500/30 text-xs font-semibold rounded-xl"
+              >
+                Show 30d Urgent ({expiring30Items.length})
+              </Button>
+            )}
+            {expiring60Items.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setStatusFilter("expiring_60")}
+                className="bg-background/80 hover:bg-background text-amber-600 dark:text-amber-400 border-amber-500/30 text-xs font-semibold rounded-xl"
+              >
+                Show 60d Watchlist ({expiring60Items.length})
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* KPI cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 min-w-0">
         {kpis.map((k) => (
@@ -401,7 +495,9 @@ const UserInventory = () => {
             <option value="in_stock">In Stock</option>
             <option value="low_stock">Low Stock (Alert)</option>
             <option value="out_of_stock">Out of Stock</option>
-            <option value="expiring">Expiring Soon (30d)</option>
+            <option value="expiring_30">🔴 Expiring in 30 Days (Urgent)</option>
+            <option value="expiring_60">🟡 Expiring in 31–60 Days (Watchlist)</option>
+            <option value="expiring">All Expiring Soon (≤60d)</option>
             <option value="active">Active Only</option>
             <option value="draft">Draft Only</option>
           </select>
@@ -526,16 +622,19 @@ const UserInventory = () => {
                   const threshold = (p.min_stock_alert !== null && p.min_stock_alert !== undefined && p.min_stock_alert > 0)
                     ? p.min_stock_alert
                     : defaultMinAlert;
-                  const out = p.stock_units <= 0;
-                  const low = !out && p.stock_units <= threshold;
+                  const stockInfo = computeProductStock(p.stock_units, p.name, p.description, p.uom, p.units_per_uom, p.base_unit);
+                  const out = stockInfo.totalSubUnits <= 0;
+                  const low = !out && stockInfo.listingStock <= threshold;
                   const margin = Number(p.retail_price) > 0 ? Math.round(((Number(p.retail_price) - Number(p.purchase_cost)) / Number(p.retail_price)) * 100) : 0;
                   const isSelected = selectedIds.includes(p.id);
                   
                   // Batch and expiry checks
-                  const isExpired = p.expiry_date ? new Date(p.expiry_date) < new Date() : false;
-                  const isExpiringSoon = p.expiry_date && !isExpired
-                    ? new Date(p.expiry_date) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-                    : false;
+                  const nowTime = Date.now();
+                  const expTime = p.expiry_date ? new Date(p.expiry_date).getTime() : null;
+                  const isExpired = expTime !== null ? expTime < nowTime : false;
+                  const daysLeft = expTime !== null && !isExpired ? Math.ceil((expTime - nowTime) / (1000 * 3600 * 24)) : null;
+                  const isExpiring30 = daysLeft !== null && daysLeft <= 30;
+                  const isExpiring60 = daysLeft !== null && daysLeft > 30 && daysLeft <= 60;
 
                   return (
                     <tr
@@ -563,8 +662,15 @@ const UserInventory = () => {
                               {isExpired && (
                                 <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-destructive/15 text-destructive shrink-0">EXPIRED</span>
                               )}
-                              {isExpiringSoon && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/15 text-amber-500 shrink-0">EXPIRING SOON</span>
+                              {isExpiring30 && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-500/15 text-rose-600 dark:text-rose-400 shrink-0">
+                                  EXPIRING ({daysLeft}d)
+                                </span>
+                              )}
+                              {isExpiring60 && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0">
+                                  EXPIRING ({daysLeft}d)
+                                </span>
                               )}
                             </div>
                             <p className="text-[10px] text-muted-foreground tracking-wider truncate mt-0.5">
@@ -577,7 +683,7 @@ const UserInventory = () => {
                       <td className="px-4 py-4"><span className="text-xs text-muted-foreground">{catName(p.category_id)}</span></td>
                       <td className="px-4 py-4">
                         {(() => {
-                          const parsed = parseProductUOM(p.name, p.description || "");
+                          const parsed = parseProductUOM(p.name, p.description || "", p.uom, p.units_per_uom, p.base_unit);
                           const isScaled = parsed.packSize > 1;
                           const retail = Number(p.discount_price ?? p.retail_price);
                           return (
@@ -600,17 +706,15 @@ const UserInventory = () => {
                       </td>
                       <td className="px-4 py-4">
                         {(() => {
-                          const parsed = parseProductUOM(p.name, p.description || "");
-                          const isScaled = parsed.packSize > 1;
-                          const packCount = isScaled ? Math.floor(p.stock_units / parsed.packSize) : p.stock_units;
+                          const isScaled = stockInfo.packSize > 1;
                           return (
                             <div className="flex flex-col">
                               <span className={`text-base font-extrabold ${out ? "text-rose-500" : low ? "text-amber-500" : "text-foreground"}`}>
-                                {isScaled ? `${packCount} ${parsed.uomLabel}s` : `${p.stock_units} ${parsed.uomLabel}s`}
+                                {stockInfo.displayText}
                               </span>
                               {isScaled && (
                                 <span className="text-[11px] font-semibold text-muted-foreground">
-                                  {p.stock_units} {parsed.subUnitName}s ({parsed.packSize}/{parsed.uomLabel})
+                                  {stockInfo.subText}
                                 </span>
                               )}
                               <p className="text-[10px] text-muted-foreground tracking-wider mt-0.5">alert ≤ {threshold}</p>
@@ -721,6 +825,18 @@ const UserInventory = () => {
       )}
       {active && (
         <ExportLedgerDialog open={exportOpen} onOpenChange={setExportOpen} products={products} categoryName={catName} businessName={active.business_name} />
+      )}
+      {active && (
+        <StockLedgerModal
+          open={stockLedgerOpen}
+          onOpenChange={setStockLedgerOpen}
+          businessId={active.id}
+          productsList={products.map((p) => ({
+            id: p.id,
+            name: p.name,
+            internal_sku: p.internal_sku,
+          }))}
+        />
       )}
       {active && userId && (
         <BulkImportDialog open={importOpen} onOpenChange={setImportOpen} businessId={active.id} ownerUserId={userId} categories={allCategories} onSaved={load} />

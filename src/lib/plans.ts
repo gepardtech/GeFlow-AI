@@ -41,6 +41,7 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     lockedRoutes: [
       "/dashboard/purchases",
       "/dashboard/reports",
+      "/dashboard/report",
       "/dashboard/analytics",
       "/dashboard/team",
     ],
