@@ -32,7 +32,7 @@ import {
   BookOpen,
   Headphones,
 } from "lucide-react";
-import AIAssistant from "@/components/ai/AIAssistant";
+import SupportAIAssistant from "@/components/ai/SupportAIAssistant";
 
 interface Ticket {
   id: string;
@@ -134,7 +134,7 @@ const UserSupport = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [activeTab, setActiveTab] = useState<"tickets" | "ai_assistant">("tickets");
-  const [maryamOpen, setMaryamOpen] = useState(false);
+  const [supportAiOpen, setSupportAiOpen] = useState(false);
 
   const [form, setForm] = useState({
     subject: "",
@@ -326,16 +326,16 @@ const UserSupport = () => {
               </span>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Submit support tickets, chat with human staff in real time, or use Maryam AI for instant live resolution.
+              Submit support tickets, chat with human staff in real time, or use Support AI for instant technical and hardware resolution.
             </p>
           </div>
 
           <div className="flex items-center gap-2.5">
             <Button
-              onClick={() => setMaryamOpen(true)}
-              className="h-11 px-4 rounded-2xl bg-gradient-to-r from-violet-600 to-sky-500 hover:opacity-95 text-white font-extrabold text-xs shadow-xs gap-2"
+              onClick={() => setSupportAiOpen(true)}
+              className="h-11 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs gap-2"
             >
-              <Sparkles className="w-4 h-4" /> Ask Maryam AI
+              <LifeBuoy className="w-4 h-4" /> Ask Support AI
             </Button>
             <Button
               onClick={() => setOpen(true)}
@@ -394,32 +394,32 @@ const UserSupport = () => {
           </div>
         </div>
 
-        {/* Maryam AI Instant Self-Service Hub */}
+        {/* Support AI Instant Self-Service Hub */}
         <div className="p-5 rounded-3xl bg-card border border-border shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-600 to-sky-500 text-white flex items-center justify-center shadow-xs">
-                <Bot className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center border border-emerald-500/20 shadow-xs">
+                <LifeBuoy className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="font-extrabold text-base text-foreground">Maryam AI — Live System Assistant</h3>
-                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20">
-                    Live Knowledge
+                  <h3 className="font-extrabold text-base text-foreground">GeFlow Support AI — Technical Helpdesk</h3>
+                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    Hardware & Setup
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Instant guidance strictly aligned with GeFlow live modules (POS hardware, SKU generation, inventory ledger, returns & taxes).
+                  Instant guidance for thermal printing (ESC/POS), barcode scanners, POS returns, inventory restock & multi-tenant access.
                 </p>
               </div>
             </div>
 
             <Button
               variant="outline"
-              onClick={() => setMaryamOpen(true)}
-              className="h-9 px-3.5 rounded-xl text-xs font-bold gap-1.5"
+              onClick={() => setSupportAiOpen(true)}
+              className="h-9 px-3.5 rounded-xl text-xs font-bold gap-1.5 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
             >
-              <Sparkles className="w-3.5 h-3.5 text-violet-500" /> Launch Maryam AI Assistant
+              <LifeBuoy className="w-3.5 h-3.5" /> Launch Support AI Assistant
             </Button>
           </div>
 
@@ -781,19 +781,19 @@ const UserSupport = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Persistent Floating AI Assistant Quick-Launch Button */}
+        {/* Persistent Floating Support AI Assistant Quick-Launch Button */}
         <div className="fixed bottom-6 right-6 z-40">
           <Button
-            onClick={() => setMaryamOpen(true)}
-            className="h-12 px-5 rounded-full bg-gradient-to-r from-violet-600 to-sky-500 hover:from-violet-700 hover:to-sky-600 text-white font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2.5 border border-white/20"
+            onClick={() => setSupportAiOpen(true)}
+            className="h-12 px-5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2.5 border border-emerald-400/30"
           >
-            <Sparkles className="w-4 h-4 animate-pulse text-amber-300" />
-            <span className="text-xs">Ask Maryam AI</span>
+            <LifeBuoy className="w-4 h-4 animate-spin-slow text-emerald-200" />
+            <span className="text-xs">Ask Support AI</span>
           </Button>
         </div>
 
-        {/* Maryam AI Dedicated Assistant Modal */}
-        <AIAssistant open={maryamOpen} onOpenChange={setMaryamOpen} />
+        {/* Support AI Dedicated Assistant Modal */}
+        <SupportAIAssistant open={supportAiOpen} onOpenChange={setSupportAiOpen} />
       </div>
     </UserPanelGate>
   );

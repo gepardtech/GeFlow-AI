@@ -3,15 +3,19 @@ import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import UserPanelGate from "@/components/UserPanelGate";
 import {
-  Bell, Loader2, Megaphone, LifeBuoy, PackageX, Search, Filter, ExternalLink, Sparkles, Truck, Trash2, CheckCheck
+  Bell, Loader2, Megaphone, LifeBuoy, PackageX, Search, Filter, ExternalLink, Sparkles, Truck, Trash2, CheckCheck,
+  UserPlus, CheckCircle2
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { getStoredAIReports, getStoredRestockReports } from "@/lib/aiReportSchedulerService";
+import { getPendingInvitationsForUser, acceptInvitation, declineInvitation, PendingInvitation } from "@/lib/teamInviteService";
 import { useToast } from "@/hooks/use-toast";
 
-type Kind = "announcement" | "ticket" | "stock" | "ai_report" | "ai_restock";
+type Kind = "announcement" | "ticket" | "stock" | "ai_report" | "ai_restock" | "team_invite";
 interface Item {
   id: string; kind: Kind; title: string; description: string; createdAt: string;
   unread: boolean; to?: string; link?: string | null; linkLabel?: string | null;
+  inviteId?: string; businessName?: string; role?: string;
 }
 
 const kindMeta: Record<Kind, { icon: typeof Bell; label: string; cls: string }> = {
@@ -20,6 +24,7 @@ const kindMeta: Record<Kind, { icon: typeof Bell; label: string; cls: string }> 
   stock: { icon: PackageX, label: "Inventory", cls: "bg-rose-500/15 text-rose-500 border-rose-500/30" },
   ai_report: { icon: Sparkles, label: "AI Report", cls: "bg-sky-500/15 text-sky-500 border-sky-500/30" },
   ai_restock: { icon: Truck, label: "AI Restock", cls: "bg-amber-500/15 text-amber-500 border-amber-500/30" },
+  team_invite: { icon: UserPlus, label: "Team Invitation", cls: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" },
 };
 
 const SEEN_KEY = "geflow.notifications.seenAt";
@@ -45,7 +50,7 @@ const UserNotifications = () => {
 
     const { data: { user } } = await supabase.auth.getUser();
 
-    const [anns, tickets, lowStock, businesses] = await Promise.all([
+    const [anns, tickets, lowStock, businesses, pendingInvites] = await Promise.all([
       supabase.from("announcements").select("id, title, body, audience, link_url, link_label, created_at").order("created_at", { ascending: false }).limit(30),
       user
         ? supabase.from("support_tickets").select("id, ticket_number, subject, status, priority, updated_at").eq("owner_user_id", user.id).order("updated_at", { ascending: false }).limit(20)
@@ -56,7 +61,22 @@ const UserNotifications = () => {
       user
         ? supabase.from("businesses").select("id, business_name").eq("owner_user_id", user.id)
         : Promise.resolve({ data: [] as any[] }),
+      user
+        ? getPendingInvitationsForUser(user.id)
+        : Promise.resolve([] as PendingInvitation[]),
     ]);
+
+    const inviteRows: Item[] = (pendingInvites || []).map((inv) => ({
+      id: `team-inv-${inv.id}`,
+      kind: "team_invite" as Kind,
+      title: `Team Invitation: ${inv.businessName}`,
+      description: `${inv.ownerName} has invited you to join "${inv.businessName}" as ${inv.role.toUpperCase()}. Click Accept to activate your access.`,
+      createdAt: inv.createdAt,
+      unread: true,
+      inviteId: inv.id,
+      businessName: inv.businessName,
+      role: inv.role,
+    }));
 
     // Collect all stored AI Reports and Restock Reports across active user businesses
     const allAIReports: Item[] = [];
@@ -89,6 +109,7 @@ const UserNotifications = () => {
     });
 
     const rows: Item[] = [
+      ...inviteRows,
       ...allAIReports,
       ...(anns.data ?? [])
         .filter((a: any) => a.audience === "all" || a.audience === "users")
@@ -126,12 +147,59 @@ const UserNotifications = () => {
     setLoading(false);
   }, []);
 
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const handleAccept = async (inviteId: string, bizName?: string, role?: string) => {
+    setActionLoading(inviteId);
+    try {
+      const res = await acceptInvitation(inviteId);
+      if (res.success) {
+        toast({
+          title: "Invitation Accepted! 🎉",
+          description: `You now have active access to "${bizName || 'the store'}" as ${role?.toUpperCase() || 'staff'}.`,
+        });
+        await load();
+      } else {
+        toast({
+          title: "Failed to Accept",
+          description: res.error || "Could not accept invitation.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDecline = async (inviteId: string) => {
+    setActionLoading(inviteId);
+    try {
+      const res = await declineInvitation(inviteId);
+      if (res.success) {
+        toast({
+          title: "Invitation Declined",
+          description: "The team invitation has been declined and removed.",
+        });
+        await load();
+      } else {
+        toast({
+          title: "Failed to Decline",
+          description: res.error || "Could not decline invitation.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   useEffect(() => {
     load();
     const ch = supabase.channel(`user_notifications_page_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "support_tickets" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "support_team_members" }, load)
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [load]);
@@ -245,7 +313,7 @@ const UserNotifications = () => {
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
             <Filter className="h-4 w-4 text-muted-foreground" />
-            {(["all", "announcement", "ticket", "stock", "ai_report", "ai_restock"] as const).map((f) => (
+            {(["all", "team_invite", "announcement", "ticket", "stock", "ai_report", "ai_restock"] as const).map((f) => (
               <button key={f} onClick={() => setFilter(f)}
                 className={`h-9 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-colors ${filter === f ? "bg-sky-500 text-white" : "bg-muted/50 text-muted-foreground hover:text-foreground"}`}>
                 {f === "all" ? "All" : kindMeta[f]?.label || f}
@@ -288,6 +356,28 @@ const UserNotifications = () => {
                       </button>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{n.description}</p>
+                    {n.kind === "team_invite" && n.inviteId && (
+                      <div className="flex items-center gap-2.5 mt-3 pt-2 border-t border-border/60">
+                        <Button
+                          size="sm"
+                          onClick={() => handleAccept(n.inviteId!, n.businessName, n.role)}
+                          disabled={actionLoading === n.inviteId}
+                          className="h-8 px-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold gap-1.5 shadow-sm border-0"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          {actionLoading === n.inviteId ? "Accepting..." : "Accept Invitation"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDecline(n.inviteId!)}
+                          disabled={actionLoading === n.inviteId}
+                          className="h-8 px-3 rounded-xl text-xs font-semibold text-muted-foreground hover:text-rose-500"
+                        >
+                          Decline
+                        </Button>
+                      </div>
+                    )}
                     <div className="flex items-center gap-3 mt-2">
                       <p className="text-[10px] text-muted-foreground">{new Date(n.createdAt).toLocaleString()}</p>
                       {n.to && <Link to={n.to} className="text-[11px] font-bold text-sky-500 hover:underline">Open</Link>}

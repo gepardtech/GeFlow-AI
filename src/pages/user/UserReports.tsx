@@ -59,6 +59,7 @@ import {
   getStoredRestockReports,
   SupplierRecommendationReport,
   generateAutoRestockRecommendation,
+  GeneratedAIReport,
 } from "@/lib/aiReportSchedulerService";
 
 interface DailyTrend {
@@ -110,6 +111,11 @@ export const UserReports = () => {
   const [selectedRestockReport, setSelectedRestockReport] = useState<SupplierRecommendationReport | null>(null);
   const [aiRestockDetailOpen, setAiRestockDetailOpen] = useState(false);
   const [generatingRestock, setGeneratingRestock] = useState(false);
+
+  // AI Report Scheduler & Report Detail Modals
+  const [aiScheduleOpen, setAiScheduleOpen] = useState(false);
+  const [aiReportDetailOpen, setAiReportDetailOpen] = useState(false);
+  const [selectedAIReport, setSelectedAIReport] = useState<GeneratedAIReport | null>(null);
 
   // AI Persistent Collections
   const [storedRestockReports, setStoredRestockReports] = useState<SupplierRecommendationReport[]>([]);
@@ -1051,6 +1057,16 @@ export const UserReports = () => {
                 <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500/10 text-amber-600">
                   {storedRestockReports.length}
                 </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAiScheduleOpen(true)}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 text-muted-foreground hover:text-foreground hover:bg-background/60"
+                title="Configure automated scheduled AI reports"
+              >
+                <Clock className="w-3.5 h-3.5 text-violet-500" />
+                <span>AI Schedule</span>
               </button>
             </div>
           </div>

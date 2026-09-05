@@ -62,10 +62,13 @@ export const isPathAllowedForRole = (role: StaffRole, path: string): boolean => 
     return allowed.some((p) => cleanPath === p || cleanPath.startsWith(p + "/"));
   }
 
-  // Cashier: POS terminal checkout, receipt dispatch, and daily sales counter
+  // Cashier: POS terminal checkout, receipt dispatch, inventory lookup, and daily reports
   if (role === "cashier") {
     const allowed = [
       "/dashboard/pos",
+      "/dashboard/inventory",
+      "/dashboard/low-stock",
+      "/dashboard/out-of-stock",
       "/dashboard/reports",
       "/dashboard/report",
       "/dashboard/announcements",

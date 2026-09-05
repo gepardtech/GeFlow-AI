@@ -310,12 +310,6 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
             <Menu className="h-5 w-5" />
           </button>
 
-          {!isPathAdmin && (
-            <div className="shrink-0">
-              <TopBusinessEmployeeDropdown variant="header" />
-            </div>
-          )}
-
           <div className="flex-1 max-w-xl relative hidden md:block">
             <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
             <input

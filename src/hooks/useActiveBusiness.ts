@@ -1,11 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  CategorySettings,
-  EffectiveBusinessSettings,
-  getCachedUserMetadata,
-  resolveSettingsHierarchy,
-} from "@/lib/settingsHierarchy";
+import { CategorySettings } from "@/lib/settingsHierarchy";
 
 export interface BusinessRow {
   id: string;
@@ -25,149 +20,214 @@ export interface BusinessRow {
 const LS_KEY = "geflow.activeBusinessId";
 const LS_MODE_KEY = "geflow.workspaceMode";
 
-/**
- * Loads businesses owned by the current user or invited as employee.
- * Supports switching between "business" (Owner) and "employee" (Staff) workspaces.
- */
-let globalCachedOwned: BusinessRow[] = [];
-let globalCachedStaff: BusinessRow[] = [];
-let globalCachedActiveId: string | null = null;
-let globalHasLoaded = false;
+interface GlobalBusinessStore {
+  owned: BusinessRow[];
+  staff: BusinessRow[];
+  mode: "business" | "employee";
+  activeId: string | null;
+  industryType: string | null;
+  categoryName: string | null;
+  categorySettings: CategorySettings | null;
+  enabledModules: string[] | null;
+  enabledFeatures: string[] | null;
+  loading: boolean;
+  hasLoaded: boolean;
+  currentUserId: string | null;
+}
 
-const DEMO_EMPLOYEE_STORE: BusinessRow = {
-  id: "emp_retail_store_demo",
-  business_name: "Retail Store",
-  business_address: "Retail Plaza, Sector 4",
-  status: "active",
-  currency: "USD",
-  base_currency: "USD",
-  default_tax: 5,
-  stock_alert_limit: 10,
-  category_id: null,
-  owner_user_id: "demo_retail_owner",
-  is_staff: true,
-  staff_role: "cashier",
+const store: GlobalBusinessStore = {
+  owned: [],
+  staff: [],
+  mode: (localStorage.getItem(LS_MODE_KEY) as "business" | "employee") || "business",
+  activeId: localStorage.getItem(LS_KEY) || null,
+  industryType: null,
+  categoryName: null,
+  categorySettings: null,
+  enabledModules: null,
+  enabledFeatures: null,
+  loading: true,
+  hasLoaded: false,
+  currentUserId: null,
 };
 
-export const useActiveBusiness = () => {
-  const [businesses, setBusinesses] = useState<BusinessRow[]>(() => {
-    const mode = (localStorage.getItem(LS_MODE_KEY) as "business" | "employee") || "business";
-    if (mode === "employee") return globalCachedStaff.length > 0 ? globalCachedStaff : [DEMO_EMPLOYEE_STORE];
-    return globalCachedOwned;
-  });
-  const [ownedBusinesses, setOwnedBusinesses] = useState<BusinessRow[]>(globalCachedOwned);
-  const [staffBusinesses, setStaffBusinesses] = useState<BusinessRow[]>(globalCachedStaff.length > 0 ? globalCachedStaff : [DEMO_EMPLOYEE_STORE]);
-  const [workspaceMode, setWorkspaceModeState] = useState<"business" | "employee">(() => {
-    return (localStorage.getItem(LS_MODE_KEY) as "business" | "employee") || "business";
-  });
-  const [activeId, setActiveId] = useState<string | null>(() => {
-    return globalCachedActiveId || localStorage.getItem(LS_KEY) || null;
-  });
-  const [industryType, setIndustryType] = useState<string | null>(null);
-  const [categoryName, setCategoryName] = useState<string | null>(null);
-  const [categorySettings, setCategorySettings] = useState<CategorySettings | null>(null);
-  const [enabledModules, setEnabledModules] = useState<string[] | null>(null);
-  const [enabledFeatures, setEnabledFeatures] = useState<string[] | null>(null);
-  const [loading, setLoading] = useState<boolean>(!globalHasLoaded);
-  const [hasLoaded, setHasLoaded] = useState<boolean>(globalHasLoaded);
+const listeners = new Set<() => void>();
 
-  const setWorkspaceMode = useCallback((mode: "business" | "employee") => {
-    localStorage.setItem(LS_MODE_KEY, mode);
-    setWorkspaceModeState(mode);
-    const pool = mode === "employee" 
-      ? (globalCachedStaff.length > 0 ? globalCachedStaff : [DEMO_EMPLOYEE_STORE]) 
-      : globalCachedOwned;
-    setBusinesses(pool);
-    if (pool.length > 0) {
-      const stillThere = pool.find((b) => b.id === activeId);
-      const newChosen = stillThere ? stillThere.id : pool[0].id;
-      localStorage.setItem(LS_KEY, newChosen);
-      globalCachedActiveId = newChosen;
-      setActiveId(newChosen);
-    }
-    window.dispatchEvent(new CustomEvent("geflow:mode-changed", { detail: { mode } }));
-    window.dispatchEvent(new CustomEvent("geflow:business-changed", { detail: { businessId: pool[0]?.id || null } }));
-  }, [activeId]);
-
-  const load = useCallback(async (isSilent = false) => {
-    if (!isSilent && !globalHasLoaded) {
-      setLoading(true);
-    }
-
+function notifyListeners() {
+  listeners.forEach((listener) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      listener();
+    } catch (e) {
+      console.error("Error in useActiveBusiness listener:", e);
+    }
+  });
+}
+
+let isFetching = false;
+let fetchPromise: Promise<void> | null = null;
+
+async function fetchBusinessData(): Promise<void> {
+  if (isFetching && fetchPromise) {
+    return fetchPromise;
+  }
+
+  isFetching = true;
+  fetchPromise = (async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (!user) {
-        setLoading(false);
-        setHasLoaded(true);
-        globalHasLoaded = true;
+        store.owned = [];
+        store.staff = [];
+        store.activeId = null;
+        store.loading = false;
+        store.hasLoaded = true;
+        store.currentUserId = null;
+        notifyListeners();
         return;
       }
 
+      store.currentUserId = user.id;
+
       // 1. Fetch businesses owned by current user
-      const { data: ownedData } = await supabase
+      const { data: ownedData, error: ownedErr } = await supabase
         .from("businesses")
         .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id")
         .eq("owner_user_id", user.id)
         .order("created_at", { ascending: true });
 
-      const ownedRows = (ownedData ?? []) as BusinessRow[];
+      if (ownedErr) {
+        console.warn("Error fetching owned businesses:", ownedErr);
+      }
+
+      const ownedRows: BusinessRow[] = (ownedData ?? []) as BusinessRow[];
 
       // 2. Fetch businesses where user is invited as staff member
-      const { data: staffMemberships } = await supabase
+      // Find direct support_team_members for user.id
+      const userIdsToCheck = new Set<string>([user.id]);
+
+      // Also check if any profile with matching email exists that was invited before user signup
+      if (user.email) {
+        const { data: invitedProfiles } = await supabase
+          .from("profiles")
+          .select("user_id")
+          .eq("email", user.email);
+
+        if (invitedProfiles) {
+          invitedProfiles.forEach((p) => {
+            if (p.user_id) userIdsToCheck.add(p.user_id);
+          });
+        }
+      }
+
+      const { data: staffMemberships, error: staffErr } = await supabase
         .from("support_team_members")
-        .select("appointed_by_user_id, role, is_active")
-        .eq("user_id", user.id)
+        .select("id, user_id, appointed_by_user_id, role, is_active")
+        .in("user_id", Array.from(userIdsToCheck))
         .eq("is_active", true);
+
+      if (staffErr) {
+        console.warn("Error fetching staff memberships:", staffErr);
+      }
 
       let staffRows: BusinessRow[] = [];
       if (staffMemberships && staffMemberships.length > 0) {
-        const ownerIds = staffMemberships.map((s) => s.appointed_by_user_id);
-        const { data: staffBizData } = await supabase
-          .from("businesses")
-          .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id")
-          .in("owner_user_id", ownerIds);
+        // If any membership was stored under another user_id for the same email, link it to user.id
+        for (const sm of staffMemberships) {
+          if (sm.user_id !== user.id) {
+            await supabase
+              .from("support_team_members")
+              .update({ user_id: user.id })
+              .eq("id", sm.id);
+          }
+        }
 
-        if (staffBizData) {
-          staffRows = staffBizData.map((b) => {
-            const membership = staffMemberships.find((m) => m.appointed_by_user_id === b.owner_user_id);
+        const specificBizIds = new Set<string>();
+        const fallbackOwnerIds = new Set<string>();
+
+        staffMemberships.forEach((sm) => {
+          if (sm.role && sm.role.includes("::")) {
+            const [, bId] = sm.role.split("::");
+            if (bId) specificBizIds.add(bId);
+          } else if (sm.appointed_by_user_id) {
+            fallbackOwnerIds.add(sm.appointed_by_user_id);
+          }
+        });
+
+        const bizQueries = [];
+        if (specificBizIds.size > 0) {
+          bizQueries.push(
+            supabase
+              .from("businesses")
+              .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id")
+              .in("id", Array.from(specificBizIds))
+          );
+        }
+        if (fallbackOwnerIds.size > 0) {
+          bizQueries.push(
+            supabase
+              .from("businesses")
+              .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id")
+              .in("owner_user_id", Array.from(fallbackOwnerIds))
+          );
+        }
+
+        if (bizQueries.length > 0) {
+          const results = await Promise.all(bizQueries);
+          const combinedBizMap = new Map<string, any>();
+          results.forEach((res) => {
+            if (res.data) {
+              res.data.forEach((b: any) => combinedBizMap.set(b.id, b));
+            }
+          });
+
+          staffRows = Array.from(combinedBizMap.values()).map((b) => {
+            const membership =
+              staffMemberships.find((m) => m.role?.endsWith("::" + b.id)) ||
+              staffMemberships.find((m) => m.appointed_by_user_id === b.owner_user_id);
+            const rawRole = membership?.role || "cashier";
+            const cleanRole = rawRole.includes("::") ? rawRole.split("::")[0] : rawRole;
             return {
               ...b,
               is_staff: true,
-              staff_role: membership?.role || "cashier",
+              staff_role: cleanRole,
             };
           });
         }
       }
 
-      const effectiveStaffRows = staffRows.length > 0 ? staffRows : [DEMO_EMPLOYEE_STORE];
+      store.owned = ownedRows;
+      store.staff = staffRows;
 
-      globalCachedOwned = ownedRows;
-      globalCachedStaff = effectiveStaffRows;
-      setOwnedBusinesses(ownedRows);
-      setStaffBusinesses(effectiveStaffRows);
-
-      // Determine current mode
-      let currentMode: "business" | "employee" = (localStorage.getItem(LS_MODE_KEY) as "business" | "employee") || "business";
-      if (ownedRows.length === 0 && staffRows.length > 0) {
+      // Determine active pool based on stored mode
+      let currentMode = store.mode;
+      // Auto switch mode if user has no stores in current mode but has stores in the other
+      if (currentMode === "business" && ownedRows.length === 0 && staffRows.length > 0) {
         currentMode = "employee";
+        store.mode = "employee";
         localStorage.setItem(LS_MODE_KEY, "employee");
-        setWorkspaceModeState("employee");
+      } else if (currentMode === "employee" && staffRows.length === 0 && ownedRows.length > 0) {
+        currentMode = "business";
+        store.mode = "business";
+        localStorage.setItem(LS_MODE_KEY, "business");
       }
 
-      const activePool = currentMode === "employee" ? effectiveStaffRows : ownedRows;
+      const activePool = currentMode === "employee" ? staffRows : ownedRows;
 
-      setBusinesses(activePool);
+      // Select active business ID
+      const savedId = localStorage.getItem(LS_KEY);
+      const exists = activePool.find((r) => r.id === savedId);
+      const chosen = exists ? exists.id : activePool[0]?.id || null;
 
-      const saved = localStorage.getItem(LS_KEY);
-      const exists = activePool.find((r) => r.id === saved);
-      const chosen = exists ? saved : activePool[0]?.id ?? null;
-
-      if (chosen && chosen !== saved) {
+      store.activeId = chosen;
+      if (chosen) {
         localStorage.setItem(LS_KEY, chosen);
+      } else {
+        localStorage.removeItem(LS_KEY);
       }
-      globalCachedActiveId = chosen;
-      setActiveId(chosen);
 
+      // Load category settings if category_id exists
       const activeRow = activePool.find((r) => r.id === chosen);
       if (activeRow?.category_id) {
         const { data: cat } = await supabase
@@ -176,90 +236,142 @@ export const useActiveBusiness = () => {
           .eq("id", activeRow.category_id)
           .maybeSingle();
 
-        setIndustryType((cat?.industry_type as string) ?? null);
-        setCategoryName((cat?.name as string) ?? null);
-        setCategorySettings(cat ? {
-          id: cat.id,
-          name: cat.name,
-          industry_type: cat.industry_type,
-          currency: cat.currency,
-          default_tax: cat.default_tax,
-          stock_alert_limit: cat.stock_alert_limit,
-        } : null);
-        setEnabledModules((cat?.enabled_modules as string[]) ?? null);
-        setEnabledFeatures((cat?.enabled_features as string[]) ?? null);
+        store.industryType = (cat?.industry_type as string) ?? null;
+        store.categoryName = (cat?.name as string) ?? null;
+        store.categorySettings = cat
+          ? {
+              id: cat.id,
+              name: cat.name,
+              industry_type: cat.industry_type,
+              currency: cat.currency,
+              default_tax: cat.default_tax,
+              stock_alert_limit: cat.stock_alert_limit,
+            }
+          : null;
+        store.enabledModules = (cat?.enabled_modules as string[]) ?? null;
+        store.enabledFeatures = (cat?.enabled_features as string[]) ?? null;
       } else {
-        setIndustryType(null);
-        setCategoryName(null);
-        setCategorySettings(null);
-        setEnabledModules(null);
-        setEnabledFeatures(null);
+        store.industryType = null;
+        store.categoryName = null;
+        store.categorySettings = null;
+        store.enabledModules = null;
+        store.enabledFeatures = null;
       }
+
+      store.loading = false;
+      store.hasLoaded = true;
     } catch (err) {
       console.warn("Failed to load active business:", err);
+      store.loading = false;
+      store.hasLoaded = true;
     } finally {
-      setLoading(false);
-      setHasLoaded(true);
-      globalHasLoaded = true;
+      isFetching = false;
+      fetchPromise = null;
+      notifyListeners();
     }
-  }, []);
+  })();
+
+  return fetchPromise;
+}
+
+// Initialize single realtime subscriber
+let isRealtimeSubscribed = false;
+function ensureRealtime() {
+  if (isRealtimeSubscribed) return;
+  isRealtimeSubscribed = true;
+
+  supabase
+    .channel("active_business_global_sync")
+    .on("postgres_changes", { event: "*", schema: "public", table: "businesses" }, () => {
+      fetchBusinessData();
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "support_team_members" }, () => {
+      fetchBusinessData();
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "business_categories" }, () => {
+      fetchBusinessData();
+    })
+    .subscribe();
+
+  const handleCustomSync = () => {
+    fetchBusinessData();
+  };
+
+  window.addEventListener("geflow:business-updated", handleCustomSync);
+  window.addEventListener("geflow:business-changed", handleCustomSync);
+  window.addEventListener("geflow:mode-changed", handleCustomSync);
+  window.addEventListener("geflow:settings-changed", handleCustomSync);
+}
+
+export const useActiveBusiness = () => {
+  const [, setTick] = useState(0);
 
   useEffect(() => {
-    load(true);
-    const onBusinessUpdated = () => { load(true); };
-    window.addEventListener("geflow:business-updated", onBusinessUpdated);
-    window.addEventListener("geflow:business-changed", onBusinessUpdated);
-    window.addEventListener("geflow:mode-changed", onBusinessUpdated);
-    window.addEventListener("geflow:settings-changed", onBusinessUpdated);
+    ensureRealtime();
+    const update = () => setTick((t) => t + 1);
+    listeners.add(update);
 
-    const channel = supabase
-      .channel(`businesses_active_rt_${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "businesses" }, () => {
-        load(true);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "business_categories" }, () => {
-        load(true);
-      })
-      .subscribe();
+    if (!store.hasLoaded && !isFetching) {
+      fetchBusinessData();
+    }
 
     return () => {
-      window.removeEventListener("geflow:business-updated", onBusinessUpdated);
-      window.removeEventListener("geflow:business-changed", onBusinessUpdated);
-      window.removeEventListener("geflow:mode-changed", onBusinessUpdated);
-      window.removeEventListener("geflow:settings-changed", onBusinessUpdated);
-      supabase.removeChannel(channel);
+      listeners.delete(update);
     };
-  }, [load]);
+  }, []);
+
+  const setWorkspaceMode = useCallback((newMode: "business" | "employee") => {
+    localStorage.setItem(LS_MODE_KEY, newMode);
+    store.mode = newMode;
+
+    const pool = newMode === "employee" ? store.staff : store.owned;
+    const stillThere = pool.find((b) => b.id === store.activeId);
+    const newChosen = stillThere ? stillThere.id : pool[0]?.id || null;
+
+    store.activeId = newChosen;
+    if (newChosen) {
+      localStorage.setItem(LS_KEY, newChosen);
+    } else {
+      localStorage.removeItem(LS_KEY);
+    }
+
+    notifyListeners();
+    window.dispatchEvent(new CustomEvent("geflow:mode-changed", { detail: { mode: newMode } }));
+    window.dispatchEvent(new CustomEvent("geflow:business-changed", { detail: { businessId: newChosen } }));
+  }, []);
 
   const setActive = useCallback((id: string) => {
     localStorage.setItem(LS_KEY, id);
-    globalCachedActiveId = id;
-    setActiveId(id);
-    window.dispatchEvent(new CustomEvent("geflow:business-changed"));
-    load(true);
-  }, [load]);
+    store.activeId = id;
+    notifyListeners();
+    window.dispatchEvent(new CustomEvent("geflow:business-changed", { detail: { businessId: id } }));
+  }, []);
 
-  const active = businesses.find((b) => b.id === activeId) ?? null;
+  const reload = useCallback(() => {
+    return fetchBusinessData();
+  }, []);
+
+  const pool = store.mode === "employee" ? store.staff : store.owned;
+  const active = pool.find((b) => b.id === store.activeId) ?? null;
 
   return {
-    businesses,
-    ownedBusinesses,
-    staffBusinesses,
-    workspaceMode,
+    businesses: pool,
+    ownedBusinesses: store.owned,
+    staffBusinesses: store.staff,
+    workspaceMode: store.mode,
     setWorkspaceMode,
     active,
     activeBusiness: active,
-    activeId,
+    activeId: store.activeId,
     setActive,
-    industryType,
-    categoryName,
-    categorySettings,
-    enabledModules,
-    enabledFeatures,
-    loading,
-    hasLoaded,
-    reload: load,
-    refresh: load,
+    industryType: store.industryType,
+    categoryName: store.categoryName,
+    categorySettings: store.categorySettings,
+    enabledModules: store.enabledModules,
+    enabledFeatures: store.enabledFeatures,
+    loading: store.loading,
+    hasLoaded: store.hasLoaded,
+    reload,
+    refresh: reload,
   };
 };
-

@@ -53,9 +53,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  checkUserRegistered,
+  inviteNewUser,
+  inviteExistingUser,
+} from "@/lib/teamInviteService";
 
 export type StaffRole = "admin" | "manager" | "cashier" | "inventory";
-export type StaffStatus = "active" | "inactive";
+export type StaffStatus = "active" | "inactive" | "pending";
 
 export interface StaffMember {
   id: string;
@@ -118,6 +123,11 @@ export const UserTeam = () => {
   const [formStatus, setFormStatus] = useState<StaffStatus>("active");
   const [submitting, setSubmitting] = useState(false);
 
+  // Existing User Detection State
+  const [isExistingUser, setIsExistingUser] = useState(false);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  const [existingUserId, setExistingUserId] = useState<string | null>(null);
+
   // Invite Success Modal State
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [inviteDetails, setInviteDetails] = useState<{
@@ -128,129 +138,147 @@ export const UserTeam = () => {
     loginUrl: string;
   } | null>(null);
 
-  // Load real team data directly from Supabase (profiles, support_team_members, user_roles)
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Auto-detect if entered email belongs to an already registered GeFlow user
+  useEffect(() => {
+    const emailClean = formEmail.trim().toLowerCase();
+    if (!emailClean || !emailClean.includes("@") || emailClean.length < 5) {
+      setIsExistingUser(false);
+      setExistingUserId(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setCheckingEmail(true);
+      try {
+        const check = await checkUserRegistered(emailClean);
+        if (check.isRegistered && check.userId) {
+          setIsExistingUser(true);
+          setExistingUserId(check.userId);
+          if (check.fullName) {
+            setFormName((prev) => (prev ? prev : check.fullName));
+          }
+        } else {
+          setIsExistingUser(false);
+          setExistingUserId(null);
+        }
+      } catch {
+        setIsExistingUser(false);
+        setExistingUserId(null);
+      } finally {
+        setCheckingEmail(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [formEmail]);
+
+  // Load real team data directly from Supabase (store owner + members appointed by owner)
   const loadRealTeam = useCallback(async () => {
     try {
       const {
-        data: { user: currentUser },
+        data: { user },
       } = await supabase.auth.getUser();
 
-      const [
-        { data: profilesData, error: profErr },
-        { data: rolesData, error: rolesErr },
-        { data: supportMembersData, error: suppErr },
-      ] = await Promise.all([
-        supabase.from("profiles").select("*").order("created_at", { ascending: true }),
-        supabase.from("user_roles").select("*"),
-        supabase.from("support_team_members").select("*"),
-      ]);
+      if (!user) {
+        setMembers([]);
+        setLoading(false);
+        return;
+      }
 
-      if (profErr) console.warn("Profiles query notice:", profErr);
-      if (rolesErr) console.warn("Roles query notice:", rolesErr);
+      setCurrentUser(user);
+
+      // Store owner ID: active business owner or fallback to current user
+      const storeOwnerId = activeBusiness?.owner_user_id || user.id;
+      const activeBizId = activeBusiness?.id;
+
+      // Fetch staff members appointed by this store owner
+      const { data: supportMembersData, error: suppErr } = await supabase
+        .from("support_team_members")
+        .select("id, user_id, role, appointed_by_user_id, is_active, created_at")
+        .eq("appointed_by_user_id", storeOwnerId);
+
       if (suppErr) console.warn("Support members query notice:", suppErr);
 
-      const rolesMap = new Map<string, string>();
-      (rolesData || []).forEach((r) => {
-        rolesMap.set(r.user_id, r.role);
+      // Filter members scoped to active business
+      const relevantSupportMembers = (supportMembersData || []).filter((s) => {
+        if (!s.role) return true;
+        if (s.role.includes("::")) {
+          const [, bizId] = s.role.split("::");
+          return !activeBizId || bizId === activeBizId;
+        }
+        return true;
       });
 
-      const supportMap = new Map<string, any>();
-      (supportMembersData || []).forEach((s) => {
-        supportMap.set(s.user_id, s);
+      // Collect user IDs for profile lookup: store owner + all appointed staff
+      const userIdsToFetch = new Set<string>([storeOwnerId]);
+      relevantSupportMembers.forEach((s) => {
+        if (s.user_id) userIdsToFetch.add(s.user_id);
+      });
+
+      const { data: profilesData, error: profErr } = await supabase
+        .from("profiles")
+        .select("*")
+        .in("user_id", Array.from(userIdsToFetch));
+
+      if (profErr) console.warn("Profiles query notice:", profErr);
+
+      const profilesMap = new Map<string, any>();
+      (profilesData || []).forEach((p) => {
+        profilesMap.set(p.user_id, p);
       });
 
       const realList: StaffMember[] = [];
-      const seenUserIds = new Set<string>();
 
-      // 1. Current Authenticated User (Workspace Owner)
-      if (currentUser) {
-        const myProfile = (profilesData || []).find((p) => p.user_id === currentUser.id);
-        const mySupport = supportMap.get(currentUser.id);
-
-        let resolvedMyRole: StaffRole = "manager";
-        if (mySupport?.role) {
-          const r = String(mySupport.role).toLowerCase();
-          if (r === "manager" || r === "inventory" || r === "cashier") {
-            resolvedMyRole = r as StaffRole;
-          }
-        }
-
-        realList.push({
-          id: currentUser.id,
-          user_id: currentUser.id,
-          full_name:
-            myProfile?.full_name ||
-            currentUser.user_metadata?.full_name ||
-            currentUser.email?.split("@")[0] ||
-            "Store Owner",
-          email: myProfile?.email || currentUser.email || "owner@geflowai.com",
-          role: resolvedMyRole,
-          status: (myProfile?.status === "suspended" || mySupport?.is_active === false) ? "inactive" : "active",
-          last_telemetry: "Online Now",
-          avatar_color: "sky",
-          created_at: myProfile?.created_at || currentUser.created_at || new Date().toISOString(),
-          is_owner: true,
-        });
-        seenUserIds.add(currentUser.id);
-      }
-
-      // 2. Map all other authentic users from profiles and support members
-      (profilesData || []).forEach((prof) => {
-        if (seenUserIds.has(prof.user_id)) return;
-        seenUserIds.add(prof.user_id);
-
-        const supportInfo = supportMap.get(prof.user_id);
-
-        let resolvedRole: StaffRole = "cashier";
-        if (supportInfo?.role) {
-          const r = String(supportInfo.role).toLowerCase();
-          if (r === "manager" || r === "inventory" || r === "cashier") {
-            resolvedRole = r as StaffRole;
-          } else if (r === "admin") {
-            resolvedRole = "manager";
-          }
-        }
-
-        const isInactive = prof.status === "suspended" || supportInfo?.is_active === false;
-
-        realList.push({
-          id: prof.user_id,
-          user_id: prof.user_id,
-          full_name: prof.full_name || prof.email?.split("@")[0] || "Team Member",
-          email: prof.email || "member@geflowai.com",
-          role: resolvedRole,
-          status: isInactive ? "inactive" : "active",
-          last_telemetry: timeAgoOrOnline(prof.last_active),
-          avatar_color: pickColor(prof.full_name || prof.email || prof.user_id),
-          created_at: prof.created_at || new Date().toISOString(),
-          is_owner: false,
-        });
+      // 1. Add Store Owner
+      const ownerProf = profilesMap.get(storeOwnerId);
+      const isCurrentOwner = user.id === storeOwnerId;
+      realList.push({
+        id: storeOwnerId,
+        user_id: storeOwnerId,
+        full_name:
+          ownerProf?.full_name ||
+          (isCurrentOwner ? user.user_metadata?.full_name || user.email?.split("@")[0] : null) ||
+          "Store Owner",
+        email: ownerProf?.email || (isCurrentOwner ? user.email : "owner@geflowai.com") || "owner@geflowai.com",
+        role: "manager",
+        status: ownerProf?.status === "suspended" ? "inactive" : "active",
+        last_telemetry: "Store Owner · Full Access",
+        avatar_color: "sky",
+        created_at: ownerProf?.created_at || new Date().toISOString(),
+        is_owner: true,
       });
 
-      // 3. Include any support team members registered whose profile might not yet be listed
-      (supportMembersData || []).forEach((supp) => {
-        if (seenUserIds.has(supp.user_id)) return;
-        seenUserIds.add(supp.user_id);
+      // 2. Add Appointed Staff Members
+      relevantSupportMembers.forEach((supp) => {
+        if (supp.user_id === storeOwnerId) return; // already added as owner
+        const prof = profilesMap.get(supp.user_id);
 
         let resolvedRole: StaffRole = "cashier";
         if (supp.role) {
-          const r = String(supp.role).toLowerCase();
+          const r = String(supp.role).split("::")[0].toLowerCase();
           if (r === "manager" || r === "inventory" || r === "cashier") {
             resolvedRole = r as StaffRole;
-          } else if (r === "admin") {
-            resolvedRole = "manager";
           }
         }
 
+        let resolvedStatus: StaffStatus = "active";
+        if (supp.is_active === false) {
+          resolvedStatus = "pending";
+        } else if (prof?.status === "suspended") {
+          resolvedStatus = "inactive";
+        }
+
         realList.push({
-          id: supp.user_id,
+          id: supp.id,
           user_id: supp.user_id,
-          full_name: `Staff Member (${supp.user_id.slice(0, 6)})`,
-          email: `staff-${supp.user_id.slice(0, 6)}@geflow.team`,
+          full_name: prof?.full_name || `Staff Member (${supp.user_id.slice(0, 6)})`,
+          email: prof?.email || `staff-${supp.user_id.slice(0, 6)}@geflow.team`,
           role: resolvedRole,
-          status: supp.is_active ? "active" : "inactive",
-          last_telemetry: timeAgoOrOnline(supp.created_at),
-          avatar_color: pickColor(supp.user_id),
+          status: resolvedStatus,
+          last_telemetry: resolvedStatus === "pending" ? "Invitation Pending" : timeAgoOrOnline(prof?.last_active || supp.created_at),
+          avatar_color: pickColor(prof?.full_name || prof?.email || supp.user_id),
           created_at: supp.created_at || new Date().toISOString(),
           is_owner: false,
         });
@@ -263,7 +291,7 @@ export const UserTeam = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [activeBusiness]);
 
   // Initial load and Realtime Database Channel Listeners
   useEffect(() => {
@@ -341,6 +369,9 @@ export const UserTeam = () => {
     setFormPassword("");
     setFormRole("cashier");
     setFormStatus("active");
+    setIsExistingUser(false);
+    setCheckingEmail(false);
+    setExistingUserId(null);
     setRegisterOpen(true);
   };
 
@@ -357,22 +388,26 @@ export const UserTeam = () => {
     setEditOpen(true);
   };
 
-  // Handle Add Member to database with owner-defined credentials and automated invite
+  // Handle Add / Invite Member to database with role-based permissions
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim() || !formEmail.trim()) {
+    const emailClean = formEmail.trim().toLowerCase();
+    const nameClean = formName.trim();
+    const pwdClean = formPassword.trim();
+
+    if (!emailClean) {
       toast({
         title: "Validation Error",
-        description: "Please provide legal name and work email.",
+        description: "Please provide a valid work email address.",
         variant: "destructive",
       });
       return;
     }
 
-    if (!formPassword || formPassword.length < 6) {
+    if (!activeBusiness?.id) {
       toast({
-        title: "Password Requirement",
-        description: "Please provide an initial password of at least 6 characters for this team member.",
+        title: "No Active Business",
+        description: "Please select an active business workspace before inviting staff.",
         variant: "destructive",
       });
       return;
@@ -380,139 +415,86 @@ export const UserTeam = () => {
 
     setSubmitting(true);
     try {
-      const emailClean = formEmail.trim().toLowerCase();
-      const nameClean = formName.trim();
-      const pwdClean = formPassword.trim();
-      const {
-        data: { user: currentUser },
-      } = await supabase.auth.getUser();
+      const ownerId = currentUser?.id || activeBusiness.owner_user_id;
+      const ownerName = currentUser?.user_metadata?.full_name || activeBusiness.business_name || "Store Owner";
 
-      let targetUserId = "";
-
-      // 1. Invoke Supabase Auth / Edge Function if available
-      try {
-        const { data: edgeRes, error: edgeErr } = await supabase.functions.invoke("admin-users", {
-          body: {
-            action: "createTeamMember",
-            email: emailClean,
-            password: pwdClean,
-            full_name: nameClean,
-            role: formRole,
-          },
-        });
-
-        if (!edgeErr && edgeRes?.user_id) {
-          targetUserId = edgeRes.user_id;
-        }
-      } catch (edgeInvocationErr) {
-        console.warn("Edge function invocation notice, falling back to direct database sync:", edgeInvocationErr);
-      }
-
-      // If target user ID not established from edge function, try client signup with non-persisting session
-      if (!targetUserId) {
-        try {
-          const rawUrl = import.meta.env.VITE_SUPABASE_URL || "https://placeholder-project.supabase.co";
-          const rawKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "placeholder-anon-key";
-          const tempClient = createClient(rawUrl, rawKey, {
-            auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-          });
-          const { data: signUpData } = await tempClient.auth.signUp({
-            email: emailClean,
-            password: pwdClean,
-            options: {
-              data: {
-                full_name: nameClean,
-                plan: "free",
-                role: formRole,
-                invited_by: currentUser?.id,
-              },
-            },
-          });
-          if (signUpData?.user?.id) {
-            targetUserId = signUpData.user.id;
-          }
-        } catch (signUpErr) {
-          console.warn("Secondary auth signup error:", signUpErr);
-        }
-      }
-
-      // If still not established, check profile or generate unique ID
-      if (!targetUserId) {
-        const { data: existingProf } = await supabase
-          .from("profiles")
-          .select("user_id")
-          .eq("email", emailClean)
-          .maybeSingle();
-
-        targetUserId = existingProf ? existingProf.user_id : crypto.randomUUID();
-      }
-
-      // Optimistic state update
-      const newMemberObj: StaffMember = {
-        id: targetUserId,
-        user_id: targetUserId,
-        full_name: nameClean,
-        email: emailClean,
-        role: formRole,
-        status: formStatus,
-        last_telemetry: "Invited Recently",
-        avatar_color: pickColor(nameClean || emailClean),
-        created_at: new Date().toISOString(),
-        is_owner: false,
-      };
-      setMembers((prev) => [newMemberObj, ...prev.filter((m) => m.user_id !== targetUserId)]);
-
-      // 2. Upsert profile record with free plan
-      await supabase.from("profiles").upsert(
-        {
-          user_id: targetUserId,
-          full_name: nameClean,
+      // Case B: Inviting an ALREADY REGISTERED user
+      if (isExistingUser && existingUserId) {
+        const res = await inviteExistingUser({
+          userId: existingUserId,
           email: emailClean,
-          status: formStatus === "active" ? "active" : "suspended",
-          plan: "free",
-        },
-        { onConflict: "user_id" }
-      );
-
-      // 3. Upsert in support_team_members with exact role
-      const { data: existingSupp } = await supabase
-        .from("support_team_members")
-        .select("id")
-        .eq("user_id", targetUserId)
-        .maybeSingle();
-
-      if (existingSupp) {
-        await supabase
-          .from("support_team_members")
-          .update({
-            role: formRole,
-            is_active: formStatus === "active",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existingSupp.id);
-      } else {
-        await supabase.from("support_team_members").insert({
-          user_id: targetUserId,
           role: formRole,
-          appointed_by_user_id: currentUser?.id || targetUserId,
-          is_active: formStatus === "active",
+          businessId: activeBusiness.id,
+          businessName: activeBusiness.business_name,
+          ownerId,
+          ownerName,
         });
+
+        if (!res.success) {
+          toast({
+            title: "Invitation Notice",
+            description: res.error || "Could not dispatch team invitation.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        toast({
+          title: "Team Invitation Sent! ✉️",
+          description: `An in-app invitation has been dispatched to ${emailClean}. Once they accept, they will gain active employee access to "${activeBusiness.business_name}".`,
+        });
+
+        setRegisterOpen(false);
+        await loadRealTeam();
+        return;
       }
 
-      // 4. Ensure standard user role (NEVER admin)
-      const { data: existRole } = await supabase
-        .from("user_roles")
-        .select("id")
-        .eq("user_id", targetUserId)
-        .maybeSingle();
-      if (!existRole) {
-        await supabase.from("user_roles").insert({ user_id: targetUserId, role: "user" });
+      // Case A: Inviting a NEW user (email does not exist in system)
+      if (!pwdClean || pwdClean.length < 6) {
+        toast({
+          title: "Password Required",
+          description: "Please set an initial password of at least 6 characters for this new user.",
+          variant: "destructive",
+        });
+        return;
       }
 
+      const res = await inviteNewUser({
+        email: emailClean,
+        password: pwdClean,
+        fullName: nameClean || emailClean.split("@")[0],
+        role: formRole,
+        businessId: activeBusiness.id,
+        ownerId,
+      });
+
+      if (!res.success) {
+        // If error indicates user is actually registered, switch to existing user mode
+        if (res.error?.toLowerCase().includes("already registered") || res.error?.toLowerCase().includes("exists")) {
+          setIsExistingUser(true);
+          const check = await checkUserRegistered(emailClean);
+          if (check.userId) {
+            setExistingUserId(check.userId);
+          }
+          toast({
+            title: "Existing User Detected",
+            description: "This email is already registered on GeFlow. Password is not needed — click 'Send Team Invitation' to dispatch an in-app invite.",
+          });
+          return;
+        }
+
+        toast({
+          title: "Registration Failed",
+          description: res.error || "Could not register new team member.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Successful new user creation: show direct credentials modal
       const loginUrl = `${window.location.origin}/login`;
-
       setInviteDetails({
-        name: nameClean,
+        name: nameClean || emailClean.split("@")[0],
         email: emailClean,
         role: formRole,
         password: pwdClean,
@@ -520,8 +502,8 @@ export const UserTeam = () => {
       });
 
       toast({
-        title: "Team Member Added & Invitation Dispatched ✉️",
-        description: `Account created for ${nameClean} with Free plan and ${formRole.toUpperCase()} permissions. Direct login link generated.`,
+        title: "Team Member Added! 🎉",
+        description: `Account created for ${nameClean || emailClean} with ${formRole.toUpperCase()} permissions and Free plan. Direct credentials ready.`,
       });
 
       setRegisterOpen(false);
@@ -529,8 +511,8 @@ export const UserTeam = () => {
       await loadRealTeam();
     } catch (err: any) {
       toast({
-        title: "Error Registering Staff",
-        description: err?.message || "Failed to register team member.",
+        title: "Error Inviting Staff",
+        description: err?.message || "Failed to invite team member.",
         variant: "destructive",
       });
       await loadRealTeam();
@@ -767,27 +749,69 @@ export const UserTeam = () => {
     }
   };
 
-  // Delete Member
+  // Delete Member (Strictly Owner-Only & Never Owner)
   const handleDeleteMember = async () => {
     if (!selectedMember) return;
+
+    const storeOwnerId = activeBusiness?.owner_user_id || currentUser?.id;
+
+    // Never allow removing the business owner
+    if (selectedMember.is_owner || selectedMember.user_id === storeOwnerId) {
+      toast({
+        title: "Action Restricted",
+        description: "The business owner account cannot be deleted or removed.",
+        variant: "destructive",
+      });
+      setDeleteOpen(false);
+      return;
+    }
+
+    // Only the business owner can remove members
+    if (currentUser?.id !== storeOwnerId) {
+      toast({
+        title: "Permission Denied",
+        description: "Only the business owner has permission to remove team members.",
+        variant: "destructive",
+      });
+      setDeleteOpen(false);
+      return;
+    }
+
     const targetUserId = selectedMember.user_id;
+    const targetMemberId = selectedMember.id;
 
     // Optimistic removal
-    setMembers((prev) => prev.filter((m) => m.user_id !== targetUserId && m.id !== selectedMember.id));
+    setMembers((prev) => prev.filter((m) => m.id !== targetMemberId && m.user_id !== targetUserId));
+    setDeleteOpen(false);
 
     try {
-      if (targetUserId) {
+      // Delete from support_team_members
+      if (targetMemberId) {
         await supabase
           .from("support_team_members")
           .delete()
-          .eq("user_id", targetUserId);
+          .eq("id", targetMemberId);
+      }
+
+      await supabase
+        .from("support_team_members")
+        .delete()
+        .eq("user_id", targetUserId)
+        .eq("appointed_by_user_id", storeOwnerId);
+
+      if (activeBusiness?.id) {
+        await supabase
+          .from("support_team_members")
+          .delete()
+          .eq("user_id", targetUserId)
+          .like("role", `%::${activeBusiness.id}`);
       }
 
       toast({
-        title: "Member Decommissioned",
-        description: `${selectedMember.full_name} removed from active team hub.`,
+        title: "Member Removed",
+        description: `${selectedMember.full_name} has been removed from the active team hub.`,
       });
-      setDeleteOpen(false);
+      window.dispatchEvent(new CustomEvent("geflow:business-changed"));
       await loadRealTeam();
     } catch (err: any) {
       toast({
@@ -1202,6 +1226,7 @@ export const UserTeam = () => {
               filteredMembers.map((member) => {
                 const isActive = member.status === "active";
                 const isOwner = Boolean(member.is_owner);
+                const isCurrentOwner = currentUser?.id === (activeBusiness?.owner_user_id || currentUser?.id);
 
                 return (
                   <div
@@ -1327,7 +1352,7 @@ export const UserTeam = () => {
                             Copy Staff ID
                           </DropdownMenuItem>
 
-                          {!isOwner && (
+                          {!isOwner && isCurrentOwner && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
@@ -1375,6 +1400,33 @@ export const UserTeam = () => {
           </DialogHeader>
 
           <form onSubmit={handleRegisterSubmit} className="space-y-4 pt-3">
+            {/* EMAIL */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block">
+                  WORK EMAIL ADDRESS
+                </label>
+                {checkingEmail && (
+                  <span className="text-[10px] text-sky-500 flex items-center gap-1 font-semibold">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Checking user...
+                  </span>
+                )}
+                {!checkingEmail && isExistingUser && (
+                  <span className="text-[10px] font-extrabold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                    Existing GeFlow User
+                  </span>
+                )}
+              </div>
+              <Input
+                type="email"
+                value={formEmail}
+                onChange={(e) => setFormEmail(e.target.value)}
+                placeholder="sarah@company.com"
+                className="h-12 rounded-2xl bg-card border-border text-xs sm:text-sm focus-visible:ring-1 focus-visible:ring-sky-500"
+                required
+              />
+            </div>
+
             {/* FULL NAME */}
             <div>
               <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
@@ -1389,53 +1441,58 @@ export const UserTeam = () => {
               />
             </div>
 
-            {/* EMAIL */}
-            <div>
-              <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
-                EMAIL ADDRESS
-              </label>
-              <Input
-                type="email"
-                value={formEmail}
-                onChange={(e) => setFormEmail(e.target.value)}
-                placeholder="sarah@company.com"
-                className="h-12 rounded-2xl bg-card border-border text-xs sm:text-sm focus-visible:ring-1 focus-visible:ring-sky-500"
-                required
-              />
-            </div>
+            {/* CONDITIONAL NOTICE FOR EXISTING USER */}
+            {isExistingUser && (
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-xs flex items-start gap-2.5">
+                <Sparkles className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-amber-500">Already Registered on GeFlow</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
+                    This user already has a GeFlow account. Password is not required. Clicking invite will deliver a real-time in-app invitation with an "Accept" button to their Notifications page.
+                  </p>
+                </div>
+              </div>
+            )}
 
-            {/* PASSWORD (Set by Business Owner) */}
+            {/* PASSWORD (Set by Business Owner for NEW users only) */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block">
-                  PASSWORD (SET BY STORE OWNER)
+                  {isExistingUser ? "ACCOUNT AUTHENTICATION" : "INITIAL PASSWORD (SET BY OWNER)"}
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setFormPassword(`Geflow@${Math.floor(1000 + Math.random() * 9000)}`)}
-                  className="text-[10px] font-bold text-sky-500 hover:underline"
-                >
-                  Generate Password
-                </button>
+                {!isExistingUser && (
+                  <button
+                    type="button"
+                    onClick={() => setFormPassword(`Geflow@${Math.floor(1000 + Math.random() * 9000)}`)}
+                    className="text-[10px] font-bold text-sky-500 hover:underline"
+                  >
+                    Generate Password
+                  </button>
+                )}
               </div>
               <Input
                 type="text"
-                value={formPassword}
+                value={isExistingUser ? "Existing user password (maintained by user)" : formPassword}
                 onChange={(e) => setFormPassword(e.target.value)}
                 placeholder="Enter password (min 6 characters)"
-                className="h-12 rounded-2xl bg-card border-border text-xs sm:text-sm focus-visible:ring-1 focus-visible:ring-sky-500 font-mono"
-                required
-                minLength={6}
+                disabled={isExistingUser}
+                className={`h-12 rounded-2xl bg-card border-border text-xs sm:text-sm focus-visible:ring-1 focus-visible:ring-sky-500 font-mono ${
+                  isExistingUser ? "opacity-60 cursor-not-allowed bg-muted/40" : ""
+                }`}
+                required={!isExistingUser}
+                minLength={isExistingUser ? undefined : 6}
               />
               <p className="text-[10px] text-muted-foreground mt-1">
-                Owner sets initial credentials. Plan is automatically assigned as <span className="font-bold text-foreground">Free</span>.
+                {isExistingUser
+                  ? "Since this user is already registered, they will use their existing credentials to sign in."
+                  : "Owner sets initial credentials. Plan is automatically assigned as Free."}
               </p>
             </div>
 
             {/* OPERATIONAL ROLE (Strictly 3 roles: Cashier, Manager, Inventory Clerk) */}
             <div>
               <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
-                ROLE
+                ASSIGNED OPERATIONAL ROLE
               </label>
               <Select
                 value={formRole}
@@ -1485,9 +1542,24 @@ export const UserTeam = () => {
             <Button
               type="submit"
               disabled={submitting}
-              className="w-full h-12 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm shadow-md transition-all active:scale-[0.99] border-0"
+              className="w-full h-12 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm shadow-md transition-all active:scale-[0.99] border-0 flex items-center justify-center gap-2"
             >
-              {submitting ? "Registering & Syncing with Auth..." : "Send Invite & Save in Database"}
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Processing Invitation...</span>
+                </>
+              ) : isExistingUser ? (
+                <>
+                  <Mail className="w-4 h-4" />
+                  <span>Dispatch In-App Invitation</span>
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-4 h-4" />
+                  <span>Register &amp; Add Member</span>
+                </>
+              )}
             </Button>
           </form>
         </DialogContent>
