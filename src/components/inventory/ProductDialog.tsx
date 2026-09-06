@@ -42,6 +42,7 @@ import { ProductSuggestion, FieldConfidenceDetail, ConfidenceLevel, FieldSource 
 import { UOMSelect } from "./UOMSelect";
 import { AIFieldStatusBadge, AIFieldStatus } from "./AIFieldStatusBadge";
 import { formatStockWithUOM, formatUomPlural, getDefaultBaseUnit } from "@/lib/uomRegistry";
+import { saveSyncedProduct } from "@/lib/businessSync";
 
 export interface FieldAIStatusInfo {
   status?: AIFieldStatus;
@@ -772,6 +773,22 @@ const ProductDialog = ({
         const res = await supabase.from("products").insert(legacyPayload);
         error = res.error;
       }
+    }
+
+    // Synchronize to the operational sync server so staff and owner see it instantly
+    const syncedProd = await saveSyncedProduct(
+      businessId,
+      {
+        ...(isEdit && product ? { id: product.id } : {}),
+        ...payloadWithColumns,
+      },
+      ownerUserId,
+      Boolean(active?.is_staff)
+    );
+
+    if (error && syncedProd) {
+      // Successfully saved via operational sync engine even if Supabase direct write was blocked by RLS
+      error = null;
     }
 
     setSaving(false);

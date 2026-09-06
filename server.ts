@@ -13,6 +13,8 @@ import { aiConfigurationService } from "./src/server/ai/config/aiConfigurationSe
 import { credentialService } from "./src/server/ai/config/credentialService";
 import { providerConnectionTester } from "./src/server/ai/tester/providerConnectionTester";
 import { usageLogger } from "./src/server/ai/usage/usageLogger";
+import { teamService } from "./src/server/team/teamService";
+import { businessDataSyncService } from "./src/server/team/businessDataSyncService";
 
 const app = express();
 const PORT = 3000;
@@ -223,6 +225,340 @@ app.get("/api/ai/traces", (req: Request, res: Response) => {
   res.json({
     traces: getRecentTraces(businessId),
   });
+});
+
+// ==========================================
+// Team Invitation & Workspace Membership APIs
+// ==========================================
+
+// Create Team Invitation
+app.post("/api/team/invite", (req: Request, res: Response) => {
+  try {
+    const {
+      ownerId,
+      ownerName,
+      ownerEmail,
+      businessId,
+      businessName,
+      businessAddress,
+      currency,
+      email,
+      fullName,
+      role,
+      permissions,
+    } = req.body || {};
+
+    if (!email || !businessId) {
+      return res.status(400).json({ success: false, error: "Email and Business ID are required." });
+    }
+
+    const result = teamService.createInvitation({
+      ownerId: ownerId || "owner",
+      ownerName: ownerName || "Store Owner",
+      ownerEmail,
+      businessId,
+      businessName: businessName || "Store",
+      businessAddress,
+      currency: currency || "USD",
+      email,
+      fullName,
+      role: role || "cashier",
+      permissions,
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get Pending Invitations for User
+app.get("/api/team/invitations", (req: Request, res: Response) => {
+  try {
+    const email = req.query.email as string | undefined;
+    const userId = req.query.userId as string | undefined;
+    const invitations = teamService.getPendingInvitations(email, userId);
+    res.json({ success: true, invitations });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Accept Invitation
+app.post("/api/team/accept", (req: Request, res: Response) => {
+  try {
+    const { invitationId, userId, userEmail, userName } = req.body || {};
+    if (!invitationId || !userEmail) {
+      return res.status(400).json({ success: false, error: "Invitation ID and User Email are required." });
+    }
+
+    const result = teamService.acceptInvitation({
+      invitationId,
+      userId: userId || "user_" + Date.now(),
+      userEmail,
+      userName,
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Decline Invitation
+app.post("/api/team/decline", (req: Request, res: Response) => {
+  try {
+    const { invitationId, userEmail, userId } = req.body || {};
+    if (!invitationId || !userEmail) {
+      return res.status(400).json({ success: false, error: "Invitation ID and User Email are required." });
+    }
+
+    const result = teamService.declineInvitation({ invitationId, userEmail, userId });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Resend Invitation
+app.post("/api/team/resend", (req: Request, res: Response) => {
+  try {
+    const { invitationId, businessId, email, ownerName } = req.body || {};
+    if (!email || (!invitationId && !businessId)) {
+      return res.status(400).json({ success: false, error: "Email and Business ID/Invitation ID are required." });
+    }
+
+    const result = teamService.resendInvitation({ invitationId, businessId, email, ownerName });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get Assigned Employee Stores for User
+app.get("/api/team/employee-businesses", (req: Request, res: Response) => {
+  try {
+    const email = req.query.email as string | undefined;
+    const userId = req.query.userId as string | undefined;
+    const businesses = teamService.getEmployeeBusinesses(userId, email);
+    res.json({ success: true, businesses });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get Team Members for Business Owner
+app.get("/api/team/members", (req: Request, res: Response) => {
+  try {
+    const businessId = req.query.businessId as string | undefined;
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "businessId query parameter is required." });
+    }
+    const members = teamService.getTeamMembersForBusiness(businessId);
+    res.json({ success: true, members });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Remove Team Member
+app.post("/api/team/remove-member", (req: Request, res: Response) => {
+  try {
+    const { businessId, memberId } = req.body || {};
+    if (!businessId || !memberId) {
+      return res.status(400).json({ success: false, error: "businessId and memberId are required." });
+    }
+    const result = teamService.removeMember(businessId, memberId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Update Member Role
+app.post("/api/team/update-role", (req: Request, res: Response) => {
+  try {
+    const { businessId, memberId, role } = req.body || {};
+    if (!businessId || !memberId || !role) {
+      return res.status(400).json({ success: false, error: "businessId, memberId and role are required." });
+    }
+    const result = teamService.updateMemberRole(businessId, memberId, role);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// User Notifications (Invitations & In-app Alerts)
+app.get("/api/team/notifications", (req: Request, res: Response) => {
+  try {
+    const email = req.query.email as string | undefined;
+    const userId = req.query.userId as string | undefined;
+    const notifications = teamService.getNotifications(email, userId);
+    res.json({ success: true, notifications });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// Operational Business Data Sync Engine
+// Synchronizes products, inventory, sales,
+// held orders, and reports between Owner & Staff
+// ==========================================
+
+// Get synced data for a business (tailored to role)
+app.get("/api/sync/business-data", (req: Request, res: Response) => {
+  try {
+    const businessId = req.query.businessId as string | undefined;
+    const role = (req.query.role as string | undefined) || "manager";
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "businessId query parameter is required." });
+    }
+    const data = businessDataSyncService.getBusinessData(businessId, role);
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Ingest master batch sync (from owner client / Supabase)
+app.post("/api/sync/batch", (req: Request, res: Response) => {
+  try {
+    const { businessId, products, sales, sale_items, stock_movements, categories, ownerUserId, businessName } = req.body || {};
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "businessId is required." });
+    }
+    const result = businessDataSyncService.syncBatch(businessId, {
+      products,
+      sales,
+      sale_items,
+      stock_movements,
+      categories,
+      ownerUserId,
+      businessName,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Save (insert or update) product
+app.post("/api/sync/product", (req: Request, res: Response) => {
+  try {
+    const { businessId, product, userId } = req.body || {};
+    if (!businessId || !product) {
+      return res.status(400).json({ success: false, error: "businessId and product are required." });
+    }
+    const saved = businessDataSyncService.saveProduct(businessId, product, userId);
+    res.json({ success: true, product: saved });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Delete product
+app.delete("/api/sync/product", (req: Request, res: Response) => {
+  try {
+    const { businessId, productId } = req.body || {};
+    if (!businessId || !productId) {
+      return res.status(400).json({ success: false, error: "businessId and productId are required." });
+    }
+    const deleted = businessDataSyncService.deleteProduct(businessId, productId);
+    res.json({ success: deleted });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Record checkout sale (atomically reduces stock & logs movement)
+app.post("/api/sync/sale", (req: Request, res: Response) => {
+  try {
+    const { businessId, sale, items, cashierName, userId } = req.body || {};
+    if (!businessId || !sale || !items) {
+      return res.status(400).json({ success: false, error: "businessId, sale, and items are required." });
+    }
+    const result = businessDataSyncService.recordSale(businessId, {
+      sale,
+      items,
+      cashierName,
+      userId,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Adjust stock / restock
+app.post("/api/sync/adjust-stock", (req: Request, res: Response) => {
+  try {
+    const { businessId, productId, deltaQuantity, type, reason, note, userId } = req.body || {};
+    if (!businessId || !productId || deltaQuantity === undefined) {
+      return res.status(400).json({ success: false, error: "businessId, productId, and deltaQuantity are required." });
+    }
+    const result = businessDataSyncService.adjustStock(
+      businessId,
+      productId,
+      Number(deltaQuantity),
+      type || "in",
+      reason || "Manual Adjustment",
+      note,
+      userId
+    );
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Held Orders (Cart hold & resume)
+app.get("/api/sync/held-orders", (req: Request, res: Response) => {
+  try {
+    const businessId = req.query.businessId as string | undefined;
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "businessId is required." });
+    }
+    const data = businessDataSyncService.getBusinessData(businessId);
+    res.json({ success: true, heldOrders: data.held_orders });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/sync/held-orders", (req: Request, res: Response) => {
+  try {
+    const { businessId, order } = req.body || {};
+    if (!businessId || !order) {
+      return res.status(400).json({ success: false, error: "businessId and order are required." });
+    }
+    const saved = businessDataSyncService.saveHeldOrder(businessId, order);
+    res.json({ success: true, heldOrder: saved });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete("/api/sync/held-orders", (req: Request, res: Response) => {
+  try {
+    const { businessId, orderId } = req.body || {};
+    if (!businessId || !orderId) {
+      return res.status(400).json({ success: false, error: "businessId and orderId are required." });
+    }
+    const ok = businessDataSyncService.deleteHeldOrder(businessId, orderId);
+    res.json({ success: ok });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 async function startServer() {

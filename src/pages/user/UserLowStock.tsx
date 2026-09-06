@@ -15,6 +15,7 @@ import {
 import BulkReplenishmentDialog, { DeficitProduct } from "@/components/inventory/BulkReplenishmentDialog";
 import StockUpdateDialog from "@/components/inventory/StockUpdateDialog";
 import type { ProductRecord } from "@/components/inventory/ProductDialog";
+import { fetchSyncedProducts } from "@/lib/businessSync";
 
 interface LowProduct extends DeficitProduct {
   purchase_cost: number; retail_price: number; min_stock_alert: number;
@@ -39,11 +40,27 @@ const UserLowStock = () => {
   const load = useCallback(async () => {
     if (!active) { setLoading(false); return; }
     setLoading(true);
-    const { data } = await supabase
-      .from("products")
-      .select("id, name, internal_sku, barcode, category_id, purchase_cost, retail_price, stock_units, min_stock_alert, batch_number, expiry_date")
-      .eq("business_id", active.id)
-      .order("stock_units", { ascending: true });
+    let data: any[] | null = null;
+
+    if (!active.is_staff) {
+      const res = await supabase
+        .from("products")
+        .select("id, name, internal_sku, barcode, category_id, purchase_cost, retail_price, stock_units, min_stock_alert, batch_number, expiry_date")
+        .eq("business_id", active.id)
+        .order("stock_units", { ascending: true });
+      data = res.data;
+    }
+
+    if (!data || data.length === 0) {
+      const synced = await fetchSyncedProducts(active.id, {
+        role: active.staff_role || "manager",
+        isStaff: Boolean(active.is_staff),
+        ownerUserId: active.owner_user_id,
+      });
+      if (synced && synced.length > 0) {
+        data = synced as any;
+      }
+    }
     
     const defaultThreshold = active.stock_alert_limit ?? 10;
     const low = (data ?? []).filter((p: any) => {
@@ -70,7 +87,16 @@ const UserLowStock = () => {
     const ch = supabase.channel(`lowstock-${active.id}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "products", filter: `business_id=eq.${active.id}` }, () => load())
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+
+    const onUpdate = () => load();
+    window.addEventListener("geflow:products-updated", onUpdate);
+    window.addEventListener("geflow:stock-updated", onUpdate);
+
+    return () => {
+      supabase.removeChannel(ch);
+      window.removeEventListener("geflow:products-updated", onUpdate);
+      window.removeEventListener("geflow:stock-updated", onUpdate);
+    };
   }, [active, load]);
 
   const filtered = rows.filter((r) =>

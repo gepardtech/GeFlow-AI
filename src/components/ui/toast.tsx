@@ -48,7 +48,7 @@ export interface ToastProps
 }
 
 const Toast = React.forwardRef<HTMLLIElement, ToastProps>(
-  ({ className, variant, open = true, ...props }, ref) => {
+  ({ className, variant, open = true, onOpenChange, ...props }, ref) => {
     if (!open) return null;
     return (
       <li

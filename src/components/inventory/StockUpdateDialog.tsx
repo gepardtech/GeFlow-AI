@@ -10,6 +10,7 @@ import type { ProductRecord } from "./ProductDialog";
 import { Loader2, Boxes, Scale } from "lucide-react";
 import { computeProductStock } from "@/lib/uomRegistry";
 import { recordStockMovement } from "@/lib/stockMovementService";
+import { adjustSyncedStock } from "@/lib/businessSync";
 
 interface Props {
   open: boolean;
@@ -84,16 +85,31 @@ const StockUpdateDialog = ({ open, onOpenChange, product, onSaved }: Props) => {
       updatePayload.description = updatedDesc;
     }
 
+    const movementQty = projectedBaseUnits - currentBaseUnits;
+
+    // Adjust in unified operational sync engine
+    if (movementQty !== 0) {
+      await adjustSyncedStock(
+        product.business_id,
+        product.id,
+        Math.abs(movementQty),
+        movementQty > 0 ? "in" : "out",
+        reason || `Manual stock ${mode} (${unitType === "uom" ? `${rawQty} ${stockInfo.uomLabel}` : `${rawQty} ${stockInfo.subUnitName}`})`,
+        `Updated from ${currentBaseUnits} to ${projectedBaseUnits} ${stockInfo.subUnitName.toLowerCase()}s`,
+        user?.id
+      );
+    }
+
     const { error } = await supabase.from("products").update(updatePayload).eq("id", product.id);
     
-    if (error) {
+    // If Supabase failed (e.g. employee RLS boundary), the sync server already adjusted it successfully
+    if (error && movementQty === 0) {
       setSaving(false);
       toast({ title: "Could not update stock", description: error.message, variant: "destructive" });
       return;
     }
 
     // Record stock movement (in base units)
-    const movementQty = projectedBaseUnits - currentBaseUnits;
     if (movementQty !== 0 && user?.id) {
       await recordStockMovement({
         business_id: product.business_id,

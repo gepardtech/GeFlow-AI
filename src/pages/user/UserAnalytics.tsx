@@ -38,6 +38,7 @@ import UserPanelGate from "@/components/UserPanelGate";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
 import { useProductCategories } from "@/hooks/useProductCategories";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchSyncedReportsData } from "@/lib/businessSync";
 import { useMoney } from "@/lib/currency";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -139,12 +140,28 @@ export const UserAnalytics = () => {
           .order("created_at", { ascending: false }),
       ]);
 
-      const currentSales = salesData || [];
-      setSales(currentSales);
-      setPurchases(purchasesData || []);
-      setProducts(productsData || []);
+      let currentSales = salesData || [];
+      let currentPurchases = purchasesData || [];
+      let currentProducts = productsData || [];
+      let currentItems: any[] = [];
 
-      if (currentSales.length > 0) {
+      if ((!currentSales.length && !currentProducts.length) || active?.is_staff) {
+        const synced = await fetchSyncedReportsData(active.id, active?.staff_role || "manager", Boolean(active?.is_staff));
+        if (synced.sales.length > 0 || synced.products.length > 0) {
+          currentSales = synced.sales;
+          currentPurchases = synced.purchases || [];
+          currentProducts = synced.products || [];
+          currentItems = synced.sale_items || [];
+        }
+      }
+
+      setSales(currentSales);
+      setPurchases(currentPurchases);
+      setProducts(currentProducts);
+
+      if (currentItems.length > 0) {
+        setSaleItems(currentItems);
+      } else if (currentSales.length > 0) {
         const saleIds = currentSales.map((s) => s.id).slice(0, 200);
         const { data: itemsData } = await supabase
           .from("sale_items")
@@ -159,7 +176,7 @@ export const UserAnalytics = () => {
     } finally {
       setLoading(false);
     }
-  }, [active?.id]);
+  }, [active?.id, active?.is_staff, active?.staff_role]);
 
   useEffect(() => {
     if (!bizLoading) loadData();

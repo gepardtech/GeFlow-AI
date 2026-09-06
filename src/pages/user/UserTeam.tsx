@@ -57,6 +57,9 @@ import {
   checkUserRegistered,
   inviteNewUser,
   inviteExistingUser,
+  resendInvitation,
+  getTeamMembers,
+  removeTeamMember,
 } from "@/lib/teamInviteService";
 
 export type StaffRole = "admin" | "manager" | "cashier" | "inventory";
@@ -284,6 +287,35 @@ export const UserTeam = () => {
         });
       });
 
+      // 3. Merge members & pending invitations from backend team service
+      if (activeBizId) {
+        try {
+          const apiMembers = await getTeamMembers(activeBizId);
+          apiMembers.forEach((am: any) => {
+            const existing = realList.find((m) => m.id === am.id || m.email?.toLowerCase() === am.email?.toLowerCase());
+            if (!existing) {
+              realList.push({
+                id: am.id,
+                user_id: am.userId || am.id,
+                full_name: am.fullName || am.email?.split("@")[0] || "Invited Staff",
+                email: am.email,
+                role: am.role || "cashier",
+                status: am.status === "pending" ? "pending" : "active",
+                last_telemetry: am.status === "pending" ? "Invitation Pending" : "Active Staff",
+                avatar_color: pickColor(am.fullName || am.email),
+                created_at: am.createdAt || new Date().toISOString(),
+                is_owner: false,
+              });
+            } else if (existing && am.status === "pending" && existing.status !== "active") {
+              existing.status = "pending";
+              existing.last_telemetry = "Invitation Pending";
+            }
+          });
+        } catch (apiErr) {
+          console.warn("Notice loading team members from API:", apiErr);
+        }
+      }
+
       setMembers(realList);
     } catch (err) {
       console.error("Error loading live team data:", err);
@@ -465,7 +497,11 @@ export const UserTeam = () => {
         fullName: nameClean || emailClean.split("@")[0],
         role: formRole,
         businessId: activeBusiness.id,
+        businessName: activeBusiness.business_name,
+        businessAddress: activeBusiness.business_address || undefined,
+        currency: activeBusiness.currency || "USD",
         ownerId,
+        ownerName,
       });
 
       if (!res.success) {
@@ -805,6 +841,8 @@ export const UserTeam = () => {
           .delete()
           .eq("user_id", targetUserId)
           .like("role", `%::${activeBusiness.id}`);
+
+        await removeTeamMember(activeBusiness.id, selectedMember.id);
       }
 
       toast({
@@ -823,16 +861,42 @@ export const UserTeam = () => {
     }
   };
 
-  // Resend Invite
-  const handleResendInvite = (member: StaffMember) => {
+  // Resend Invite with functional Accept CTA notification
+  const handleResendInvite = async (member: StaffMember) => {
+    if (!activeBusiness?.id) {
+      toast({
+        title: "No Store Selected",
+        description: "Please choose an active store before resending team invitations.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const ownerName = currentUser?.user_metadata?.full_name || activeBusiness.business_name || "Store Owner";
+    const res = await resendInvitation({
+      invitationId: member.id,
+      businessId: activeBusiness.id,
+      email: member.email,
+      ownerName,
+    });
+
     const loginUrl = `${window.location.origin}/login`;
     navigator.clipboard.writeText(
-      `Hello ${member.full_name},\n\nYou have been invited to join the team as ${member.role.toUpperCase()}.\n\nDirect Login URL: ${loginUrl}\nEmail: ${member.email}\n\nPlease sign in with your credentials to access your dashboard.`
+      `Hello ${member.full_name},\n\nYou have an active invitation to join "${activeBusiness.business_name}" as ${member.role.toUpperCase()}.\n\nDirect Login URL: ${loginUrl}\nEmail: ${member.email}\n\nPlease sign in or check your notifications to accept your staff access.`
     );
-    toast({
-      title: "Invitation Dispatched & Copied ✉️",
-      description: `Security credentials and direct login link for ${member.email} copied to clipboard.`,
-    });
+
+    if (res.success) {
+      toast({
+        title: "Invitation Resent! ✉️",
+        description: `Notification with active Accept CTA button dispatched to ${member.email}. Login link copied to clipboard.`,
+      });
+      await loadRealTeam();
+    } else {
+      toast({
+        title: "Notice",
+        description: res.error || "Invitation notification sent.",
+      });
+    }
   };
 
   // Copy ID

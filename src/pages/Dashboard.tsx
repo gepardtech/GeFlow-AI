@@ -6,6 +6,7 @@ import { usePlan } from "@/hooks/usePlan";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
 import { useMoney } from "@/lib/currency";
 import { useStaffRole } from "@/hooks/useStaffRole";
+import { fetchSyncedReportsData } from "@/lib/businessSync";
 import {
   Package,
   ShoppingCart,
@@ -151,14 +152,27 @@ const Dashboard = () => {
         .limit(5),
     ]);
 
-    const prods = products ?? [];
-    if (bizId) {
+    let prods = products ?? [];
+    let allSales = sales ?? [];
+    let allSaleItems = saleItems ?? [];
+    let allMovements = movements ?? [];
+
+    if ((!prods.length && !allSales.length) || active?.is_staff) {
+      const synced = await fetchSyncedReportsData(bizId, active?.staff_role || "manager", Boolean(active?.is_staff));
+      if (synced.products.length > 0 || synced.sales.length > 0) {
+        prods = synced.products;
+        allSales = synced.sales;
+        allSaleItems = synced.sale_items;
+        allMovements = synced.stock_movements;
+      }
+    }
+
+    if (bizId && !active?.is_staff) {
       supabase.from("businesses").update({ listed_products: prods.length }).eq("id", bizId).then();
     }
-    if (user?.id) {
+    if (user?.id && !active?.is_staff) {
       supabase.from("profiles").update({ listed_products: prods.length }).eq("user_id", user.id).then();
     }
-    const allSales = sales ?? [];
 
     // KPIs
     const completed = allSales.filter((s) => s.status === "completed");

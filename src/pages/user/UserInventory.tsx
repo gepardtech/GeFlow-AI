@@ -28,6 +28,7 @@ import ProductViewDialog from "@/components/inventory/ProductViewDialog";
 import StockUpdateDialog from "@/components/inventory/StockUpdateDialog";
 import BulkTransferDialog from "@/components/inventory/BulkTransferDialog";
 import ExportLedgerDialog from "@/components/inventory/ExportLedgerDialog";
+import { fetchSyncedProducts } from "@/lib/businessSync";
 import BulkImportDialog from "@/components/inventory/BulkImportDialog";
 import BarcodeLookupDialog from "@/components/inventory/BarcodeLookupDialog";
 import RestockWorkflowDialog from "@/components/inventory/RestockWorkflowDialog";
@@ -82,21 +83,34 @@ const UserInventory = () => {
       setLoading(true);
     }
     try {
-      const { data: initialData, error } = await supabase
-        .from("products")
-        .select("id, name, internal_sku, description, category_id, subcategory_id, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, barcode, status, images, uom, units_per_uom, base_unit")
-        .eq("business_id", activeId)
-        .order("created_at", { ascending: false });
-      
-      let data = initialData;
-      if (error) {
-        // Resilient fallback if columns not yet migrated
-        const fallback = await supabase
+      let data: any[] | null = null;
+      if (!active?.is_staff) {
+        const { data: initialData, error } = await supabase
           .from("products")
-          .select("id, name, internal_sku, description, category_id, subcategory_id, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, barcode, status, images")
+          .select("id, name, internal_sku, description, category_id, subcategory_id, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, barcode, status, images, uom, units_per_uom, base_unit")
           .eq("business_id", activeId)
           .order("created_at", { ascending: false });
-        data = fallback.data as any;
+        
+        data = initialData;
+        if (error) {
+          const fallback = await supabase
+            .from("products")
+            .select("id, name, internal_sku, description, category_id, subcategory_id, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, barcode, status, images")
+            .eq("business_id", activeId)
+            .order("created_at", { ascending: false });
+          data = fallback.data as any;
+        }
+      }
+
+      if (!data || data.length === 0) {
+        const synced = await fetchSyncedProducts(activeId, {
+          role: active?.staff_role || "manager",
+          isStaff: Boolean(active?.is_staff),
+          ownerUserId: active?.owner_user_id,
+        });
+        if (synced && synced.length > 0) {
+          data = synced as any;
+        }
       }
 
       if (data) {
@@ -107,7 +121,7 @@ const UserInventory = () => {
     } finally {
       setLoading(false);
     }
-  }, [activeId]);
+  }, [activeId, active?.is_staff, active?.staff_role, active?.owner_user_id]);
 
   useEffect(() => {
     (async () => {
@@ -129,7 +143,16 @@ const UserInventory = () => {
         load(true);
       })
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+
+    const onUpdate = () => load(true);
+    window.addEventListener("geflow:products-updated", onUpdate);
+    window.addEventListener("geflow:stock-updated", onUpdate);
+
+    return () => {
+      supabase.removeChannel(ch);
+      window.removeEventListener("geflow:products-updated", onUpdate);
+      window.removeEventListener("geflow:stock-updated", onUpdate);
+    };
   }, [activeId, load]);
 
   const catName = (id: string | null) => allCategories.find((c) => c.id === id)?.name ?? "—";
@@ -164,9 +187,22 @@ const UserInventory = () => {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
+    try {
+      fetch("/api/sync/product", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: activeId, productId: deleteTarget.id }),
+      }).catch(() => {});
+    } catch {
+      /* ignore */
+    }
     const { error } = await supabase.from("products").delete().eq("id", deleteTarget.id);
-    if (error) { toast({ title: "Could not delete", description: error.message, variant: "destructive" }); }
-    else { toast({ title: "Product deleted", description: deleteTarget.name }); load(); }
+    if (error && !active?.is_staff) { toast({ title: "Could not delete", description: error.message, variant: "destructive" }); }
+    else {
+      toast({ title: "Product deleted", description: deleteTarget.name });
+      window.dispatchEvent(new CustomEvent("geflow:products-updated", { detail: { businessId: activeId } }));
+      load();
+    }
     setDeleteTarget(null);
   };
 
@@ -174,12 +210,20 @@ const UserInventory = () => {
     if (selectedIds.length === 0) return;
     setBulkDeleting(true);
     try {
+      selectedIds.forEach((id) => {
+        fetch("/api/sync/product", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ businessId: activeId, productId: id }),
+        }).catch(() => {});
+      });
       const { error } = await supabase.from("products").delete().in("id", selectedIds);
-      if (error) {
+      if (error && !active?.is_staff) {
         toast({ title: "Bulk delete failed", description: error.message, variant: "destructive" });
       } else {
         toast({ title: "Products deleted", description: `Successfully deleted ${selectedIds.length} product(s).` });
         setSelectedIds([]);
+        window.dispatchEvent(new CustomEvent("geflow:products-updated", { detail: { businessId: activeId } }));
         load();
       }
     } catch (err: any) {

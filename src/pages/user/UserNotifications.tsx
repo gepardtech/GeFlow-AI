@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import UserPanelGate from "@/components/UserPanelGate";
 import {
@@ -33,6 +33,7 @@ const DISMISSED_KEY = "geflow.notifications.dismissedIds";
 
 const UserNotifications = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -62,7 +63,7 @@ const UserNotifications = () => {
         ? supabase.from("businesses").select("id, business_name").eq("owner_user_id", user.id)
         : Promise.resolve({ data: [] as any[] }),
       user
-        ? getPendingInvitationsForUser(user.id)
+        ? getPendingInvitationsForUser(user.id, user.email)
         : Promise.resolve([] as PendingInvitation[]),
     ]);
 
@@ -152,13 +153,16 @@ const UserNotifications = () => {
   const handleAccept = async (inviteId: string, bizName?: string, role?: string) => {
     setActionLoading(inviteId);
     try {
-      const res = await acceptInvitation(inviteId);
+      const res = await acceptInvitation(inviteId, bizName, role);
       if (res.success) {
         toast({
           title: "Invitation Accepted! 🎉",
           description: `You now have active access to "${bizName || 'the store'}" as ${role?.toUpperCase() || 'staff'}.`,
         });
         await load();
+        // Redirect user to the store workspace with their designated role permissions
+        const targetPath = role === "cashier" ? "/dashboard/pos" : role === "inventory" ? "/dashboard/inventory" : "/dashboard";
+        navigate(targetPath);
       } else {
         toast({
           title: "Failed to Accept",
@@ -195,13 +199,26 @@ const UserNotifications = () => {
 
   useEffect(() => {
     load();
+    const handleEvent = () => load();
+    window.addEventListener("geflow:invitation-sent", handleEvent);
+    window.addEventListener("geflow:invitation-resent", handleEvent);
+    window.addEventListener("geflow:team-invite-accepted", handleEvent);
+    window.addEventListener("panel:refresh", handleEvent);
+
     const ch = supabase.channel(`user_notifications_page_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "support_tickets" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "products" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "support_team_members" }, load)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+
+    return () => {
+      window.removeEventListener("geflow:invitation-sent", handleEvent);
+      window.removeEventListener("geflow:invitation-resent", handleEvent);
+      window.removeEventListener("geflow:team-invite-accepted", handleEvent);
+      window.removeEventListener("panel:refresh", handleEvent);
+      supabase.removeChannel(ch);
+    };
   }, [load]);
 
   const markAllRead = () => {

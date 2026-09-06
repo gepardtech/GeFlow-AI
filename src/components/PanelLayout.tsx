@@ -5,7 +5,8 @@ import { fetchAllContactSubmissions } from "@/lib/contactService";
 import {
   Bell, ChevronLeft, ChevronDown, LogOut, RefreshCw, Search, Sun, Moon,
   Settings, LifeBuoy, LogIn, Lock, Menu, Sparkles, LucideIcon,
-  Building2, Briefcase, Check, ChevronsUpDown, Store, UserCheck, Plus
+  Building2, Briefcase, Check, ChevronsUpDown, Store, UserCheck, Plus,
+  UserPlus, CheckCircle2, X
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useToast } from "@/hooks/use-toast";
@@ -19,11 +20,25 @@ import AnnouncementBar from "@/components/AnnouncementBar";
 import AIAssistant from "@/components/ai/AIAssistant";
 import { usePlatformSettings } from "@/components/PlatformSettingsProvider";
 import { TopBusinessEmployeeDropdown } from "@/components/TopBusinessEmployeeDropdown";
+import { getPendingInvitationsForUser, acceptInvitation, declineInvitation } from "@/lib/teamInviteService";
 
 export interface NavChild { label: string; to: string; }
 export interface NavItem { label: string; to: string; icon: LucideIcon; children?: NavChild[]; }
 
-interface Notification { id: string; title: string; description: string; createdAt: string; unread: boolean; }
+interface Notification {
+  id: string;
+  title: string;
+  description: string;
+  createdAt: string;
+  unread: boolean;
+  type?: "team_invite" | "invite_accepted" | "general" | "announcement" | "contact";
+  inviteId?: string;
+  businessId?: string;
+  businessName?: string;
+  role?: string;
+  ownerName?: string;
+  link?: string;
+}
 
 interface Props {
   children: ReactNode;
@@ -59,6 +74,8 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
   const [aiOpen, setAiOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifPopoverOpen, setNotifPopoverOpen] = useState(false);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const { theme, setTheme, resolvedTheme } = useTheme();
   const { toast } = useToast();
@@ -117,15 +134,164 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
       );
     } else {
       const { data } = await supabase.auth.getUser();
-      if (data.user) {
-        setNotifications([
-          { id: "welcome", title: "Welcome to GeFlow", description: "Your workspace is ready.", createdAt: data.user.created_at, unread: true },
-        ]);
+      const user = data.user;
+      if (user) {
+        const notifList: Notification[] = [];
+
+        // 1. Fetch pending invitations with real business names
+        try {
+          const invites = await getPendingInvitationsForUser(user.id, user.email);
+          invites.forEach((inv) => {
+            notifList.push({
+              id: `team-inv-${inv.id}`,
+              title: `Team Invitation: ${inv.businessName}`,
+              description: `${inv.ownerName} invited you to join "${inv.businessName}" as ${inv.role.toUpperCase()}.`,
+              createdAt: inv.createdAt,
+              unread: true,
+              type: "team_invite",
+              inviteId: inv.id,
+              businessId: inv.businessId,
+              businessName: inv.businessName,
+              role: inv.role,
+              ownerName: inv.ownerName,
+            });
+          });
+        } catch (invErr) {
+          console.warn("Notice loading pending invites in header:", invErr);
+        }
+
+        // 2. Fetch server team notifications (e.g. accepted notifications)
+        try {
+          const res = await fetch(`/api/team/notifications?email=${encodeURIComponent(user.email || "")}&userId=${user.id}`);
+          if (res.ok) {
+            const teamData = await res.json();
+            if (teamData.success && Array.isArray(teamData.notifications)) {
+              teamData.notifications.forEach((tn: any) => {
+                if (!notifList.some((existing) => existing.inviteId === tn.inviteId || existing.id === tn.id)) {
+                  notifList.push({
+                    id: tn.id,
+                    title: tn.title,
+                    description: tn.description,
+                    createdAt: tn.createdAt,
+                    unread: tn.unread ?? true,
+                    type: tn.type || "general",
+                    inviteId: tn.inviteId,
+                    businessName: tn.businessName,
+                    role: tn.role,
+                    ownerName: tn.ownerName,
+                  });
+                }
+              });
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+
+        // 3. Announcements
+        try {
+          const { data: anns } = await supabase
+            .from("announcements")
+            .select("id, title, body, created_at")
+            .order("created_at", { ascending: false })
+            .limit(5);
+
+          (anns || []).forEach((a: any) => {
+            notifList.push({
+              id: `ann-${a.id}`,
+              title: a.title,
+              description: a.body?.slice(0, 80) || "",
+              createdAt: a.created_at,
+              unread: false,
+              type: "announcement",
+              link: "/dashboard/announcements",
+            });
+          });
+        } catch {
+          /* ignore */
+        }
+
+        if (notifList.length === 0) {
+          notifList.push({
+            id: "welcome",
+            title: "Welcome to GeFlow",
+            description: "Your workspace is live and synchronized.",
+            createdAt: user.created_at,
+            unread: false,
+            type: "general",
+          });
+        }
+
+        setNotifications(notifList);
       }
     }
   }, [isPathAdmin]);
 
+  const handleAcceptInvite = async (inviteId: string, bizName?: string, role?: string) => {
+    setActionLoadingId(inviteId);
+    try {
+      const res = await acceptInvitation(inviteId, bizName, role);
+      if (res.success) {
+        toast({
+          title: "Invitation Accepted! 🎉",
+          description: `You are now active in "${bizName || 'the store'}" as ${role?.toUpperCase() || 'staff'}.`,
+        });
+        setNotifPopoverOpen(false);
+        await fetchNotifications();
+        // Redirect to store workspace with proper role view
+        const target = role === "cashier" ? "/dashboard/pos" : role === "inventory" ? "/dashboard/inventory" : "/dashboard";
+        navigate(target);
+      } else {
+        toast({
+          title: "Failed to Accept",
+          description: res.error || "Could not accept invitation.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleDeclineInvite = async (inviteId: string) => {
+    setActionLoadingId(inviteId);
+    try {
+      const res = await declineInvitation(inviteId);
+      if (res.success) {
+        toast({
+          title: "Invitation Declined",
+          description: "Invitation was removed.",
+        });
+        await fetchNotifications();
+      } else {
+        toast({
+          title: "Failed to Decline",
+          description: res.error || "Could not decline invitation.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
+
+  // Realtime updates for all notifications & team invites
+  useEffect(() => {
+    const onNotifEvent = () => fetchNotifications();
+    window.addEventListener("geflow:invitation-sent", onNotifEvent);
+    window.addEventListener("geflow:invitation-resent", onNotifEvent);
+    window.addEventListener("geflow:team-invite-accepted", onNotifEvent);
+    window.addEventListener("panel:refresh", onNotifEvent);
+
+    return () => {
+      window.removeEventListener("geflow:invitation-sent", onNotifEvent);
+      window.removeEventListener("geflow:invitation-resent", onNotifEvent);
+      window.removeEventListener("geflow:team-invite-accepted", onNotifEvent);
+      window.removeEventListener("panel:refresh", onNotifEvent);
+    };
+  }, [fetchNotifications]);
 
   // Realtime updates for admin
   useEffect(() => {
@@ -346,52 +512,131 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
               {mounted && (isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-foreground" />)}
             </button>
 
-            <Popover>
+            <Popover open={notifPopoverOpen} onOpenChange={setNotifPopoverOpen}>
               <PopoverTrigger asChild>
-                <button className="h-10 w-10 rounded-xl hover:bg-muted flex items-center justify-center relative transition-all hover:scale-105">
+                <button className="h-10 w-10 rounded-xl hover:bg-muted flex items-center justify-center relative transition-all hover:scale-105 cursor-pointer">
                   <Bell className="h-4 w-4" />
                   {unreadCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 h-4 min-w-4 px-1 rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground flex items-center justify-center">
+                    <span className="absolute top-1.5 right-1.5 h-4 min-w-4 px-1 rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground flex items-center justify-center animate-pulse">
                       {unreadCount}
                     </span>
                   )}
                 </button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-80 p-0">
-                <div className="p-3 border-b border-border flex items-center justify-between">
-                  <p className="font-bold text-sm">Notifications</p>
-                  <span className="text-[10px] font-bold tracking-widest text-sky-500">{unreadCount} NEW</span>
+              <PopoverContent align="end" className="w-88 sm:w-96 p-0 shadow-2xl rounded-2xl border border-border/70 overflow-hidden">
+                <div className="p-3.5 border-b border-border/80 flex items-center justify-between bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <Bell className="w-4 h-4 text-primary" />
+                    <p className="font-bold text-sm">Notifications</p>
+                  </div>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400">
+                    {unreadCount} NEW
+                  </span>
                 </div>
-                <div className="max-h-80 overflow-y-auto">
+                <div className="max-h-96 overflow-y-auto divide-y divide-border/60">
                   {notifications.length === 0 ? (
-                    <p className="p-6 text-center text-xs text-muted-foreground">No notifications</p>
+                    <div className="p-8 text-center text-xs text-muted-foreground">
+                      <Bell className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+                      <p className="font-semibold">No notifications right now</p>
+                      <p className="text-[11px] text-muted-foreground/70 mt-0.5">You're all caught up!</p>
+                    </div>
                   ) : (
-                    notifications.map((n) => (
-                      <Link
-                        key={n.id}
-                        to={isAdmin ? "/admin/notifications" : "/dashboard/announcements/notifications"}
-                        className={`block p-3 border-b border-border last:border-0 hover:bg-muted/40 transition-colors ${n.unread ? "bg-sky-400/5" : ""}`}
-                      >
-                        <p className="text-sm font-semibold">{n.title}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{n.description}</p>
-                        <p className="text-[10px] text-muted-foreground mt-1">{new Date(n.createdAt).toLocaleString()}</p>
-                      </Link>
-                    ))
+                    notifications.map((n) => {
+                      if (n.type === "team_invite" && n.inviteId) {
+                        return (
+                          <div
+                            key={n.id}
+                            className="p-3.5 bg-emerald-500/5 hover:bg-emerald-500/10 transition-colors border-l-4 border-l-emerald-500"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                  <Store className="w-4 h-4" />
+                                </div>
+                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                                  STORE INVITATION
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground">
+                                {new Date(n.createdAt).toLocaleDateString()}
+                              </span>
+                            </div>
+
+                            <p className="text-xs font-bold text-foreground mt-2">
+                              {n.businessName || "Store Workspace"}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                              {n.ownerName || "The store owner"} invited you to join this business as{" "}
+                              <strong className="text-emerald-600 dark:text-emerald-400 uppercase font-black">
+                                {n.role || "staff"}
+                              </strong>
+                              . Accept to activate your employee access.
+                            </p>
+
+                            <div className="flex items-center gap-2 mt-3">
+                              <button
+                                type="button"
+                                disabled={actionLoadingId === n.inviteId}
+                                onClick={() => handleAcceptInvite(n.inviteId!, n.businessName, n.role)}
+                                className="flex-1 h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                {actionLoadingId === n.inviteId ? "Accepting..." : "Accept Invitation"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={actionLoadingId === n.inviteId}
+                                onClick={() => handleDeclineInvite(n.inviteId!)}
+                                className="h-8 px-3 rounded-lg border border-border/80 hover:bg-muted text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+                              >
+                                Decline
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <Link
+                          key={n.id}
+                          to={n.link || (isAdmin ? "/admin/notifications" : "/dashboard/announcements/notifications")}
+                          onClick={() => setNotifPopoverOpen(false)}
+                          className={`block p-3.5 hover:bg-muted/40 transition-colors ${
+                            n.unread ? "bg-sky-400/5" : ""
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-xs font-semibold text-foreground">{n.title}</p>
+                            {n.unread && (
+                              <span className="w-2 h-2 rounded-full bg-sky-500 shrink-0 mt-1" />
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">
+                            {n.description}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground/70 mt-1">
+                            {new Date(n.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        </Link>
+                      );
+                    })
                   )}
                 </div>
-                <div className="p-3 border-t border-border space-y-2">
+                <div className="p-3 border-t border-border/80 space-y-2 bg-muted/20">
                   <Link
                     to={isAdmin ? "/admin/notifications" : "/dashboard/announcements/notifications"}
-                    className="w-full h-9 rounded-xl bg-sky-400 hover:bg-sky-500 text-white text-xs font-bold transition-colors flex items-center justify-center"
+                    onClick={() => setNotifPopoverOpen(false)}
+                    className="w-full h-8.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold transition-colors flex items-center justify-center shadow-sm"
                   >
-                    View all notifications
+                    View All Notifications & Invites
                   </Link>
                   {!isAdmin && (
                     <Link
                       to="/dashboard/announcements"
-                      className="w-full h-9 rounded-xl border border-border text-xs font-bold hover:bg-muted transition-colors flex items-center justify-center"
+                      onClick={() => setNotifPopoverOpen(false)}
+                      className="w-full h-8 rounded-xl border border-border/80 text-xs font-semibold hover:bg-muted transition-colors flex items-center justify-center"
                     >
-                      View announcements
+                      View Announcements
                     </Link>
                   )}
                 </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CategorySettings } from "@/lib/settingsHierarchy";
+import { getEmployeeBusinesses } from "@/lib/teamInviteService";
 
 export interface BusinessRow {
   id: string;
@@ -197,11 +198,30 @@ async function fetchBusinessData(): Promise<void> {
         }
       }
 
+      // Merge verified employee businesses from team service (guarantees real names)
+      try {
+        const apiStaff = await getEmployeeBusinesses(user?.id, user?.email);
+        if (apiStaff && apiStaff.length > 0) {
+          apiStaff.forEach((as) => {
+            const existingIndex = staffRows.findIndex((sr) => sr.id === as.id);
+            if (existingIndex >= 0) {
+              staffRows[existingIndex] = { ...staffRows[existingIndex], ...as };
+            } else {
+              staffRows.push(as);
+            }
+          });
+        }
+      } catch (staffErr) {
+        console.warn("Notice loading api staff businesses:", staffErr);
+      }
+
       store.owned = ownedRows;
       store.staff = staffRows;
 
       // Determine active pool based on stored mode
-      let currentMode = store.mode;
+      let currentMode = (localStorage.getItem(LS_MODE_KEY) as "business" | "employee") || store.mode;
+      store.mode = currentMode;
+
       // Auto switch mode if user has no stores in current mode but has stores in the other
       if (currentMode === "business" && ownedRows.length === 0 && staffRows.length > 0) {
         currentMode = "employee";
@@ -227,8 +247,15 @@ async function fetchBusinessData(): Promise<void> {
         localStorage.removeItem(LS_KEY);
       }
 
-      // Load category settings if category_id exists
+      // Sync active staff role for permission gates
       const activeRow = activePool.find((r) => r.id === chosen);
+      if (activeRow?.is_staff && activeRow?.staff_role) {
+        localStorage.setItem("geflow_cached_staff_role", activeRow.staff_role);
+      } else if (!activeRow?.is_staff && activeRow) {
+        localStorage.setItem("geflow_cached_staff_role", "owner");
+      }
+
+      // Load category settings if category_id exists
       if (activeRow?.category_id) {
         const { data: cat } = await supabase
           .from("business_categories")
@@ -301,6 +328,10 @@ function ensureRealtime() {
   window.addEventListener("geflow:business-changed", handleCustomSync);
   window.addEventListener("geflow:mode-changed", handleCustomSync);
   window.addEventListener("geflow:settings-changed", handleCustomSync);
+  window.addEventListener("geflow:team-invite-accepted", handleCustomSync);
+  window.addEventListener("geflow:invitation-sent", handleCustomSync);
+  window.addEventListener("geflow:invitation-resent", handleCustomSync);
+  window.addEventListener("panel:refresh", handleCustomSync);
 }
 
 export const useActiveBusiness = () => {

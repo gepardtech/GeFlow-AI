@@ -38,6 +38,7 @@ import {
 } from "recharts";
 import UserPanelGate from "@/components/UserPanelGate";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
+import { fetchSyncedReportsData } from "@/lib/businessSync";
 import { supabase } from "@/integrations/supabase/client";
 import { useMoney } from "@/lib/currency";
 import { useToast } from "@/hooks/use-toast";
@@ -204,13 +205,36 @@ export const UserReports = () => {
           .select("id, purchase_id, product_id, product_name, quantity, unit_cost, subtotal"),
       ]);
 
-      setDbSales(salesData || []);
-      setDbSaleItems(itemsData || []);
-      setDbProducts(productsData || []);
-      setDbCategories(catData || []);
-      setDbStockMovements(movementsData || []);
-      setDbPurchases(purchasesData || []);
-      setDbPurchaseItems(purchaseItemsData || []);
+      let sData = salesData || [];
+      let iData = itemsData || [];
+      let pData = productsData || [];
+      let cData = catData || [];
+      let mData = movementsData || [];
+      let purData = purchasesData || [];
+      let purItems = purchaseItemsData || [];
+
+      if ((!sData.length && !pData.length) || active.is_staff) {
+        const synced = await fetchSyncedReportsData(active.id, active.staff_role || "manager", Boolean(active.is_staff));
+        if (synced.sales.length > 0 || synced.products.length > 0) {
+          sData = synced.sales;
+          iData = synced.sale_items;
+          pData = synced.products;
+          mData = synced.stock_movements;
+          purData = synced.purchases;
+          purItems = synced.purchase_items;
+          if (synced.categories && synced.categories.length > 0) {
+            cData = synced.categories;
+          }
+        }
+      }
+
+      setDbSales(sData);
+      setDbSaleItems(iData);
+      setDbProducts(pData);
+      setDbCategories(cData);
+      setDbStockMovements(mData);
+      setDbPurchases(purData);
+      setDbPurchaseItems(purItems);
     } catch (err: any) {
       console.error("Error loading reports realtime data:", err);
     } finally {
@@ -221,6 +245,18 @@ export const UserReports = () => {
   useEffect(() => {
     if (!bizLoading) loadData();
   }, [bizLoading, loadData]);
+
+  useEffect(() => {
+    const onUpdate = () => loadData();
+    window.addEventListener("geflow:sales-updated", onUpdate);
+    window.addEventListener("geflow:products-updated", onUpdate);
+    window.addEventListener("geflow:stock-updated", onUpdate);
+    return () => {
+      window.removeEventListener("geflow:sales-updated", onUpdate);
+      window.removeEventListener("geflow:products-updated", onUpdate);
+      window.removeEventListener("geflow:stock-updated", onUpdate);
+    };
+  }, [loadData]);
 
   // Real-time subscriptions across all relevant tables
   useEffect(() => {

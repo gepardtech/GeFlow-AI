@@ -28,6 +28,13 @@ import {
   saveHeldOrder,
   deleteHeldOrder,
 } from "@/lib/heldOrdersService";
+import {
+  fetchSyncedProducts,
+  recordSyncedSale,
+  getSyncedHeldOrders,
+  saveSyncedHeldOrder,
+  deleteSyncedHeldOrder,
+} from "@/lib/businessSync";
 import { recordStockMovement } from "@/lib/stockMovementService";
 import { parseProductUOM, computeProductStock } from "@/lib/uomRegistry";
 import { COUNTRIES, detectDefaultCountry } from "@/lib/countries";
@@ -130,8 +137,11 @@ const UserPOS = () => {
       setHeldOrders([]);
       return;
     }
-    const list = await fetchHeldOrders(active.id);
-    setHeldOrders(list);
+    let list = await fetchHeldOrders(active.id);
+    if (!list || list.length === 0) {
+      list = await getSyncedHeldOrders(active.id);
+    }
+    setHeldOrders(list || []);
   }, [active?.id]);
 
   useEffect(() => {
@@ -163,24 +173,42 @@ const UserPOS = () => {
   const load = useCallback(async () => {
     if (!active) { setLoading(false); return; }
     setLoading(true);
-    const { data: initialData, error } = await supabase
-      .from("products")
-      .select("id, name, description, internal_sku, barcode, category_id, retail_price, discount_price, purchase_cost, stock_units, min_stock_alert, uom, units_per_uom, base_unit")
-      .eq("business_id", active.id)
-      .eq("status", "active")
-      .order("name");
+    let data: any[] | null = null;
 
-    let data = initialData;
-    if (error) {
-      // Resilient fallback if table has not migrated explicit columns yet
-      const fallback = await supabase
+    // 1. If owner, try direct Supabase fetch
+    if (!active.is_staff) {
+      const { data: initialData, error } = await supabase
         .from("products")
-        .select("id, name, description, internal_sku, barcode, category_id, retail_price, discount_price, purchase_cost, stock_units, min_stock_alert")
+        .select("id, name, description, internal_sku, barcode, category_id, retail_price, discount_price, purchase_cost, stock_units, min_stock_alert, uom, units_per_uom, base_unit")
         .eq("business_id", active.id)
         .eq("status", "active")
         .order("name");
-      data = fallback.data as any;
+
+      data = initialData;
+      if (error) {
+        const fallback = await supabase
+          .from("products")
+          .select("id, name, description, internal_sku, barcode, category_id, retail_price, discount_price, purchase_cost, stock_units, min_stock_alert")
+          .eq("business_id", active.id)
+          .eq("status", "active")
+          .order("name");
+        data = fallback.data as any;
+      }
     }
+
+    // 2. If no data from Supabase or staff role (Cashier / Manager), fetch from sync engine
+    if (!data || data.length === 0) {
+      const synced = await fetchSyncedProducts(active.id, {
+        role: active.staff_role || "cashier",
+        isStaff: Boolean(active.is_staff),
+        ownerUserId: active.owner_user_id,
+        statusOnly: "active",
+      });
+      if (synced && synced.length > 0) {
+        data = synced as any;
+      }
+    }
+
     setProducts((data as POSProduct[]) ?? []);
     setLoading(false);
   }, [active]);
@@ -200,8 +228,22 @@ const UserPOS = () => {
     const ch = supabase.channel(`pos-${active.id}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "products", filter: `business_id=eq.${active.id}` }, () => load())
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [active, load]);
+
+    const onUpdate = () => {
+      load();
+      refreshHeldOrders();
+    };
+    window.addEventListener("geflow:products-updated", onUpdate);
+    window.addEventListener("geflow:stock-updated", onUpdate);
+    window.addEventListener("geflow:sales-updated", onUpdate);
+
+    return () => {
+      supabase.removeChannel(ch);
+      window.removeEventListener("geflow:products-updated", onUpdate);
+      window.removeEventListener("geflow:stock-updated", onUpdate);
+      window.removeEventListener("geflow:sales-updated", onUpdate);
+    };
+  }, [active, load, refreshHeldOrders]);
 
   const unitPrice = (p: POSProduct) => Number(p.discount_price ?? p.retail_price) || 0;
 
@@ -484,28 +526,31 @@ const UserPOS = () => {
     setProcessing(true);
     const profit = cart.reduce((s, l) => s + (l.unit - Number(l.proportionalCost)) * l.qty, 0) - discountValue;
 
-    const { data: sale, error: saleErr } = await supabase
-      .from("sales")
-      .insert({ business_id: active.id, owner_user_id: userId, processed_by: userId, total: grandTotal, profit, status: "completed" })
-      .select("id")
-      .single();
-
-    if (saleErr || !sale) {
-      setProcessing(false);
-      toast({ title: "Transaction failed", description: saleErr?.message, variant: "destructive" });
-      return;
-    }
-
-    const items = cart.map((l) => ({
-      sale_id: sale.id,
-      owner_user_id: userId,
+    const saleItems = cart.map((l) => ({
       product_id: l.id,
       product_name: l.fractionOfPack !== 1 ? `${l.name} [${l.displayUnitLabel}]` : l.name,
       quantity: l.qty,
       unit_price: l.unit,
       unit_cost: Number(l.proportionalCost),
+      deductionUnits: (l.stockUnitsDeducted || 1) * l.qty,
     }));
-    await supabase.from("sale_items").insert(items);
+
+    // Post to unified sync engine
+    const syncRes = await recordSyncedSale(active.id, {
+      sale: {
+        total: grandTotal,
+        profit,
+        status: "completed",
+        processed_by: cashierName || "Cashier",
+        owner_user_id: active.owner_user_id || userId,
+      },
+      items: saleItems,
+      cashierName: cashierName || "Cashier",
+      userId,
+      isStaff: Boolean(active.is_staff),
+    });
+
+    const saleId = syncRes?.sale?.id || `sale_${Date.now()}`;
 
     // Group stock deductions in BASE UNITS per product to ensure accurate atomic updates
     const productDeductions: Record<string, { product: POSProduct; totalBaseUnitsDeducted: number; summaryLabels: string[] }> = {};
@@ -539,23 +584,30 @@ const UserPOS = () => {
         updatePayload.description = updatedDesc;
       }
 
-      await supabase.from("products").update(updatePayload).eq("id", pid);
-      await recordStockMovement({
-        business_id: active.id,
-        owner_user_id: userId,
-        product_id: pid,
-        quantity: -totalBaseUnitsDeducted,
-        type: "out",
-        reason: "POS sale (UOM accurate)",
-        note: `Sale ${sale.id.slice(0, 8)} · Sold: ${summaryLabels.join(", ")} (-${totalBaseUnitsDeducted} ${stockInfo.subUnitName.toLowerCase()}s)`,
-        reference_id: sale.id,
-        reference_type: "pos_sale",
-        created_by: userId,
-      });
+      if (!active.is_staff) {
+        try {
+          await supabase.from("products").update(updatePayload).eq("id", pid);
+          await recordStockMovement({
+            business_id: active.id,
+            owner_user_id: userId,
+            product_id: pid,
+            quantity: -totalBaseUnitsDeducted,
+            type: "out",
+            reason: "POS sale (UOM accurate)",
+            note: `Sale ${saleId.slice(0, 8)} · Sold: ${summaryLabels.join(", ")} (-${totalBaseUnitsDeducted} ${stockInfo.subUnitName.toLowerCase()}s)`,
+            reference_id: saleId,
+            reference_type: "pos_sale",
+            created_by: userId,
+          });
+        } catch {
+          /* ignore supabase errors */
+        }
+      }
     }
 
     if (activeHeldOrderId) {
       await deleteHeldOrder(activeHeldOrderId, active.id);
+      await deleteSyncedHeldOrder(active.id, activeHeldOrderId);
       setActiveHeldOrderId(null);
       refreshHeldOrders();
     }
@@ -563,7 +615,7 @@ const UserPOS = () => {
     setProcessing(false);
 
     // Build the printable receipt from finalized cart
-    const invoiceNo = makeInvoiceNo(sale.id);
+    const invoiceNo = makeInvoiceNo(saleId);
     setReceipt({
       invoiceNo,
       date: new Date(),
@@ -602,7 +654,7 @@ const UserPOS = () => {
     setReceiptOpen(true);
 
     toast({
-      title: "Transaction complete",
+      title: "Transaction complete 🧾",
       description: `${cart.length} item(s) · ${fmt(grandTotal)}${payMethod === "cash" ? ` · change ${fmt(changeDue)}` : ""}`,
     });
     clearCart();
@@ -612,7 +664,7 @@ const UserPOS = () => {
   const handleHoldCart = async () => {
     if (!active?.id || cart.length === 0) return;
     try {
-      await saveHeldOrder({
+      const heldData = {
         business_id: active.id,
         owner_user_id: active.owner_user_id,
         customer_name: customerName.trim() || null,
@@ -621,7 +673,9 @@ const UserPOS = () => {
         cart_data: cart,
         total_amount: grandTotal,
         item_count: cart.reduce((sum, item) => sum + item.qty, 0),
-      });
+      };
+      await saveHeldOrder(heldData);
+      await saveSyncedHeldOrder(active.id, heldData);
 
       toast({
         title: "Order placed on hold",
