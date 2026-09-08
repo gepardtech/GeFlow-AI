@@ -352,9 +352,10 @@ export const UserSettings = () => {
     const currentBiz = active || activeBusiness;
     try {
       // 1. Update user metadata in Supabase auth and local cache via hierarchy helper
+      const effectiveDbTax = enableTaxCalculation ? (Number(defaultTaxRate) || 0) : 0;
       await saveUserSettingsOverrides({
         user_currency: currency,
-        user_default_tax: Number(defaultTaxRate) || 0,
+        user_default_tax: effectiveDbTax,
         user_stock_alert_limit: Number(lowStockThreshold) || 10,
         theme: selectedTheme,
       });
@@ -368,7 +369,7 @@ export const UserSettings = () => {
             business_address: businessAddress.trim(),
             currency: currency,
             base_currency: currency,
-            default_tax: Number(defaultTaxRate) || 0,
+            default_tax: effectiveDbTax,
             stock_alert_limit: Number(lowStockThreshold) || 10,
             updated_at: new Date().toISOString(),
           })
@@ -397,13 +398,16 @@ export const UserSettings = () => {
         }
       }
 
-      // 3. Persist extended attributes to localStorage
+      // 3. Persist extended attributes to localStorage and Supabase auth
       const payload = {
+        businessName: businessName.trim(),
+        businessAddress: businessAddress.trim(),
         businessTagline,
         businessPhone,
         businessEmail,
         registrationNumber,
         timezone,
+        currency,
         logoUrl,
         receiptHeader,
         receiptSubheader,
@@ -434,17 +438,37 @@ export const UserSettings = () => {
         decimalPrecision,
         enableAnimations,
         enableTaxCalculation,
+        defaultTaxRate: Number(defaultTaxRate) || 0,
         taxPricingMode,
         taxRegistrationNumber,
         taxLabel,
         enableSecondaryTax,
-        secondaryTaxRate,
+        secondaryTaxRate: Number(secondaryTaxRate) || 0,
         secondaryTaxLabel,
         taxExemptionB2B,
         customTaxBrackets,
       };
 
       localStorage.setItem(`geflow_settings_${currentBiz?.id || "global"}`, JSON.stringify(payload));
+      localStorage.setItem("geflow_settings_global", JSON.stringify(payload));
+
+      if (currentBiz?.id) {
+        fetch("/api/sync/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            businessId: currentBiz.id,
+            settings: payload,
+          }),
+        }).catch((e) => console.debug("Server sync settings notice:", e));
+      }
+
+      supabase.auth.updateUser({
+        data: {
+          geflow_settings: payload,
+          [`geflow_settings_${currentBiz?.id || "default"}`]: payload,
+        },
+      }).catch((e) => console.debug("Supabase user metadata sync error:", e));
 
       // Refresh currency and money formatting across the entire app
       await refreshBusinessMoney();
@@ -510,6 +534,145 @@ export const UserSettings = () => {
       description: "Bracket was removed from the active configuration.",
     });
   };
+
+  // Instant reactive auto-sync: when user modifies toggles/inputs, apply changes within seconds
+  const autoSyncTimerRef = useRef<any>(null);
+  const isInitialMount = useRef(true);
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    const currentBiz = active || activeBusiness;
+    if (!currentBiz?.id) return;
+
+    if (autoSyncTimerRef.current) clearTimeout(autoSyncTimerRef.current);
+    autoSyncTimerRef.current = setTimeout(() => {
+      const payload = {
+        businessName: businessName.trim(),
+        businessAddress: businessAddress.trim(),
+        businessTagline,
+        businessPhone,
+        businessEmail,
+        registrationNumber,
+        timezone,
+        currency,
+        logoUrl,
+        receiptHeader,
+        receiptSubheader,
+        receiptFooter,
+        showLogoOnReceipt,
+        showTaxBreakdown,
+        showCashierName,
+        showBarcodeOnReceipt,
+        autoPrintReceipt,
+        posSoundEffects,
+        openDrawerOnCash,
+        scannerMode,
+        quickAmounts,
+        defaultCustomerType,
+        outOfStockNotify,
+        expiryWarningDays,
+        highReturnAlert,
+        inAppAlerts,
+        emailDigestFrequency,
+        alertRecipients,
+        alertAudible,
+        selectedTheme,
+        densityMode,
+        accentColor,
+        language,
+        dateFormat,
+        timeFormat,
+        decimalPrecision,
+        enableAnimations,
+        enableTaxCalculation,
+        defaultTaxRate: Number(defaultTaxRate) || 0,
+        taxPricingMode,
+        taxRegistrationNumber,
+        taxLabel,
+        enableSecondaryTax,
+        secondaryTaxRate: Number(secondaryTaxRate) || 0,
+        secondaryTaxLabel,
+        taxExemptionB2B,
+        customTaxBrackets,
+      };
+
+      localStorage.setItem(`geflow_settings_${currentBiz.id}`, JSON.stringify(payload));
+      localStorage.setItem("geflow_settings_global", JSON.stringify(payload));
+
+      window.dispatchEvent(new CustomEvent("geflow:settings-changed", { detail: payload }));
+      window.dispatchEvent(
+        new CustomEvent("geflow:business-updated", {
+          detail: {
+            id: currentBiz.id,
+            business_name: businessName.trim() || currentBiz.business_name,
+            business_address: businessAddress.trim(),
+            currency,
+            base_currency: currency,
+            default_tax: Number(defaultTaxRate) || 0,
+            stock_alert_limit: Number(lowStockThreshold) || 10,
+            expiryWarningDays: Number(expiryWarningDays) || 30,
+            logoUrl,
+          },
+        })
+      );
+
+      fetch("/api/sync/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessId: currentBiz.id,
+          settings: payload,
+        }),
+      }).catch(() => {});
+    }, 500);
+
+    return () => {
+      if (autoSyncTimerRef.current) clearTimeout(autoSyncTimerRef.current);
+    };
+  }, [
+    showTaxBreakdown,
+    enableTaxCalculation,
+    taxPricingMode,
+    defaultTaxRate,
+    taxRegistrationNumber,
+    taxLabel,
+    enableSecondaryTax,
+    secondaryTaxRate,
+    secondaryTaxLabel,
+    currency,
+    businessName,
+    businessAddress,
+    lowStockThreshold,
+    autoPrintReceipt,
+    posSoundEffects,
+    openDrawerOnCash,
+    scannerMode,
+    quickAmounts,
+    defaultCustomerType,
+    outOfStockNotify,
+    expiryWarningDays,
+    highReturnAlert,
+    inAppAlerts,
+    emailDigestFrequency,
+    alertRecipients,
+    alertAudible,
+    selectedTheme,
+    densityMode,
+    accentColor,
+    language,
+    dateFormat,
+    timeFormat,
+    decimalPrecision,
+    enableAnimations,
+    taxExemptionB2B,
+    customTaxBrackets,
+    active?.id,
+    activeBusiness?.id,
+  ]);
 
   // Calculate live tax preview
   const taxCalculations = useMemo(() => {

@@ -15,7 +15,7 @@ import {
 import BulkReplenishmentDialog, { DeficitProduct } from "@/components/inventory/BulkReplenishmentDialog";
 import StockUpdateDialog from "@/components/inventory/StockUpdateDialog";
 import type { ProductRecord } from "@/components/inventory/ProductDialog";
-import { fetchSyncedProducts } from "@/lib/businessSync";
+import { fetchSyncedProducts, isDemoProduct } from "@/lib/businessSync";
 
 interface LowProduct extends DeficitProduct {
   purchase_cost: number; retail_price: number; min_stock_alert: number;
@@ -42,16 +42,14 @@ const UserLowStock = () => {
     setLoading(true);
     let data: any[] | null = null;
 
-    if (!active.is_staff) {
-      const res = await supabase
-        .from("products")
-        .select("id, name, internal_sku, barcode, category_id, purchase_cost, retail_price, stock_units, min_stock_alert, batch_number, expiry_date")
-        .eq("business_id", active.id)
-        .order("stock_units", { ascending: true });
-      data = res.data;
-    }
+    const res = await supabase
+      .from("products")
+      .select("id, name, internal_sku, barcode, category_id, purchase_cost, retail_price, stock_units, min_stock_alert, batch_number, expiry_date")
+      .eq("business_id", active.id)
+      .order("stock_units", { ascending: true });
+    data = res.data;
 
-    if (!data || data.length === 0) {
+    if (!data || data.length === 0 || active.is_staff) {
       const synced = await fetchSyncedProducts(active.id, {
         role: active.staff_role || "manager",
         isStaff: Boolean(active.is_staff),
@@ -63,12 +61,14 @@ const UserLowStock = () => {
     }
     
     const defaultThreshold = active.stock_alert_limit ?? 10;
-    const low = (data ?? []).filter((p: any) => {
-      const threshold = (p.min_stock_alert !== null && p.min_stock_alert !== undefined && p.min_stock_alert > 0)
-        ? p.min_stock_alert
-        : defaultThreshold;
-      return p.stock_units > 0 && p.stock_units <= threshold;
-    });
+    const low = (data ?? [])
+      .filter((p: any) => !isDemoProduct(p))
+      .filter((p: any) => {
+        const threshold = (p.min_stock_alert !== null && p.min_stock_alert !== undefined && p.min_stock_alert > 0)
+          ? p.min_stock_alert
+          : defaultThreshold;
+        return p.stock_units > 0 && p.stock_units <= threshold;
+      });
     setRows(low as LowProduct[]);
     setLoading(false);
   }, [active]);

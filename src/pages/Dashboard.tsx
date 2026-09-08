@@ -81,7 +81,7 @@ const Stat = ({
 const Dashboard = () => {
   const navigate = useNavigate();
   const { plan, planId, fullName, loading: planLoading } = usePlan();
-  const { active, businesses, staffBusinesses, hasLoaded, loading: bizLoading } = useActiveBusiness();
+  const { active, businesses, staffBusinesses, hasLoaded, loading: bizLoading, mode } = useActiveBusiness();
   const { isCashier, isInventoryClerk, isManager, isOwner } = useStaffRole();
 
   const [loading, setLoading] = useState(true);
@@ -157,7 +157,8 @@ const Dashboard = () => {
     let allSaleItems = saleItems ?? [];
     let allMovements = movements ?? [];
 
-    if ((!prods.length && !allSales.length) || active?.is_staff) {
+    // Only fallback if Supabase query completely failed
+    if (products === null && sales === null) {
       const synced = await fetchSyncedReportsData(bizId, active?.staff_role || "manager", Boolean(active?.is_staff));
       if (synced.products.length > 0 || synced.sales.length > 0) {
         prods = synced.products;
@@ -295,6 +296,16 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (bizLoading || !hasLoaded) return;
+    // In employee mode, NEVER redirect to business registration steps
+    if (mode === "employee") {
+      if (active) {
+        load();
+      } else {
+        setLoading(false);
+      }
+      return;
+    }
+    // Only redirect Store Owners who have zero businesses registered
     if (!active && businesses.length === 0 && staffBusinesses.length === 0) {
       navigate("/setup/business");
       return;
@@ -302,7 +313,7 @@ const Dashboard = () => {
     if (active) {
       load();
     }
-  }, [bizLoading, hasLoaded, active, businesses.length, staffBusinesses.length, load, navigate]);
+  }, [bizLoading, hasLoaded, active, businesses.length, staffBusinesses.length, mode, load, navigate]);
 
   // Realtime
   useEffect(() => {
@@ -353,43 +364,65 @@ const Dashboard = () => {
   return (
     <UserPanelGate pageTitle="Dashboard" module="dashboard">
       <div className="w-full space-y-6 min-w-0 pb-10">
-        {/* ========================================================================= */}
-        {/* HEADER SECTION (Welcome Title + Action CTAs)                             */}
-        {/* ========================================================================= */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-w-0">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight mb-1 truncate text-foreground">
-              Welcome back, {firstName} 👋
-            </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground truncate">
-              {isCashier
-                ? "POS terminal and sales overview dashboard."
-                : "Here's your business pulse for the last 30 days."}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
-            <button
-              onClick={() => navigate("/dashboard/pos")}
-              className="h-9 sm:h-10 px-3.5 sm:px-4 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 sm:gap-2 hover:bg-primary/90 transition shadow-md shadow-primary/20 whitespace-nowrap"
-            >
-              <Plus className="h-4 w-4 shrink-0" /> New Sale (POS)
-            </button>
-            {!isCashier && (
+        {!active && mode === "employee" ? (
+          <div className="p-8 sm:p-12 rounded-3xl bg-card border border-border/80 text-center space-y-4 max-w-xl mx-auto my-8 shadow-sm">
+            <div className="w-16 h-16 rounded-2xl bg-sky-500/15 text-sky-500 flex items-center justify-center mx-auto text-2xl font-bold">
+              👨‍💼
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-xl font-bold text-foreground">Employee Workspace · Standby</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                You are logged into your staff account. No store assignment was found for your account yet. When your Store Owner invites or assigns you via Staff Management, your assigned business, terminal, and inventory catalog will appear here automatically.
+              </p>
+            </div>
+            <div className="pt-2 flex items-center justify-center gap-3">
               <button
-                onClick={() => navigate("/dashboard/inventory")}
-                className="h-9 sm:h-10 px-3.5 sm:px-4 rounded-xl bg-card border border-border/80 text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 sm:gap-2 hover:bg-muted transition whitespace-nowrap"
+                onClick={() => window.location.reload()}
+                className="h-10 px-5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition shadow-sm"
               >
-                <Plus className="h-4 w-4 shrink-0" /> Add Product
+                Refresh Invitations
               </button>
-            )}
-            <button
-              onClick={() => navigate("/dashboard/reports")}
-              className="h-9 sm:h-10 px-3.5 sm:px-4 rounded-xl bg-card border border-border/80 text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 sm:gap-2 hover:bg-muted transition whitespace-nowrap"
-            >
-              <Clock className="h-4 w-4 shrink-0" /> Reports
-            </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <>
+            {/* ========================================================================= */}
+            {/* HEADER SECTION (Welcome Title + Action CTAs)                             */}
+            {/* ========================================================================= */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-w-0">
+              <div className="min-w-0 flex-1">
+                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight mb-1 truncate text-foreground">
+                  Welcome back, {firstName} 👋
+                </h1>
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">
+                  {isCashier
+                    ? "POS terminal and sales overview dashboard."
+                    : "Here's your business pulse for the last 30 days."}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap shrink-0">
+                <button
+                  onClick={() => navigate("/dashboard/pos")}
+                  className="h-9 sm:h-10 px-3.5 sm:px-4 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 sm:gap-2 hover:bg-primary/90 transition shadow-md shadow-primary/20 whitespace-nowrap"
+                >
+                  <Plus className="h-4 w-4 shrink-0" /> New Sale (POS)
+                </button>
+                {!isCashier && (
+                  <button
+                    onClick={() => navigate("/dashboard/inventory")}
+                    className="h-9 sm:h-10 px-3.5 sm:px-4 rounded-xl bg-card border border-border/80 text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 sm:gap-2 hover:bg-muted transition whitespace-nowrap"
+                  >
+                    <Plus className="h-4 w-4 shrink-0" /> Add Product
+                  </button>
+                )}
+                <button
+                  onClick={() => navigate("/dashboard/reports")}
+                  className="h-9 sm:h-10 px-3.5 sm:px-4 rounded-xl bg-card border border-border/80 text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 sm:gap-2 hover:bg-muted transition whitespace-nowrap"
+                >
+                  <Clock className="h-4 w-4 shrink-0" /> Reports
+                </button>
+              </div>
+            </div>
 
         {/* ========================================================================= */}
         {/* 5 KPI METRICS CARDS (Adaptive Grid with Text-Safe Truncation)            */}
@@ -766,6 +799,8 @@ const Dashboard = () => {
             )}
           </div>
         </div>
+        </>
+        )}
       </div>
     </UserPanelGate>
   );

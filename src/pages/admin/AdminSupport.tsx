@@ -645,55 +645,321 @@ const TemplatesDialog = ({ open, onOpenChange, templates, onChange }: any) => {
 // ---------- ANNOUNCEMENT DIALOG ----------
 const AnnouncementDialog = ({ open, onOpenChange, onSaved, edit }: any) => {
   const { toast } = useToast();
-  const [form, setForm] = useState<any>({ title: "", body: "", audience: "all", position: "top", variant: "info", link_url: "", link_label: "", starts_at: new Date().toISOString().slice(0, 16), ends_at: "", is_active: true });
+  const [form, setForm] = useState<any>({
+    title: "",
+    body: "",
+    audience: "all",
+    position: "top",
+    variant: "info",
+    link_url: "",
+    link_label: "",
+    coupon_code: "",
+    starts_at: new Date().toISOString().slice(0, 16),
+    ends_at: "",
+    is_active: true,
+  });
+  const [availableCoupons, setAvailableCoupons] = useState<any[]>([]);
+
   useEffect(() => {
-    if (edit) setForm({
-      title: edit.title, body: edit.body, audience: edit.audience, position: edit.position, variant: edit.variant,
-      link_url: edit.link_url ?? "", link_label: edit.link_label ?? "",
-      starts_at: edit.starts_at?.slice(0, 16) ?? "", ends_at: edit.ends_at?.slice(0, 16) ?? "", is_active: edit.is_active,
-    });
-    else setForm({ title: "", body: "", audience: "all", position: "top", variant: "info", link_url: "", link_label: "", starts_at: new Date().toISOString().slice(0, 16), ends_at: "", is_active: true });
+    if (!open) return;
+    supabase
+      .from("coupons")
+      .select("id, code, discount_type, discount_value, applies_to_plan, active")
+      .eq("active", true)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        setAvailableCoupons(data || []);
+      });
+  }, [open]);
+
+  useEffect(() => {
+    if (edit) {
+      // Extract coupon code from url or text if available
+      let detectedCoupon = "";
+      if (edit.link_url) {
+        try {
+          const u = new URL(edit.link_url, window.location.origin);
+          detectedCoupon = u.searchParams.get("coupon") || u.searchParams.get("code") || "";
+        } catch {
+          const match = edit.link_url.match(/[?&](?:coupon|code)=([^&#]+)/i);
+          if (match) detectedCoupon = decodeURIComponent(match[1]);
+        }
+      }
+      setForm({
+        title: edit.title,
+        body: edit.body,
+        audience: edit.audience,
+        position: edit.position,
+        variant: edit.variant,
+        link_url: edit.link_url ?? "",
+        link_label: edit.link_label ?? "",
+        coupon_code: detectedCoupon,
+        starts_at: edit.starts_at?.slice(0, 16) ?? "",
+        ends_at: edit.ends_at?.slice(0, 16) ?? "",
+        is_active: edit.is_active,
+      });
+    } else {
+      setForm({
+        title: "",
+        body: "",
+        audience: "all",
+        position: "top",
+        variant: "promo",
+        link_url: "",
+        link_label: "",
+        coupon_code: "",
+        starts_at: new Date().toISOString().slice(0, 16),
+        ends_at: "",
+        is_active: true,
+      });
+    }
   }, [edit, open]);
+
+  const handleApplyCouponToLink = (couponCode: string, targetPlan: string = "premium") => {
+    const cleanCode = couponCode.trim().toUpperCase();
+    const targetUrl = `/checkout?plan=${targetPlan}&coupon=${encodeURIComponent(cleanCode)}`;
+    setForm((f: any) => ({
+      ...f,
+      coupon_code: cleanCode,
+      variant: "promo",
+      link_url: targetUrl,
+      link_label: f.link_label || `Claim ${cleanCode} Discount`,
+      body: f.body || `Special discount! Use code ${cleanCode} at checkout to save instantly.`,
+    }));
+  };
+
   const save = async () => {
-    if (!form.title.trim() || !form.body.trim()) { toast({ title: "Title & body required", variant: "destructive" }); return; }
+    if (!form.title.trim() || !form.body.trim()) {
+      toast({ title: "Title & body required", variant: "destructive" });
+      return;
+    }
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
+    let finalLinkUrl = form.link_url?.trim() || null;
+    const cleanCoupon = form.coupon_code?.trim().toUpperCase();
+
+    // Ensure coupon parameter is embedded in link_url if coupon code is specified
+    if (finalLinkUrl && cleanCoupon) {
+      try {
+        const hasCoupon = /[?&](?:coupon|code)=/i.test(finalLinkUrl);
+        if (!hasCoupon) {
+          finalLinkUrl += (finalLinkUrl.includes("?") ? "&" : "?") + `coupon=${encodeURIComponent(cleanCoupon)}`;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
     const payload = {
-      title: form.title.trim(), body: form.body.trim(), audience: form.audience, position: form.position, variant: form.variant,
-      link_url: form.link_url || null, link_label: form.link_label || null,
+      title: form.title.trim(),
+      body: form.body.trim(),
+      audience: form.audience,
+      position: form.position,
+      variant: form.variant,
+      link_url: finalLinkUrl,
+      link_label: form.link_label?.trim() || null,
       starts_at: new Date(form.starts_at).toISOString(),
       ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
-      is_active: form.is_active, created_by_user_id: user.id,
+      is_active: form.is_active,
+      created_by_user_id: user.id,
     };
+
     let error;
     if (edit) ({ error } = await supabase.from("announcements").update(payload).eq("id", edit.id));
     else ({ error } = await supabase.from("announcements").insert(payload));
-    if (error) { toast({ title: "Save failed", description: error.message, variant: "destructive" }); return; }
+
+    if (error) {
+      toast({ title: "Save failed", description: error.message, variant: "destructive" });
+      return;
+    }
     toast({ title: edit ? "Announcement updated" : "Announcement scheduled" });
-    onSaved(); onOpenChange(false);
+    onSaved();
+    onOpenChange(false);
   };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader><DialogTitle>{edit ? "Edit Announcement" : "New Announcement"}</DialogTitle><DialogDescription>Slide-style banner shown across selected audiences.</DialogDescription></DialogHeader>
-        <div className="space-y-3">
-          <Lab label="TITLE"><input value={form.title} onChange={(e) => setForm((f: any) => ({ ...f, title: e.target.value }))} className="h-10 w-full px-3 bg-muted/40 rounded-lg text-sm" /></Lab>
-          <Lab label="BODY"><textarea rows={3} value={form.body} onChange={(e) => setForm((f: any) => ({ ...f, body: e.target.value }))} className="w-full p-3 bg-muted/40 rounded-lg text-sm" /></Lab>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{edit ? "Edit Announcement" : "New Announcement"}</DialogTitle>
+          <DialogDescription>
+            Slide-style banner shown across selected audiences with automatic coupon auto-apply at checkout.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3.5">
+          <Lab label="TITLE">
+            <input
+              value={form.title}
+              onChange={(e) => setForm((f: any) => ({ ...f, title: e.target.value }))}
+              placeholder="e.g. Flash Sale: 20% Off All Plans!"
+              className="h-10 w-full px-3 bg-muted/40 rounded-lg text-sm border border-border/60"
+            />
+          </Lab>
+
+          <Lab label="BODY / DISCOUNT DESCRIPTION">
+            <textarea
+              rows={3}
+              value={form.body}
+              onChange={(e) => setForm((f: any) => ({ ...f, body: e.target.value }))}
+              placeholder="Describe the promotion or offer. Mention your coupon code here."
+              className="w-full p-3 bg-muted/40 rounded-lg text-sm border border-border/60"
+            />
+          </Lab>
+
+          {/* Dedicated Promo Coupon Integration */}
+          <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                🎫 Attach Promo Coupon (Auto-Applied on Checkout)
+              </span>
+              {availableCoupons.length > 0 && (
+                <span className="text-[10px] text-muted-foreground font-medium">
+                  {availableCoupons.length} Active coupon(s)
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <p className="text-[10px] text-muted-foreground mb-1 font-bold">TYPE OR SELECT COUPON</p>
+                <div className="flex gap-1.5">
+                  <input
+                    value={form.coupon_code}
+                    onChange={(e) => setForm((f: any) => ({ ...f, coupon_code: e.target.value.toUpperCase() }))}
+                    placeholder="e.g. SUMMER50"
+                    className="h-9 w-full px-3 bg-background rounded-lg text-xs font-mono font-bold uppercase border border-border/70"
+                  />
+                  {availableCoupons.length > 0 && (
+                    <Select
+                      onValueChange={(val) => {
+                        handleApplyCouponToLink(val, "premium");
+                      }}
+                    >
+                      <SelectTrigger className="h-9 w-28 bg-background text-xs border border-border/70">
+                        <SelectValue placeholder="Pick..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableCoupons.map((c) => (
+                          <SelectItem key={c.id} value={c.code} className="text-xs">
+                            {c.code} ({c.discount_type === "percent" ? `${c.discount_value}%` : `$${c.discount_value}`})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] text-muted-foreground mb-1 font-bold">QUICK TARGET CHECKOUT LINK</p>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-9 text-[11px] font-bold flex-1 bg-background"
+                    onClick={() => handleApplyCouponToLink(form.coupon_code || "PROMO", "standard")}
+                  >
+                    Standard Plan
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-9 text-[11px] font-bold flex-1 bg-background"
+                    onClick={() => handleApplyCouponToLink(form.coupon_code || "PROMO", "premium")}
+                  >
+                    Premium Plan
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              When a user clicks this announcement's CTA, they are automatically redirected to checkout and this coupon is auto-filled and validated immediately.
+            </p>
+          </div>
+
           <div className="grid grid-cols-3 gap-2">
-            <Lab label="AUDIENCE"><Select value={form.audience} onValueChange={(v) => setForm((f: any) => ({ ...f, audience: v }))}><SelectTrigger className="h-10 bg-muted/40 border-0"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="public">Public Site</SelectItem><SelectItem value="users">User Panel</SelectItem><SelectItem value="admins">Admin Panel</SelectItem></SelectContent></Select></Lab>
-            <Lab label="POSITION"><Select value={form.position} onValueChange={(v) => setForm((f: any) => ({ ...f, position: v }))}><SelectTrigger className="h-10 bg-muted/40 border-0"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="top">Top</SelectItem><SelectItem value="bottom">Bottom</SelectItem></SelectContent></Select></Lab>
-            <Lab label="VARIANT"><Select value={form.variant} onValueChange={(v) => setForm((f: any) => ({ ...f, variant: v }))}><SelectTrigger className="h-10 bg-muted/40 border-0"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="info">Info</SelectItem><SelectItem value="success">Success</SelectItem><SelectItem value="warning">Warning</SelectItem><SelectItem value="promo">Promo</SelectItem></SelectContent></Select></Lab>
+            <Lab label="AUDIENCE">
+              <Select value={form.audience} onValueChange={(v) => setForm((f: any) => ({ ...f, audience: v }))}>
+                <SelectTrigger className="h-10 bg-muted/40 border border-border/60"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="public">Public Site</SelectItem>
+                  <SelectItem value="users">User Panel</SelectItem>
+                  <SelectItem value="admins">Admin Panel</SelectItem>
+                </SelectContent>
+              </Select>
+            </Lab>
+            <Lab label="POSITION">
+              <Select value={form.position} onValueChange={(v) => setForm((f: any) => ({ ...f, position: v }))}>
+                <SelectTrigger className="h-10 bg-muted/40 border border-border/60"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="top">Top</SelectItem>
+                  <SelectItem value="bottom">Bottom</SelectItem>
+                </SelectContent>
+              </Select>
+            </Lab>
+            <Lab label="VARIANT">
+              <Select value={form.variant} onValueChange={(v) => setForm((f: any) => ({ ...f, variant: v }))}>
+                <SelectTrigger className="h-10 bg-muted/40 border border-border/60"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="promo">Promo (Discount)</SelectItem>
+                  <SelectItem value="info">Info</SelectItem>
+                  <SelectItem value="success">Success</SelectItem>
+                  <SelectItem value="warning">Warning</SelectItem>
+                </SelectContent>
+              </Select>
+            </Lab>
           </div>
+
           <div className="grid grid-cols-2 gap-2">
-            <Lab label="LINK URL"><input value={form.link_url} onChange={(e) => setForm((f: any) => ({ ...f, link_url: e.target.value }))} className="h-10 w-full px-3 bg-muted/40 rounded-lg text-sm" /></Lab>
-            <Lab label="LINK LABEL"><input value={form.link_label} onChange={(e) => setForm((f: any) => ({ ...f, link_label: e.target.value }))} className="h-10 w-full px-3 bg-muted/40 rounded-lg text-sm" /></Lab>
+            <Lab label="TARGET LINK URL (with ?coupon=...)">
+              <input
+                value={form.link_url}
+                onChange={(e) => setForm((f: any) => ({ ...f, link_url: e.target.value }))}
+                placeholder="/checkout?plan=premium&coupon=CODE"
+                className="h-10 w-full px-3 bg-muted/40 rounded-lg text-sm border border-border/60"
+              />
+            </Lab>
+            <Lab label="CTA BUTTON LABEL">
+              <input
+                value={form.link_label}
+                onChange={(e) => setForm((f: any) => ({ ...f, link_label: e.target.value }))}
+                placeholder="e.g. Claim Discount Now"
+                className="h-10 w-full px-3 bg-muted/40 rounded-lg text-sm border border-border/60"
+              />
+            </Lab>
           </div>
+
           <div className="grid grid-cols-2 gap-2">
-            <Lab label="STARTS AT"><input type="datetime-local" value={form.starts_at} onChange={(e) => setForm((f: any) => ({ ...f, starts_at: e.target.value }))} className="h-10 w-full px-3 bg-muted/40 rounded-lg text-sm" /></Lab>
-            <Lab label="ENDS AT (optional)"><input type="datetime-local" value={form.ends_at} onChange={(e) => setForm((f: any) => ({ ...f, ends_at: e.target.value }))} className="h-10 w-full px-3 bg-muted/40 rounded-lg text-sm" /></Lab>
+            <Lab label="STARTS AT">
+              <input
+                type="datetime-local"
+                value={form.starts_at}
+                onChange={(e) => setForm((f: any) => ({ ...f, starts_at: e.target.value }))}
+                className="h-10 w-full px-3 bg-muted/40 rounded-lg text-sm border border-border/60"
+              />
+            </Lab>
+            <Lab label="ENDS AT (optional)">
+              <input
+                type="datetime-local"
+                value={form.ends_at}
+                onChange={(e) => setForm((f: any) => ({ ...f, ends_at: e.target.value }))}
+                className="h-10 w-full px-3 bg-muted/40 rounded-lg text-sm border border-border/60"
+              />
+            </Lab>
           </div>
-          <label className="flex items-center gap-2"><Switch checked={form.is_active} onCheckedChange={(v) => setForm((f: any) => ({ ...f, is_active: v }))} /><span className="text-xs font-bold">Active</span></label>
-          <Button onClick={save} className="w-full bg-sky-400 hover:bg-sky-500 text-white">{edit ? "Save Changes" : "Schedule Announcement"}</Button>
+
+          <label className="flex items-center gap-2 pt-1 cursor-pointer">
+            <Switch checked={form.is_active} onCheckedChange={(v) => setForm((f: any) => ({ ...f, is_active: v }))} />
+            <span className="text-xs font-bold">Active Announcement</span>
+          </label>
+
+          <Button onClick={save} className="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold h-11 rounded-xl">
+            {edit ? "Save Changes" : "Publish Announcement"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

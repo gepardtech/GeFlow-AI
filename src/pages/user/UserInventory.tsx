@@ -28,7 +28,7 @@ import ProductViewDialog from "@/components/inventory/ProductViewDialog";
 import StockUpdateDialog from "@/components/inventory/StockUpdateDialog";
 import BulkTransferDialog from "@/components/inventory/BulkTransferDialog";
 import ExportLedgerDialog from "@/components/inventory/ExportLedgerDialog";
-import { fetchSyncedProducts } from "@/lib/businessSync";
+import { fetchSyncedProducts, isDemoProduct } from "@/lib/businessSync";
 import BulkImportDialog from "@/components/inventory/BulkImportDialog";
 import BarcodeLookupDialog from "@/components/inventory/BarcodeLookupDialog";
 import RestockWorkflowDialog from "@/components/inventory/RestockWorkflowDialog";
@@ -84,25 +84,26 @@ const UserInventory = () => {
     }
     try {
       let data: any[] | null = null;
-      if (!active?.is_staff) {
-        const { data: initialData, error } = await supabase
+      const { data: initialData, error } = await supabase
+        .from("products")
+        .select("id, name, internal_sku, description, category_id, subcategory_id, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, barcode, status, images, uom, units_per_uom, base_unit")
+        .eq("business_id", activeId)
+        .order("created_at", { ascending: false });
+      
+      data = initialData;
+      if (error || !data || data.length === 0) {
+        const fallback = await supabase
           .from("products")
-          .select("id, name, internal_sku, description, category_id, subcategory_id, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, barcode, status, images, uom, units_per_uom, base_unit")
+          .select("id, name, internal_sku, description, category_id, subcategory_id, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, barcode, status, images")
           .eq("business_id", activeId)
           .order("created_at", { ascending: false });
-        
-        data = initialData;
-        if (error) {
-          const fallback = await supabase
-            .from("products")
-            .select("id, name, internal_sku, description, category_id, subcategory_id, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, barcode, status, images")
-            .eq("business_id", activeId)
-            .order("created_at", { ascending: false });
+        if (fallback.data && fallback.data.length > 0) {
           data = fallback.data as any;
         }
       }
 
-      if (!data || data.length === 0) {
+      // If Supabase returned no rows or user is employee (RLS), fetch from sync engine
+      if (!data || data.length === 0 || active?.is_staff) {
         const synced = await fetchSyncedProducts(activeId, {
           role: active?.staff_role || "manager",
           isStaff: Boolean(active?.is_staff),
@@ -113,15 +114,31 @@ const UserInventory = () => {
         }
       }
 
-      if (data) {
-        setProducts(data as ProductRecord[]);
+      // Clean products to strictly guarantee no fake/demo items
+      const cleanProducts = ((data as ProductRecord[]) ?? []).filter((p) => !isDemoProduct(p));
+
+      // If user is owner and we have genuine products, keep the sync server updated
+      if (!active?.is_staff && data && Array.isArray(data)) {
+        fetch("/api/sync/batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            businessId: activeId,
+            businessName: active?.name,
+            ownerUserId: active?.owner_user_id,
+            products: cleanProducts,
+            replace: true,
+          }),
+        }).catch(() => {});
       }
+
+      setProducts(cleanProducts);
     } catch (err) {
       console.warn("Failed to fetch inventory products:", err);
     } finally {
       setLoading(false);
     }
-  }, [activeId, active?.is_staff, active?.staff_role, active?.owner_user_id]);
+  }, [activeId, active?.name, active?.is_staff, active?.staff_role, active?.owner_user_id]);
 
   useEffect(() => {
     (async () => {

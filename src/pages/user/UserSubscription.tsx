@@ -38,6 +38,13 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { useSearchParams } from "react-router-dom";
+import {
+  validateCoupon,
+  getPendingCoupon,
+  clearPendingCoupon,
+  findActiveAnnouncementCoupon,
+} from "@/lib/couponHelper";
 import jsPDF from "jspdf";
 
 interface InvoiceRecord {
@@ -69,6 +76,7 @@ const DEFAULT_CARD: SavedPaymentMethod = {
 };
 
 export const UserSubscription = () => {
+  const [searchParams] = useSearchParams();
   const { planId, fullName, email, userId } = usePlan();
   const { plans: livePricing, loading: pricingLoading } = usePricingPlans();
   const { activeBusiness } = useActiveBusiness();
@@ -101,6 +109,14 @@ export const UserSubscription = () => {
   const [couponCode, setCouponCode] = useState("");
   const [couponDiscount, setCouponDiscount] = useState<number>(0);
   const [couponApplied, setCouponApplied] = useState(false);
+  const [appliedCouponData, setAppliedCouponData] = useState<{
+    code: string;
+    label: string;
+    amount: number;
+    discountType: "percent" | "amount";
+    discountValue: number;
+    isAnnouncementPromo?: boolean;
+  } | null>(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [upgradeBusy, setUpgradeBusy] = useState(false);
   const [selectedCycleForUpgrade, setSelectedCycleForUpgrade] = useState<"monthly" | "yearly">("monthly");
@@ -341,52 +357,77 @@ export const UserSubscription = () => {
     }
   };
 
-  // Open Upgrade Modal
-  const openUpgradeModal = (planKey: string) => {
-    setSelectedPlanKey(planKey);
-    setSelectedCycleForUpgrade(billingCycle);
-    setCouponCode("");
-    setCouponDiscount(0);
-    setCouponApplied(false);
-    setUpgradeModalOpen(true);
-  };
+  // Upgrade price computations
+  const rawUpgradePrice = useMemo(() => {
+    if (selectedPlanKey === "free") return 0;
+    if (selectedPlanKey === "standard") {
+      return selectedCycleForUpgrade === "yearly"
+        ? planPricing.standard.yearly
+        : planPricing.standard.monthly;
+    }
+    return selectedCycleForUpgrade === "yearly"
+      ? planPricing.premium.yearly
+      : planPricing.premium.monthly;
+  }, [selectedPlanKey, selectedCycleForUpgrade, planPricing]);
+
+  const calculatedDiscountAmount = useMemo(() => {
+    if (!couponApplied || !appliedCouponData) return 0;
+    if (appliedCouponData.discountType === "percent") {
+      return +((rawUpgradePrice * appliedCouponData.discountValue) / 100).toFixed(2);
+    }
+    return Math.min(rawUpgradePrice, appliedCouponData.amount);
+  }, [couponApplied, appliedCouponData, rawUpgradePrice]);
+
+  const finalUpgradePrice = useMemo(() => {
+    return Math.max(0, +(rawUpgradePrice - calculatedDiscountAmount).toFixed(2));
+  }, [rawUpgradePrice, calculatedDiscountAmount]);
 
   // Apply Coupon
-  const handleApplyCoupon = async () => {
-    if (!couponCode.trim()) return;
+  const handleApplyCoupon = async (overrideCode?: string, overridePlan?: string) => {
+    const raw = overrideCode !== undefined ? overrideCode : couponCode;
+    const codeClean = raw.trim().toUpperCase();
+    if (!codeClean) return;
+    setCouponCode(codeClean);
     setValidatingCoupon(true);
     try {
-      const codeClean = couponCode.trim().toUpperCase();
-      const { data: couponRow } = await supabase
-        .from("coupons")
-        .select("*")
-        .eq("code", codeClean)
-        .eq("is_active", true)
-        .maybeSingle();
+      const planToValidate = overridePlan || selectedPlanKey;
+      const priceToValidate =
+        planToValidate === "free"
+          ? 0
+          : planToValidate === "standard"
+          ? selectedCycleForUpgrade === "yearly"
+            ? planPricing.standard.yearly
+            : planPricing.standard.monthly
+          : selectedCycleForUpgrade === "yearly"
+          ? planPricing.premium.yearly
+          : planPricing.premium.monthly;
 
-      if (couponRow) {
-        setCouponDiscount(couponRow.discount_percent || 20);
+      const res = await validateCoupon(codeClean, planToValidate, priceToValidate);
+      if (res.valid) {
+        setCouponDiscount(res.discountType === "percent" ? res.discountValue : 0);
         setCouponApplied(true);
-        toast({
-          title: "Coupon Applied!",
-          description: `${couponRow.discount_percent || 20}% architectural discount applied.`,
+        setAppliedCouponData({
+          code: res.code,
+          label: res.label,
+          amount: res.amount,
+          discountType: res.discountType,
+          discountValue: res.discountValue,
+          isAnnouncementPromo: res.isAnnouncementPromo,
         });
+        toast({
+          title: res.isAnnouncementPromo ? "Announcement Promo Applied!" : "Coupon Applied!",
+          description: `${res.label} discount applied.`,
+        });
+        clearPendingCoupon();
       } else {
-        // Friendly fallback for demo coupons
-        if (codeClean === "LAUNCH20" || codeClean === "PROMO" || codeClean === "GEFLOW") {
-          setCouponDiscount(20);
-          setCouponApplied(true);
-          toast({
-            title: "Promo Code Applied!",
-            description: "20% special discount applied to your checkout.",
-          });
-        } else {
-          toast({
-            title: "Invalid Coupon Code",
-            description: "The coupon code provided is invalid or expired.",
-            variant: "destructive",
-          });
-        }
+        setCouponApplied(false);
+        setAppliedCouponData(null);
+        setCouponDiscount(0);
+        toast({
+          title: "Invalid Coupon Code",
+          description: res.reason || "The coupon code provided is invalid or expired.",
+          variant: "destructive",
+        });
       }
     } catch {
       toast({
@@ -399,6 +440,42 @@ export const UserSubscription = () => {
     }
   };
 
+  // Open Upgrade Modal
+  const openUpgradeModal = (planKey: string) => {
+    setSelectedPlanKey(planKey);
+    setSelectedCycleForUpgrade(billingCycle);
+    setUpgradeModalOpen(true);
+
+    if (!couponApplied) {
+      const urlCoupon = searchParams.get("coupon") || searchParams.get("code") || searchParams.get("promo");
+      const pending = getPendingCoupon();
+      const target = (urlCoupon || pending || "").trim().toUpperCase();
+      if (target) {
+        setCouponCode(target);
+        setTimeout(() => {
+          handleApplyCoupon(target, planKey);
+        }, 50);
+      }
+    }
+  };
+
+  // Check URL parameters on mount
+  useEffect(() => {
+    const urlPlan = searchParams.get("plan");
+    const urlCoupon = searchParams.get("coupon") || searchParams.get("code") || searchParams.get("promo");
+    const pendingCoupon = getPendingCoupon();
+
+    if (urlPlan && (urlPlan === "standard" || urlPlan === "premium")) {
+      openUpgradeModal(urlPlan);
+    } else if (urlCoupon || pendingCoupon) {
+      const target = (urlCoupon || pendingCoupon || "").trim().toUpperCase();
+      if (target) {
+        setCouponCode(target);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   // Execute Upgrade
   const handleConfirmUpgrade = async () => {
     setUpgradeBusy(true);
@@ -406,18 +483,8 @@ export const UserSubscription = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No active session found.");
 
-      const rawPrice =
-        selectedPlanKey === "free"
-          ? 0
-          : selectedPlanKey === "standard"
-          ? selectedCycleForUpgrade === "yearly"
-            ? planPricing.standard.yearly
-            : planPricing.standard.monthly
-          : selectedCycleForUpgrade === "yearly"
-          ? planPricing.premium.yearly
-          : planPricing.premium.monthly;
-
-      const finalPrice = Math.max(0, rawPrice * (1 - couponDiscount / 100));
+      const rawPrice = rawUpgradePrice;
+      const finalPrice = finalUpgradePrice;
 
       // 1. Update Profile Plan
       await supabase
@@ -1264,20 +1331,43 @@ export const UserSubscription = () => {
 
             {/* Coupon Field */}
             <div>
-              <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
-                PROMOTIONAL COUPON
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
+                  PROMOTIONAL COUPON
+                </label>
+                {couponApplied && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCouponApplied(false);
+                      setAppliedCouponData(null);
+                      setCouponDiscount(0);
+                      setCouponCode("");
+                    }}
+                    className="text-[10px] text-muted-foreground hover:text-destructive underline cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
               <div className="flex gap-2">
                 <Input
                   value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value)}
+                  onChange={(e) => {
+                    setCouponCode(e.target.value);
+                    if (couponApplied) {
+                      setCouponApplied(false);
+                      setAppliedCouponData(null);
+                      setCouponDiscount(0);
+                    }
+                  }}
                   placeholder="Enter discount code"
-                  className="h-11 rounded-2xl uppercase tracking-wider text-xs"
+                  className="h-11 rounded-2xl uppercase tracking-wider text-xs font-mono font-bold"
                   disabled={couponApplied}
                 />
                 <Button
                   type="button"
-                  onClick={handleApplyCoupon}
+                  onClick={() => handleApplyCoupon()}
                   disabled={validatingCoupon || couponApplied || !couponCode.trim()}
                   variant="outline"
                   className="h-11 px-4 rounded-2xl text-xs font-bold shrink-0"
@@ -1311,42 +1401,18 @@ export const UserSubscription = () => {
             <div className="p-4 rounded-2xl bg-sky-500/5 border border-sky-500/20 space-y-1.5">
               <div className="flex justify-between text-muted-foreground">
                 <span>Subtotal</span>
-                <span>
-                  $
-                  {selectedPlanKey === "premium"
-                    ? selectedCycleForUpgrade === "yearly"
-                      ? planPricing.premium.yearly
-                      : planPricing.premium.monthly
-                    : selectedPlanKey === "standard"
-                    ? selectedCycleForUpgrade === "yearly"
-                      ? planPricing.standard.yearly
-                      : planPricing.standard.monthly
-                    : 0}
-                </span>
+                <span>${rawUpgradePrice.toFixed(2)}</span>
               </div>
-              {couponApplied && (
+              {couponApplied && appliedCouponData && (
                 <div className="flex justify-between text-emerald-500 font-bold">
-                  <span>Discount ({couponDiscount}%)</span>
-                  <span>-20% Applied</span>
+                  <span>Discount ({appliedCouponData.label})</span>
+                  <span>-${calculatedDiscountAmount.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between font-bold text-sm text-foreground pt-1.5 border-t border-sky-500/20">
                 <span>Total Due Now</span>
                 <span className="text-base text-sky-400 font-black">
-                  $
-                  {Math.max(
-                    0,
-                    (selectedPlanKey === "premium"
-                      ? selectedCycleForUpgrade === "yearly"
-                        ? planPricing.premium.yearly
-                        : planPricing.premium.monthly
-                      : selectedPlanKey === "standard"
-                      ? selectedCycleForUpgrade === "yearly"
-                        ? planPricing.standard.yearly
-                        : planPricing.standard.monthly
-                      : 0) *
-                      (1 - couponDiscount / 100)
-                  ).toFixed(2)}
+                  ${finalUpgradePrice.toFixed(2)}
                 </span>
               </div>
             </div>

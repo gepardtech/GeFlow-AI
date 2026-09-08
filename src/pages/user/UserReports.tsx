@@ -185,7 +185,7 @@ export const UserReports = () => {
           .select("id, sale_id, product_id, product_name, quantity, unit_price, unit_cost, created_at, owner_user_id"),
         supabase
           .from("products")
-          .select("id, name, sku, category_id, retail_price, purchase_cost, stock_units, status")
+          .select("id, name, internal_sku, category_id, retail_price, purchase_cost, stock_units, status")
           .eq("business_id", active.id),
         supabase
           .from("product_categories")
@@ -213,7 +213,8 @@ export const UserReports = () => {
       let purData = purchasesData || [];
       let purItems = purchaseItemsData || [];
 
-      if ((!sData.length && !pData.length) || active.is_staff) {
+      // Only fallback if both queries failed and returned null
+      if (salesData === null && productsData === null) {
         const synced = await fetchSyncedReportsData(active.id, active.staff_role || "manager", Boolean(active.is_staff));
         if (synced.sales.length > 0 || synced.products.length > 0) {
           sData = synced.sales;
@@ -439,23 +440,17 @@ export const UserReports = () => {
       });
     }
 
-    // Default fallback if brand new workspace has no products yet
-    if (categoryTotals.size === 0) {
-      categoryTotals.set("Pharmaceuticals", 4500);
-      categoryTotals.set("Medical Supplies", 2800);
-      categoryTotals.set("Wellness & Nutrition", 1200);
-      categoryTotals.set("Safety & Hygiene", 950);
-    }
-
     const totalMixValue = Array.from(categoryTotals.values()).reduce((a, b) => a + b, 0) || 1;
-    const categoryMix: CategoryMixItem[] = Array.from(categoryTotals.entries())
-      .slice(0, 5)
-      .map(([name, val], idx) => ({
-        name: name.toUpperCase(),
-        value: val,
-        color: CATEGORY_COLORS[idx % CATEGORY_COLORS.length],
-        percentage: Math.max(1, Math.round((val / totalMixValue) * 100)),
-      }));
+    const categoryMix: CategoryMixItem[] = categoryTotals.size === 0
+      ? []
+      : Array.from(categoryTotals.entries())
+          .slice(0, 5)
+          .map(([name, val], idx) => ({
+            name: name.toUpperCase(),
+            value: val,
+            color: CATEGORY_COLORS[idx % CATEGORY_COLORS.length],
+            percentage: Math.max(1, Math.round((val / totalMixValue) * 100)),
+          }));
 
     // 4. Build Audit Ledger Rows based on selected Report Logic
     let auditLedger: LedgerItemDetail[] = [];

@@ -1,6 +1,44 @@
 import fs from "fs";
 import path from "path";
 
+export function isFakeOrDemoProduct(p: any): boolean {
+  if (!p) return false;
+  const name = String(p.name || "").toLowerCase().trim();
+  const sku = String(p.internal_sku || p.sku || "").toUpperCase().trim();
+  const id = String(p.id || "");
+
+  if (
+    name.includes("barcode scanner handheld") ||
+    name.includes("thermal receipt paper 80mm") ||
+    name.includes("heavy duty cash drawer") ||
+    name.includes("thermal pos receipt printer") ||
+    name.includes("tablet countertop stand") ||
+    name.includes("barcode price label stickers") ||
+    name === "organic espresso roast" ||
+    name === "caramel macchiato syrup" ||
+    name === "butter croissant (pack of 4)" ||
+    name === "earl grey reserve loose leaf" ||
+    name === "ceramic artisan mug 12oz"
+  ) {
+    return true;
+  }
+
+  if (
+    ["SCAN-WL-01", "PPR-THM-80", "CSH-DRW-HD", "PRN-POS-80", "STN-TAB-360", "LBL-STK-5030"].includes(sku)
+  ) {
+    return true;
+  }
+
+  if (
+    (id.includes("_01") || id.includes("_02") || id.includes("_03") || id.includes("_04") || id.includes("_05") || id.includes("_06")) &&
+    (id.startsWith("prod_2fa7e2a5") || id.startsWith("prod_bcf76970") || id.startsWith("prod_espresso") || id.startsWith("prod_latte") || id.startsWith("prod_croissant") || id.startsWith("prod_tea") || id.startsWith("prod_cup"))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export interface SyncedProduct {
   id: string;
   business_id: string;
@@ -83,6 +121,7 @@ export interface BusinessDataUnit {
   businessId: string;
   businessName?: string;
   ownerUserId?: string;
+  settings?: any;
   products: SyncedProduct[];
   sales: SyncedSale[];
   sale_items: SyncedSaleItem[];
@@ -117,21 +156,11 @@ export class BusinessDataSyncService {
         const raw = fs.readFileSync(DATA_FILE, "utf-8");
         const parsed = JSON.parse(raw);
         const businesses = parsed.businesses || {};
-        // Purge any legacy fake coffee products
+        // Purge any legacy fake demo products
         Object.keys(businesses).forEach((bizId) => {
           if (businesses[bizId] && Array.isArray(businesses[bizId].products)) {
             businesses[bizId].products = businesses[bizId].products.filter(
-              (p: any) =>
-                !p.id?.startsWith("prod_espresso") &&
-                !p.id?.startsWith("prod_latte") &&
-                !p.id?.startsWith("prod_croissant") &&
-                !p.id?.startsWith("prod_tea") &&
-                !p.id?.startsWith("prod_cup") &&
-                p.name !== "Organic Espresso Roast" &&
-                p.name !== "Caramel Macchiato Syrup" &&
-                p.name !== "Butter Croissant (Pack of 4)" &&
-                p.name !== "Earl Grey Reserve Loose Leaf" &&
-                p.name !== "Ceramic Artisan Mug 12oz"
+              (p: any) => !isFakeOrDemoProduct(p)
             );
           }
         });
@@ -162,6 +191,7 @@ export class BusinessDataSyncService {
         businessId,
         businessName: businessName || "Store",
         ownerUserId: ownerUserId || "",
+        settings: {},
         products: [],
         sales: [],
         sale_items: [],
@@ -180,24 +210,37 @@ export class BusinessDataSyncService {
       if (businessName) {
         this.store.businesses[businessId].businessName = businessName;
       }
-      // Ensure no mock coffee items exist
+      // Ensure no mock demo items exist
       if (Array.isArray(this.store.businesses[businessId].products)) {
         this.store.businesses[businessId].products = this.store.businesses[businessId].products.filter(
-          (p: any) =>
-            !p.id?.startsWith("prod_espresso") &&
-            !p.id?.startsWith("prod_latte") &&
-            !p.id?.startsWith("prod_croissant") &&
-            !p.id?.startsWith("prod_tea") &&
-            !p.id?.startsWith("prod_cup") &&
-            p.name !== "Organic Espresso Roast" &&
-            p.name !== "Caramel Macchiato Syrup" &&
-            p.name !== "Butter Croissant (Pack of 4)" &&
-            p.name !== "Earl Grey Reserve Loose Leaf" &&
-            p.name !== "Ceramic Artisan Mug 12oz"
+          (p: any) => !isFakeOrDemoProduct(p)
         );
       }
     }
-    return this.store.businesses[businessId];
+
+    const unit = this.store.businesses[businessId];
+
+    // Maintain products array strictly reflecting real business catalog (never seed mock/demo items)
+    if (!unit.products) {
+      unit.products = [];
+    } else {
+      unit.products = unit.products.filter((p: any) => !isFakeOrDemoProduct(p));
+    }
+
+    return unit;
+  }
+
+  public getSettings(businessId: string): any {
+    const unit = this.getOrCreateBusinessUnit(businessId);
+    return unit.settings || {};
+  }
+
+  public saveSettings(businessId: string, settings: any): { success: boolean; settings: any } {
+    const unit = this.getOrCreateBusinessUnit(businessId);
+    unit.settings = { ...(unit.settings || {}), ...settings };
+    unit.lastSyncedAt = new Date().toISOString();
+    this.persist();
+    return { success: true, settings: unit.settings };
   }
 
   /**
@@ -286,17 +329,23 @@ export class BusinessDataSyncService {
       categories?: any[];
       ownerUserId?: string;
       businessName?: string;
+      replace?: boolean;
     }
   ): { success: boolean; syncedCounts: Record<string, number> } {
     const unit = this.getOrCreateBusinessUnit(businessId, payload.ownerUserId, payload.businessName);
     const now = new Date().toISOString();
 
     let pCount = 0;
-    if (Array.isArray(payload.products) && payload.products.length > 0) {
-      payload.products.forEach((p) => {
+    if (Array.isArray(payload.products)) {
+      const cleanList = payload.products.filter((p) => !isFakeOrDemoProduct(p));
+      if (payload.replace) {
+        unit.products = [];
+      }
+      cleanList.forEach((p) => {
         const idx = unit.products.findIndex((existing) => existing.id === p.id);
         const normalized: SyncedProduct = {
           ...p,
+          id: p.id || `prod_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
           business_id: businessId,
           owner_user_id: p.owner_user_id || unit.ownerUserId || payload.ownerUserId,
           purchase_cost: Number(p.purchase_cost) || 0,
@@ -314,6 +363,8 @@ export class BusinessDataSyncService {
         }
         pCount++;
       });
+      // Always guarantee no demo products
+      unit.products = unit.products.filter((p) => !isFakeOrDemoProduct(p));
     }
 
     let sCount = 0;

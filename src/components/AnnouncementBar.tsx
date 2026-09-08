@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Megaphone,
@@ -12,16 +13,19 @@ import {
   Sparkles,
   Calendar,
   ArrowRight,
+  Ticket,
 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  detectAnnouncementCoupon as detectCouponDetailed,
+  setPendingCoupon,
+} from "@/lib/couponHelper";
 
 export interface Announcement {
   id: string;
@@ -34,6 +38,11 @@ export interface Announcement {
   audience: string;
   created_at?: string;
 }
+
+export const detectAnnouncementCoupon = (a: { link_url?: string | null; body?: string | null; title?: string | null; variant?: string | null } | null): string | null => {
+  const res = detectCouponDetailed(a);
+  return res ? res.code : null;
+};
 
 interface Props {
   audience: "public" | "users" | "admins";
@@ -83,6 +92,7 @@ const variantStyles = (v: string) => {
 };
 
 export const AnnouncementBar = ({ audience, position = "top" }: Props) => {
+  const navigate = useNavigate();
   const [items, setItems] = useState<Announcement[]>([]);
   const [idx, setIdx] = useState(0);
   const [closed, setClosed] = useState<Set<string>>(new Set());
@@ -127,15 +137,32 @@ export const AnnouncementBar = ({ audience, position = "top" }: Props) => {
   const IconComp = style.icon;
 
   const handleCtaClick = () => {
+    const code = detectAnnouncementCoupon(cur);
+    if (code) {
+      setPendingCoupon(code);
+    }
     setSelectedAnnouncement(cur);
   };
 
-  const handleRedirect = (url: string) => {
+  const handleRedirect = (url: string, couponCode?: string | null) => {
     if (!url) return;
-    if (url.startsWith("http://") || url.startsWith("https://")) {
-      window.open(url, "_blank", "noopener,noreferrer");
+    let target = url.trim();
+
+    const code = couponCode || detectAnnouncementCoupon(selectedAnnouncement || cur);
+    if (code) {
+      setPendingCoupon(code);
+
+      // Check if target url already has the coupon param
+      const hasCoupon = /[?&](?:coupon|code|promo)=/i.test(target);
+      if (!hasCoupon && (target.includes("/checkout") || target.includes("/pricing") || target.includes("/subscription") || target.startsWith("/"))) {
+        target += (target.includes("?") ? "&" : "?") + `coupon=${encodeURIComponent(code)}`;
+      }
+    }
+
+    if (target.startsWith("http://") || target.startsWith("https://")) {
+      window.open(target, "_blank", "noopener,noreferrer");
     } else {
-      window.location.href = url;
+      navigate(target);
     }
   };
 
@@ -245,6 +272,30 @@ export const AnnouncementBar = ({ audience, position = "top" }: Props) => {
             {/* Body Content */}
             <div className="p-5 sm:p-6 space-y-4 max-h-[55vh] overflow-y-auto text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">
               {selectedAnnouncement.body}
+
+              {/* Automatic Promo Code Detection Callout */}
+              {(() => {
+                const detectedCode = detectAnnouncementCoupon(selectedAnnouncement);
+                if (!detectedCode) return null;
+                return (
+                  <div className="mt-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Ticket className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                          Promo Coupon Code
+                        </p>
+                        <p className="font-mono font-black text-sm text-foreground tracking-wider">
+                          {detectedCode}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full flex-shrink-0">
+                      ✓ Auto-applied at checkout
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Footer with Primary Action CTA */}
@@ -262,7 +313,8 @@ export const AnnouncementBar = ({ audience, position = "top" }: Props) => {
                 <Button
                   type="button"
                   onClick={() => {
-                    handleRedirect(selectedAnnouncement.link_url!);
+                    const code = detectAnnouncementCoupon(selectedAnnouncement);
+                    handleRedirect(selectedAnnouncement.link_url!, code);
                     setSelectedAnnouncement(null);
                   }}
                   className={`w-full sm:w-auto text-xs font-bold rounded-xl px-5 gap-1.5 shadow-sm ${
@@ -272,17 +324,37 @@ export const AnnouncementBar = ({ audience, position = "top" }: Props) => {
                   <span>{selectedAnnouncement.link_label?.trim() || "Proceed to Target Page"}</span>
                   <ExternalLink className="h-3.5 w-3.5" />
                 </Button>
-              ) : (
-                <Button
-                  type="button"
-                  onClick={() => setSelectedAnnouncement(null)}
-                  className={`w-full sm:w-auto text-xs font-bold rounded-xl px-5 shadow-sm ${
-                    variantStyles(selectedAnnouncement.variant).btn
-                  }`}
-                >
-                  Got It
-                </Button>
-              )}
+              ) : (() => {
+                const code = detectAnnouncementCoupon(selectedAnnouncement);
+                if (code) {
+                  return (
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        handleRedirect(`/checkout?coupon=${encodeURIComponent(code)}`, code);
+                        setSelectedAnnouncement(null);
+                      }}
+                      className={`w-full sm:w-auto text-xs font-bold rounded-xl px-5 gap-1.5 shadow-sm ${
+                        variantStyles(selectedAnnouncement.variant).btn
+                      }`}
+                    >
+                      <span>Claim & Go to Checkout</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  );
+                }
+                return (
+                  <Button
+                    type="button"
+                    onClick={() => setSelectedAnnouncement(null)}
+                    className={`w-full sm:w-auto text-xs font-bold rounded-xl px-5 shadow-sm ${
+                      variantStyles(selectedAnnouncement.variant).btn
+                    }`}
+                  >
+                    Got It
+                  </Button>
+                );
+              })()}
             </DialogFooter>
           </DialogContent>
         </Dialog>

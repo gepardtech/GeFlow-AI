@@ -433,7 +433,7 @@ app.get("/api/sync/business-data", (req: Request, res: Response) => {
 // Ingest master batch sync (from owner client / Supabase)
 app.post("/api/sync/batch", (req: Request, res: Response) => {
   try {
-    const { businessId, products, sales, sale_items, stock_movements, categories, ownerUserId, businessName } = req.body || {};
+    const { businessId, products, sales, sale_items, stock_movements, categories, ownerUserId, businessName, replace } = req.body || {};
     if (!businessId) {
       return res.status(400).json({ success: false, error: "businessId is required." });
     }
@@ -445,6 +445,7 @@ app.post("/api/sync/batch", (req: Request, res: Response) => {
       categories,
       ownerUserId,
       businessName,
+      replace,
     });
     res.json(result);
   } catch (err: any) {
@@ -556,6 +557,33 @@ app.delete("/api/sync/held-orders", (req: Request, res: Response) => {
     }
     const ok = businessDataSyncService.deleteHeldOrder(businessId, orderId);
     res.json({ success: ok });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Synchronize Business & POS Settings across terminals and employee sessions
+app.get("/api/sync/settings", (req: Request, res: Response) => {
+  try {
+    const businessId = (req.query.businessId as string) || "";
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "businessId query parameter is required." });
+    }
+    const settings = businessDataSyncService.getSettings(businessId);
+    res.json({ success: true, settings });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/sync/settings", (req: Request, res: Response) => {
+  try {
+    const { businessId, settings } = req.body || {};
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "businessId is required." });
+    }
+    const result = businessDataSyncService.saveSettings(businessId, settings || {});
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }

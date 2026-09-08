@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import Layout from "@/components/Layout";
-import { Check, Minus } from "lucide-react";
+import { Check, Minus, Tag } from "lucide-react";
 import { useMoney } from "@/lib/currency";
 import { usePricingPlans } from "@/hooks/usePricingPlans";
+import { getPendingCoupon } from "@/lib/couponHelper";
 import {
   Accordion,
   AccordionContent,
@@ -49,15 +50,33 @@ const Cell = ({ value }: { value: string | boolean }) => {
 };
 
 const Pricing = () => {
+  const [searchParams] = useSearchParams();
   const { price } = useMoney({ scope: "platform" });
   const { priceOf, featuresOf, byKey, badgeOf, isPopular, badgePositionOf, nameOf, taglineOf } = usePricingPlans();
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly");
+
+  const urlCoupon = searchParams.get("coupon") || searchParams.get("code") || searchParams.get("promo");
+  const activePromoCode = (urlCoupon || getPendingCoupon() || "").trim().toUpperCase();
+
+  const getCheckoutUrl = (plan: string, period: string) => {
+    let url = `/checkout?plan=${encodeURIComponent(plan)}&period=${encodeURIComponent(period)}`;
+    if (activePromoCode) {
+      url += `&coupon=${encodeURIComponent(activePromoCode)}`;
+    }
+    return url;
+  };
 
   return (
     <Layout>
       {/* Header */}
       <section className="pt-20 pb-10">
         <div className="container mx-auto px-4 text-center">
+          {activePromoCode && (
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-bold mb-4 animate-in fade-in">
+              <Tag className="w-3.5 h-3.5" />
+              <span>Promo Code {activePromoCode} Active — Discount applied at checkout</span>
+            </div>
+          )}
           <h1 className="text-4xl md:text-5xl font-bold mb-4 leading-tight">
             Choose the Right <span className="text-gradient">Plan</span>
             <br />
@@ -157,7 +176,7 @@ const Pricing = () => {
                     </span>
                   )}
                   <Button className="cta-btn w-full rounded-full" asChild>
-                    <Link to={`/checkout?plan=standard&period=${billingPeriod}`}>CHOOSE PLAN</Link>
+                    <Link to={getCheckoutUrl("standard", billingPeriod)}>CHOOSE PLAN</Link>
                   </Button>
                 </div>
               );
@@ -194,7 +213,7 @@ const Pricing = () => {
                     </span>
                   )}
                   <Button className="cta-btn w-full rounded-full" asChild>
-                    <Link to={`/checkout?plan=premium&period=${billingPeriod}`}>CHOOSE PLAN</Link>
+                    <Link to={getCheckoutUrl("premium", billingPeriod)}>CHOOSE PLAN</Link>
                   </Button>
                 </div>
               );
@@ -267,7 +286,7 @@ const Pricing = () => {
                     ))}
                   </ul>
                   <Button className="cta-btn w-full rounded-full" asChild>
-                    <Link to="/checkout?plan=standard&period=lifetime">UNLOCK LIFETIME</Link>
+                    <Link to={getCheckoutUrl("standard", "lifetime")}>UNLOCK LIFETIME</Link>
                   </Button>
                 </div>
               );
@@ -297,7 +316,7 @@ const Pricing = () => {
                     ))}
                   </ul>
                   <Button className="cta-btn w-full rounded-full" asChild>
-                    <Link to="/checkout?plan=premium&period=lifetime">UNLOCK LIFETIME</Link>
+                    <Link to={getCheckoutUrl("premium", "lifetime")}>UNLOCK LIFETIME</Link>
                   </Button>
                 </div>
               );

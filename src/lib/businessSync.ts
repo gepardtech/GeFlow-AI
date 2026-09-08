@@ -1,5 +1,43 @@
 import { supabase } from "@/integrations/supabase/client";
 
+export function isDemoProduct(p: any): boolean {
+  if (!p) return false;
+  const name = String(p.name || "").toLowerCase().trim();
+  const sku = String(p.internal_sku || p.sku || "").toUpperCase().trim();
+  const id = String(p.id || "");
+
+  if (
+    name.includes("barcode scanner handheld") ||
+    name.includes("thermal receipt paper 80mm") ||
+    name.includes("heavy duty cash drawer") ||
+    name.includes("thermal pos receipt printer") ||
+    name.includes("tablet countertop stand") ||
+    name.includes("barcode price label stickers") ||
+    name === "organic espresso roast" ||
+    name === "caramel macchiato syrup" ||
+    name === "butter croissant (pack of 4)" ||
+    name === "earl grey reserve loose leaf" ||
+    name === "ceramic artisan mug 12oz"
+  ) {
+    return true;
+  }
+
+  if (
+    ["SCAN-WL-01", "PPR-THM-80", "CSH-DRW-HD", "PRN-POS-80", "STN-TAB-360", "LBL-STK-5030"].includes(sku)
+  ) {
+    return true;
+  }
+
+  if (
+    (id.includes("_01") || id.includes("_02") || id.includes("_03") || id.includes("_04") || id.includes("_05") || id.includes("_06")) &&
+    (id.startsWith("prod_2fa7e2a5") || id.startsWith("prod_bcf76970") || id.startsWith("prod_espresso") || id.startsWith("prod_latte") || id.startsWith("prod_croissant") || id.startsWith("prod_tea") || id.startsWith("prod_cup"))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export interface SyncedProductItem {
   id: string;
   business_id: string;
@@ -58,7 +96,8 @@ export async function syncOwnerDataToServer(businessId: string, ownerUserId?: st
       supabase.from("product_categories").select("*"),
     ]);
 
-    if (products && products.length > 0) {
+    if (products !== null && Array.isArray(products)) {
+      const cleanProducts = products.filter((p: any) => !isDemoProduct(p));
       await fetch("/api/sync/batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -66,7 +105,8 @@ export async function syncOwnerDataToServer(businessId: string, ownerUserId?: st
           businessId,
           ownerUserId,
           businessName,
-          products,
+          products: cleanProducts,
+          replace: true,
           sales: sales || [],
           sale_items: items || [],
           stock_movements: movements || [],
@@ -103,12 +143,13 @@ export async function fetchSyncedProducts(
     const { data, error } = await query.order("name");
 
     if (!error && data && data.length > 0) {
+      const cleanData = (data as SyncedProductItem[]).filter((p) => !isDemoProduct(p));
       try {
-        localStorage.setItem(`geflow_products_${businessId}`, JSON.stringify(data));
+        localStorage.setItem(`geflow_products_${businessId}`, JSON.stringify(cleanData));
       } catch {
         /* ignore */
       }
-      return data as SyncedProductItem[];
+      return cleanData;
     }
   } catch (err) {
     console.warn("Supabase direct query:", err);
@@ -119,8 +160,14 @@ export async function fetchSyncedProducts(
     const res = await fetch(`/api/sync/business-data?businessId=${encodeURIComponent(businessId)}&role=${encodeURIComponent(options.role || "manager")}`);
     if (res.ok) {
       const data = await res.json();
-      if (data.success && Array.isArray(data.products) && data.products.length > 0) {
-        return data.products as SyncedProductItem[];
+      if (data.success && Array.isArray(data.products)) {
+        const cleanProducts = (data.products as SyncedProductItem[]).filter((p) => !isDemoProduct(p));
+        try {
+          localStorage.setItem(`geflow_products_${businessId}`, JSON.stringify(cleanProducts));
+        } catch {
+          /* ignore */
+        }
+        return cleanProducts;
       }
     }
   } catch (err) {
@@ -131,13 +178,50 @@ export async function fetchSyncedProducts(
   try {
     const cached = localStorage.getItem(`geflow_products_${businessId}`);
     if (cached) {
-      return JSON.parse(cached) as SyncedProductItem[];
+      const parsed = JSON.parse(cached) as SyncedProductItem[];
+      const cleaned = parsed.filter((p: any) => !isDemoProduct(p));
+      return cleaned;
     }
   } catch {
     /* ignore */
   }
 
   return [];
+}
+
+// Global purge of legacy cached demo items in browser localStorage
+if (typeof window !== "undefined") {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith("geflow_products_") || key.startsWith("cached_reports_"))) {
+        const val = localStorage.getItem(key);
+        if (
+          val &&
+          (val.includes("prod_espresso") ||
+            val.includes("Organic Espresso") ||
+            val.includes("Caramel Macchiato") ||
+            val.includes("Butter Croissant") ||
+            val.includes("Barcode Scanner") ||
+            val.includes("Receipt Paper") ||
+            val.includes("Cash Drawer") ||
+            val.includes("Receipt Printer") ||
+            val.includes("Tablet Stand") ||
+            val.includes("Price Label Stickers") ||
+            val.includes("SCAN-WL-01") ||
+            val.includes("PPR-THM-80") ||
+            val.includes("CSH-DRW-HD") ||
+            val.includes("PRN-POS-80"))
+        ) {
+          keysToRemove.push(key);
+        }
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch {
+    /* ignore */
+  }
 }
 
 /**
@@ -182,7 +266,7 @@ export async function fetchSyncedReportsData(
 
     if (salesData || productsData || purchasesData) {
       return {
-        products: productsData || [],
+        products: (productsData || []).filter((p: any) => !isDemoProduct(p)),
         sales: salesData || [],
         sale_items: itemsData || [],
         stock_movements: movementsData || [],
@@ -202,7 +286,7 @@ export async function fetchSyncedReportsData(
       const data = await res.json();
       if (data.success) {
         return {
-          products: data.products || [],
+          products: (data.products || []).filter((p: any) => !isDemoProduct(p)),
           sales: data.sales || [],
           sale_items: data.sale_items || [],
           stock_movements: data.stock_movements || [],

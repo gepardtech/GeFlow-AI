@@ -1,0 +1,34 @@
+{
+  "businesses": {
+    "2fa7e2a5-1937-4545-a7f6-06354b50c8b8": {
+      "businessId": "2fa7e2a5-1937-4545-a7f6-06354b50c8b8",
+      "businessName": "Store",
+      "ownerUserId": "",
+      "settings": {},
+      "products": [],
+      "sales": [],
+      "sale_items": [],
+      "stock_movements": [],
+      "held_orders": [],
+      "purchases": [],
+      "purchase_items": [],
+      "categories": [],
+      "lastSyncedAt": "2026-09-08T14:51:41.727Z"
+    },
+    "bcf76970-8113-40c8-9516-756798ed39c2": {
+      "businessId": "bcf76970-8113-40c8-9516-756798ed39c2",
+      "businessName": "Store",
+      "ownerUserId": "",
+      "settings": {},
+      "products": [],
+      "sales": [],
+      "sale_items": [],
+      "stock_movements": [],
+      "held_orders": [],
+      "purchases": [],
+      "purchase_items": [],
+      "categories": [],
+      "lastSyncedAt": "2026-09-08T14:51:45.159Z"
+    }
+  }
+}

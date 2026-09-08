@@ -34,6 +34,12 @@ export interface ReceiptData {
   discount: number;
   taxRate: number;
   tax: number;
+  secondaryTax?: number;
+  secondaryTaxRate?: number;
+  secondaryTaxLabel?: string;
+  taxLabel?: string;
+  taxPricingMode?: "exclusive" | "inclusive";
+  taxRegistrationNumber?: string;
   total: number;
   payMethod: "cash" | "card";
   cashGiven: number;
@@ -62,7 +68,10 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
 
   const sym = data?.symbol || "$";
   const showLogo = data?.showLogoOnReceipt !== false;
-  const showTax = data?.showTaxBreakdown !== false;
+  const isTaxInclusive = data?.taxPricingMode === "inclusive";
+  const taxName = (data?.taxLabel || "Tax").toUpperCase();
+  const showTax = data?.showTaxBreakdown !== false && Number(data?.taxRate || 0) > 0 && Number(data?.tax || 0) > 0;
+  const showSecTax = data?.showTaxBreakdown !== false && Number(data?.secondaryTaxRate || 0) > 0 && Number(data?.secondaryTax || 0) > 0;
   const showCashier = data?.showCashierName !== false;
   const showBarcode = data?.showBarcodeOnReceipt !== false;
   const headerTitle = data?.receiptHeader || data?.businessName || "GEFLOW STORE";
@@ -92,6 +101,24 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
           <div class="bars">||| | |||| | ||||| || | |||</div>
           <div class="bar-num">${data.invoiceNo}-RETURN-AUTH</div>
          </div>`
+      : "";
+
+    const taxVatRow = data.taxRegistrationNumber
+      ? `<div class="meta-row" style="margin-top:2px;"><span>TAX / VAT REG:</span><span>${data.taxRegistrationNumber}</span></div>`
+      : "";
+
+    const taxRowHtml = showTax
+      ? `<div class="calc-row muted">
+          <span>${isTaxInclusive ? "INCL. " : ""}${taxName} (${data.taxRate}%)</span>
+          <span>${isTaxInclusive ? "" : "+"}${money(sym, data.tax)}</span>
+        </div>`
+      : "";
+
+    const secTaxRowHtml = showSecTax && data.secondaryTax
+      ? `<div class="calc-row muted">
+          <span>${(data.secondaryTaxLabel || "SURCHARGE").toUpperCase()} (${data.secondaryTaxRate}%)</span>
+          <span>+${money(sym, data.secondaryTax)}</span>
+        </div>`
       : "";
 
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${data.invoiceNo}</title>
@@ -133,6 +160,7 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
       <div class="meta">
         <div class="meta-row"><span>DATE: ${fmtDate(data.date)}</span><span>TIME: ${fmtTime(data.date)}</span></div>
         <div class="meta-row"><span>RECEIPT #: ${data.invoiceNo}</span>${showCashier && data.cashierName ? `<span>CASHIER: ${data.cashierName}</span>` : ""}</div>
+        ${taxVatRow}
         ${(data.customerName || data.customerPhone) ? `<div class="meta-row" style="margin-top:2px;font-weight:bold;"><span>CUSTOMER: ${data.customerName || "Walk-in"}</span>${data.customerPhone ? `<span>TEL: ${data.customerPhone}</span>` : ""}</div>` : ""}
         ${data.patientNote ? `<div class="meta-row" style="margin-top:2px;font-size:9px;color:#444;"><span>RX / NOTE: ${data.patientNote}</span></div>` : ""}
       </div>
@@ -146,7 +174,8 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
       <div class="dash"></div>
       <div class="calc-row"><span>SUBTOTAL</span><span>${money(sym, data.subtotal)}</span></div>
       ${data.discount > 0 ? `<div class="calc-row muted"><span>DISCOUNT</span><span>-${money(sym, data.discount)}</span></div>` : ""}
-      ${showTax ? `<div class="calc-row muted"><span>TAX (${data.taxRate}%)</span><span>${money(sym, data.tax)}</span></div>` : ""}
+      ${taxRowHtml}
+      ${secTaxRowHtml}
       <div class="total-due"><span>TOTAL DUE</span><span>${money(sym, data.total)}</span></div>
       <div class="calc-row muted" style="margin-top:4px;"><span>TENDER (${data.payMethod.toUpperCase()})</span><span>${data.payMethod === "cash" ? money(sym, data.cashGiven) : money(sym, data.total)}</span></div>
       ${data.payMethod === "cash" ? `<div class="calc-row muted"><span>CHANGE</span><span>${money(sym, data.changeDue)}</span></div>` : ""}
@@ -178,7 +207,7 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
     };
     if (frame.contentWindow?.document.readyState === "complete") setTimeout(run, 200);
     else frame.onload = () => setTimeout(run, 200);
-  }, [data, sym, showLogo, showTax, showCashier, showBarcode, headerTitle, subheader, storeAddress, footerMsg]);
+  }, [data, sym, showLogo, showTax, showCashier, showBarcode, headerTitle, subheader, storeAddress, footerMsg, isTaxInclusive, showSecTax, taxName]);
 
   useEffect(() => {
     if (open && data && data.autoPrintReceipt && !printedRef.current) {
@@ -332,8 +361,14 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
               )}
               {showTax && (
                 <div className="flex justify-between text-zinc-500 dark:text-zinc-400">
-                  <span>TAX ({data.taxRate}%)</span>
-                  <span>{money(sym, data.tax)}</span>
+                  <span>{isTaxInclusive ? "INCL. " : ""}{taxName} ({data.taxRate}%)</span>
+                  <span>{isTaxInclusive ? "" : "+"}{money(sym, data.tax)}</span>
+                </div>
+              )}
+              {showSecTax && data.secondaryTax && data.secondaryTax > 0 && (
+                <div className="flex justify-between text-zinc-500 dark:text-zinc-400">
+                  <span>{(data.secondaryTaxLabel || "SURCHARGE").toUpperCase()} ({data.secondaryTaxRate}%)</span>
+                  <span>+{money(sym, data.secondaryTax)}</span>
                 </div>
               )}
               <div className="flex justify-between font-black text-xs pt-1.5 border-t border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100">

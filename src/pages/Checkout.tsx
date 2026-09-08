@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,14 @@ import { usePricingPlans } from "@/hooks/usePricingPlans";
 import { PayPalScriptProvider } from "@paypal/react-paypal-js";
 import { usePaymentGateways } from "@/hooks/usePaymentGateways";
 import { PayPalCardSection, PayPalWalletSection, CaptureResult } from "@/components/checkout/PayPalPayment";
+import {
+  validateCoupon,
+  getPendingCoupon,
+  clearPendingCoupon,
+  findActiveAnnouncementCoupon,
+  ValidatedCouponResult,
+} from "@/lib/couponHelper";
+import { Tag } from "lucide-react";
 
 
 type Plan = "standard" | "premium";
@@ -90,45 +98,96 @@ const Checkout = () => {
   const [paymentMethod, setPaymentMethod] = useState<"card" | "paypal">("card");
   const [paypalEmail, setPaypalEmail] = useState("");
   const [coupon, setCoupon] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; amount: number; label: string } | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    amount: number;
+    label: string;
+    discountType?: "percent" | "amount";
+    discountValue?: number;
+    isAnnouncementPromo?: boolean;
+  } | null>(null);
   const [couponError, setCouponError] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
   const [invoice, setInvoice] = useState<InvoiceData | null>(null);
   const [showInvoice, setShowInvoice] = useState(false);
   const [isAdminEmail, setIsAdminEmail] = useState(false);
 
-  const discount = appliedCoupon?.amount ?? 0;
+  const discount = useMemo(() => {
+    if (!appliedCoupon) return 0;
+    if (appliedCoupon.discountType === "percent" && appliedCoupon.discountValue) {
+      return +((subtotal * appliedCoupon.discountValue) / 100).toFixed(2);
+    }
+    return Math.min(subtotal, appliedCoupon.amount);
+  }, [appliedCoupon, subtotal]);
+
   const total = useMemo(() => +(Math.max(subtotal - discount, 0) + tax).toFixed(2), [subtotal, discount, tax]);
 
-  const applyCoupon = async () => {
-    const code = coupon.trim().toUpperCase();
+  const applyCoupon = useCallback(async (codeToApply?: string) => {
+    const raw = codeToApply !== undefined ? codeToApply : coupon;
+    const code = raw.trim().toUpperCase();
     if (!code) return;
+    setCoupon(code);
     setCouponLoading(true);
     setCouponError("");
-    // Validate via a secure function so the full coupon table is never exposed.
-    const { data, error } = await supabase.rpc("validate_coupon", {
-      _code: code,
-      _plan: plan,
-      _subtotal: subtotal,
-    });
-    setCouponLoading(false);
-    const result = Array.isArray(data) ? data[0] : data;
-    if (error || !result) {
+
+    try {
+      const res = await validateCoupon(code, plan, subtotal);
+      if (res.valid) {
+        setAppliedCoupon({
+          code: res.code,
+          amount: res.amount,
+          label: res.label,
+          discountType: res.discountType,
+          discountValue: res.discountValue,
+          isAnnouncementPromo: res.isAnnouncementPromo,
+        });
+        setCouponError("");
+        toast({
+          title: res.isAnnouncementPromo ? "Announcement Promo Applied!" : "Promo Coupon Applied!",
+          description: `${res.label} activated.`,
+        });
+        clearPendingCoupon();
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(res.reason || "Invalid or expired coupon code.");
+      }
+    } catch (e: any) {
+      console.warn("Coupon validation error", e);
       setAppliedCoupon(null);
-      setCouponError("Invalid or expired coupon code.");
-      return;
+      setCouponError("Unable to validate coupon code.");
+    } finally {
+      setCouponLoading(false);
     }
-    if (!result.valid) {
-      setAppliedCoupon(null);
-      setCouponError(result.reason || "Invalid or expired coupon code.");
-      return;
-    }
-    const amount = Number(result.amount) || 0;
-    const label = result.label || "";
-    setAppliedCoupon({ code, amount: +amount.toFixed(2), label });
-    setCouponError("");
-    toast({ title: "Coupon applied!", description: `${label} activated.` });
-  };
+  }, [coupon, plan, subtotal, toast]);
+
+  // Automatically detect and apply promo coupon from URL params, storage, or active announcements
+  useEffect(() => {
+    let isCancelled = false;
+
+    const detectAndApply = async () => {
+      const urlCoupon = params.get("coupon") || params.get("code") || params.get("promo");
+      const pendingCoupon = getPendingCoupon();
+      let targetCoupon = (urlCoupon || pendingCoupon).trim().toUpperCase();
+
+      if (!targetCoupon && !appliedCoupon) {
+        const announcementCoupon = await findActiveAnnouncementCoupon();
+        if (announcementCoupon?.code && !isCancelled) {
+          targetCoupon = announcementCoupon.code;
+        }
+      }
+
+      if (targetCoupon && subtotal > 0 && !appliedCoupon && !isCancelled) {
+        setCoupon(targetCoupon);
+        await applyCoupon(targetCoupon);
+      }
+    };
+
+    detectAndApply();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [params, subtotal, plan, appliedCoupon, applyCoupon]);
 
 
   const ctaLabel = period === "lifetime" ? "AUTHORIZE & START NODE" : "AUTHORIZE & START TRIAL";
@@ -483,14 +542,31 @@ const Checkout = () => {
                     value={coupon}
                     onChange={(e) => { setCoupon(e.target.value); setCouponError(""); }}
                     placeholder="Enter code"
-                    className="h-10 uppercase"
+                    className="h-10 uppercase font-mono font-bold"
                   />
-                  <Button type="button" onClick={applyCoupon} disabled={couponLoading} variant="outline" className="h-10 px-4 text-xs font-bold tracking-wider">
+                  <Button type="button" onClick={() => applyCoupon()} disabled={couponLoading} variant="outline" className="h-10 px-4 text-xs font-bold tracking-wider">
                     {couponLoading ? "..." : "APPLY"}
                   </Button>
                 </div>
                 {couponError && <p className="text-xs text-destructive mt-2">{couponError}</p>}
-                {appliedCoupon && <p className="text-xs text-primary mt-2 font-semibold">✓ {appliedCoupon.label} applied</p>}
+                {appliedCoupon && (
+                  <div className="flex items-center justify-between mt-2.5 p-2 rounded-lg bg-primary/10 border border-primary/20 text-xs">
+                    <span className="font-semibold text-primary flex items-center gap-1">
+                      <span>✓</span>
+                      <span>{appliedCoupon.label} ({appliedCoupon.code}) applied</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAppliedCoupon(null);
+                        setCoupon("");
+                      }}
+                      className="text-muted-foreground hover:text-destructive text-[11px] underline ml-2 cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-border" />

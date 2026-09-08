@@ -15,7 +15,7 @@ import {
 import BulkReplenishmentDialog, { DeficitProduct } from "@/components/inventory/BulkReplenishmentDialog";
 import StockUpdateDialog from "@/components/inventory/StockUpdateDialog";
 import type { ProductRecord } from "@/components/inventory/ProductDialog";
-import { fetchSyncedProducts } from "@/lib/businessSync";
+import { fetchSyncedProducts, isDemoProduct } from "@/lib/businessSync";
 
 interface OOSProduct extends DeficitProduct {
   purchase_cost: number; retail_price: number; min_stock_alert: number;
@@ -44,17 +44,15 @@ const UserOutOfStock = () => {
     setLoading(true);
     let data: any[] | null = null;
 
-    if (!active.is_staff) {
-      const res = await supabase
-        .from("products")
-        .select("id, name, internal_sku, barcode, category_id, subcategory_id, description, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, status, images")
-        .eq("business_id", active.id)
-        .lte("stock_units", 0)
-        .order("name");
-      data = res.data;
-    }
+    const res = await supabase
+      .from("products")
+      .select("id, name, internal_sku, barcode, category_id, subcategory_id, description, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, status, images")
+      .eq("business_id", active.id)
+      .lte("stock_units", 0)
+      .order("name");
+    data = res.data;
 
-    if (!data || data.length === 0) {
+    if (!data || data.length === 0 || active.is_staff) {
       const synced = await fetchSyncedProducts(active.id, {
         role: active.staff_role || "manager",
         isStaff: Boolean(active.is_staff),
@@ -65,7 +63,8 @@ const UserOutOfStock = () => {
       }
     }
 
-    setRows((data as OOSProduct[]) ?? []);
+    const cleanRows = ((data as OOSProduct[]) ?? []).filter((p) => !isDemoProduct(p));
+    setRows(cleanRows);
     setLoading(false);
   }, [active]);
 

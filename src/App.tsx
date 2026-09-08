@@ -63,6 +63,12 @@ import UserSettings from "./pages/user/UserSettings";
 import UserAnnouncements from "./pages/user/UserAnnouncements";
 import UserNotifications from "./pages/user/UserNotifications";
 import UserSupport from "./pages/user/UserSupport";
+import { useBusinessRealtimeSync } from "./hooks/useBusinessRealtimeSync";
+
+function BusinessSyncObserver() {
+  useBusinessRealtimeSync();
+  return null;
+}
 
 const queryClient = new QueryClient();
 
@@ -74,6 +80,7 @@ const App = () => (
       <Sonner />
       <PlatformSettingsProvider>
       <I18nProvider>
+      <BusinessSyncObserver />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />

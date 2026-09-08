@@ -190,7 +190,7 @@ export async function generateScheduledAIReport(
   ] = await Promise.all([
     supabase.from("sales").select("id, total, profit, status, created_at").eq("business_id", businessId),
     supabase.from("sale_items").select("id, product_id, product_name, quantity, unit_price, unit_cost, created_at"),
-    supabase.from("products").select("id, name, sku, retail_price, purchase_cost, stock_units, min_stock_alert, expiry_date, status").eq("business_id", businessId),
+    supabase.from("products").select("id, name, internal_sku, retail_price, purchase_cost, stock_units, min_stock_alert, expiry_date, status").eq("business_id", businessId),
     supabase.from("suppliers").select("id, name, contact_name, phone, email, address").eq("business_id", businessId),
   ]);
 
@@ -368,7 +368,7 @@ export async function generateAutoRestockRecommendation(
     { data: products },
     { data: suppliers },
   ] = await Promise.all([
-    supabase.from("products").select("id, name, sku, purchase_cost, retail_price, stock_units, min_stock_alert").eq("business_id", businessId),
+    supabase.from("products").select("id, name, internal_sku, purchase_cost, retail_price, stock_units, min_stock_alert").eq("business_id", businessId),
     supabase.from("suppliers").select("id, name, contact_name, phone, email, address").eq("business_id", businessId),
   ]);
 

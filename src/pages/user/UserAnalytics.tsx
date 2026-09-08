@@ -145,7 +145,8 @@ export const UserAnalytics = () => {
       let currentProducts = productsData || [];
       let currentItems: any[] = [];
 
-      if ((!currentSales.length && !currentProducts.length) || active?.is_staff) {
+      // Only fallback to sync engine if Supabase query failed completely
+      if (salesData === null && productsData === null) {
         const synced = await fetchSyncedReportsData(active.id, active?.staff_role || "manager", Boolean(active?.is_staff));
         if (synced.sales.length > 0 || synced.products.length > 0) {
           currentSales = synced.sales;

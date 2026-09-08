@@ -34,6 +34,7 @@ import {
   getSyncedHeldOrders,
   saveSyncedHeldOrder,
   deleteSyncedHeldOrder,
+  isDemoProduct,
 } from "@/lib/businessSync";
 import { recordStockMovement } from "@/lib/stockMovementService";
 import { parseProductUOM, computeProductStock } from "@/lib/uomRegistry";
@@ -148,22 +149,99 @@ const UserPOS = () => {
     refreshHeldOrders();
   }, [refreshHeldOrders]);
 
-  const taxRate = Number(active?.default_tax ?? 0);
   const catName = useCallback(
     (id: string | null) => categories.find((c) => c.id === id)?.name ?? "General",
     [categories]
   );
 
-  // Load POS settings
-  const posConfig = useMemo(() => {
-    if (!active?.id) return {};
+  // Load POS settings reactively so any changes from Settings apply immediately
+  const [posConfig, setPosConfig] = useState<any>(() => {
     try {
-      const saved = localStorage.getItem(`geflow_settings_${active.id}`) || localStorage.getItem("geflow_settings_global");
+      const key = active?.id ? `geflow_settings_${active.id}` : "geflow_settings_global";
+      const saved = localStorage.getItem(key) || localStorage.getItem("geflow_settings_global");
       return saved ? JSON.parse(saved) : {};
     } catch {
       return {};
     }
+  });
+
+  const reloadSettings = useCallback(async () => {
+    try {
+      const key = active?.id ? `geflow_settings_${active.id}` : "geflow_settings_global";
+      const saved = localStorage.getItem(key) || localStorage.getItem("geflow_settings_global");
+      if (saved) {
+        setPosConfig(JSON.parse(saved));
+      }
+
+      // Sync settings from server if active business is set (keeps employee and owner POS in 100% sync)
+      if (active?.id) {
+        try {
+          const res = await fetch(`/api/sync/settings?businessId=${encodeURIComponent(active.id)}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.settings && Object.keys(data.settings).length > 0) {
+              setPosConfig((prev: any) => ({ ...prev, ...data.settings }));
+              localStorage.setItem(key, JSON.stringify(data.settings));
+            }
+          }
+        } catch {
+          // ignore network glitches
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to reload POS config", e);
+    }
   }, [active?.id]);
+
+  useEffect(() => {
+    reloadSettings();
+  }, [reloadSettings]);
+
+  useEffect(() => {
+    const onSettingsChanged = (e: any) => {
+      if (e?.detail) {
+        setPosConfig(e.detail);
+      } else {
+        reloadSettings();
+      }
+    };
+    const onBizUpdated = () => reloadSettings();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key && e.key.startsWith("geflow_settings")) reloadSettings();
+    };
+
+    window.addEventListener("geflow:settings-changed", onSettingsChanged);
+    window.addEventListener("geflow:business-updated", onBizUpdated);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener("geflow:settings-changed", onSettingsChanged);
+      window.removeEventListener("geflow:business-updated", onBizUpdated);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [reloadSettings]);
+
+  // Tax and pricing configuration
+  // User Requirement:
+  // 1. Tax Breakdown: turning off turns off tax calculating from pos cart & invoice
+  // 2. Automated tax engine: turning off disables tax calculating from pos cart & invoice
+  // 3. Price Tax Inclusivity: functional support for inclusive vs exclusive pricing
+  const isTaxEngineActive = posConfig.enableTaxCalculation !== false && posConfig.enableTaxCalculation !== "false";
+  const isTaxBreakdownActive = posConfig.showTaxBreakdown !== false && posConfig.showTaxBreakdown !== "false";
+  const isTaxEnabled = isTaxEngineActive && isTaxBreakdownActive;
+
+  const rawTaxRate = Number(
+    posConfig.defaultTaxRate !== undefined
+      ? posConfig.defaultTaxRate
+      : (active?.default_tax ?? 0)
+  );
+  const effectiveTaxRate = isTaxEnabled ? rawTaxRate : 0;
+  const taxRate = effectiveTaxRate;
+
+  const enableSecondaryTax = isTaxEnabled && Boolean(posConfig.enableSecondaryTax);
+  const secondaryTaxRate = enableSecondaryTax ? (Number(posConfig.secondaryTaxRate) || 0) : 0;
+  const taxPricingMode: "exclusive" | "inclusive" = posConfig.taxPricingMode === "inclusive" ? "inclusive" : "exclusive";
+  const isTaxInclusive = taxPricingMode === "inclusive";
+  const showTaxBreakdown = isTaxEnabled;
 
   const quickCashOptions = useMemo(() => {
     const raw = posConfig.quickAmounts || "10, 20, 50, 100";
@@ -175,29 +253,29 @@ const UserPOS = () => {
     setLoading(true);
     let data: any[] | null = null;
 
-    // 1. If owner, try direct Supabase fetch
-    if (!active.is_staff) {
-      const { data: initialData, error } = await supabase
+    // 1. Direct Supabase fetch for all users (real database)
+    const { data: initialData, error } = await supabase
+      .from("products")
+      .select("id, name, description, internal_sku, barcode, category_id, retail_price, discount_price, purchase_cost, stock_units, min_stock_alert, uom, units_per_uom, base_unit")
+      .eq("business_id", active.id)
+      .eq("status", "active")
+      .order("name");
+
+    data = initialData;
+    if (error || !data || data.length === 0) {
+      const fallback = await supabase
         .from("products")
-        .select("id, name, description, internal_sku, barcode, category_id, retail_price, discount_price, purchase_cost, stock_units, min_stock_alert, uom, units_per_uom, base_unit")
+        .select("id, name, description, internal_sku, barcode, category_id, retail_price, discount_price, purchase_cost, stock_units, min_stock_alert")
         .eq("business_id", active.id)
         .eq("status", "active")
         .order("name");
-
-      data = initialData;
-      if (error) {
-        const fallback = await supabase
-          .from("products")
-          .select("id, name, description, internal_sku, barcode, category_id, retail_price, discount_price, purchase_cost, stock_units, min_stock_alert")
-          .eq("business_id", active.id)
-          .eq("status", "active")
-          .order("name");
+      if (fallback.data && fallback.data.length > 0) {
         data = fallback.data as any;
       }
     }
 
-    // 2. If no data from Supabase or staff role (Cashier / Manager), fetch from sync engine
-    if (!data || data.length === 0) {
+    // 2. Fetch from Business Sync engine (ensures employee POS receives 100% of business listed inventory)
+    if (!data || data.length === 0 || active.is_staff) {
       const synced = await fetchSyncedProducts(active.id, {
         role: active.staff_role || "cashier",
         isStaff: Boolean(active.is_staff),
@@ -209,7 +287,24 @@ const UserPOS = () => {
       }
     }
 
-    setProducts((data as POSProduct[]) ?? []);
+    const cleanProducts = ((data as POSProduct[]) ?? []).filter((p) => !isDemoProduct(p));
+
+    // If owner, sync to central sync engine so employees always have the latest catalog
+    if (!active.is_staff && data && Array.isArray(data)) {
+      fetch("/api/sync/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessId: active.id,
+          businessName: active.name,
+          ownerUserId: active.owner_user_id,
+          products: cleanProducts,
+          replace: true,
+        }),
+      }).catch(() => {});
+    }
+
+    setProducts(cleanProducts);
     setLoading(false);
   }, [active]);
 
@@ -512,8 +607,31 @@ const UserPOS = () => {
   const subtotal = cart.reduce((s, l) => s + l.unit * l.qty, 0);
   const discountValue = Math.min(subtotal * (Number(discountPct) || 0) / 100, subtotal);
   const taxed = subtotal - discountValue;
-  const gst = taxed * (taxRate / 100);
-  const grandTotal = taxed + gst;
+
+  let gst = 0;
+  let secondaryGst = 0;
+  let grandTotal = taxed;
+
+  if (isTaxEnabled && (effectiveTaxRate > 0 || secondaryTaxRate > 0)) {
+    if (isTaxInclusive) {
+      // Prices ALREADY include tax - total does NOT increase
+      const combinedRate = effectiveTaxRate + secondaryTaxRate;
+      const base = taxed / (1 + combinedRate / 100);
+      gst = Math.round((base * (effectiveTaxRate / 100)) * 100) / 100;
+      secondaryGst = Math.round((base * (secondaryTaxRate / 100)) * 100) / 100;
+      grandTotal = taxed;
+    } else {
+      // Tax Exclusive - added on top of taxed subtotal
+      gst = Math.round((taxed * (effectiveTaxRate / 100)) * 100) / 100;
+      secondaryGst = Math.round((taxed * (secondaryTaxRate / 100)) * 100) / 100;
+      grandTotal = taxed + gst + secondaryGst;
+    }
+  } else {
+    gst = 0;
+    secondaryGst = 0;
+    grandTotal = taxed;
+  }
+
   const cashNum = Number(cashGiven) || 0;
   const changeDue = payMethod === "cash" ? Math.max(cashNum - grandTotal, 0) : 0;
 
@@ -584,24 +702,22 @@ const UserPOS = () => {
         updatePayload.description = updatedDesc;
       }
 
-      if (!active.is_staff) {
-        try {
-          await supabase.from("products").update(updatePayload).eq("id", pid);
-          await recordStockMovement({
-            business_id: active.id,
-            owner_user_id: userId,
-            product_id: pid,
-            quantity: -totalBaseUnitsDeducted,
-            type: "out",
-            reason: "POS sale (UOM accurate)",
-            note: `Sale ${saleId.slice(0, 8)} · Sold: ${summaryLabels.join(", ")} (-${totalBaseUnitsDeducted} ${stockInfo.subUnitName.toLowerCase()}s)`,
-            reference_id: saleId,
-            reference_type: "pos_sale",
-            created_by: userId,
-          });
-        } catch {
-          /* ignore supabase errors */
-        }
+      try {
+        await supabase.from("products").update(updatePayload).eq("id", pid);
+        await recordStockMovement({
+          business_id: active.id,
+          owner_user_id: userId,
+          product_id: pid,
+          quantity: -totalBaseUnitsDeducted,
+          type: "out",
+          reason: "POS sale (UOM accurate)",
+          note: `Sale ${saleId.slice(0, 8)} · Sold: ${summaryLabels.join(", ")} (-${totalBaseUnitsDeducted} ${stockInfo.subUnitName.toLowerCase()}s)`,
+          reference_id: saleId,
+          reference_type: "pos_sale",
+          created_by: userId,
+        });
+      } catch {
+        /* ignore supabase errors */
       }
     }
 
@@ -643,8 +759,14 @@ const UserPOS = () => {
       })),
       subtotal,
       discount: discountValue,
-      taxRate,
+      taxRate: effectiveTaxRate,
       tax: gst,
+      secondaryTax: secondaryGst,
+      secondaryTaxRate,
+      secondaryTaxLabel: posConfig.secondaryTaxLabel || "Secondary Tax",
+      taxLabel: posConfig.taxLabel || "Tax",
+      taxPricingMode,
+      taxRegistrationNumber: posConfig.taxRegistrationNumber || "",
       total: grandTotal,
       payMethod,
       cashGiven: cashNum,
@@ -1125,10 +1247,26 @@ const UserPOS = () => {
               <span className="text-muted-foreground">Subtotal ({cart.length} items)</span>
               <span className="font-bold">{fmt(subtotal)}</span>
             </div>
-            {taxRate > 0 && (
+            {discountValue > 0 && (
+              <div className="flex items-center justify-between text-xs text-emerald-600 dark:text-emerald-400">
+                <span className="font-medium">Discount ({discountPct}%)</span>
+                <span className="font-bold">−{fmt(discountValue)}</span>
+              </div>
+            )}
+            {showTaxBreakdown && isTaxEnabled && effectiveTaxRate > 0 && (
               <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Tax ({taxRate}%)</span>
-                <span className="font-bold">{fmt(gst)}</span>
+                <span className="text-muted-foreground">
+                  {isTaxInclusive ? "Includes " : ""}{posConfig.taxLabel || "Tax"} ({effectiveTaxRate}%)
+                </span>
+                <span className="font-bold">{isTaxInclusive ? "" : "+"}{fmt(gst)}</span>
+              </div>
+            )}
+            {showTaxBreakdown && isTaxEnabled && enableSecondaryTax && secondaryTaxRate > 0 && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">
+                  {isTaxInclusive ? "Includes " : ""}{posConfig.secondaryTaxLabel || "Surcharge"} ({secondaryTaxRate}%)
+                </span>
+                <span className="font-bold">{isTaxInclusive ? "" : "+"}{fmt(secondaryGst)}</span>
               </div>
             )}
             <div className="flex items-center justify-between text-xs">
