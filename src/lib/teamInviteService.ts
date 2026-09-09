@@ -168,8 +168,50 @@ export async function inviteNewUser({
     }
   }
 
-  // 2. Dispatch invitation through team backend service
+  // 2. Dispatch creation/invitation through team backend service
   try {
+    // If password was provided, register as an active direct member
+    if (cleanPassword && cleanPassword.length >= 6) {
+      const directRes = await fetch("/api/team/add-member", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ownerId,
+          ownerName: ownerName || "Store Owner",
+          businessId,
+          businessName: businessName || "Store",
+          businessAddress,
+          currency,
+          email: cleanEmail,
+          fullName: cleanName,
+          role,
+          userId: targetUserId || undefined,
+          status: "active",
+        }),
+      });
+
+      const directData = await directRes.json();
+      if (directRes.ok && directData.success) {
+        const effectiveId = targetUserId || directData.member?.id || directData.member?.userId || directData.member?.user_id || "u_" + Date.now();
+        await syncMemberToSupabase({
+          userId: effectiveId,
+          email: cleanEmail,
+          fullName: cleanName,
+          role,
+          businessId,
+          ownerId,
+          isActive: true,
+        });
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("geflow:team-updated", { detail: { email: cleanEmail } }));
+          window.dispatchEvent(new CustomEvent("geflow:business-changed", { detail: { businessId } }));
+        }
+        return { success: true, userId: effectiveId };
+      }
+    }
+
+    // Fallback or non-password invite
     const res = await fetch("/api/team/invite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -194,6 +236,7 @@ export async function inviteNewUser({
     // Also trigger local event so notifications update immediately
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("geflow:invitation-sent", { detail: { email: cleanEmail } }));
+      window.dispatchEvent(new CustomEvent("geflow:team-updated", { detail: { email: cleanEmail } }));
     }
 
     return { success: true, userId: targetUserId || data.invitation?.id };
@@ -572,20 +615,151 @@ export async function getEmployeeBusinesses(
 }
 
 /**
+ * Synchronize staff member record to Supabase database (profiles & support_team_members)
+ */
+export async function syncMemberToSupabase(params: {
+  userId: string;
+  email: string;
+  fullName: string;
+  role: string;
+  businessId: string;
+  ownerId: string;
+  isActive: boolean;
+}): Promise<void> {
+  try {
+    const roleString = `${params.role}::${params.businessId}`;
+    // 1. Upsert profile so the member has a persistent record
+    try {
+      await supabase.from("profiles").upsert(
+        {
+          user_id: params.userId,
+          email: params.email,
+          full_name: params.fullName,
+          plan: "free",
+          status: params.isActive ? "active" : "inactive",
+          last_active: new Date().toISOString(),
+        } as any,
+        { onConflict: "user_id" }
+      );
+    } catch {
+      /* ignore */
+    }
+
+    // 2. Check existing support_team_members record
+    const { data: existing } = await supabase
+      .from("support_team_members")
+      .select("id")
+      .eq("user_id", params.userId)
+      .eq("appointed_by_user_id", params.ownerId)
+      .maybeSingle();
+
+    if (existing?.id) {
+      await supabase
+        .from("support_team_members")
+        .update({
+          role: roleString,
+          is_active: params.isActive,
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq("id", existing.id);
+    } else {
+      await supabase.from("support_team_members").insert({
+        id: "stm_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
+        user_id: params.userId,
+        appointed_by_user_id: params.ownerId,
+        role: roleString,
+        is_active: params.isActive,
+      } as any);
+    }
+  } catch (err) {
+    console.warn("Notice syncing staff member to Supabase database:", err);
+  }
+}
+
+/**
+ * Add a direct team member (creates active membership immediately).
+ */
+export async function addDirectTeamMember(params: {
+  businessId: string;
+  businessName?: string;
+  businessAddress?: string;
+  currency?: string;
+  ownerId: string;
+  ownerName?: string;
+  email: string;
+  fullName: string;
+  role: "cashier" | "manager" | "inventory";
+  userId?: string;
+  status?: "active" | "pending";
+}): Promise<{ success: boolean; member?: any; error?: string }> {
+  try {
+    const res = await fetch("/api/team/add-member", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    const data = await res.json();
+    const effectiveUserId = params.userId || data.member?.userId || data.member?.user_id || "u_" + Date.now();
+
+    // Direct database sync
+    await syncMemberToSupabase({
+      userId: effectiveUserId,
+      email: params.email,
+      fullName: params.fullName,
+      role: params.role,
+      businessId: params.businessId,
+      ownerId: params.ownerId,
+      isActive: params.status !== "pending",
+    });
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("geflow:team-updated", { detail: { email: params.email } }));
+    }
+    return data;
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
  * Fetch all team members and pending invites for a store owner.
  */
-export async function getTeamMembers(businessId: string): Promise<any[]> {
+export async function getTeamMembers(businessId?: string, ownerId?: string): Promise<any[]> {
   try {
-    const res = await fetch(`/api/team/members?businessId=${encodeURIComponent(businessId)}`);
+    const params = new URLSearchParams();
+    if (businessId) params.append("businessId", businessId);
+    if (ownerId) params.append("ownerId", ownerId);
+
+    const res = await fetch(`/api/team/members?${params.toString()}`);
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.members)) {
+        try {
+          const cacheKey = `geflow_team_members_${businessId || ownerId || "cache"}`;
+          localStorage.setItem(cacheKey, JSON.stringify(data.members));
+          localStorage.setItem("geflow_team_members_cache", JSON.stringify(data.members));
+        } catch {
+          /* ignore */
+        }
         return data.members;
       }
     }
   } catch (err) {
     console.warn("Notice fetching team members from API:", err);
   }
+
+  // Fallback to local cache if offline or temporary glitch
+  try {
+    const cacheKey = `geflow_team_members_${businessId || ownerId || "cache"}`;
+    const cached = localStorage.getItem(cacheKey) || localStorage.getItem("geflow_team_members_cache");
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    /* ignore */
+  }
+
   return [];
 }
 
@@ -594,15 +768,30 @@ export async function getTeamMembers(businessId: string): Promise<any[]> {
  */
 export async function removeTeamMember(
   businessId: string,
-  memberId: string
+  memberId: string,
+  ownerId?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    // 1. Sync delete with Supabase database
+    try {
+      await supabase
+        .from("support_team_members")
+        .delete()
+        .or(`id.eq.${memberId},user_id.eq.${memberId}`);
+    } catch (dbErr) {
+      console.warn("Supabase member delete note:", dbErr);
+    }
+
+    // 2. Remove from backend team service
     const res = await fetch("/api/team/remove-member", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ businessId, memberId }),
+      body: JSON.stringify({ businessId, memberId, ownerId }),
     });
     const data = await res.json();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("geflow:team-updated"));
+    }
     return { success: data.success ?? true };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -615,15 +804,67 @@ export async function removeTeamMember(
 export async function updateTeamMemberRole(
   businessId: string,
   memberId: string,
-  role: "cashier" | "manager" | "inventory"
+  role: "cashier" | "manager" | "inventory",
+  ownerId?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    // 1. Sync role update with Supabase database
+    try {
+      const roleString = `${role}::${businessId}`;
+      await supabase
+        .from("support_team_members")
+        .update({ role: roleString, updated_at: new Date().toISOString() } as any)
+        .or(`id.eq.${memberId},user_id.eq.${memberId}`);
+    } catch (dbErr) {
+      console.warn("Supabase role update note:", dbErr);
+    }
+
+    // 2. Update in backend service
     const res = await fetch("/api/team/update-role", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ businessId, memberId, role }),
+      body: JSON.stringify({ businessId, memberId, role, ownerId }),
     });
     const data = await res.json();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("geflow:team-updated"));
+    }
+    return { success: data.success ?? true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Update a team member's active/inactive status.
+ */
+export async function updateTeamMemberStatus(
+  businessId: string,
+  memberId: string,
+  isActive: boolean,
+  ownerId?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // 1. Sync status update with Supabase database
+    try {
+      await supabase
+        .from("support_team_members")
+        .update({ is_active: isActive, updated_at: new Date().toISOString() } as any)
+        .or(`id.eq.${memberId},user_id.eq.${memberId}`);
+    } catch (dbErr) {
+      console.warn("Supabase status update note:", dbErr);
+    }
+
+    // 2. Update in backend service
+    const res = await fetch("/api/team/update-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ businessId, memberId, isActive, ownerId }),
+    });
+    const data = await res.json();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("geflow:team-updated"));
+    }
     return { success: data.success ?? true };
   } catch (err: any) {
     return { success: false, error: err.message };

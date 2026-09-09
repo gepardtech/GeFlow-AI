@@ -72,9 +72,14 @@ export const PlatformSettingsProvider = ({ children }: { children: ReactNode }) 
     // Reading it directly (instead of an RPC) lets us subscribe to realtime
     // changes so every visitor — signed-in or not — sees updates instantly.
     const load = async () => {
-      const { data } = await supabase.from("public_settings").select("*").limit(1).maybeSingle();
-      if (active && data) { setSettings(data); applyPlatformSettings(data); }
-      setLoading(false);
+      try {
+        const { data } = await supabase.from("public_settings").select("*").limit(1).maybeSingle();
+        if (active && data) { setSettings(data); applyPlatformSettings(data); }
+      } catch (err) {
+        console.warn("Public settings load note:", err);
+      } finally {
+        if (active) setLoading(false);
+      }
     };
     load();
     const ch = supabase

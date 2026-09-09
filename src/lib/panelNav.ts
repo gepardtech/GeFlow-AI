@@ -2,7 +2,7 @@ import {
   Activity, Users, Building2, Tag, Package, CreditCard, Eye, BarChart3, Wallet,
   LifeBuoy, Settings, LayoutDashboard, AlertCircle, ShoppingCart, ShoppingBag,
   FileText, Settings as SettingsIcon, Repeat, DollarSign, Receipt, Undo2,
-  SlidersHorizontal, Megaphone, TriangleAlert, Bell, ScrollText, GitBranch,
+  SlidersHorizontal, Megaphone, TriangleAlert, Bell, ScrollText, GitBranch, Mail,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { PlanId } from "@/lib/plans";
@@ -41,6 +41,7 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Logs", to: "/admin/logs", icon: ScrollText },
   { label: "Analytics", to: "/admin/analytics", icon: BarChart3 },
   { label: "Notifications", to: "/admin/notifications", icon: Bell },
+  { label: "Newsletter", to: "/admin/newsletter", icon: Mail },
   { label: "Support", to: "/admin/support", icon: LifeBuoy },
   { label: "Settings", to: "/admin/settings", icon: Settings },
 ];

@@ -60,6 +60,8 @@ import {
   resendInvitation,
   getTeamMembers,
   removeTeamMember,
+  updateTeamMemberRole,
+  updateTeamMemberStatus,
 } from "@/lib/teamInviteService";
 
 export type StaffRole = "admin" | "manager" | "cashier" | "inventory";
@@ -98,12 +100,27 @@ const pickColor = (nameOrEmail: string) => {
   return colors[code % colors.length];
 };
 
+const getInitialCachedMembers = (): StaffMember[] => {
+  try {
+    const raw = localStorage.getItem("geflow_team_members_cache");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return [];
+};
+
 export const UserTeam = () => {
   const { activeBusiness } = useActiveBusiness();
   const { toast } = useToast();
 
-  const [members, setMembers] = useState<StaffMember[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [members, setMembers] = useState<StaffMember[]>(getInitialCachedMembers);
+  const [loading, setLoading] = useState<boolean>(() => getInitialCachedMembers().length === 0);
   const [refreshing, setRefreshing] = useState(false);
 
   // Search & Filter State
@@ -177,7 +194,7 @@ export const UserTeam = () => {
     return () => clearTimeout(timer);
   }, [formEmail]);
 
-  // Load real team data directly from Supabase (store owner + members appointed by owner)
+  // Load real team data (merging Supabase records + backend team storage)
   const loadRealTeam = useCallback(async () => {
     try {
       const {
@@ -194,47 +211,59 @@ export const UserTeam = () => {
 
       // Store owner ID: active business owner or fallback to current user
       const storeOwnerId = activeBusiness?.owner_user_id || user.id;
-      const activeBizId = activeBusiness?.id;
+      const activeBizId = activeBusiness?.id || (typeof window !== "undefined" ? localStorage.getItem("geflow.activeBusinessId") : null) || undefined;
 
-      // Fetch staff members appointed by this store owner
-      const { data: supportMembersData, error: suppErr } = await supabase
-        .from("support_team_members")
-        .select("id, user_id, role, appointed_by_user_id, is_active, created_at")
-        .eq("appointed_by_user_id", storeOwnerId);
-
-      if (suppErr) console.warn("Support members query notice:", suppErr);
-
-      // Filter members scoped to active business
-      const relevantSupportMembers = (supportMembersData || []).filter((s) => {
-        if (!s.role) return true;
-        if (s.role.includes("::")) {
-          const [, bizId] = s.role.split("::");
-          return !activeBizId || bizId === activeBizId;
-        }
-        return true;
-      });
-
-      // Collect user IDs for profile lookup: store owner + all appointed staff
-      const userIdsToFetch = new Set<string>([storeOwnerId]);
-      relevantSupportMembers.forEach((s) => {
-        if (s.user_id) userIdsToFetch.add(s.user_id);
-      });
-
-      const { data: profilesData, error: profErr } = await supabase
-        .from("profiles")
-        .select("*")
-        .in("user_id", Array.from(userIdsToFetch));
-
-      if (profErr) console.warn("Profiles query notice:", profErr);
-
+      // 1. Fetch staff members appointed by this store owner from Supabase (graceful error handling)
+      let relevantSupportMembers: any[] = [];
       const profilesMap = new Map<string, any>();
-      (profilesData || []).forEach((p) => {
-        profilesMap.set(p.user_id, p);
-      });
+
+      try {
+        let suppQuery = supabase
+          .from("support_team_members")
+          .select("id, user_id, role, appointed_by_user_id, is_active, created_at");
+
+        if (storeOwnerId && user.id && storeOwnerId !== user.id) {
+          suppQuery = suppQuery.or(`appointed_by_user_id.eq.${storeOwnerId},appointed_by_user_id.eq.${user.id},user_id.eq.${user.id}`);
+        } else {
+          suppQuery = suppQuery.or(`appointed_by_user_id.eq.${storeOwnerId},user_id.eq.${user.id}`);
+        }
+
+        const { data: supportMembersData, error: suppErr } = await suppQuery;
+
+        if (suppErr) console.warn("Support members query notice:", suppErr);
+
+        relevantSupportMembers = (supportMembersData || []).filter((s) => {
+          if (!s.role) return true;
+          if (s.role.includes("::")) {
+            const [, bizId] = s.role.split("::");
+            if (!activeBizId) return true;
+            return bizId === activeBizId || activeBizId.includes(bizId) || bizId.includes(activeBizId);
+          }
+          return true;
+        });
+
+        const userIdsToFetch = new Set<string>([storeOwnerId]);
+        relevantSupportMembers.forEach((s) => {
+          if (s.user_id) userIdsToFetch.add(s.user_id);
+        });
+
+        const { data: profilesData, error: profErr } = await supabase
+          .from("profiles")
+          .select("*")
+          .in("user_id", Array.from(userIdsToFetch));
+
+        if (profErr) console.warn("Profiles query notice:", profErr);
+
+        (profilesData || []).forEach((p) => {
+          profilesMap.set(p.user_id, p);
+        });
+      } catch (dbErr) {
+        console.warn("Notice loading direct Supabase data:", dbErr);
+      }
 
       const realList: StaffMember[] = [];
 
-      // 1. Add Store Owner
+      // Add Store Owner
       const ownerProf = profilesMap.get(storeOwnerId);
       const isCurrentOwner = user.id === storeOwnerId;
       realList.push({
@@ -253,9 +282,9 @@ export const UserTeam = () => {
         is_owner: true,
       });
 
-      // 2. Add Appointed Staff Members
+      // Add Appointed Staff Members from Supabase
       relevantSupportMembers.forEach((supp) => {
-        if (supp.user_id === storeOwnerId) return; // already added as owner
+        if (supp.user_id === storeOwnerId) return;
         const prof = profilesMap.get(supp.user_id);
 
         let resolvedRole: StaffRole = "cashier";
@@ -287,36 +316,106 @@ export const UserTeam = () => {
         });
       });
 
-      // 3. Merge members & pending invitations from backend team service
-      if (activeBizId) {
+      // 3. Merge members & invitations from backend team service (persists across page refresh!)
+      try {
+        const apiMembers = await getTeamMembers(activeBizId, storeOwnerId);
+        let extraMembers: any[] = [];
+        if (activeBizId && storeOwnerId) {
+          extraMembers = await getTeamMembers(undefined, storeOwnerId);
+        }
+        const combinedApiMembers = [...apiMembers];
+        extraMembers.forEach((em) => {
+          if (!combinedApiMembers.some((m) => (m.id && m.id === em.id) || (m.userId && m.userId === em.userId) || (m.email && em.email && m.email.toLowerCase() === em.email.toLowerCase()))) {
+            combinedApiMembers.push(em);
+          }
+        });
+
+        combinedApiMembers.forEach((am: any) => {
+          const amEmail = (am.email || am.userEmail || "").trim().toLowerCase();
+          const amUserId = am.user_id || am.userId || am.id;
+
+          // Skip if this is the store owner
+          if (amUserId === storeOwnerId || (amEmail && realList[0]?.email?.toLowerCase() === amEmail)) {
+            return;
+          }
+
+          const existingIndex = realList.findIndex(
+            (m) =>
+              (m.id && (m.id === am.id || m.id === am.invitation_id)) ||
+              (m.user_id && amUserId && m.user_id === amUserId) ||
+              (amEmail && m.email && m.email.toLowerCase() === amEmail)
+          );
+
+          const memberRole: StaffRole =
+            am.role === "manager" || am.role === "inventory" || am.role === "cashier"
+              ? am.role
+              : "cashier";
+          const memberStatus: StaffStatus =
+            am.status === "pending" ? "pending" : am.status === "inactive" ? "inactive" : "active";
+          const memberName =
+            am.full_name || am.fullName || am.userName || (amEmail ? amEmail.split("@")[0] : "Staff Member");
+          const memberDate = am.created_at || am.createdAt || new Date().toISOString();
+
+          if (existingIndex >= 0) {
+            realList[existingIndex] = {
+              ...realList[existingIndex],
+              full_name: memberName || realList[existingIndex].full_name,
+              role: memberRole,
+              status: memberStatus,
+              last_telemetry:
+                memberStatus === "pending"
+                  ? "Invitation Pending"
+                  : realList[existingIndex].last_telemetry || "Active Staff",
+            };
+          } else {
+            realList.push({
+              id: am.id,
+              user_id: amUserId,
+              full_name: memberName,
+              email: amEmail || `staff@geflow.team`,
+              role: memberRole,
+              status: memberStatus,
+              last_telemetry: memberStatus === "pending" ? "Invitation Pending" : "Active Staff",
+              avatar_color: pickColor(memberName || amEmail),
+              created_at: memberDate,
+              is_owner: false,
+            });
+          }
+        });
+      } catch (apiErr) {
+        console.warn("Notice loading team members from API:", apiErr);
+      }
+
+      // 4. Fallback merge from local storage cache so items never vanish on refresh
+      if (realList.length <= 1) {
         try {
-          const apiMembers = await getTeamMembers(activeBizId);
-          apiMembers.forEach((am: any) => {
-            const existing = realList.find((m) => m.id === am.id || m.email?.toLowerCase() === am.email?.toLowerCase());
-            if (!existing) {
-              realList.push({
-                id: am.id,
-                user_id: am.userId || am.id,
-                full_name: am.fullName || am.email?.split("@")[0] || "Invited Staff",
-                email: am.email,
-                role: am.role || "cashier",
-                status: am.status === "pending" ? "pending" : "active",
-                last_telemetry: am.status === "pending" ? "Invitation Pending" : "Active Staff",
-                avatar_color: pickColor(am.fullName || am.email),
-                created_at: am.createdAt || new Date().toISOString(),
-                is_owner: false,
+          const cached = localStorage.getItem(`geflow_team_members_${activeBizId}`) || localStorage.getItem("geflow_team_members_cache");
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 1) {
+              parsed.forEach((cm: StaffMember) => {
+                if (!cm.is_owner && !realList.some((rm) => rm.id === cm.id || rm.user_id === cm.user_id || (cm.email && rm.email.toLowerCase() === cm.email.toLowerCase()))) {
+                  realList.push(cm);
+                }
               });
-            } else if (existing && am.status === "pending" && existing.status !== "active") {
-              existing.status = "pending";
-              existing.last_telemetry = "Invitation Pending";
             }
-          });
-        } catch (apiErr) {
-          console.warn("Notice loading team members from API:", apiErr);
+          }
+        } catch {
+          /* ignore */
         }
       }
 
       setMembers(realList);
+
+      // Save to localStorage cache so it renders immediately on next refresh
+      try {
+        localStorage.setItem("geflow_team_members_cache", JSON.stringify(realList));
+        if (activeBizId) {
+          localStorage.setItem(`geflow_team_members_${activeBizId}`, JSON.stringify(realList));
+        }
+      } catch {
+        /* ignore */
+      }
     } catch (err) {
       console.error("Error loading live team data:", err);
     } finally {
@@ -325,7 +424,7 @@ export const UserTeam = () => {
     }
   }, [activeBusiness]);
 
-  // Initial load and Realtime Database Channel Listeners
+  // Initial load, Realtime Database Channel Listeners & Custom Events
   useEffect(() => {
     loadRealTeam();
 
@@ -343,8 +442,21 @@ export const UserTeam = () => {
       )
       .subscribe();
 
+    const handleCustomTeamEvent = () => {
+      loadRealTeam();
+    };
+
+    window.addEventListener("geflow:team-updated", handleCustomTeamEvent);
+    window.addEventListener("geflow:business-changed", handleCustomTeamEvent);
+    window.addEventListener("geflow:invitation-sent", handleCustomTeamEvent);
+    window.addEventListener("geflow:invitation-accepted", handleCustomTeamEvent);
+
     return () => {
       supabase.removeChannel(channel);
+      window.removeEventListener("geflow:team-updated", handleCustomTeamEvent);
+      window.removeEventListener("geflow:business-changed", handleCustomTeamEvent);
+      window.removeEventListener("geflow:invitation-sent", handleCustomTeamEvent);
+      window.removeEventListener("geflow:invitation-accepted", handleCustomTeamEvent);
     };
   }, [loadRealTeam]);
 
@@ -436,19 +548,14 @@ export const UserTeam = () => {
       return;
     }
 
-    if (!activeBusiness?.id) {
-      toast({
-        title: "No Active Business",
-        description: "Please select an active business workspace before inviting staff.",
-        variant: "destructive",
-      });
-      return;
-    }
+    const storeOwnerId = currentUser?.id || activeBusiness?.owner_user_id;
+    const bizId = activeBusiness?.id || (typeof window !== "undefined" ? localStorage.getItem("geflow.activeBusinessId") : null) || (storeOwnerId ? `biz_${storeOwnerId}` : "default_biz");
+    const bizName = activeBusiness?.business_name || "My Store";
 
     setSubmitting(true);
     try {
-      const ownerId = currentUser?.id || activeBusiness.owner_user_id;
-      const ownerName = currentUser?.user_metadata?.full_name || activeBusiness.business_name || "Store Owner";
+      const ownerId = storeOwnerId || currentUser?.id || "owner";
+      const ownerName = currentUser?.user_metadata?.full_name || bizName || "Store Owner";
 
       // Case B: Inviting an ALREADY REGISTERED user
       if (isExistingUser && existingUserId) {
@@ -456,8 +563,8 @@ export const UserTeam = () => {
           userId: existingUserId,
           email: emailClean,
           role: formRole,
-          businessId: activeBusiness.id,
-          businessName: activeBusiness.business_name,
+          businessId: bizId,
+          businessName: bizName,
           ownerId,
           ownerName,
         });
@@ -473,7 +580,7 @@ export const UserTeam = () => {
 
         toast({
           title: "Team Invitation Sent! ✉️",
-          description: `An in-app invitation has been dispatched to ${emailClean}. Once they accept, they will gain active employee access to "${activeBusiness.business_name}".`,
+          description: `An in-app invitation has been dispatched to ${emailClean}. Once they accept, they will gain active employee access to "${bizName}".`,
         });
 
         setRegisterOpen(false);
@@ -496,10 +603,10 @@ export const UserTeam = () => {
         password: pwdClean,
         fullName: nameClean || emailClean.split("@")[0],
         role: formRole,
-        businessId: activeBusiness.id,
-        businessName: activeBusiness.business_name,
-        businessAddress: activeBusiness.business_address || undefined,
-        currency: activeBusiness.currency || "USD",
+        businessId: bizId,
+        businessName: bizName,
+        businessAddress: activeBusiness?.business_address || undefined,
+        currency: activeBusiness?.currency || "USD",
         ownerId,
         ownerName,
       });
@@ -568,6 +675,9 @@ export const UserTeam = () => {
     }
 
     const targetUserId = member.user_id;
+    const storeOwnerId = currentUser?.id || activeBusiness?.owner_user_id;
+    const bizId = activeBusiness?.id || (typeof window !== "undefined" ? localStorage.getItem("geflow.activeBusinessId") : null) || (storeOwnerId ? `biz_${storeOwnerId}` : "default_biz");
+
     // Optimistic update
     setMembers((prev) =>
       prev.map((m) =>
@@ -578,11 +688,10 @@ export const UserTeam = () => {
     );
 
     try {
-      const {
-        data: { user: currentUser },
-      } = await supabase.auth.getUser();
+      // 1. Update persistent backend team service
+      await updateTeamMemberRole(bizId, member.id || targetUserId, newRole, storeOwnerId);
 
-      // 1. Try edge function update
+      // 2. Try edge function update
       try {
         await supabase.functions.invoke("admin-users", {
           body: {
@@ -596,28 +705,32 @@ export const UserTeam = () => {
         console.warn("Edge function update notice:", e);
       }
 
-      // 2. Direct database update in support_team_members
-      const { data: existingSupp } = await supabase
-        .from("support_team_members")
-        .select("id")
-        .eq("user_id", targetUserId)
-        .maybeSingle();
-
-      if (existingSupp) {
-        await supabase
+      // 3. Direct database update in support_team_members (if permitted)
+      try {
+        const { data: existingSupp } = await supabase
           .from("support_team_members")
-          .update({
+          .select("id")
+          .eq("user_id", targetUserId)
+          .maybeSingle();
+
+        if (existingSupp) {
+          await supabase
+            .from("support_team_members")
+            .update({
+              role: newRole,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existingSupp.id);
+        } else {
+          await supabase.from("support_team_members").insert({
+            user_id: targetUserId,
             role: newRole,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existingSupp.id);
-      } else {
-        await supabase.from("support_team_members").insert({
-          user_id: targetUserId,
-          role: newRole,
-          appointed_by_user_id: currentUser?.id || targetUserId,
-          is_active: member.status === "active",
-        });
+            appointed_by_user_id: storeOwnerId || targetUserId,
+            is_active: member.status === "active",
+          });
+        }
+      } catch (dbErr) {
+        console.warn("Notice updating support_team_members:", dbErr);
       }
 
       toast({
@@ -644,6 +757,8 @@ export const UserTeam = () => {
     const targetUserId = selectedMember.user_id;
     const nameClean = formName.trim();
     const emailClean = formEmail.trim().toLowerCase();
+    const storeOwnerId = currentUser?.id || activeBusiness?.owner_user_id;
+    const bizId = activeBusiness?.id || (typeof window !== "undefined" ? localStorage.getItem("geflow.activeBusinessId") : null) || (storeOwnerId ? `biz_${storeOwnerId}` : "default_biz");
 
     // Optimistic state update
     setMembers((prev) =>
@@ -661,44 +776,47 @@ export const UserTeam = () => {
     );
 
     try {
-      const {
-        data: { user: currentUser },
-      } = await supabase.auth.getUser();
+      // 1. Update backend team service (handles persistence across reloads)
+      await updateTeamMemberRole(bizId, selectedMember.id || targetUserId, formRole, storeOwnerId);
+      await updateTeamMemberStatus(bizId, selectedMember.id || targetUserId, formStatus === "active", storeOwnerId);
 
+      // 2. Update Supabase tables if permitted
       if (targetUserId) {
-        // 1. Update profiles table
-        await supabase
-          .from("profiles")
-          .update({
-            full_name: nameClean,
-            email: emailClean,
-            status: formStatus === "active" ? "active" : "suspended",
-          })
-          .eq("user_id", targetUserId);
-
-        // 2. Check and upsert/update support_team_members table
-        const { data: existingSupp } = await supabase
-          .from("support_team_members")
-          .select("id")
-          .eq("user_id", targetUserId)
-          .maybeSingle();
-
-        if (existingSupp) {
+        try {
           await supabase
-            .from("support_team_members")
+            .from("profiles")
             .update({
-              role: formRole,
-              is_active: formStatus === "active",
-              updated_at: new Date().toISOString(),
+              full_name: nameClean,
+              email: emailClean,
+              status: formStatus === "active" ? "active" : "suspended",
             })
-            .eq("id", existingSupp.id);
-        } else {
-          await supabase.from("support_team_members").insert({
-            user_id: targetUserId,
-            role: formRole,
-            appointed_by_user_id: currentUser?.id || targetUserId,
-            is_active: formStatus === "active",
-          });
+            .eq("user_id", targetUserId);
+
+          const { data: existingSupp } = await supabase
+            .from("support_team_members")
+            .select("id")
+            .eq("user_id", targetUserId)
+            .maybeSingle();
+
+          if (existingSupp) {
+            await supabase
+              .from("support_team_members")
+              .update({
+                role: formRole,
+                is_active: formStatus === "active",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", existingSupp.id);
+          } else {
+            await supabase.from("support_team_members").insert({
+              user_id: targetUserId,
+              role: formRole,
+              appointed_by_user_id: storeOwnerId || targetUserId,
+              is_active: formStatus === "active",
+            });
+          }
+        } catch (dbErr) {
+          console.warn("Notice updating Supabase tables:", dbErr);
         }
       }
 
@@ -725,6 +843,8 @@ export const UserTeam = () => {
   const toggleMemberStatus = async (member: StaffMember) => {
     const nextStatus: StaffStatus = member.status === "active" ? "inactive" : "active";
     const targetUserId = member.user_id;
+    const storeOwnerId = currentUser?.id || activeBusiness?.owner_user_id;
+    const bizId = activeBusiness?.id || (typeof window !== "undefined" ? localStorage.getItem("geflow.activeBusinessId") : null) || (storeOwnerId ? `biz_${storeOwnerId}` : "default_biz");
 
     // Optimistic update
     setMembers((prev) =>
@@ -736,37 +856,41 @@ export const UserTeam = () => {
     );
 
     try {
-      const {
-        data: { user: currentUser },
-      } = await supabase.auth.getUser();
+      // 1. Update backend team service
+      await updateTeamMemberStatus(bizId, member.id || targetUserId, nextStatus === "active", storeOwnerId);
 
+      // 2. Update Supabase tables if permitted
       if (targetUserId) {
-        await supabase
-          .from("profiles")
-          .update({ status: nextStatus === "active" ? "active" : "suspended" })
-          .eq("user_id", targetUserId);
-
-        const { data: existingSupp } = await supabase
-          .from("support_team_members")
-          .select("id")
-          .eq("user_id", targetUserId)
-          .maybeSingle();
-
-        if (existingSupp) {
+        try {
           await supabase
+            .from("profiles")
+            .update({ status: nextStatus === "active" ? "active" : "suspended" })
+            .eq("user_id", targetUserId);
+
+          const { data: existingSupp } = await supabase
             .from("support_team_members")
-            .update({
+            .select("id")
+            .eq("user_id", targetUserId)
+            .maybeSingle();
+
+          if (existingSupp) {
+            await supabase
+              .from("support_team_members")
+              .update({
+                is_active: nextStatus === "active",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", existingSupp.id);
+          } else {
+            await supabase.from("support_team_members").insert({
+              user_id: targetUserId,
+              role: member.role,
+              appointed_by_user_id: storeOwnerId || targetUserId,
               is_active: nextStatus === "active",
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", existingSupp.id);
-        } else {
-          await supabase.from("support_team_members").insert({
-            user_id: targetUserId,
-            role: member.role,
-            appointed_by_user_id: currentUser?.id || targetUserId,
-            is_active: nextStatus === "active",
-          });
+            });
+          }
+        } catch (dbErr) {
+          console.warn("Notice updating status in Supabase:", dbErr);
         }
       }
 
@@ -790,6 +914,7 @@ export const UserTeam = () => {
     if (!selectedMember) return;
 
     const storeOwnerId = activeBusiness?.owner_user_id || currentUser?.id;
+    const bizId = activeBusiness?.id || (typeof window !== "undefined" ? localStorage.getItem("geflow.activeBusinessId") : null) || (storeOwnerId ? `biz_${storeOwnerId}` : "default_biz");
 
     // Never allow removing the business owner
     if (selectedMember.is_owner || selectedMember.user_id === storeOwnerId) {
@@ -821,28 +946,33 @@ export const UserTeam = () => {
     setDeleteOpen(false);
 
     try {
-      // Delete from support_team_members
-      if (targetMemberId) {
-        await supabase
-          .from("support_team_members")
-          .delete()
-          .eq("id", targetMemberId);
-      }
+      // 1. Remove from backend team service
+      await removeTeamMember(bizId, selectedMember.id || targetUserId, storeOwnerId);
 
-      await supabase
-        .from("support_team_members")
-        .delete()
-        .eq("user_id", targetUserId)
-        .eq("appointed_by_user_id", storeOwnerId);
+      // 2. Delete from support_team_members in Supabase
+      try {
+        if (targetMemberId) {
+          await supabase
+            .from("support_team_members")
+            .delete()
+            .eq("id", targetMemberId);
+        }
 
-      if (activeBusiness?.id) {
         await supabase
           .from("support_team_members")
           .delete()
           .eq("user_id", targetUserId)
-          .like("role", `%::${activeBusiness.id}`);
+          .eq("appointed_by_user_id", storeOwnerId);
 
-        await removeTeamMember(activeBusiness.id, selectedMember.id);
+        if (bizId) {
+          await supabase
+            .from("support_team_members")
+            .delete()
+            .eq("user_id", targetUserId)
+            .like("role", `%::${bizId}`);
+        }
+      } catch (dbErr) {
+        console.warn("Notice deleting from Supabase support_team_members:", dbErr);
       }
 
       toast({
@@ -850,6 +980,7 @@ export const UserTeam = () => {
         description: `${selectedMember.full_name} has been removed from the active team hub.`,
       });
       window.dispatchEvent(new CustomEvent("geflow:business-changed"));
+      window.dispatchEvent(new CustomEvent("geflow:team-updated"));
       await loadRealTeam();
     } catch (err: any) {
       toast({

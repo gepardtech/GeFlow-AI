@@ -3,9 +3,32 @@
     "2fa7e2a5-1937-4545-a7f6-06354b50c8b8": {
       "businessId": "2fa7e2a5-1937-4545-a7f6-06354b50c8b8",
       "businessName": "Store",
-      "ownerUserId": "",
+      "ownerUserId": "3dc16736-b637-48da-8e0e-6c6c8438deed",
       "settings": {},
-      "products": [],
+      "products": [
+        {
+          "id": "f26b9b8d-96da-488c-b770-54ac0e97ed6b",
+          "business_id": "2fa7e2a5-1937-4545-a7f6-06354b50c8b8",
+          "owner_user_id": "3dc16736-b637-48da-8e0e-6c6c8438deed",
+          "name": "Paracetamol 500mg",
+          "internal_sku": "PAR-411560",
+          "description": "Strength/Formulation: 500mg. Pack configuration: 20 units per box. Weight: 500 mg.\n[UOM: box] [SCALE: 20] [UNITS_PER_UOM: 20] [BASE_UNIT: piece] [PACK_QTY: 7] [BASE_QTY: 140]",
+          "category_id": "1ddc626a-bc85-4307-840f-744acae99408",
+          "subcategory_id": "d0821e09-cd38-4da8-a013-a00e04d388be",
+          "purchase_cost": 20,
+          "retail_price": 30,
+          "discount_price": null,
+          "stock_units": 140,
+          "min_stock_alert": 10,
+          "batch_number": null,
+          "expiry_date": null,
+          "barcode": null,
+          "status": "active",
+          "images": [],
+          "created_at": "2026-09-04T15:33:01.060368+00:00",
+          "updated_at": "2026-09-06T17:05:59.784307+00:00"
+        }
+      ],
       "sales": [],
       "sale_items": [],
       "stock_movements": [],
@@ -13,7 +36,7 @@
       "purchases": [],
       "purchase_items": [],
       "categories": [],
-      "lastSyncedAt": "2026-09-08T14:51:41.727Z"
+      "lastSyncedAt": "2026-09-09T14:25:03.717Z"
     },
     "bcf76970-8113-40c8-9516-756798ed39c2": {
       "businessId": "bcf76970-8113-40c8-9516-756798ed39c2",
@@ -29,6 +52,21 @@
       "purchase_items": [],
       "categories": [],
       "lastSyncedAt": "2026-09-08T14:51:45.159Z"
+    },
+    "test": {
+      "businessId": "test",
+      "businessName": "Store",
+      "ownerUserId": "",
+      "settings": {},
+      "products": [],
+      "sales": [],
+      "sale_items": [],
+      "stock_movements": [],
+      "held_orders": [],
+      "purchases": [],
+      "purchase_items": [],
+      "categories": [],
+      "lastSyncedAt": "2026-09-09T14:43:15.038Z"
     }
   }
 }

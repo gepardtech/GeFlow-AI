@@ -422,64 +422,243 @@ export class TeamService {
     }));
   }
 
-  public getTeamMembersForBusiness(businessId: string): any[] {
+  public getTeamMembers(params: { businessId?: string; ownerId?: string }): any[] {
     this.refresh();
+    const rawBiz = params.businessId?.trim();
+    const rawOwner = params.ownerId?.trim();
+    const businessId = (rawBiz && rawBiz !== "null" && rawBiz !== "undefined") ? rawBiz : undefined;
+    const ownerId = (rawOwner && rawOwner !== "null" && rawOwner !== "undefined") ? rawOwner : undefined;
+
+    const matchesFilter = (itemBiz?: string, itemOwner?: string) => {
+      if (!businessId && !ownerId) return true;
+      if (businessId && itemBiz && (itemBiz === businessId || itemBiz.includes(businessId) || businessId.includes(itemBiz))) return true;
+      if (ownerId && itemOwner && (itemOwner === ownerId || itemOwner.includes(ownerId) || ownerId.includes(itemOwner))) return true;
+      if (businessId && businessId.startsWith("biz_") && itemOwner && businessId.includes(itemOwner)) return true;
+      if (itemBiz && itemBiz.startsWith("biz_") && ownerId && itemBiz.includes(ownerId)) return true;
+      return false;
+    };
 
     // Active members
     const active = this.store.memberships
-      .filter((m) => m.businessId === businessId && m.isActive)
+      .filter((m) => {
+        if (!m.isActive && m.isActive !== undefined) return false;
+        return matchesFilter(m.businessId, m.ownerId);
+      })
       .map((m) => ({
         id: m.id,
         user_id: m.userId,
+        userId: m.userId,
         full_name: m.userName,
+        fullName: m.userName,
         email: m.userEmail,
         role: m.role,
-        status: "active",
+        status: m.isActive === false ? "inactive" : "active",
         created_at: m.createdAt,
+        createdAt: m.createdAt,
+        updated_at: m.updatedAt,
+        updatedAt: m.updatedAt,
         is_owner: false,
+        business_id: m.businessId,
+        businessId: m.businessId,
+        appointed_by_user_id: m.ownerId,
+      }));
+
+    // Inactive members
+    const inactive = this.store.memberships
+      .filter((m) => {
+        if (m.isActive !== false) return false;
+        return matchesFilter(m.businessId, m.ownerId);
+      })
+      .map((m) => ({
+        id: m.id,
+        user_id: m.userId,
+        userId: m.userId,
+        full_name: m.userName,
+        fullName: m.userName,
+        email: m.userEmail,
+        role: m.role,
+        status: "inactive",
+        created_at: m.createdAt,
+        createdAt: m.createdAt,
+        updated_at: m.updatedAt,
+        updatedAt: m.updatedAt,
+        is_owner: false,
+        business_id: m.businessId,
+        businessId: m.businessId,
+        appointed_by_user_id: m.ownerId,
       }));
 
     // Pending invitations
     const pending = this.store.invitations
-      .filter((inv) => inv.businessId === businessId && inv.status === "pending")
+      .filter((inv) => {
+        if (inv.status !== "pending") return false;
+        return matchesFilter(inv.businessId, inv.ownerId);
+      })
       .map((inv) => ({
         id: inv.id,
         user_id: inv.inviteeUserId || inv.id,
+        userId: inv.inviteeUserId || inv.id,
         full_name: inv.inviteeName || inv.inviteeEmail.split("@")[0],
+        fullName: inv.inviteeName || inv.inviteeEmail.split("@")[0],
         email: inv.inviteeEmail,
         role: inv.role,
         status: "pending",
         created_at: inv.createdAt,
+        createdAt: inv.createdAt,
+        updated_at: inv.updatedAt,
+        updatedAt: inv.updatedAt,
         is_owner: false,
+        business_id: inv.businessId,
+        businessId: inv.businessId,
         invitation_id: inv.id,
+        appointed_by_user_id: inv.ownerId,
       }));
 
-    return [...active, ...pending];
+    return [...active, ...inactive, ...pending];
   }
 
-  public removeMember(businessId: string, memberId: string): { success: boolean } {
+  public getTeamMembersForBusiness(businessId: string): any[] {
+    return this.getTeamMembers({ businessId });
+  }
+
+  public addDirectMember(params: {
+    businessId: string;
+    businessName?: string;
+    businessAddress?: string;
+    currency?: string;
+    ownerId: string;
+    ownerName?: string;
+    email: string;
+    fullName: string;
+    role: "cashier" | "manager" | "inventory";
+    permissions?: string[];
+    userId?: string;
+    status?: "active" | "pending";
+  }): { success: boolean; member: any } {
     this.refresh();
-    this.store.memberships = this.store.memberships.filter(
-      (m) => !(m.businessId === businessId && (m.id === memberId || m.userId === memberId))
-    );
+    const cleanEmail = params.email.trim().toLowerCase();
+    const cleanBizName = params.businessName?.trim() || "Store";
+    const cleanRole = params.role || "cashier";
+    const now = new Date().toISOString();
+    const cleanUserId = params.userId?.trim() || "user_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
+
+    // Remove any existing invitation for this email & business
     this.store.invitations = this.store.invitations.filter(
-      (i) => !(i.businessId === businessId && (i.id === memberId || i.inviteeUserId === memberId))
+      (i) => !(i.businessId === params.businessId && i.inviteeEmail.toLowerCase() === cleanEmail)
     );
+
+    // Check if membership exists
+    const existingIndex = this.store.memberships.findIndex(
+      (m) =>
+        m.businessId === params.businessId &&
+        (m.userEmail.toLowerCase() === cleanEmail || (params.userId && m.userId === params.userId))
+    );
+
+    let member: TeamMembership;
+    if (existingIndex >= 0) {
+      member = {
+        ...this.store.memberships[existingIndex],
+        userName: params.fullName.trim() || this.store.memberships[existingIndex].userName,
+        role: cleanRole,
+        permissions: params.permissions || this.store.memberships[existingIndex].permissions,
+        businessName: cleanBizName,
+        isActive: params.status !== "pending",
+        updatedAt: now,
+      };
+      this.store.memberships[existingIndex] = member;
+    } else {
+      member = {
+        id: "mem_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9),
+        businessId: params.businessId,
+        businessName: cleanBizName,
+        businessAddress: params.businessAddress,
+        currency: params.currency || "USD",
+        userId: cleanUserId,
+        userEmail: cleanEmail,
+        userName: params.fullName.trim() || cleanEmail.split("@")[0],
+        ownerId: params.ownerId,
+        role: cleanRole,
+        permissions: params.permissions || (cleanRole === "cashier" ? ["pos", "inventory"] : cleanRole === "inventory" ? ["inventory", "purchases"] : ["full"]),
+        isActive: params.status !== "pending",
+        createdAt: now,
+        updatedAt: now,
+      };
+      this.store.memberships.push(member);
+    }
+
+    saveStorage(this.store);
+
+    return {
+      success: true,
+      member: {
+        id: member.id,
+        user_id: member.userId,
+        userId: member.userId,
+        full_name: member.userName,
+        fullName: member.userName,
+        email: member.userEmail,
+        role: member.role,
+        status: member.isActive ? "active" : "inactive",
+        created_at: member.createdAt,
+        createdAt: member.createdAt,
+        updated_at: member.updatedAt,
+        updatedAt: member.updatedAt,
+        is_owner: false,
+        business_id: member.businessId,
+        businessId: member.businessId,
+      },
+    };
+  }
+
+  public removeMember(businessId: string, memberId: string, ownerId?: string): { success: boolean } {
+    this.refresh();
+    const cleanMemId = memberId?.trim().toLowerCase();
+    this.store.memberships = this.store.memberships.filter((m) => {
+      const bizMatch = !businessId || m.businessId === businessId || (ownerId && m.ownerId === ownerId) || (businessId && (m.businessId.includes(businessId) || businessId.includes(m.businessId)));
+      const idMatch = m.id === memberId || m.userId === memberId || (cleanMemId && m.userEmail.toLowerCase() === cleanMemId);
+      return !(bizMatch && idMatch);
+    });
+    this.store.invitations = this.store.invitations.filter((i) => {
+      const bizMatch = !businessId || i.businessId === businessId || (ownerId && i.ownerId === ownerId) || (businessId && (i.businessId.includes(businessId) || businessId.includes(i.businessId)));
+      const idMatch = i.id === memberId || i.inviteeUserId === memberId || (cleanMemId && i.inviteeEmail.toLowerCase() === cleanMemId);
+      return !(bizMatch && idMatch);
+    });
     saveStorage(this.store);
     return { success: true };
   }
 
-  public updateMemberRole(businessId: string, memberId: string, role: "cashier" | "manager" | "inventory"): { success: boolean } {
+  public updateMemberStatus(businessId: string, memberId: string, isActive: boolean, ownerId?: string): { success: boolean } {
     this.refresh();
+    const cleanMemId = memberId?.trim().toLowerCase();
     const mem = this.store.memberships.find(
-      (m) => m.businessId === businessId && (m.id === memberId || m.userId === memberId)
+      (m) =>
+        (!businessId || m.businessId === businessId || (ownerId && m.ownerId === ownerId) || (businessId && (m.businessId.includes(businessId) || businessId.includes(m.businessId)))) &&
+        (m.id === memberId || m.userId === memberId || (cleanMemId && m.userEmail.toLowerCase() === cleanMemId))
+    );
+    if (mem) {
+      mem.isActive = isActive;
+      mem.updatedAt = new Date().toISOString();
+    }
+    saveStorage(this.store);
+    return { success: true };
+  }
+
+  public updateMemberRole(businessId: string, memberId: string, role: "cashier" | "manager" | "inventory", ownerId?: string): { success: boolean } {
+    this.refresh();
+    const cleanMemId = memberId?.trim().toLowerCase();
+    const mem = this.store.memberships.find(
+      (m) =>
+        (!businessId || m.businessId === businessId || (ownerId && m.ownerId === ownerId) || (businessId && (m.businessId.includes(businessId) || businessId.includes(m.businessId)))) &&
+        (m.id === memberId || m.userId === memberId || (cleanMemId && m.userEmail.toLowerCase() === cleanMemId))
     );
     if (mem) {
       mem.role = role;
       mem.updatedAt = new Date().toISOString();
     }
     const inv = this.store.invitations.find(
-      (i) => i.businessId === businessId && (i.id === memberId || i.inviteeUserId === memberId)
+      (i) =>
+        (!businessId || i.businessId === businessId || (ownerId && i.ownerId === ownerId) || (businessId && (i.businessId.includes(businessId) || businessId.includes(i.businessId)))) &&
+        (i.id === memberId || i.inviteeUserId === memberId || (cleanMemId && i.inviteeEmail.toLowerCase() === cleanMemId))
     );
     if (inv) {
       inv.role = role;

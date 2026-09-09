@@ -15,6 +15,8 @@ import { providerConnectionTester } from "./src/server/ai/tester/providerConnect
 import { usageLogger } from "./src/server/ai/usage/usageLogger";
 import { teamService } from "./src/server/team/teamService";
 import { businessDataSyncService } from "./src/server/team/businessDataSyncService";
+import { settingsService } from "./src/server/settings/settingsService";
+import { newsletterService } from "./src/server/newsletter/newsletterService";
 
 const app = express();
 const PORT = 3000;
@@ -359,11 +361,55 @@ app.get("/api/team/employee-businesses", (req: Request, res: Response) => {
 app.get("/api/team/members", (req: Request, res: Response) => {
   try {
     const businessId = req.query.businessId as string | undefined;
-    if (!businessId) {
-      return res.status(400).json({ success: false, error: "businessId query parameter is required." });
+    const ownerId = req.query.ownerId as string | undefined;
+    if (!businessId && !ownerId) {
+      return res.status(400).json({ success: false, error: "businessId or ownerId query parameter is required." });
     }
-    const members = teamService.getTeamMembersForBusiness(businessId);
+    const members = teamService.getTeamMembers({ businessId, ownerId });
     res.json({ success: true, members });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Add Direct Member (Store Owner adding an employee with credentials)
+app.post("/api/team/add-member", (req: Request, res: Response) => {
+  try {
+    const {
+      businessId,
+      businessName,
+      businessAddress,
+      currency,
+      ownerId,
+      ownerName,
+      email,
+      fullName,
+      role,
+      permissions,
+      userId,
+      status,
+    } = req.body || {};
+
+    if (!email || (!businessId && !ownerId)) {
+      return res.status(400).json({ success: false, error: "Email and Business ID (or Owner ID) are required." });
+    }
+
+    const result = teamService.addDirectMember({
+      businessId: businessId || "biz_" + (ownerId || "default"),
+      businessName,
+      businessAddress,
+      currency,
+      ownerId: ownerId || "owner",
+      ownerName,
+      email,
+      fullName: fullName || email.split("@")[0],
+      role: role || "cashier",
+      permissions,
+      userId,
+      status: status || "active",
+    });
+
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -372,11 +418,11 @@ app.get("/api/team/members", (req: Request, res: Response) => {
 // Remove Team Member
 app.post("/api/team/remove-member", (req: Request, res: Response) => {
   try {
-    const { businessId, memberId } = req.body || {};
-    if (!businessId || !memberId) {
-      return res.status(400).json({ success: false, error: "businessId and memberId are required." });
+    const { businessId, memberId, ownerId } = req.body || {};
+    if ((!businessId && !ownerId) || !memberId) {
+      return res.status(400).json({ success: false, error: "businessId (or ownerId) and memberId are required." });
     }
-    const result = teamService.removeMember(businessId, memberId);
+    const result = teamService.removeMember(businessId, memberId, ownerId);
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -386,11 +432,25 @@ app.post("/api/team/remove-member", (req: Request, res: Response) => {
 // Update Member Role
 app.post("/api/team/update-role", (req: Request, res: Response) => {
   try {
-    const { businessId, memberId, role } = req.body || {};
-    if (!businessId || !memberId || !role) {
+    const { businessId, memberId, role, ownerId } = req.body || {};
+    if ((!businessId && !ownerId) || !memberId || !role) {
       return res.status(400).json({ success: false, error: "businessId, memberId and role are required." });
     }
-    const result = teamService.updateMemberRole(businessId, memberId, role);
+    const result = teamService.updateMemberRole(businessId, memberId, role, ownerId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Update Member Status (Active / Inactive)
+app.post("/api/team/update-status", (req: Request, res: Response) => {
+  try {
+    const { businessId, memberId, isActive, ownerId } = req.body || {};
+    if ((!businessId && !ownerId) || !memberId || isActive === undefined) {
+      return res.status(400).json({ success: false, error: "businessId, memberId and isActive are required." });
+    }
+    const result = teamService.updateMemberStatus(businessId, memberId, Boolean(isActive), ownerId);
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -584,6 +644,150 @@ app.post("/api/sync/settings", (req: Request, res: Response) => {
     }
     const result = businessDataSyncService.saveSettings(businessId, settings || {});
     res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// Platform General Settings
+// Social Links, Footer Copyright, & About Members
+// ==========================================
+app.get("/api/settings/general", (req: Request, res: Response) => {
+  try {
+    const settings = settingsService.getSettings();
+    res.json({ success: true, settings });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/settings/general", (req: Request, res: Response) => {
+  try {
+    const updated = settingsService.updateAllSettings(req.body || {});
+    res.json({ success: true, settings: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/settings/general/social-links", (req: Request, res: Response) => {
+  try {
+    const { links } = req.body || {};
+    if (!Array.isArray(links)) {
+      return res.status(400).json({ success: false, error: "links must be an array" });
+    }
+    const updated = settingsService.updateSocialLinks(links);
+    res.json({ success: true, settings: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/settings/general/footer-copyright", (req: Request, res: Response) => {
+  try {
+    const { copyright } = req.body || {};
+    if (!copyright || typeof copyright.text !== "string") {
+      return res.status(400).json({ success: false, error: "valid copyright object is required" });
+    }
+    const updated = settingsService.updateFooterCopyright(copyright);
+    res.json({ success: true, settings: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/settings/general/about-members", (req: Request, res: Response) => {
+  try {
+    const { members } = req.body || {};
+    if (!Array.isArray(members)) {
+      return res.status(400).json({ success: false, error: "members must be an array" });
+    }
+    const updated = settingsService.updateAboutMembers(members);
+    res.json({ success: true, settings: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// Newsletter & Subscription Engine
+// Syncs with Notifications, Broadcasts & Auto-Emails
+// ==========================================
+app.get("/api/newsletter/subscribers", (req: Request, res: Response) => {
+  try {
+    const subscribers = newsletterService.getSubscribers();
+    res.json({ success: true, subscribers });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/newsletter/subscribe", (req: Request, res: Response) => {
+  try {
+    const { email, source, appName } = req.body || {};
+    const result = newsletterService.subscribe(email, source, appName);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.delete("/api/newsletter/subscribers/:id", (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = newsletterService.deleteSubscriber(id);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/newsletter/templates", (req: Request, res: Response) => {
+  try {
+    const templates = newsletterService.getTemplates();
+    res.json({ success: true, templates });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.put("/api/newsletter/templates/:id", (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updated = newsletterService.updateTemplate(id, req.body || {});
+    res.json({ success: true, template: updated });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/newsletter/broadcast", (req: Request, res: Response) => {
+  try {
+    const { templateId, title, body, ctaLabel, ctaUrl, appName } = req.body || {};
+    if (!title || !body) {
+      return res.status(400).json({ success: false, error: "Title and body are required for broadcast" });
+    }
+    const result = newsletterService.broadcast({ templateId, title, body, ctaLabel, ctaUrl, appName });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/newsletter/logs", (req: Request, res: Response) => {
+  try {
+    const logs = newsletterService.getLogs();
+    res.json({ success: true, logs });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/newsletter/stats", (req: Request, res: Response) => {
+  try {
+    const stats = newsletterService.getStats();
+    res.json({ success: true, stats });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
