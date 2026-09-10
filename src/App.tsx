@@ -47,6 +47,8 @@ import AdminSettings from "./pages/admin/AdminSettings";
 import AdminPlanLimits from "./pages/admin/AdminPlanLimits";
 import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminLogs from "./pages/admin/AdminLogs";
+import AdminNewsletter from "./pages/admin/AdminNewsletter";
+import ScrollToTop from "./components/ScrollToTop";
 
 import UserInventory from "./pages/user/UserInventory";
 import UserLowStock from "./pages/user/UserLowStock";
@@ -82,6 +84,7 @@ const App = () => (
       <I18nProvider>
       <BusinessSyncObserver />
       <BrowserRouter>
+        <ScrollToTop />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/features" element={<Features />} />
@@ -114,6 +117,7 @@ const App = () => (
           <Route path="/admin/plan-limits" element={<AdminGuard><AdminPlanLimits /></AdminGuard>} />
           <Route path="/admin/logs" element={<AdminGuard><AdminLogs /></AdminGuard>} />
           <Route path="/admin/notifications" element={<AdminGuard><AdminNotifications /></AdminGuard>} />
+          <Route path="/admin/newsletter" element={<AdminGuard><AdminNewsletter /></AdminGuard>} />
           <Route path="/admin/settings" element={<AdminGuard><AdminSettings /></AdminGuard>} />
           <Route path="/setup/business" element={<AuthGuard><SetupBusiness /></AuthGuard>} />
           <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />

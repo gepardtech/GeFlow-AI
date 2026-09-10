@@ -70,6 +70,39 @@ export async function deleteNewsletterSubscriber(id: string): Promise<boolean> {
   return !!data.success;
 }
 
+export async function toggleSubscriberStatus(id: string, status?: "subscribed" | "unsubscribed"): Promise<NewsletterSubscriber> {
+  const res = await fetch(`/api/newsletter/subscribers/${id}/status`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error("Failed to update subscriber status.");
+  const data = await res.json();
+  return data.subscriber;
+}
+
+export async function sendDirectEmail(params: {
+  recipientEmail: string;
+  subject: string;
+  headline?: string;
+  body: string;
+  ctaText?: string;
+  ctaUrl?: string;
+  footerText?: string;
+  appName?: string;
+}): Promise<{ success: boolean; message: string; log: NewsletterLog }> {
+  const res = await fetch("/api/newsletter/send-direct", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || "Failed to deliver email template.");
+  }
+  return data;
+}
+
 export async function getNewsletterTemplates(): Promise<NewsletterTemplate[]> {
   const res = await fetch("/api/newsletter/templates");
   if (!res.ok) throw new Error("Failed to load templates.");

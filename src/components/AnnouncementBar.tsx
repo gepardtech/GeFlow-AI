@@ -26,6 +26,7 @@ import {
   detectAnnouncementCoupon as detectCouponDetailed,
   setPendingCoupon,
 } from "@/lib/couponHelper";
+import { getLiveAnnouncements } from "@/lib/promotionsClient";
 
 export interface Announcement {
   id: string;
@@ -37,6 +38,7 @@ export interface Announcement {
   link_label: string | null;
   audience: string;
   created_at?: string;
+  is_active?: boolean;
 }
 
 export const detectAnnouncementCoupon = (a: { link_url?: string | null; body?: string | null; title?: string | null; variant?: string | null } | null): string | null => {
@@ -101,25 +103,24 @@ export const AnnouncementBar = ({ audience, position = "top" }: Props) => {
   useEffect(() => {
     const load = async () => {
       try {
-        const { data } = await supabase
-          .from("announcements")
-          .select("id, title, body, variant, position, link_url, link_label, audience, created_at")
-          .eq("position", position)
-          .order("created_at", { ascending: false });
-        const filtered = (data ?? []).filter(
-          (a: any) => a.audience === "all" || a.audience === audience
-        );
-        setItems(filtered as Announcement[]);
+        const live = await getLiveAnnouncements(true, audience, position);
+        setItems(live as Announcement[]);
       } catch (err) {
         console.warn("Failed to load announcements:", err);
       }
     };
     load();
+
+    const handleUpdate = () => load();
+    window.addEventListener("geflow:announcements-updated", handleUpdate);
+
     const ch = supabase
       .channel(`ann_${audience}_${position}_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, load)
       .subscribe();
+
     return () => {
+      window.removeEventListener("geflow:announcements-updated", handleUpdate);
       supabase.removeChannel(ch);
     };
   }, [audience, position]);
@@ -137,10 +138,6 @@ export const AnnouncementBar = ({ audience, position = "top" }: Props) => {
   const IconComp = style.icon;
 
   const handleCtaClick = () => {
-    const code = detectAnnouncementCoupon(cur);
-    if (code) {
-      setPendingCoupon(code);
-    }
     setSelectedAnnouncement(cur);
   };
 
@@ -150,12 +147,24 @@ export const AnnouncementBar = ({ audience, position = "top" }: Props) => {
 
     const code = couponCode || detectAnnouncementCoupon(selectedAnnouncement || cur);
     if (code) {
-      setPendingCoupon(code);
+      // Mark as explicitly originated from Announcement CTA button
+      setPendingCoupon(code, true);
+      try {
+        sessionStorage.setItem("geflow_from_announcement_cta", "1");
+      } catch {
+        /* ignore */
+      }
 
       // Check if target url already has the coupon param
       const hasCoupon = /[?&](?:coupon|code|promo)=/i.test(target);
       if (!hasCoupon && (target.includes("/checkout") || target.includes("/pricing") || target.includes("/subscription") || target.startsWith("/"))) {
-        target += (target.includes("?") ? "&" : "?") + `coupon=${encodeURIComponent(code)}`;
+        target += (target.includes("?") ? "&" : "?") + `coupon=${encodeURIComponent(code)}&from_cta=1`;
+      } else if (!target.includes("from_cta=1")) {
+        target += (target.includes("?") ? "&" : "?") + "from_cta=1";
+      }
+    } else {
+      if ((target.includes("/checkout") || target.startsWith("/")) && !target.includes("from_cta=1")) {
+        target += (target.includes("?") ? "&" : "?") + "from_cta=1";
       }
     }
 

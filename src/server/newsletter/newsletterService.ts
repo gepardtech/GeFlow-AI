@@ -155,7 +155,7 @@ class NewsletterService {
     }
 
     const now = new Date().toISOString();
-    let existingIndex = this.subscribers.findIndex((s) => s.email.toLowerCase() === cleanEmail);
+    const existingIndex = this.subscribers.findIndex((s) => s.email.toLowerCase() === cleanEmail);
     let subscriber: NewsletterSubscriber;
     let isNew = false;
 
@@ -229,6 +229,57 @@ class NewsletterService {
     this.subscribers = this.subscribers.filter((s) => s.id !== id && s.email !== id);
     this.saveSubscribers();
     return { success: true };
+  }
+
+  public toggleStatus(id: string, status?: "subscribed" | "unsubscribed"): { success: boolean; subscriber: NewsletterSubscriber } {
+    this.loadAll();
+    const sub = this.subscribers.find((s) => s.id === id || s.email.toLowerCase() === id.toLowerCase());
+    if (!sub) {
+      throw new Error("Subscriber not found.");
+    }
+    sub.status = status || (sub.status === "subscribed" ? "unsubscribed" : "subscribed");
+    this.saveSubscribers();
+    return { success: true, subscriber: sub };
+  }
+
+  public sendDirectEmail(params: {
+    recipientEmail: string;
+    subject: string;
+    headline?: string;
+    body: string;
+    ctaText?: string;
+    ctaUrl?: string;
+    footerText?: string;
+    appName?: string;
+  }): { success: boolean; message: string; log: NewsletterLog } {
+    this.loadAll();
+    const cleanEmail = params.recipientEmail.trim().toLowerCase();
+    const now = new Date().toISOString();
+    const sub = this.subscribers.find((s) => s.email.toLowerCase() === cleanEmail);
+    if (sub) {
+      sub.lastEmailSentAt = now;
+      sub.emailsDelivered = (sub.emailsDelivered || 0) + 1;
+      this.saveSubscribers();
+    }
+
+    const log: NewsletterLog = {
+      id: "log_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
+      recipient: cleanEmail,
+      templateId: "custom_direct",
+      templateName: "Custom Direct Email",
+      subject: params.subject,
+      type: "announcement",
+      status: "delivered",
+      sentAt: now,
+    };
+    this.logs.unshift(log);
+    this.saveLogs();
+
+    return {
+      success: true,
+      message: `Customized email template sent directly to ${cleanEmail}`,
+      log,
+    };
   }
 
   public updateTemplate(id: string, updates: Partial<NewsletterTemplate>): NewsletterTemplate {

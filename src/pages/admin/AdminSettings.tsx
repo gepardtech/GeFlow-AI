@@ -15,6 +15,7 @@ import {
   Settings, Palette, CreditCard, Shield, Bell, Loader2, Save, Upload, ImageIcon, Globe, Trash2, Mail,
 } from "lucide-react";
 import { EmailTemplatesManager } from "@/components/admin/EmailTemplatesManager";
+import { AdminSocialAndFooterSettings } from "@/components/admin/AdminSocialAndFooterSettings";
 
 type SettingsRow = Record<string, any>;
 
@@ -110,6 +111,7 @@ const AdminSettings = () => {
       <Tabs defaultValue="general">
         <TabsList className="bg-card border border-border rounded-xl p-1.5 inline-flex flex-wrap h-auto gap-1">
           <TabsTrigger value="general" className="data-[state=active]:bg-sky-400/15 data-[state=active]:text-sky-500 rounded-lg gap-2 font-bold"><Settings className="h-4 w-4" /> General</TabsTrigger>
+          <TabsTrigger value="social-footer" className="rounded-lg gap-2 font-bold"><Globe className="h-4 w-4" /> Social &amp; Footer</TabsTrigger>
           <TabsTrigger value="branding" className="rounded-lg gap-2 font-bold"><Palette className="h-4 w-4" /> Branding</TabsTrigger>
           <TabsTrigger value="billing" className="rounded-lg gap-2 font-bold"><CreditCard className="h-4 w-4" /> Billing</TabsTrigger>
           <TabsTrigger value="security" className="rounded-lg gap-2 font-bold"><Shield className="h-4 w-4" /> Security</TabsTrigger>
@@ -154,6 +156,16 @@ const AdminSettings = () => {
               <Input value={form.maintenance_message ?? ""} onChange={(e) => set("maintenance_message", e.target.value)} placeholder="GeFlow is under maintenance, please come back in some time." />
             </Field>
           </Card>
+
+          {/* Social Links & Footer Copyright Manager */}
+          <div className="pt-4 border-t border-border">
+            <AdminSocialAndFooterSettings />
+          </div>
+        </TabsContent>
+
+        {/* SOCIAL & FOOTER DEDICATED TAB */}
+        <TabsContent value="social-footer" className="mt-6">
+          <AdminSocialAndFooterSettings />
         </TabsContent>
 
 

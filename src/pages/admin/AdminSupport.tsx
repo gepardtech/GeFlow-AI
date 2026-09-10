@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllContactSubmissions, markLocalContactSubmissionRead, deleteLocalContactSubmission, ContactSubmissionRecord } from "@/lib/contactService";
 import PanelLayout from "@/components/PanelLayout";
 import { ADMIN_NAV, ADMIN_IDENTITY } from "@/lib/panelNav";
+import { SupportNewsletterTab } from "@/components/admin/SupportNewsletterTab";
 import {
   Search, MessageSquareReply, Megaphone, BookOpen, Users, Bot,
   LifeBuoy, Eye, Send, Plus, Pencil, Trash2, Loader2, X, Sparkles, Activity, Shield, Clock, Mail, CheckCircle2,
@@ -18,6 +20,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar, Cell } from "recharts";
+import {
+  getLiveAnnouncements,
+  saveLiveAnnouncement,
+  toggleLiveAnnouncementActive,
+  deleteLiveAnnouncement,
+  getLiveCoupons,
+  AnnouncementItem,
+} from "@/lib/promotionsClient";
 
 type Ticket = {
   id: string; ticket_number: string; owner_user_id: string; subject: string;
@@ -88,10 +98,14 @@ const AdminSupport = () => {
   }, []);
 
   // ---------- ANNOUNCEMENTS ----------
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const loadAnnouncements = useCallback(async () => {
-    const { data } = await supabase.from("announcements").select("*").order("created_at", { ascending: false });
-    setAnnouncements((data as Announcement[]) ?? []);
+    try {
+      const data = await getLiveAnnouncements();
+      setAnnouncements(data);
+    } catch (err) {
+      console.warn("Failed to load announcements:", err);
+    }
   }, []);
 
   // ---------- KB ----------
@@ -123,9 +137,11 @@ const AdminSupport = () => {
   useEffect(() => {
     loadTickets(); loadTemplates(); loadAnnouncements(); loadKb(); loadTeam(); loadAutomation();
     const onSubChange = () => loadTickets();
+    const onAnnChange = () => loadAnnouncements();
     window.addEventListener("geflow:contact-submission-added", onSubChange);
     window.addEventListener("geflow:contact-submission-updated", onSubChange);
     window.addEventListener("geflow:contact-submission-deleted", onSubChange);
+    window.addEventListener("geflow:announcements-updated", onAnnChange);
     const ch = supabase.channel(`admin_support_rt_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "support_tickets" }, loadTickets)
       .on("postgres_changes", { event: "*", schema: "public", table: "contact_submissions" }, loadTickets)
@@ -140,6 +156,7 @@ const AdminSupport = () => {
       window.removeEventListener("geflow:contact-submission-added", onSubChange);
       window.removeEventListener("geflow:contact-submission-updated", onSubChange);
       window.removeEventListener("geflow:contact-submission-deleted", onSubChange);
+      window.removeEventListener("geflow:announcements-updated", onAnnChange);
       supabase.removeChannel(ch);
     };
   }, [loadTickets, loadTemplates, loadAnnouncements, loadKb, loadTeam, loadAutomation]);
@@ -662,14 +679,10 @@ const AnnouncementDialog = ({ open, onOpenChange, onSaved, edit }: any) => {
 
   useEffect(() => {
     if (!open) return;
-    supabase
-      .from("coupons")
-      .select("id, code, discount_type, discount_value, applies_to_plan, active")
-      .eq("active", true)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        setAvailableCoupons(data || []);
-      });
+    getLiveCoupons().then((all) => {
+      const activeCoupons = (all || []).filter((c) => c.active);
+      setAvailableCoupons(activeCoupons);
+    });
   }, [open]);
 
   useEffect(() => {
@@ -765,15 +778,12 @@ const AnnouncementDialog = ({ open, onOpenChange, onSaved, edit }: any) => {
       created_by_user_id: user.id,
     };
 
-    let error;
-    if (edit) ({ error } = await supabase.from("announcements").update(payload).eq("id", edit.id));
-    else ({ error } = await supabase.from("announcements").insert(payload));
-
-    if (error) {
-      toast({ title: "Save failed", description: error.message, variant: "destructive" });
+    const res = await saveLiveAnnouncement(payload, edit?.id);
+    if (res.error) {
+      toast({ title: "Save failed", description: res.error, variant: "destructive" });
       return;
     }
-    toast({ title: edit ? "Announcement updated" : "Announcement scheduled" });
+    toast({ title: edit ? "Announcement updated" : "Announcement published" });
     onSaved();
     onOpenChange(false);
   };
@@ -1130,17 +1140,27 @@ const Row = ({ k, v }: { k: string; v: string }) => (
 // ---------- ANNOUNCEMENTS MANAGER ----------
 const AnnouncementsManager = ({ items, onChange, openCreate }: any) => {
   const { toast } = useToast();
-  const [edit, setEdit] = useState<Announcement | null>(null);
+  const [edit, setEdit] = useState<AnnouncementItem | null>(null);
   const del = async (id: string) => {
-    const { error } = await supabase.from("announcements").delete().eq("id", id);
-    if (error) { toast({ title: "Delete failed", description: error.message, variant: "destructive" }); return; }
-    onChange(); toast({ title: "Deleted" });
+    const res = await deleteLiveAnnouncement(id);
+    if (res.error) {
+      toast({ title: "Delete failed", description: res.error, variant: "destructive" });
+      return;
+    }
+    onChange();
+    toast({ title: "Announcement deleted", description: "Removed permanently from the site." });
   };
-  const toggle = async (a: Announcement) => {
+  const toggle = async (a: AnnouncementItem) => {
     const next = !a.is_active;
-    const { error } = await supabase.from("announcements").update({ is_active: next }).eq("id", a.id);
-    if (error) { toast({ title: "Update failed", description: error.message, variant: "destructive" }); return; }
-    toast({ title: next ? "Announcement activated" : "Announcement paused" });
+    const res = await toggleLiveAnnouncementActive(a.id, next);
+    if (res.error) {
+      toast({ title: "Update failed", description: res.error, variant: "destructive" });
+      return;
+    }
+    toast({
+      title: next ? "Announcement Activated" : "Announcement Inactivated",
+      description: next ? "Banner is now live on selected pages." : "Banner has been inactivated and hidden from all users.",
+    });
     onChange();
   };
   return (

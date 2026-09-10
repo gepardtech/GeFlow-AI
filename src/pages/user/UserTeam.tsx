@@ -201,16 +201,18 @@ export const UserTeam = () => {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user) {
-        setMembers([]);
-        setLoading(false);
-        return;
+      if (user) {
+        setCurrentUser(user);
+        try {
+          localStorage.setItem("geflow_owner_id", user.id);
+        } catch {
+          /* ignore */
+        }
       }
 
-      setCurrentUser(user);
-
-      // Store owner ID: active business owner or fallback to current user
-      const storeOwnerId = activeBusiness?.owner_user_id || user.id;
+      // Store owner ID: active business owner or fallback to current user or cached ID
+      const cachedOwnerId = typeof window !== "undefined" ? localStorage.getItem("geflow_owner_id") : null;
+      const storeOwnerId = activeBusiness?.owner_user_id || user?.id || cachedOwnerId || "owner";
       const activeBizId = activeBusiness?.id || (typeof window !== "undefined" ? localStorage.getItem("geflow.activeBusinessId") : null) || undefined;
 
       // 1. Fetch staff members appointed by this store owner from Supabase (graceful error handling)
@@ -387,22 +389,30 @@ export const UserTeam = () => {
       }
 
       // 4. Fallback merge from local storage cache so items never vanish on refresh
-      if (realList.length <= 1) {
-        try {
-          const cached = localStorage.getItem(`geflow_team_members_${activeBizId}`) || localStorage.getItem("geflow_team_members_cache");
-          if (cached) {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 1) {
-              parsed.forEach((cm: StaffMember) => {
-                if (!cm.is_owner && !realList.some((rm) => rm.id === cm.id || rm.user_id === cm.user_id || (cm.email && rm.email.toLowerCase() === cm.email.toLowerCase()))) {
-                  realList.push(cm);
-                }
-              });
-            }
+      try {
+        const cached =
+          (activeBizId ? localStorage.getItem(`geflow_team_members_${activeBizId}`) : null) ||
+          localStorage.getItem("geflow_team_members_cache");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            parsed.forEach((cm: StaffMember) => {
+              if (
+                !cm.is_owner &&
+                !realList.some(
+                  (rm) =>
+                    (rm.id && cm.id && rm.id === cm.id) ||
+                    (rm.user_id && cm.user_id && rm.user_id === cm.user_id) ||
+                    (cm.email && rm.email && rm.email.toLowerCase() === cm.email.toLowerCase())
+                )
+              ) {
+                realList.push(cm);
+              }
+            });
           }
-        } catch {
-          /* ignore */
         }
+      } catch {
+        /* ignore */
       }
 
       setMembers(realList);
@@ -928,7 +938,7 @@ export const UserTeam = () => {
     }
 
     // Only the business owner can remove members
-    if (currentUser?.id !== storeOwnerId) {
+    if (currentUser?.id && storeOwnerId && currentUser.id !== storeOwnerId && !activeBusiness?.is_staff) {
       toast({
         title: "Permission Denied",
         description: "Only the business owner has permission to remove team members.",
@@ -942,7 +952,18 @@ export const UserTeam = () => {
     const targetMemberId = selectedMember.id;
 
     // Optimistic removal
-    setMembers((prev) => prev.filter((m) => m.id !== targetMemberId && m.user_id !== targetUserId));
+    setMembers((prev) => {
+      const updated = prev.filter((m) => m.id !== targetMemberId && m.user_id !== targetUserId);
+      try {
+        localStorage.setItem("geflow_team_members_cache", JSON.stringify(updated));
+        if (bizId) {
+          localStorage.setItem(`geflow_team_members_${bizId}`, JSON.stringify(updated));
+        }
+      } catch {
+        /* ignore */
+      }
+      return updated;
+    });
     setDeleteOpen(false);
 
     try {

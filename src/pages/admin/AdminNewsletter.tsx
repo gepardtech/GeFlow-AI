@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import PanelLayout from "@/components/PanelLayout";
 import { ADMIN_NAV, ADMIN_IDENTITY } from "@/lib/panelNav";
 import { useToast } from "@/hooks/use-toast";
@@ -70,7 +70,7 @@ export default function AdminNewsletter() {
   const [broadcasting, setBroadcasting] = useState(false);
 
   // Load All Data
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [subsData, tplsData, logsData, statsData] = await Promise.all([
@@ -106,11 +106,11 @@ export default function AdminNewsletter() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedTemplateId]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   // When selected template changes
   const handleSelectTemplate = (id: string) => {

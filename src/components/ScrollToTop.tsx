@@ -5,22 +5,35 @@ export default function ScrollToTop() {
   const { pathname, search, hash } = useLocation();
 
   useEffect(() => {
-    // If there is no specific element hash targeting an in-page section,
-    // ensure every page navigation starts cleanly at the top hero banner.
+    // Disable browser default scroll restoration so it never restores footer position
+    if (typeof window !== "undefined" && "scrollRestoration" in window.history) {
+      window.history.scrollRestoration = "manual";
+    }
+
     if (!hash) {
-      window.scrollTo({
-        top: 0,
-        left: 0,
-        behavior: "instant" as ScrollBehavior,
-      });
-      document.documentElement.scrollTo({
-        top: 0,
-        left: 0,
-        behavior: "instant" as ScrollBehavior,
-      });
-      if (document.body) {
-        document.body.scrollTop = 0;
-      }
+      const resetScroll = () => {
+        window.scrollTo(0, 0);
+        if (document.documentElement) {
+          document.documentElement.scrollTop = 0;
+          document.documentElement.scrollLeft = 0;
+        }
+        if (document.body) {
+          document.body.scrollTop = 0;
+          document.body.scrollLeft = 0;
+        }
+      };
+
+      // Run immediately
+      resetScroll();
+      // Run on next animation frame
+      const raf = requestAnimationFrame(resetScroll);
+      // Run shortly after DOM paint
+      const t = setTimeout(resetScroll, 20);
+
+      return () => {
+        cancelAnimationFrame(raf);
+        clearTimeout(t);
+      };
     } else {
       const id = hash.replace("#", "");
       const element = document.getElementById(id);

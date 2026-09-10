@@ -56,6 +56,7 @@ const Navbar = () => {
             <Link
               key={l.href}
               to={l.href}
+              onClick={() => window.scrollTo({ top: 0, left: 0, behavior: "instant" })}
               className={`text-sm font-medium transition-colors hover:text-primary whitespace-nowrap ${
                 location.pathname === l.href ? "text-primary" : "text-muted-foreground"
               }`}

@@ -37,6 +37,23 @@
       "isActive": true,
       "createdAt": "2026-09-09T14:20:45.267Z",
       "updatedAt": "2026-09-09T14:20:45.267Z"
+    },
+    {
+      "id": "mem_1789054221180_lqgfxdn",
+      "businessId": "biz_test_1",
+      "businessName": "Store",
+      "currency": "USD",
+      "userId": "user_1789054221180_1ai0r",
+      "userEmail": "john.doe@teststore.com",
+      "userName": "John Doe",
+      "ownerId": "owner_user_1",
+      "role": "manager",
+      "permissions": [
+        "full"
+      ],
+      "isActive": true,
+      "createdAt": "2026-09-10T15:30:21.180Z",
+      "updatedAt": "2026-09-10T15:30:21.180Z"
     }
   ],
   "notifications": [

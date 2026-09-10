@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,7 @@ import {
   validateCoupon,
   getPendingCoupon,
   clearPendingCoupon,
-  findActiveAnnouncementCoupon,
+  isPendingCouponFromCta,
   ValidatedCouponResult,
 } from "@/lib/couponHelper";
 import { Tag } from "lucide-react";
@@ -112,6 +112,10 @@ const Checkout = () => {
   const [showInvoice, setShowInvoice] = useState(false);
   const [isAdminEmail, setIsAdminEmail] = useState(false);
 
+  // Tracking refs to respect user intent on coupon removal and CTA auto-apply
+  const hasAutoAppliedRef = useRef(false);
+  const userRemovedCouponRef = useRef(false);
+
   const discount = useMemo(() => {
     if (!appliedCoupon) return 0;
     if (appliedCoupon.discountType === "percent" && appliedCoupon.discountValue) {
@@ -122,16 +126,19 @@ const Checkout = () => {
 
   const total = useMemo(() => +(Math.max(subtotal - discount, 0) + tax).toFixed(2), [subtotal, discount, tax]);
 
-  const applyCoupon = useCallback(async (codeToApply?: string) => {
+  const applyCoupon = useCallback(async (codeToApply?: string, isAutoApply: boolean = false) => {
     const raw = codeToApply !== undefined ? codeToApply : coupon;
     const code = raw.trim().toUpperCase();
-    if (!code) return;
+    if (!code) {
+      setCouponError("Please enter a coupon code.");
+      return;
+    }
     setCoupon(code);
     setCouponLoading(true);
     setCouponError("");
 
     try {
-      const res = await validateCoupon(code, plan, subtotal);
+      const res = await validateCoupon(code, plan, subtotal, period);
       if (res.valid) {
         setAppliedCoupon({
           code: res.code,
@@ -142,14 +149,22 @@ const Checkout = () => {
           isAnnouncementPromo: res.isAnnouncementPromo,
         });
         setCouponError("");
+        clearPendingCoupon();
+        userRemovedCouponRef.current = false;
         toast({
           title: res.isAnnouncementPromo ? "Announcement Promo Applied!" : "Promo Coupon Applied!",
-          description: `${res.label} activated.`,
+          description: `${res.label} activated for your order.`,
         });
-        clearPendingCoupon();
       } else {
         setAppliedCoupon(null);
-        setCouponError(res.reason || "Invalid or expired coupon code.");
+        setCouponError(res.reason || "Invalid or inactive coupon code.");
+        if (!isAutoApply) {
+          toast({
+            title: "Coupon Cannot Be Applied",
+            description: res.reason || "Invalid or expired coupon code.",
+            variant: "destructive",
+          });
+        }
       }
     } catch (e: any) {
       console.warn("Coupon validation error", e);
@@ -158,36 +173,102 @@ const Checkout = () => {
     } finally {
       setCouponLoading(false);
     }
-  }, [coupon, plan, subtotal, toast]);
+  }, [coupon, plan, subtotal, period, toast]);
 
-  // Automatically detect and apply promo coupon from URL params, storage, or active announcements
+  const handleRemoveCoupon = useCallback(() => {
+    userRemovedCouponRef.current = true;
+    setAppliedCoupon(null);
+    setCoupon("");
+    setCouponError("");
+    clearPendingCoupon();
+
+    // Clean URL query parameters so coupon/from_cta isn't lingering or re-read
+    const newParams = new URLSearchParams(params);
+    newParams.delete("coupon");
+    newParams.delete("code");
+    newParams.delete("promo");
+    newParams.delete("from_cta");
+    newParams.delete("cta");
+    navigate({ search: newParams.toString() }, { replace: true });
+
+    toast({
+      title: "Coupon Removed",
+      description: "The discount has been removed from this order.",
+    });
+  }, [params, navigate, toast]);
+
+  // Re-validate coupon whenever plan, period, or subtotal changes
+  const appliedCouponCode = appliedCoupon?.code;
   useEffect(() => {
+    if (!appliedCouponCode) return;
     let isCancelled = false;
 
-    const detectAndApply = async () => {
-      const urlCoupon = params.get("coupon") || params.get("code") || params.get("promo");
-      const pendingCoupon = getPendingCoupon();
-      let targetCoupon = (urlCoupon || pendingCoupon).trim().toUpperCase();
-
-      if (!targetCoupon && !appliedCoupon) {
-        const announcementCoupon = await findActiveAnnouncementCoupon();
-        if (announcementCoupon?.code && !isCancelled) {
-          targetCoupon = announcementCoupon.code;
-        }
-      }
-
-      if (targetCoupon && subtotal > 0 && !appliedCoupon && !isCancelled) {
-        setCoupon(targetCoupon);
-        await applyCoupon(targetCoupon);
+    const revalidate = async () => {
+      const res = await validateCoupon(appliedCouponCode, plan, subtotal, period);
+      if (isCancelled) return;
+      if (res.valid) {
+        setAppliedCoupon((prev) =>
+          prev
+            ? {
+                ...prev,
+                amount: res.amount,
+                label: res.label,
+                discountType: res.discountType,
+                discountValue: res.discountValue,
+              }
+            : null
+        );
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(res.reason || "Coupon is not valid for the selected plan.");
+        toast({
+          title: "Coupon Removed",
+          description: res.reason || "This coupon does not apply to the selected plan or billing cycle.",
+          variant: "destructive",
+        });
       }
     };
 
-    detectAndApply();
+    revalidate();
 
     return () => {
       isCancelled = true;
     };
-  }, [params, subtotal, plan, appliedCoupon, applyCoupon]);
+  }, [appliedCouponCode, plan, period, subtotal, toast]);
+
+  // Apply coupon automatically ONLY when user arrives via Announcement CTA Button
+  useEffect(() => {
+    let isCancelled = false;
+
+    const checkAutoApply = async () => {
+      const isFromCta =
+        params.get("from_cta") === "1" ||
+        params.get("cta") === "1" ||
+        isPendingCouponFromCta();
+
+      const urlCoupon = (params.get("coupon") || params.get("code") || params.get("promo") || "").trim().toUpperCase();
+      const pendingCoupon = getPendingCoupon();
+      const targetCoupon = urlCoupon || pendingCoupon;
+
+      if (isFromCta && targetCoupon && !hasAutoAppliedRef.current && !userRemovedCouponRef.current) {
+        hasAutoAppliedRef.current = true;
+        if (!isCancelled && subtotal > 0) {
+          setCoupon(targetCoupon);
+          await applyCoupon(targetCoupon, true);
+        }
+      } else if (!isFromCta && urlCoupon) {
+        // User visited directly or with a URL param without CTA button:
+        // Do NOT auto-apply. Just populate the input for convenience, user has to click APPLY manually.
+        setCoupon((current) => current || urlCoupon);
+      }
+    };
+
+    checkAutoApply();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [params, subtotal, applyCoupon]);
 
 
   const ctaLabel = period === "lifetime" ? "AUTHORIZE & START NODE" : "AUTHORIZE & START TRIAL";
@@ -540,28 +621,34 @@ const Checkout = () => {
                 <div className="flex gap-2">
                   <Input
                     value={coupon}
-                    onChange={(e) => { setCoupon(e.target.value); setCouponError(""); }}
-                    placeholder="Enter code"
+                    onChange={(e) => {
+                      setCoupon(e.target.value.toUpperCase());
+                      setCouponError("");
+                    }}
+                    placeholder={appliedCoupon ? `Applied: ${appliedCoupon.code}` : "Enter code"}
                     className="h-10 uppercase font-mono font-bold"
                   />
-                  <Button type="button" onClick={() => applyCoupon()} disabled={couponLoading} variant="outline" className="h-10 px-4 text-xs font-bold tracking-wider">
-                    {couponLoading ? "..." : "APPLY"}
+                  <Button
+                    type="button"
+                    onClick={() => applyCoupon()}
+                    disabled={couponLoading || !coupon.trim()}
+                    variant="outline"
+                    className="h-10 px-4 text-xs font-bold tracking-wider"
+                  >
+                    {couponLoading ? "..." : appliedCoupon ? "REPLACE" : "APPLY"}
                   </Button>
                 </div>
                 {couponError && <p className="text-xs text-destructive mt-2">{couponError}</p>}
                 {appliedCoupon && (
                   <div className="flex items-center justify-between mt-2.5 p-2 rounded-lg bg-primary/10 border border-primary/20 text-xs">
-                    <span className="font-semibold text-primary flex items-center gap-1">
+                    <span className="font-semibold text-primary flex items-center gap-1.5">
                       <span>✓</span>
                       <span>{appliedCoupon.label} ({appliedCoupon.code}) applied</span>
                     </span>
                     <button
                       type="button"
-                      onClick={() => {
-                        setAppliedCoupon(null);
-                        setCoupon("");
-                      }}
-                      className="text-muted-foreground hover:text-destructive text-[11px] underline ml-2 cursor-pointer"
+                      onClick={handleRemoveCoupon}
+                      className="text-muted-foreground hover:text-destructive text-xs font-semibold underline ml-2 cursor-pointer transition-colors"
                     >
                       Remove
                     </button>

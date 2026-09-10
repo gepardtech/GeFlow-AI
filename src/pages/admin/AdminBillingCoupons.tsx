@@ -19,22 +19,14 @@ import {
 import {
   Ticket, Plus, Loader2, Pencil, Trash2, Percent, DollarSign, Copy, CheckCircle2, XCircle,
 } from "lucide-react";
-
-type Coupon = {
-  id: string;
-  code: string;
-  description: string | null;
-  discount_type: string;
-  discount_value: number;
-  applies_to_plan: string | null;
-  min_amount: number;
-  max_uses: number | null;
-  used_count: number;
-  starts_at: string | null;
-  expires_at: string | null;
-  active: boolean;
-  created_at: string;
-};
+import {
+  getLiveCoupons,
+  saveLiveCoupon,
+  toggleLiveCouponActive,
+  deleteLiveCoupon,
+  formatPlanTargetLabel,
+  CouponItem,
+} from "@/lib/promotionsClient";
 
 const emptyForm = {
   code: "", description: "", discount_type: "percent", discount_value: 10,
@@ -43,38 +35,54 @@ const emptyForm = {
 
 const AdminBillingCoupons = () => {
   const { toast } = useToast();
-  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [coupons, setCoupons] = useState<CouponItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<Coupon | null>(null);
+  const [editing, setEditing] = useState<CouponItem | null>(null);
   const [form, setForm] = useState<any>(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Coupon | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CouponItem | null>(null);
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from("coupons").select("*").order("created_at", { ascending: false });
-    setCoupons((data as Coupon[]) ?? []);
-    setLoading(false);
+    try {
+      const data = await getLiveCoupons();
+      setCoupons(data);
+    } catch (err) {
+      console.warn("Failed to load coupons:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     load();
+    const handleUpdate = () => load();
+    window.addEventListener("geflow:coupons-updated", handleUpdate);
     const ch = supabase.channel(`admin_coupons_rt_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "coupons" }, load)
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+
+    return () => {
+      window.removeEventListener("geflow:coupons-updated", handleUpdate);
+      supabase.removeChannel(ch);
+    };
   }, [load]);
 
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
 
   const openCreate = () => { setEditing(null); setForm(emptyForm); setOpen(true); };
-  const openEdit = (c: Coupon) => {
+  const openEdit = (c: CouponItem) => {
     setEditing(c);
     setForm({
-      code: c.code, description: c.description ?? "", discount_type: c.discount_type,
-      discount_value: c.discount_value, applies_to_plan: c.applies_to_plan ?? "all",
-      min_amount: c.min_amount, max_uses: c.max_uses ?? "",
-      expires_at: c.expires_at ? c.expires_at.slice(0, 10) : "", active: c.active,
+      code: c.code,
+      description: c.description ?? "",
+      discount_type: c.discount_type,
+      discount_value: c.discount_value,
+      applies_to_plan: c.applies_to_plan ?? "all",
+      min_amount: c.min_amount,
+      max_uses: c.max_uses ?? "",
+      expires_at: c.expires_at ? c.expires_at.slice(0, 10) : "",
+      active: c.active,
     });
     setOpen(true);
   };
@@ -82,7 +90,7 @@ const AdminBillingCoupons = () => {
   const submit = async () => {
     if (!form.code.trim()) { toast({ title: "Code required", variant: "destructive" }); return; }
     setSaving(true);
-    const payload = {
+    const payload: Partial<CouponItem> = {
       code: form.code.trim().toUpperCase(),
       description: form.description || null,
       discount_type: form.discount_type,
@@ -93,27 +101,42 @@ const AdminBillingCoupons = () => {
       expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : null,
       active: form.active,
     };
-    const res = editing
-      ? await supabase.from("coupons").update(payload).eq("id", editing.id)
-      : await supabase.from("coupons").insert(payload as any);
+
+    const res = await saveLiveCoupon(payload, editing?.id);
     setSaving(false);
-    if (res.error) { toast({ title: "Save failed", description: res.error.message, variant: "destructive" }); return; }
-    toast({ title: editing ? "Coupon updated" : "Coupon created", description: "Synced live to the checkout page." });
+
+    if (res.error) {
+      toast({ title: "Save failed", description: res.error, variant: "destructive" });
+      return;
+    }
+
+    toast({
+      title: editing ? "Coupon updated" : "Coupon created",
+      description: `Coupon ${payload.code} saved and synchronized with checkout.`,
+    });
     setOpen(false);
     load();
   };
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    const { error } = await supabase.from("coupons").delete().eq("id", deleteTarget.id);
-    if (error) { toast({ title: "Delete failed", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Coupon deleted" });
+    const targetCode = deleteTarget.code;
+    setCoupons((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+    await deleteLiveCoupon(deleteTarget.id);
+    toast({ title: "Coupon deleted", description: `${targetCode} removed successfully.` });
     setDeleteTarget(null);
     load();
   };
 
-  const toggleActive = async (c: Coupon) => {
-    await supabase.from("coupons").update({ active: !c.active }).eq("id", c.id);
+  const toggleActive = async (c: CouponItem) => {
+    const nextActive = !c.active;
+    // Optimistic UI update
+    setCoupons((prev) => prev.map((item) => item.id === c.id ? { ...item, active: nextActive } : item));
+    await toggleLiveCouponActive(c.id, nextActive);
+    toast({
+      title: nextActive ? "Coupon Activated" : "Coupon Inactivated",
+      description: `${c.code} is now ${nextActive ? "active" : "inactive and will not apply at checkout"}.`,
+    });
     load();
   };
 
@@ -125,7 +148,7 @@ const AdminBillingCoupons = () => {
     redemptions: coupons.reduce((s, c) => s + (c.used_count ?? 0), 0),
   }), [coupons]);
 
-  const isExpired = (c: Coupon) => c.expires_at && new Date(c.expires_at) < new Date();
+  const isExpired = (c: CouponItem) => c.expires_at && new Date(c.expires_at) < new Date();
 
   return (
     <PanelLayout navItems={ADMIN_NAV} {...ADMIN_IDENTITY} isAdmin>
@@ -159,7 +182,7 @@ const AdminBillingCoupons = () => {
                 <tr className="text-left text-[10px] font-bold tracking-widest text-muted-foreground border-b border-border">
                   <th className="px-5 py-3">CODE</th>
                   <th className="px-5 py-3">DISCOUNT</th>
-                  <th className="px-5 py-3">PLAN</th>
+                  <th className="px-5 py-3">APPLIES TO PLAN</th>
                   <th className="px-5 py-3">USAGE</th>
                   <th className="px-5 py-3">EXPIRES</th>
                   <th className="px-5 py-3">STATUS</th>
@@ -179,14 +202,22 @@ const AdminBillingCoupons = () => {
                     <td className="px-5 py-4 font-bold">
                       {c.discount_type === "percent" ? `${c.discount_value}%` : `$${Number(c.discount_value).toFixed(2)}`}
                     </td>
-                    <td className="px-5 py-4 capitalize text-muted-foreground">{c.applies_to_plan ?? "All plans"}</td>
+                    <td className="px-5 py-4">
+                      {c.applies_to_plan ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                          {formatPlanTargetLabel(c.applies_to_plan)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs font-medium">All Plans</span>
+                      )}
+                    </td>
                     <td className="px-5 py-4 text-muted-foreground">{c.used_count}{c.max_uses != null ? ` / ${c.max_uses}` : ""}</td>
                     <td className="px-5 py-4 text-muted-foreground">{c.expires_at ? new Date(c.expires_at).toLocaleDateString() : "—"}</td>
                     <td className="px-5 py-4">
                       {isExpired(c) ? (
                         <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-500"><XCircle className="h-3.5 w-3.5" /> Expired</span>
                       ) : (
-                        <button onClick={() => toggleActive(c)} className={`inline-flex items-center gap-1 text-xs font-bold ${c.active ? "text-emerald-500" : "text-muted-foreground"}`}>
+                        <button onClick={() => toggleActive(c)} className={`inline-flex items-center gap-1 text-xs font-bold cursor-pointer transition-colors ${c.active ? "text-emerald-500 hover:text-emerald-600" : "text-muted-foreground hover:text-foreground"}`}>
                           {c.active ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />} {c.active ? "Active" : "Inactive"}
                         </button>
                       )}
@@ -232,13 +263,21 @@ const AdminBillingCoupons = () => {
               </Field>
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
-              <Field label="Applies To">
+              <Field label="Applies To Specific Plan">
                 <Select value={form.applies_to_plan} onValueChange={(v) => set("applies_to_plan", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All plans</SelectItem>
-                    <SelectItem value="standard">Standard</SelectItem>
-                    <SelectItem value="premium">Premium</SelectItem>
+                  <SelectTrigger><SelectValue placeholder="Select plan applicability" /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    <SelectItem value="all">🌟 All Plans & Cycles</SelectItem>
+                    <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted/50 rounded mt-1">Standard Plan</div>
+                    <SelectItem value="standard">Standard (All Cycles)</SelectItem>
+                    <SelectItem value="standard_monthly">Standard — Monthly ($29/mo)</SelectItem>
+                    <SelectItem value="standard_yearly">Standard — Yearly ($279/yr)</SelectItem>
+                    <SelectItem value="standard_lifetime">Standard — Lifetime ($499)</SelectItem>
+                    <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted/50 rounded mt-1">Premium Plan</div>
+                    <SelectItem value="premium">Premium (All Cycles)</SelectItem>
+                    <SelectItem value="premium_monthly">Premium — Monthly ($79/mo)</SelectItem>
+                    <SelectItem value="premium_yearly">Premium — Yearly ($759/yr)</SelectItem>
+                    <SelectItem value="premium_lifetime">Plan: Premium Lifetime ($999)</SelectItem>
                   </SelectContent>
                 </Select>
               </Field>

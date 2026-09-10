@@ -26,12 +26,25 @@ export interface AboutPageMember {
   role: string;
   bio?: string;
   image_url: string;
+  imageUrl?: string;
   order: number;
+  enabled?: boolean;
   social_links?: {
     linkedin?: string;
     twitter?: string;
+    x?: string;
     github?: string;
     facebook?: string;
+    pinterest?: string;
+    email?: string;
+  };
+  socialLinks?: {
+    linkedin?: string;
+    twitter?: string;
+    x?: string;
+    github?: string;
+    facebook?: string;
+    pinterest?: string;
     email?: string;
   };
 }
@@ -65,28 +78,53 @@ export const DEFAULT_GENERAL_SETTINGS: PlatformGeneralSettings = {
   about_members: [
     {
       id: "mem_1",
-      name: "Hamza Tariq",
-      role: "Founder & Chief Executive Officer",
-      bio: "10+ years engineering mission-critical point-of-sale infrastructure and enterprise business management systems across retail and healthcare.",
+      name: "SG Bilal",
+      role: "Chairman & Chief Executive Officer",
+      bio: "Founder of Gepard Tech — the parent ecosystem behind GeFlow — SG Bilal is a full-stack developer and applied AI specialist. He architected GeFlow's real-time POS, inventory, and analytics engine.",
       image_url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
+      imageUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
       order: 1,
+      enabled: true,
       social_links: {
-        linkedin: "https://linkedin.com/in/gepardtechs",
+        facebook: "https://web.facebook.com/gepardweb/",
+        instagram: "https://www.instagram.com/gepardweb/",
         twitter: "https://x.com/gepardweb",
+        x: "https://x.com/gepardweb",
+        linkedin: "https://www.linkedin.com/company/gepardweb",
+        pinterest: "https://www.pinterest.com/gepardwebs",
         github: "https://github.com/gepardweb",
-        email: "hamza@geflow.team",
+        email: "gepardwebs@gmail.com",
+      },
+      socialLinks: {
+        facebook: "https://web.facebook.com/gepardweb/",
+        instagram: "https://www.instagram.com/gepardweb/",
+        twitter: "https://x.com/gepardweb",
+        x: "https://x.com/gepardweb",
+        linkedin: "https://www.linkedin.com/company/gepardweb",
+        pinterest: "https://www.pinterest.com/gepardwebs",
+        github: "https://github.com/gepardweb",
+        email: "gepardwebs@gmail.com",
       },
     },
     {
       id: "mem_2",
       name: "Sarah Jenkins",
       role: "Chief Product Officer & Architecture Lead",
-      bio: "Specializes in high-concurrency offline-first database synchronization and zero-latency retail checkout workflows.",
+      bio: "Specializes in high-concurrency offline-first database synchronization and zero-latency retail checkout workflows across thousands of enterprise retail chains.",
       image_url: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop&crop=faces",
+      imageUrl: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop&crop=faces",
       order: 2,
+      enabled: true,
       social_links: {
         linkedin: "https://linkedin.com/in/sarah-jenkins",
         twitter: "https://x.com/sarah_pos",
+        x: "https://x.com/sarah_pos",
+        email: "sarah@geflow.team",
+      },
+      socialLinks: {
+        linkedin: "https://linkedin.com/in/sarah-jenkins",
+        twitter: "https://x.com/sarah_pos",
+        x: "https://x.com/sarah_pos",
         email: "sarah@geflow.team",
       },
     },
@@ -94,10 +132,17 @@ export const DEFAULT_GENERAL_SETTINGS: PlatformGeneralSettings = {
       id: "mem_3",
       name: "Alex Chen",
       role: "VP of Engineering & Systems",
-      bio: "Former cloud infrastructure architect dedicated to 99.999% uptime, microsecond ledger consistency, and automated failover.",
+      bio: "Cloud infrastructure architect dedicated to 99.999% uptime, microsecond ledger consistency, distributed replication, and automated failover.",
       image_url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=faces",
+      imageUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=faces",
       order: 3,
+      enabled: true,
       social_links: {
+        linkedin: "https://linkedin.com/in/alexchen",
+        github: "https://github.com/alexchen",
+        email: "alex@geflow.team",
+      },
+      socialLinks: {
         linkedin: "https://linkedin.com/in/alexchen",
         github: "https://github.com/alexchen",
         email: "alex@geflow.team",
@@ -107,12 +152,21 @@ export const DEFAULT_GENERAL_SETTINGS: PlatformGeneralSettings = {
       id: "mem_4",
       name: "Elena Rostova",
       role: "Head of Merchant Success & Growth",
-      bio: "Passionate advocate for merchant productivity, omni-channel scaling, and onboarding thousands of multi-location retail chains.",
+      bio: "Passionate advocate for merchant productivity, omni-channel scaling, customer retention, and onboarding multi-branch retail and pharmacy networks.",
       image_url: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop&crop=faces",
+      imageUrl: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop&crop=faces",
       order: 4,
+      enabled: true,
       social_links: {
         linkedin: "https://linkedin.com/in/elenarostova",
         twitter: "https://x.com/elena_merchants",
+        x: "https://x.com/elena_merchants",
+        email: "elena@geflow.team",
+      },
+      socialLinks: {
+        linkedin: "https://linkedin.com/in/elenarostova",
+        twitter: "https://x.com/elena_merchants",
+        x: "https://x.com/elena_merchants",
         email: "elena@geflow.team",
       },
     },

@@ -59,7 +59,6 @@ const I18nProvider = ({ children }: { children: React.ReactNode }) => {
     if (!target || lang.startsWith("en")) {
       if (sessionStorage.getItem("geflow.i18n.applied")) {
         sessionStorage.removeItem("geflow.i18n.applied");
-        window.location.reload();
       }
       return;
     }

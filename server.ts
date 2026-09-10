@@ -17,6 +17,7 @@ import { teamService } from "./src/server/team/teamService";
 import { businessDataSyncService } from "./src/server/team/businessDataSyncService";
 import { settingsService } from "./src/server/settings/settingsService";
 import { newsletterService } from "./src/server/newsletter/newsletterService";
+import { promotionsService } from "./src/server/promotions/promotionsService";
 
 const app = express();
 const PORT = 3000;
@@ -360,12 +361,12 @@ app.get("/api/team/employee-businesses", (req: Request, res: Response) => {
 // Get Team Members for Business Owner
 app.get("/api/team/members", (req: Request, res: Response) => {
   try {
-    const businessId = req.query.businessId as string | undefined;
-    const ownerId = req.query.ownerId as string | undefined;
-    if (!businessId && !ownerId) {
-      return res.status(400).json({ success: false, error: "businessId or ownerId query parameter is required." });
-    }
-    const members = teamService.getTeamMembers({ businessId, ownerId });
+    const businessId = (req.query.businessId as string | undefined)?.trim();
+    const ownerId = (req.query.ownerId as string | undefined)?.trim();
+    const members = teamService.getTeamMembers({
+      businessId: businessId && businessId !== "undefined" && businessId !== "null" ? businessId : undefined,
+      ownerId: ownerId && ownerId !== "undefined" && ownerId !== "null" ? ownerId : undefined,
+    });
     res.json({ success: true, members });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -743,6 +744,39 @@ app.delete("/api/newsletter/subscribers/:id", (req: Request, res: Response) => {
   }
 });
 
+app.post("/api/newsletter/subscribers/:id/status", (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body || {};
+    const result = newsletterService.toggleStatus(id, status);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/newsletter/send-direct", (req: Request, res: Response) => {
+  try {
+    const { recipientEmail, subject, headline, body, ctaText, ctaUrl, footerText, appName } = req.body || {};
+    if (!recipientEmail || !subject || !body) {
+      return res.status(400).json({ success: false, error: "recipientEmail, subject, and body are required." });
+    }
+    const result = newsletterService.sendDirectEmail({
+      recipientEmail,
+      subject,
+      headline,
+      body,
+      ctaText,
+      ctaUrl,
+      footerText,
+      appName,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.get("/api/newsletter/templates", (req: Request, res: Response) => {
   try {
     const templates = newsletterService.getTemplates();
@@ -790,6 +824,114 @@ app.get("/api/newsletter/stats", (req: Request, res: Response) => {
     res.json({ success: true, stats });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// Announcements & Promotional Campaigns Engine
+// Handles persistent sync, activation/inactivation and real-time deletion
+// ==========================================
+app.get("/api/announcements", (req: Request, res: Response) => {
+  try {
+    const activeOnly = req.query.activeOnly === "true" || req.query.active === "true";
+    const audience = typeof req.query.audience === "string" ? req.query.audience : undefined;
+    const position = typeof req.query.position === "string" ? req.query.position : undefined;
+    const list = promotionsService.getAnnouncements(activeOnly, audience, position);
+    res.json({ success: true, announcements: list });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/announcements", (req: Request, res: Response) => {
+  try {
+    const created = promotionsService.createAnnouncement(req.body || {});
+    res.json({ success: true, announcement: created });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.patch("/api/announcements/:id", (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updated = promotionsService.updateAnnouncement(id, req.body || {});
+    if (!updated) {
+      return res.status(404).json({ success: false, error: "Announcement not found" });
+    }
+    res.json({ success: true, announcement: updated });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.delete("/api/announcements/:id", (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const deleted = promotionsService.deleteAnnouncement(id);
+    res.json({ success: true, deleted });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// Coupons & Discount Engine
+// Live sync, plan-specific matching, active/inactive toggling
+// ==========================================
+app.get("/api/coupons", (req: Request, res: Response) => {
+  try {
+    const coupons = promotionsService.getCoupons();
+    res.json({ success: true, coupons });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/coupons", (req: Request, res: Response) => {
+  try {
+    const created = promotionsService.createCoupon(req.body || {});
+    res.json({ success: true, coupon: created });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.patch("/api/coupons/:id", (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updated = promotionsService.updateCoupon(id, req.body || {});
+    if (!updated) {
+      return res.status(404).json({ success: false, error: "Coupon not found" });
+    }
+    res.json({ success: true, coupon: updated });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.delete("/api/coupons/:id", (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const deleted = promotionsService.deleteCoupon(id);
+    res.json({ success: true, deleted });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/coupons/validate", (req: Request, res: Response) => {
+  try {
+    const { code, plan, subtotal, period } = req.body || {};
+    const result = promotionsService.validateCoupon(
+      code || "",
+      plan || "standard",
+      Number(subtotal) || 0,
+      period || "monthly"
+    );
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
   }
 });
 
