@@ -3,7 +3,25 @@ import { Link } from "react-router-dom";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ShieldCheck, Zap, Globe, Facebook, Instagram, Mail, Linkedin, Github } from "lucide-react";
+import {
+  ShieldCheck,
+  Zap,
+  Globe,
+  Facebook,
+  Instagram,
+  Mail,
+  Linkedin,
+  Github,
+  CheckCircle2,
+  Lock,
+  Cpu,
+  Server,
+  Sparkles,
+  Building2,
+  ShoppingBag,
+  Store,
+  HeartHandshake,
+} from "lucide-react";
 import aboutStory from "@/assets/about-story.jpg";
 import sgBilal from "@/assets/sg-bilal.jpg";
 import {
@@ -46,18 +64,18 @@ const About = () => {
   useEffect(() => {
     const cached = getCachedGeneralSettings();
     if (cached?.about_members && cached.about_members.length > 0) {
-      setMembers(cached.about_members.filter((m) => m.enabled));
+      setMembers(cached.about_members.filter((m) => m.enabled !== false));
     }
 
     fetchGeneralSettings().then((res) => {
       if (res?.about_members && res.about_members.length > 0) {
-        setMembers(res.about_members.filter((m) => m.enabled));
+        setMembers(res.about_members.filter((m) => m.enabled !== false));
       }
     });
 
     const handleUpdate = (e: any) => {
       if (e.detail?.about_members) {
-        setMembers(e.detail.about_members.filter((m: any) => m.enabled));
+        setMembers(e.detail.about_members.filter((m: any) => m.enabled !== false));
       }
     };
 
@@ -68,61 +86,167 @@ const About = () => {
   return (
     <Layout>
       {/* Hero */}
-      <section className="pt-12 pb-16 text-center">
-        <div className="container mx-auto px-4">
-          <p className="text-[10px] font-bold tracking-[0.25em] text-primary mb-4">ABOUT GEFLOW • OUR MISSION</p>
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-5 leading-tight">
-            The Future of <span className="text-primary">Business</span><br/>Operating Systems
+      <section className="pt-12 pb-14 text-center">
+        <div className="container mx-auto px-4 max-w-4xl">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-[11px] font-bold tracking-widest uppercase mb-5">
+            <Sparkles className="w-3.5 h-3.5" />
+            About GeFlow • Our Engineering Mission
+          </div>
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-5 leading-tight tracking-tight">
+            The Central Operating System for <br/>
+            <span className="text-primary bg-clip-text text-transparent bg-gradient-to-r from-sky-500 to-teal-500">
+              High-Velocity Commerce
+            </span>
           </h1>
-          <p className="text-muted-foreground max-w-xl mx-auto">
-            GeFlow is more than software; it's a centralized intelligence node for the modern entrepreneur.
+          <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto leading-relaxed">
+            GeFlow is an intelligent, offline-first operating system designed for pharmacies, retail networks, supermarkets, and modern warehouses. Built for microsecond latency and zero downtime.
           </p>
         </div>
       </section>
 
+      {/* Operational Highlights Ticker */}
+      <section className="border-y border-border py-8 bg-card/60">
+        <div className="container mx-auto px-4 max-w-6xl">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+            <div className="p-3">
+              <p className="text-3xl md:text-4xl font-black text-foreground tracking-tight">$1.2B+</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-primary mt-1">Processed Volume</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Across retail &amp; medical nodes</p>
+            </div>
+            <div className="p-3">
+              <p className="text-3xl md:text-4xl font-black text-foreground tracking-tight">10,000+</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-primary mt-1">Active Terminals</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Offline-first cloud synced</p>
+            </div>
+            <div className="p-3">
+              <p className="text-3xl md:text-4xl font-black text-foreground tracking-tight">99.999%</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-primary mt-1">Guaranteed Uptime</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">High-availability cluster SLA</p>
+            </div>
+            <div className="p-3">
+              <p className="text-3xl md:text-4xl font-black text-foreground tracking-tight">28+</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-primary mt-1">Global Regions</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Multi-currency &amp; tax compliance</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Our Story */}
-      <section className="py-12 bg-muted/40">
+      <section className="py-14 bg-muted/30">
         <div className="container mx-auto px-4 max-w-5xl grid md:grid-cols-2 gap-10 items-center">
           <div>
-            <h2 className="text-2xl font-bold mb-5">Our Story</h2>
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-600 uppercase tracking-widest mb-3">
+              <Building2 className="h-3.5 w-3.5" />
+              Origins &amp; Vision
+            </div>
+            <h2 className="text-2xl md:text-3xl font-bold mb-4 text-foreground">Why We Founded GeFlow</h2>
             <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-              The journey of GeFlow began at <span className="text-foreground font-semibold">Gepard Webs</span>, where we observed a critical gap in how local businesses managed their lifecycles. Traditional methods were fragmented, error-prone, and slow.
+              The journey began inside <span className="text-foreground font-semibold">Gepard Techs</span>, observing frontline entrepreneurs wrestling with fragmented legacy tools, fragile network outages, and desynchronized stock counts.
             </p>
             <p className="text-muted-foreground text-sm leading-relaxed mb-6">
-              We spent years developing a core architecture that could handle the high-velocity demands of pharmacies and warehouses while remaining simple enough for a local retail store to use instantly.
+              We engineered GeFlow from scratch with an offline-first distributed data model. Pharmacies can dispense life-saving medication and grocery chains can process transactions during network dropouts, with instant cryptographic reconciliation the moment connectivity returns.
             </p>
-            <div className="flex gap-8">
+            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border">
               <div>
-                <p className="text-2xl font-bold text-primary">10k+</p>
-                <p className="text-[10px] font-bold tracking-wider text-muted-foreground">ACTIVE NODES</p>
+                <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  Zero Stoppages
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">Never lose a sale to internet dropouts</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-secondary">24/7</p>
-                <p className="text-[10px] font-bold tracking-wider text-muted-foreground">UPTIME SLA</p>
+                <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  Bank-Grade Vault
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">AES-256 data protection standard</p>
               </div>
             </div>
           </div>
-          <div className="premium-card overflow-hidden aspect-video">
+          <div className="premium-card overflow-hidden aspect-video shadow-md rounded-2xl border border-border">
             <img src={aboutStory} alt="GeFlow team building modern business operating system" loading="lazy" width={1280} height={896} className="w-full h-full object-cover" />
           </div>
         </div>
       </section>
 
-      {/* Pillars */}
+      {/* Core Engineering Pillars */}
       <section className="py-16">
         <div className="container mx-auto px-4 max-w-6xl text-center">
-          <h2 className="text-3xl font-bold mb-3">Why We Built GeFlow</h2>
-          <p className="text-muted-foreground text-sm mb-10">Resolving the critical "e-selling" barriers for the foundation of commerce.</p>
+          <div className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-600 uppercase tracking-widest mb-3">
+            <Cpu className="h-3.5 w-3.5" />
+            Architectural Philosophy
+          </div>
+          <h2 className="text-3xl font-bold mb-3 text-foreground">Built for Mission-Critical Reliability</h2>
+          <p className="text-muted-foreground text-sm max-w-xl mx-auto mb-10">Resolving the friction points of modern commerce with purpose-built software.</p>
           <div className="grid md:grid-cols-3 gap-6">
             {pillars.map(({ Icon, title, text }) => (
-              <div key={title} className="premium-card p-7 text-left">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center mb-5">
-                  <Icon className="h-5 w-5 text-primary" />
+              <div key={title} className="premium-card p-7 text-left rounded-2xl border border-border bg-card">
+                <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center mb-5 text-primary">
+                  <Icon className="h-6 w-6" />
                 </div>
-                <h3 className="font-bold mb-3">{title}</h3>
+                <h3 className="font-bold text-base mb-2 text-foreground">{title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">{text}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Industry Verticals Section */}
+      <section className="py-16 bg-muted/40 border-y border-border">
+        <div className="container mx-auto px-4 max-w-6xl">
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-primary uppercase tracking-widest mb-3">
+              <Store className="h-3.5 w-3.5" />
+              Tailored Commerce
+            </div>
+            <h2 className="text-3xl font-bold text-foreground">Specialized Engines for Every Trade</h2>
+            <p className="text-sm text-muted-foreground mt-2">
+              Every vertical requires custom workflows. GeFlow is crafted to match the exact mechanics of your business sector.
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="p-6 rounded-2xl bg-card border border-border shadow-xs hover:border-primary/40 transition-colors">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center mb-4">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <h4 className="font-bold text-sm text-foreground">Pharmacies &amp; Clinics</h4>
+              <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                Batch number tracking, automated expiration warnings, prescription tagging, and medicine substitute search.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-card border border-border shadow-xs hover:border-primary/40 transition-colors">
+              <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-600 flex items-center justify-center mb-4">
+                <Zap className="h-5 w-5" />
+              </div>
+              <h4 className="font-bold text-sm text-foreground">Supermarkets &amp; Groceries</h4>
+              <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                Sub-second barcode scans, weight scale integration, combo discounts, and multi-cashier split shifts.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-card border border-border shadow-xs hover:border-primary/40 transition-colors">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mb-4">
+                <ShoppingBag className="h-5 w-5" />
+              </div>
+              <h4 className="font-bold text-sm text-foreground">Fashion &amp; Boutiques</h4>
+              <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                Multi-variant size and color matrix, loyalty rewards, thermal tag printing, and returns management.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-card border border-border shadow-xs hover:border-primary/40 transition-colors">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center mb-4">
+                <Server className="h-5 w-5" />
+              </div>
+              <h4 className="font-bold text-sm text-foreground">Wholesale &amp; Warehouses</h4>
+              <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                Tiered bulk volume pricing, multi-depot stock routing, purchase orders, and supplier credit balance ledgers.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -135,59 +259,69 @@ const About = () => {
           
           <div className="flex flex-wrap justify-center gap-8">
             {members.length > 0 ? (
-              members.map((member) => (
-                <div key={member.id} className="premium-card p-8 w-full max-w-sm flex flex-col items-center">
-                  <div className="h-28 w-28 rounded-2xl overflow-hidden mb-5 ring-4 ring-primary/20 bg-muted flex items-center justify-center">
-                    {member.imageUrl ? (
-                      <img src={member.imageUrl} alt={member.name} loading="lazy" className="w-full h-full object-cover" />
-                    ) : (
-                      <img src={sgBilal} alt={member.name} loading="lazy" className="w-full h-full object-cover" />
-                    )}
+              members.map((member) => {
+                const img = member.image_url || member.imageUrl || sgBilal;
+                const soc = member.social_links || member.socialLinks || {};
+                const xLink = soc.x || soc.twitter;
+
+                return (
+                  <div key={member.id} className="premium-card p-8 w-full max-w-sm flex flex-col items-center">
+                    <div className="h-28 w-28 rounded-2xl overflow-hidden mb-5 ring-4 ring-primary/20 bg-muted flex items-center justify-center">
+                      <img
+                        src={img}
+                        alt={member.name}
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = sgBilal;
+                        }}
+                      />
+                    </div>
+                    <h3 className="font-bold text-lg">{member.name}</h3>
+                    <p className="text-[10px] font-bold tracking-wider text-primary mb-4 uppercase">{member.role}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed mb-5 text-center">
+                      {member.bio}
+                    </p>
+                    <div className="flex justify-center gap-2 mt-auto flex-wrap">
+                      {soc.facebook && (
+                        <a href={soc.facebook} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all">
+                          <Facebook size={15} />
+                        </a>
+                      )}
+                      {soc.instagram && (
+                        <a href={soc.instagram} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all">
+                          <Instagram size={15} />
+                        </a>
+                      )}
+                      {xLink && (
+                        <a href={xLink} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all">
+                          <XIcon size={14} />
+                        </a>
+                      )}
+                      {soc.linkedin && (
+                        <a href={soc.linkedin} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all">
+                          <Linkedin size={15} />
+                        </a>
+                      )}
+                      {soc.github && (
+                        <a href={soc.github} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all">
+                          <Github size={15} />
+                        </a>
+                      )}
+                      {soc.pinterest && (
+                        <a href={soc.pinterest} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all">
+                          <PinterestIcon size={15} />
+                        </a>
+                      )}
+                      {soc.email && (
+                        <a href={soc.email.startsWith("mailto:") ? soc.email : `mailto:${soc.email}`} className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all">
+                          <Mail size={15} />
+                        </a>
+                      )}
+                    </div>
                   </div>
-                  <h3 className="font-bold text-lg">{member.name}</h3>
-                  <p className="text-[10px] font-bold tracking-wider text-primary mb-4 uppercase">{member.role}</p>
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-5 text-center">
-                    {member.bio}
-                  </p>
-                  <div className="flex justify-center gap-2 mt-auto">
-                    {member.socialLinks?.facebook && (
-                      <a href={member.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all">
-                        <Facebook size={15} />
-                      </a>
-                    )}
-                    {member.socialLinks?.instagram && (
-                      <a href={member.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all">
-                        <Instagram size={15} />
-                      </a>
-                    )}
-                    {member.socialLinks?.x && (
-                      <a href={member.socialLinks.x} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all">
-                        <XIcon size={14} />
-                      </a>
-                    )}
-                    {member.socialLinks?.linkedin && (
-                      <a href={member.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all">
-                        <Linkedin size={15} />
-                      </a>
-                    )}
-                    {member.socialLinks?.github && (
-                      <a href={member.socialLinks.github} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all">
-                        <Github size={15} />
-                      </a>
-                    )}
-                    {member.socialLinks?.pinterest && (
-                      <a href={member.socialLinks.pinterest} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all">
-                        <PinterestIcon size={15} />
-                      </a>
-                    )}
-                    {member.socialLinks?.email && (
-                      <a href={member.socialLinks.email.startsWith("mailto:") ? member.socialLinks.email : `mailto:${member.socialLinks.email}`} className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all">
-                        <Mail size={15} />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="premium-card p-8 max-w-md mx-auto">
                 <div className="h-28 w-28 rounded-2xl overflow-hidden mx-auto mb-5 ring-4 ring-primary/20">

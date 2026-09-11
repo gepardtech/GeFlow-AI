@@ -11,6 +11,8 @@ import {
   SocialMediaLink,
   FooterCopyrightSettings,
   WordUrlMapping,
+  AboutPageMember,
+  DEFAULT_GENERAL_SETTINGS,
 } from "@/lib/generalSettingsService";
 import {
   Facebook,
@@ -29,7 +31,22 @@ import {
   CheckCircle2,
   Sparkles,
   Link as LinkIcon,
+  Users,
+  UserPlus,
+  Edit3,
+  Image as ImageIcon,
+  RotateCcw,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const PinterestIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -113,6 +130,11 @@ export const AdminSocialAndFooterSettings = () => {
   const [newUrl, setNewUrl] = useState("");
   const [newOpenInNewTab, setNewOpenInNewTab] = useState(true);
 
+  // About Page Members state
+  const [aboutMembers, setAboutMembers] = useState<AboutPageMember[]>(DEFAULT_GENERAL_SETTINGS.about_members);
+  const [memberModalOpen, setMemberModalOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState<Partial<AboutPageMember> | null>(null);
+
   useEffect(() => {
     fetchGeneralSettings()
       .then((settings) => {
@@ -124,13 +146,16 @@ export const AdminSocialAndFooterSettings = () => {
             setCopyrightText(settings.footer_copyright.text);
             setWordUrls(settings.footer_copyright.wordUrls || []);
           }
+          if (settings.about_members && settings.about_members.length > 0) {
+            setAboutMembers(settings.about_members);
+          }
         }
       })
       .finally(() => setLoading(false));
   }, []);
 
-  // Save Social Links & Copyright to Database & Server
-  const handleSaveAll = async () => {
+  // Save Social Links, Copyright & About Members to Database & Server
+  const handleSaveAll = async (overrideMembers?: AboutPageMember[]) => {
     setSaving(true);
     try {
       const copyrightSettings: FooterCopyrightSettings = {
@@ -138,14 +163,17 @@ export const AdminSocialAndFooterSettings = () => {
         wordUrls,
       };
 
+      const membersToSave = overrideMembers || aboutMembers;
+
       await saveGeneralSettings({
         social_links: socialLinks,
         footer_copyright: copyrightSettings,
+        about_members: membersToSave,
       });
 
       toast({
         title: "Settings Saved & Synced",
-        description: "Social media links and footer copyright are updated live on landing pages.",
+        description: "Social media links, footer copyright, and About page members are updated live on landing pages.",
       });
     } catch (err: any) {
       toast({
@@ -155,6 +183,128 @@ export const AdminSocialAndFooterSettings = () => {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // About Members Handlers
+  const handleOpenAddMember = () => {
+    setEditingMember({
+      id: "mem_" + Date.now(),
+      name: "",
+      role: "",
+      bio: "",
+      image_url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
+      imageUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
+      order: aboutMembers.length + 1,
+      enabled: true,
+      social_links: {
+        facebook: "",
+        instagram: "",
+        x: "",
+        linkedin: "",
+        pinterest: "",
+        github: "",
+        email: "",
+      },
+    });
+    setMemberModalOpen(true);
+  };
+
+  const handleOpenEditMember = (member: AboutPageMember) => {
+    setEditingMember({
+      ...member,
+      social_links: {
+        facebook: member.social_links?.facebook || (member as any).socialLinks?.facebook || "",
+        instagram: member.social_links?.instagram || (member as any).socialLinks?.instagram || "",
+        x: member.social_links?.x || member.social_links?.twitter || (member as any).socialLinks?.x || "",
+        linkedin: member.social_links?.linkedin || (member as any).socialLinks?.linkedin || "",
+        pinterest: member.social_links?.pinterest || (member as any).socialLinks?.pinterest || "",
+        github: member.social_links?.github || (member as any).socialLinks?.github || "",
+        email: member.social_links?.email || (member as any).socialLinks?.email || "",
+      },
+    });
+    setMemberModalOpen(true);
+  };
+
+  const handleSaveMemberModal = async () => {
+    if (!editingMember || !editingMember.name?.trim() || !editingMember.role?.trim()) {
+      toast({
+        title: "Missing Name or Role",
+        description: "Please enter at least member full name and title/role.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const memberToSave: AboutPageMember = {
+      id: editingMember.id || "mem_" + Date.now(),
+      name: editingMember.name.trim(),
+      role: editingMember.role.trim(),
+      bio: editingMember.bio?.trim() || "",
+      image_url: editingMember.image_url?.trim() || editingMember.imageUrl?.trim() || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
+      imageUrl: editingMember.image_url?.trim() || editingMember.imageUrl?.trim() || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
+      order: editingMember.order || 1,
+      enabled: editingMember.enabled !== false,
+      social_links: editingMember.social_links || {},
+      socialLinks: editingMember.social_links || {},
+    };
+
+    let updated: AboutPageMember[];
+    const exists = aboutMembers.some((m) => m.id === memberToSave.id);
+    if (exists) {
+      updated = aboutMembers.map((m) => (m.id === memberToSave.id ? memberToSave : m));
+    } else {
+      updated = [...aboutMembers, memberToSave];
+    }
+
+    setAboutMembers(updated);
+    setMemberModalOpen(false);
+    await handleSaveAll(updated);
+  };
+
+  const handleDeleteMember = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete ${name} from About page leadership?`)) {
+      return;
+    }
+    const updated = aboutMembers.filter((m) => m.id !== id);
+    setAboutMembers(updated);
+    await handleSaveAll(updated);
+  };
+
+  const handleToggleMember = async (member: AboutPageMember) => {
+    const updated = aboutMembers.map((m) =>
+      m.id === member.id ? { ...m, enabled: !m.enabled } : m
+    );
+    setAboutMembers(updated);
+    await handleSaveAll(updated);
+  };
+
+  // Cache & Storage purge handler
+  const handlePurgePlatformCache = () => {
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (
+          key &&
+          (key.startsWith("geflow_team_members") ||
+            key.startsWith("geflow_platform_general_settings") ||
+            key.startsWith("geflow_cached_plans") ||
+            key.startsWith("geflow_realtime_cache"))
+        ) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
+      toast({
+        title: "Platform Cache Cleared",
+        description: `Successfully purged ${keysToRemove.length} cached data partitions. Stale browser memory refreshed.`,
+      });
+    } catch {
+      toast({
+        title: "Cache Reset",
+        description: "Cache memory cleared.",
+      });
     }
   };
 
@@ -563,6 +713,389 @@ export const AdminSocialAndFooterSettings = () => {
           </div>
         </div>
       </div>
+
+      {/* ========================================================= */}
+      {/* SECTION 3: ABOUT PAGE MEMBERS MANAGEMENT                  */}
+      {/* ========================================================= */}
+      <div className="bg-card border border-border rounded-2xl p-6 shadow-xs">
+        <div className="flex items-start justify-between gap-4 flex-wrap pb-4 border-b border-border">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-sky-500/10 text-sky-500">
+                <Users className="h-5 w-5" />
+              </div>
+              <h3 className="text-base font-bold text-foreground">
+                About Page Members &amp; Leadership
+              </h3>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1 max-w-2xl leading-relaxed">
+              Manage the executive profiles, leadership team, and specialists displayed on the public About page.
+              Add or edit member photos, roles, bios, and specific social handles. Syncs in real time with our database and public landing pages.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              onClick={handleOpenAddMember}
+              size="sm"
+              className="rounded-xl h-10 text-xs bg-sky-500 hover:bg-sky-600 text-white font-bold gap-1.5"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              Add Member
+            </Button>
+          </div>
+        </div>
+
+        {/* Members Cards Grid */}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+          {aboutMembers.map((member) => {
+            const isVisible = member.enabled !== false;
+            const soc = member.social_links || (member as any).socialLinks || {};
+            const activeSocialCount = Object.values(soc).filter((v) => typeof v === "string" && v.trim().length > 0).length;
+
+            return (
+              <div
+                key={member.id}
+                className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
+                  isVisible
+                    ? "bg-card border-border shadow-xs"
+                    : "bg-muted/30 border-dashed border-border opacity-70"
+                }`}
+              >
+                <div>
+                  <div className="flex items-start gap-3">
+                    <img
+                      src={member.image_url || member.imageUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces"}
+                      alt={member.name}
+                      className="w-12 h-12 rounded-xl object-cover border border-border shrink-0 bg-muted"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces";
+                      }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <h4 className="text-xs font-bold truncate text-foreground">{member.name}</h4>
+                        <Badge
+                          variant="outline"
+                          className={`text-[9px] px-1.5 py-0 uppercase font-black tracking-wider ${
+                            isVisible
+                              ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                              : "bg-muted text-muted-foreground border-border"
+                          }`}
+                        >
+                          {isVisible ? "Active" : "Hidden"}
+                        </Badge>
+                      </div>
+                      <p className="text-[11px] text-sky-600 font-semibold truncate mt-0.5">
+                        {member.role}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        Order #{member.order} • {activeSocialCount} social links
+                      </p>
+                    </div>
+                  </div>
+
+                  {member.bio && (
+                    <p className="text-[11px] text-muted-foreground mt-3 line-clamp-3 leading-relaxed">
+                      {member.bio}
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={isVisible}
+                      onCheckedChange={() => handleToggleMember(member)}
+                    />
+                    <span className="text-[11px] text-muted-foreground">
+                      {isVisible ? "Visible" : "Hidden"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleOpenEditMember(member)}
+                      className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground"
+                      title="Edit member"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => handleDeleteMember(member.id, member.name)}
+                      className="h-7 w-7 rounded-lg text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                      title="Delete member"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ========================================================= */}
+      {/* SECTION 4: PLATFORM CACHE & STORAGE MANAGEMENT            */}
+      {/* ========================================================= */}
+      <div className="bg-card border border-border rounded-2xl p-6 shadow-xs">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600">
+                <RotateCcw className="h-5 w-5" />
+              </div>
+              <h3 className="text-base font-bold text-foreground">
+                Platform Cache &amp; Storage Maintenance
+              </h3>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1 max-w-2xl leading-relaxed">
+              Clear stale client-side caches, language reload locks, team member synchronization keys, and cached platform preferences.
+              Does not erase your persistent cloud database.
+            </p>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handlePurgePlatformCache}
+            className="rounded-xl h-10 text-xs font-bold text-amber-600 hover:bg-amber-500/10 border-amber-500/30 gap-2"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Purge Platform Cache
+          </Button>
+        </div>
+      </div>
+
+      {/* ========================================================= */}
+      {/* MODAL: ADD / EDIT ABOUT PAGE MEMBER                       */}
+      {/* ========================================================= */}
+      <Dialog open={memberModalOpen} onOpenChange={setMemberModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <Users className="h-5 w-5 text-sky-500" />
+              {editingMember?.name ? `Edit Member: ${editingMember.name}` : "Add About Page Member"}
+            </DialogTitle>
+            <DialogDescription>
+              Configure member details, photo, and social profiles shown on the public About page.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingMember && (
+            <div className="space-y-4 mt-2">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Full Name *</Label>
+                  <Input
+                    value={editingMember.name || ""}
+                    onChange={(e) => setEditingMember({ ...editingMember, name: e.target.value })}
+                    placeholder="e.g. SG Bilal"
+                    className="h-9 text-xs rounded-lg"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Role / Title *</Label>
+                  <Input
+                    value={editingMember.role || ""}
+                    onChange={(e) => setEditingMember({ ...editingMember, role: e.target.value })}
+                    placeholder="e.g. Chairman & Chief Executive Officer"
+                    className="h-9 text-xs rounded-lg"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Profile Photo URL</Label>
+                <div className="flex items-center gap-3">
+                  <img
+                    src={editingMember.image_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces"}
+                    alt="Preview"
+                    className="w-12 h-12 rounded-xl object-cover border border-border shrink-0 bg-muted"
+                  />
+                  <Input
+                    value={editingMember.image_url || ""}
+                    onChange={(e) => setEditingMember({ ...editingMember, image_url: e.target.value, imageUrl: e.target.value })}
+                    placeholder="https://images.unsplash.com/... or https://..."
+                    className="h-9 text-xs font-mono rounded-lg flex-1"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Professional Biography</Label>
+                <Textarea
+                  rows={3}
+                  value={editingMember.bio || ""}
+                  onChange={(e) => setEditingMember({ ...editingMember, bio: e.target.value })}
+                  placeholder="Describe member background, specialty, and contributions..."
+                  className="text-xs rounded-xl"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Display Order</Label>
+                  <Input
+                    type="number"
+                    value={editingMember.order || 1}
+                    onChange={(e) => setEditingMember({ ...editingMember, order: parseInt(e.target.value) || 1 })}
+                    className="h-9 text-xs rounded-lg"
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 pt-6">
+                  <Switch
+                    checked={editingMember.enabled !== false}
+                    onCheckedChange={(checked) => setEditingMember({ ...editingMember, enabled: checked })}
+                  />
+                  <Label className="text-xs font-bold">Display on About Page</Label>
+                </div>
+              </div>
+
+              {/* Social Media Links for Member */}
+              <div className="pt-3 border-t border-border space-y-3">
+                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">
+                  Member Social Handles &amp; Links
+                </Label>
+
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground mb-1 block">LinkedIn Profile</Label>
+                    <Input
+                      value={editingMember.social_links?.linkedin || ""}
+                      onChange={(e) =>
+                        setEditingMember({
+                          ...editingMember,
+                          social_links: { ...editingMember.social_links, linkedin: e.target.value },
+                        })
+                      }
+                      placeholder="https://linkedin.com/in/..."
+                      className="h-8 text-xs font-mono rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground mb-1 block">X / Twitter</Label>
+                    <Input
+                      value={editingMember.social_links?.x || editingMember.social_links?.twitter || ""}
+                      onChange={(e) =>
+                        setEditingMember({
+                          ...editingMember,
+                          social_links: { ...editingMember.social_links, x: e.target.value, twitter: e.target.value },
+                        })
+                      }
+                      placeholder="https://x.com/..."
+                      className="h-8 text-xs font-mono rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground mb-1 block">Facebook</Label>
+                    <Input
+                      value={editingMember.social_links?.facebook || ""}
+                      onChange={(e) =>
+                        setEditingMember({
+                          ...editingMember,
+                          social_links: { ...editingMember.social_links, facebook: e.target.value },
+                        })
+                      }
+                      placeholder="https://facebook.com/..."
+                      className="h-8 text-xs font-mono rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground mb-1 block">Instagram</Label>
+                    <Input
+                      value={editingMember.social_links?.instagram || ""}
+                      onChange={(e) =>
+                        setEditingMember({
+                          ...editingMember,
+                          social_links: { ...editingMember.social_links, instagram: e.target.value },
+                        })
+                      }
+                      placeholder="https://instagram.com/..."
+                      className="h-8 text-xs font-mono rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground mb-1 block">GitHub Profile</Label>
+                    <Input
+                      value={editingMember.social_links?.github || ""}
+                      onChange={(e) =>
+                        setEditingMember({
+                          ...editingMember,
+                          social_links: { ...editingMember.social_links, github: e.target.value },
+                        })
+                      }
+                      placeholder="https://github.com/..."
+                      className="h-8 text-xs font-mono rounded-lg"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground mb-1 block">Pinterest</Label>
+                    <Input
+                      value={editingMember.social_links?.pinterest || ""}
+                      onChange={(e) =>
+                        setEditingMember({
+                          ...editingMember,
+                          social_links: { ...editingMember.social_links, pinterest: e.target.value },
+                        })
+                      }
+                      placeholder="https://pinterest.com/..."
+                      className="h-8 text-xs font-mono rounded-lg"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <Label className="text-[11px] text-muted-foreground mb-1 block">Official Email Address</Label>
+                    <Input
+                      value={editingMember.social_links?.email || ""}
+                      onChange={(e) =>
+                        setEditingMember({
+                          ...editingMember,
+                          social_links: { ...editingMember.social_links, email: e.target.value },
+                        })
+                      }
+                      placeholder="e.g. name@geflow.team"
+                      className="h-8 text-xs font-mono rounded-lg"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-4 flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setMemberModalOpen(false)}
+              className="rounded-xl h-10 text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveMemberModal}
+              className="rounded-xl h-10 text-xs bg-sky-500 hover:bg-sky-600 text-white font-bold gap-2"
+            >
+              <Save className="h-3.5 w-3.5" />
+              Save Member
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

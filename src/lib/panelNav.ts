@@ -83,6 +83,7 @@ export const USER_NAV: NavItem[] = [
   { label: "Low Stock", to: "/dashboard/low-stock", icon: TriangleAlert, module: "inventory" },
   { label: "Out of Stock", to: "/dashboard/out-of-stock", icon: AlertCircle, module: "inventory" },
   { label: "POS Terminal", to: "/dashboard/pos", icon: ShoppingCart, module: "pos" },
+  { label: "Returns & Refunds", to: "/dashboard/returns", icon: Undo2, module: "pos" },
   { label: "Purchases", to: "/dashboard/purchases", icon: ShoppingBag, module: "purchases" },
   { label: "Reports", to: "/dashboard/reports", icon: FileText, module: "reports" },
   { label: "Analytics", to: "/dashboard/analytics", icon: BarChart3, module: "analytics" },

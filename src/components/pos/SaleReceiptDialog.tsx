@@ -41,7 +41,7 @@ export interface ReceiptData {
   taxPricingMode?: "exclusive" | "inclusive";
   taxRegistrationNumber?: string;
   total: number;
-  payMethod: "cash" | "card";
+  payMethod: string;
   cashGiven: number;
   changeDue: number;
   symbol: string;

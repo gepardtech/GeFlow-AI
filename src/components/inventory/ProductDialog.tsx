@@ -654,6 +654,8 @@ const ProductDialog = ({
   };
 
   const handleSave = async () => {
+    if (saving) return;
+
     if (!validateForm()) {
       toast({
         title: "Validation errors detected",
@@ -665,89 +667,54 @@ const ProductDialog = ({
 
     setSaving(true);
 
-    if (!isEdit) {
-      // Check real-time product limit
-      const { count } = await supabase
-        .from("products")
-        .select("*", { count: "exact", head: true })
-        .eq("business_id", businessId);
+    try {
+      if (!isEdit) {
+        // Check real-time product limit
+        const { count } = await supabase
+          .from("products")
+          .select("*", { count: "exact", head: true })
+          .eq("business_id", businessId);
 
-      const currentCount = count ?? 0;
-      if (isExceeded("products", currentCount)) {
-        const pLimit = getLimit("products");
-        setSaving(false);
-        toast({
-          title: "Product limit exceeded",
-          description: `Your current plan limit of ${pLimit} products has been reached. Please upgrade your plan to add more products.`,
-          variant: "destructive",
-        });
-        return;
+        const currentCount = count ?? 0;
+        if (isExceeded("products", currentCount)) {
+          const pLimit = getLimit("products");
+          toast({
+            title: "Product limit exceeded",
+            description: `Your current plan limit of ${pLimit} products has been reached. Please upgrade your plan to add more products.`,
+            variant: "destructive",
+          });
+          return;
+        }
       }
-    }
 
-    // stock_units is ALWAYS stored in Base Unit (smallest unit e.g. tablets, pieces, ml)
-    const openingBoxes = Number(form.opening_stock_boxes !== "" ? form.opening_stock_boxes : (form.pack_qty !== "" ? form.pack_qty : form.stock_units)) || 0;
-    const unitsPerUom = Math.max(1, Number(form.units_per_uom || form.measurement_scale) || 1);
-    const totalBaseUnits = Math.round(openingBoxes * unitsPerUom);
-    const resolvedUom = (form.uom || "box").toLowerCase().trim();
-    const resolvedBaseUnit = (form.base_unit || getDefaultBaseUnit(resolvedUom, industryType)).toLowerCase().trim();
+      // stock_units is ALWAYS stored in Base Unit (smallest unit e.g. tablets, pieces, ml)
+      const openingBoxes = Number(form.opening_stock_boxes !== "" ? form.opening_stock_boxes : (form.pack_qty !== "" ? form.pack_qty : form.stock_units)) || 0;
+      const unitsPerUom = Math.max(1, Number(form.units_per_uom || form.measurement_scale) || 1);
+      const totalBaseUnits = Math.round(openingBoxes * unitsPerUom);
+      const resolvedUom = (form.uom || "box").toLowerCase().trim();
+      const resolvedBaseUnit = (form.base_unit || getDefaultBaseUnit(resolvedUom, industryType)).toLowerCase().trim();
 
-    // Format description with UOM metadata tags as backward-compatible fallback
-    let finalDescription = form.description.trim();
-    const tags: string[] = [];
-    if (resolvedUom) tags.push(`[UOM: ${resolvedUom}]`);
-    if (unitsPerUom > 1) {
-      tags.push(`[SCALE: ${unitsPerUom}]`);
-      tags.push(`[UNITS_PER_UOM: ${unitsPerUom}]`);
-    }
-    tags.push(`[BASE_UNIT: ${resolvedBaseUnit}]`);
-    tags.push(`[PACK_QTY: ${openingBoxes}]`);
-    tags.push(`[BASE_QTY: ${totalBaseUnits}]`);
+      // Format description with UOM metadata tags as backward-compatible fallback
+      let finalDescription = form.description.trim();
+      const tags: string[] = [];
+      if (resolvedUom) tags.push(`[UOM: ${resolvedUom}]`);
+      if (unitsPerUom > 1) {
+        tags.push(`[SCALE: ${unitsPerUom}]`);
+        tags.push(`[UNITS_PER_UOM: ${unitsPerUom}]`);
+      }
+      tags.push(`[BASE_UNIT: ${resolvedBaseUnit}]`);
+      tags.push(`[PACK_QTY: ${openingBoxes}]`);
+      tags.push(`[BASE_QTY: ${totalBaseUnits}]`);
 
-    if (tags.length > 0) {
-      finalDescription = finalDescription
-        ? `${finalDescription}\n${tags.join(" ")}`
-        : tags.join(" ");
-    }
+      if (tags.length > 0) {
+        finalDescription = finalDescription
+          ? `${finalDescription}\n${tags.join(" ")}`
+          : tags.join(" ");
+      }
 
-    const finalSku = form.internal_sku.trim() || generateAutoSku(form.name);
+      const finalSku = form.internal_sku.trim() || generateAutoSku(form.name);
 
-    const payloadWithColumns: Record<string, any> = {
-      business_id: businessId,
-      owner_user_id: ownerUserId,
-      name: form.name.trim(),
-      internal_sku: finalSku,
-      description: finalDescription || null,
-      category_id: form.category_id || null,
-      subcategory_id: form.subcategory_id || null,
-      purchase_cost: Number(form.purchase_cost) || 0,
-      retail_price: Number(form.retail_price) || 0,
-      discount_price: form.discount_price ? Number(form.discount_price) : null,
-      stock_units: totalBaseUnits, // ALWAYS in Base Unit (e.g. 120 tablets for 10 boxes of 12)
-      uom: resolvedUom,
-      units_per_uom: unitsPerUom,
-      base_unit: resolvedBaseUnit,
-      min_stock_alert: parseInt(form.min_stock_alert, 10) || 5,
-      batch_number: form.batch_number.trim() || null,
-      expiry_date: form.expiry_date || null,
-      barcode: form.barcode.trim() || null,
-      status: form.status || "active",
-      images,
-    };
-
-    let error: any = null;
-    if (isEdit && product) {
-      const res = await supabase.from("products").update(payloadWithColumns).eq("id", product.id);
-      error = res.error;
-    } else {
-      const res = await supabase.from("products").insert(payloadWithColumns);
-      error = res.error;
-    }
-
-    // Resilient fallback if the new columns (uom, units_per_uom, base_unit) have not yet been migrated in Supabase (Postgres 42703)
-    if (error && (error.code === "42703" || String(error.message).toLowerCase().includes("column"))) {
-      console.warn("Retrying save without new column properties (tags preserved in description):", error.message);
-      const legacyPayload = {
+      const payloadWithColumns: Record<string, any> = {
         business_id: businessId,
         owner_user_id: ownerUserId,
         name: form.name.trim(),
@@ -758,7 +725,10 @@ const ProductDialog = ({
         purchase_cost: Number(form.purchase_cost) || 0,
         retail_price: Number(form.retail_price) || 0,
         discount_price: form.discount_price ? Number(form.discount_price) : null,
-        stock_units: totalBaseUnits, // ALWAYS in Base Units!
+        stock_units: totalBaseUnits, // ALWAYS in Base Unit (e.g. 120 tablets for 10 boxes of 12)
+        uom: resolvedUom,
+        units_per_uom: unitsPerUom,
+        base_unit: resolvedBaseUnit,
         min_stock_alert: parseInt(form.min_stock_alert, 10) || 5,
         batch_number: form.batch_number.trim() || null,
         expiry_date: form.expiry_date || null,
@@ -766,72 +736,113 @@ const ProductDialog = ({
         status: form.status || "active",
         images,
       };
+
+      let error: any = null;
       if (isEdit && product) {
-        const res = await supabase.from("products").update(legacyPayload).eq("id", product.id);
+        const res = await supabase.from("products").update(payloadWithColumns).eq("id", product.id);
         error = res.error;
       } else {
-        const res = await supabase.from("products").insert(legacyPayload);
+        const res = await supabase.from("products").insert(payloadWithColumns);
         error = res.error;
       }
-    }
 
-    // Synchronize to the operational sync server so staff and owner see it instantly
-    const syncedProd = await saveSyncedProduct(
-      businessId,
-      {
-        ...(isEdit && product ? { id: product.id } : {}),
-        ...payloadWithColumns,
-      },
-      ownerUserId,
-      Boolean(active?.is_staff)
-    );
-
-    if (error && syncedProd) {
-      // Successfully saved via operational sync engine even if Supabase direct write was blocked by RLS
-      error = null;
-    }
-
-    setSaving(false);
-
-    if (error) {
-      toast({
-        title: "Could not save product",
-        description: error.message,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Synchronize listed_products count to businesses and profiles
-    try {
-      const { count: bCount } = await supabase
-        .from("products")
-        .select("*", { count: "exact", head: true })
-        .eq("business_id", businessId);
-      if (bCount !== null && bCount !== undefined) {
-        await supabase.from("businesses").update({ listed_products: bCount }).eq("id", businessId);
-      }
-      const targetUserId = ownerUserId;
-      if (targetUserId) {
-        const { count: uCount } = await supabase
-          .from("products")
-          .select("*", { count: "exact", head: true })
-          .eq("owner_user_id", targetUserId);
-        if (uCount !== null && uCount !== undefined) {
-          await supabase.from("profiles").update({ listed_products: uCount }).eq("user_id", targetUserId);
+      // Resilient fallback if the new columns (uom, units_per_uom, base_unit) have not yet been migrated in Supabase (Postgres 42703)
+      if (error && (error.code === "42703" || String(error.message).toLowerCase().includes("column"))) {
+        console.warn("Retrying save without new column properties (tags preserved in description):", error.message);
+        const legacyPayload = {
+          business_id: businessId,
+          owner_user_id: ownerUserId,
+          name: form.name.trim(),
+          internal_sku: finalSku,
+          description: finalDescription || null,
+          category_id: form.category_id || null,
+          subcategory_id: form.subcategory_id || null,
+          purchase_cost: Number(form.purchase_cost) || 0,
+          retail_price: Number(form.retail_price) || 0,
+          discount_price: form.discount_price ? Number(form.discount_price) : null,
+          stock_units: totalBaseUnits, // ALWAYS in Base Units!
+          min_stock_alert: parseInt(form.min_stock_alert, 10) || 5,
+          batch_number: form.batch_number.trim() || null,
+          expiry_date: form.expiry_date || null,
+          barcode: form.barcode.trim() || null,
+          status: form.status || "active",
+          images,
+        };
+        if (isEdit && product) {
+          const res = await supabase.from("products").update(legacyPayload).eq("id", product.id);
+          error = res.error;
+        } else {
+          const res = await supabase.from("products").insert(legacyPayload);
+          error = res.error;
         }
       }
-    } catch (syncErr) {
-      console.warn("Product count sync notice:", syncErr);
+
+      // Synchronize to the operational sync server so staff and owner see it instantly
+      const syncedProd = await saveSyncedProduct(
+        businessId,
+        {
+          ...(isEdit && product ? { id: product.id } : {}),
+          ...payloadWithColumns,
+        },
+        ownerUserId,
+        Boolean(active?.is_staff)
+      );
+
+      if (error && syncedProd) {
+        // Successfully saved via operational sync engine even if Supabase direct write was blocked by RLS
+        error = null;
+      }
+
+      if (error) {
+        toast({
+          title: "Could not save product",
+          description: error.message || "Database insert error",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Synchronize listed_products count to businesses and profiles
+      try {
+        const { count: bCount } = await supabase
+          .from("products")
+          .select("*", { count: "exact", head: true })
+          .eq("business_id", businessId);
+        if (bCount !== null && bCount !== undefined) {
+          await supabase.from("businesses").update({ listed_products: bCount }).eq("id", businessId);
+        }
+        const targetUserId = ownerUserId;
+        if (targetUserId) {
+          const { count: uCount } = await supabase
+            .from("products")
+            .select("*", { count: "exact", head: true })
+            .eq("owner_user_id", targetUserId);
+          if (uCount !== null && uCount !== undefined) {
+            await supabase.from("profiles").update({ listed_products: uCount }).eq("user_id", targetUserId);
+          }
+        }
+      } catch (syncErr) {
+        console.warn("Product count sync notice:", syncErr);
+      }
+
+      toast({
+        title: isEdit ? "Product SKU updated" : "Product SKU saved successfully",
+        description: `${form.name} (${formatStockWithUOM(form.stock_units, form.uom)}) committed to catalog.`,
+      });
+
+      window.dispatchEvent(new CustomEvent("geflow:products-updated"));
+      onSaved();
+      onOpenChange(false);
+    } catch (unexpectedErr: any) {
+      console.error("Unexpected error saving product:", unexpectedErr);
+      toast({
+        title: "Could not save product",
+        description: unexpectedErr?.message || "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
     }
-
-    toast({
-      title: isEdit ? "Product SKU updated" : "Product SKU saved successfully",
-      description: `${form.name} (${formatStockWithUOM(form.stock_units, form.uom)}) committed to catalog.`,
-    });
-
-    onSaved();
-    onOpenChange(false);
   };
 
   // Calculations for Final Review
@@ -1438,7 +1449,7 @@ const ProductDialog = ({
             {showAlert && (
               <div className="p-3 bg-muted/20 border border-border rounded-xl">
                 <FieldLabel htmlFor="min-stock-alert-input">
-                  Low Stock Safety Alert Threshold (in Base Units)
+                  Low Stock Safety Alert Threshold (in {form.uom ? form.uom.charAt(0).toUpperCase() + form.uom.slice(1) : "Box"}es)
                 </FieldLabel>
                 <Input
                   id="min-stock-alert-input"
@@ -1450,7 +1461,7 @@ const ProductDialog = ({
                   className="h-10 text-xs mt-1"
                 />
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  Triggers low stock warning when inventory drops to or below this single piece threshold.
+                  Triggers low stock alert when inventory drops to or below this {form.uom ? form.uom.toLowerCase() : "box"} quantity ({form.units_per_uom && Number(form.units_per_uom) > 1 ? `≈ ${(Number(form.min_stock_alert) || 5) * Number(form.units_per_uom)} ${form.base_unit || "units"}` : "units"}).
                 </p>
               </div>
             )}

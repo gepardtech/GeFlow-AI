@@ -54,7 +54,7 @@ const getInitialCachedState = (): {
  */
 export const usePlan = (): PlanState => {
   const cached = getInitialCachedState();
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(!cached.planId);
   const [planId, setPlanId] = useState<PlanId>(cached.planId);
   const [fullName, setFullName] = useState<string | null>(cached.fullName);
   const [email, setEmail] = useState<string | null>(cached.email);

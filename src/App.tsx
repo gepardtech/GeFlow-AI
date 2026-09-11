@@ -55,6 +55,7 @@ import UserLowStock from "./pages/user/UserLowStock";
 import UserBusinesses from "./pages/user/UserBusinesses";
 import UserOutOfStock from "./pages/user/UserOutOfStock";
 import UserPOS from "./pages/user/UserPOS";
+import UserReturns from "./pages/user/UserReturns";
 import UserPurchases from "./pages/user/UserPurchases";
 import UserReports from "./pages/user/UserReports";
 import UserAnalytics from "./pages/user/UserAnalytics";
@@ -127,6 +128,8 @@ const App = () => (
           <Route path="/businesses" element={<AuthGuard><UserBusinesses /></AuthGuard>} />
           <Route path="/dashboard/out-of-stock" element={<AuthGuard><UserOutOfStock /></AuthGuard>} />
           <Route path="/dashboard/pos" element={<AuthGuard><UserPOS /></AuthGuard>} />
+          <Route path="/dashboard/returns" element={<AuthGuard><UserReturns /></AuthGuard>} />
+          <Route path="/returns" element={<AuthGuard><UserReturns /></AuthGuard>} />
           <Route path="/dashboard/purchases" element={<AuthGuard><UserPurchases /></AuthGuard>} />
           <Route path="/dashboard/reports" element={<AuthGuard><UserReports /></AuthGuard>} />
           <Route path="/dashboard/report" element={<AuthGuard><UserReports /></AuthGuard>} />

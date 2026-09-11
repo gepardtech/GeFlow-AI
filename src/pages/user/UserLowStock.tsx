@@ -16,9 +16,16 @@ import BulkReplenishmentDialog, { DeficitProduct } from "@/components/inventory/
 import StockUpdateDialog from "@/components/inventory/StockUpdateDialog";
 import type { ProductRecord } from "@/components/inventory/ProductDialog";
 import { fetchSyncedProducts, isDemoProduct } from "@/lib/businessSync";
+import { computeProductStock, isProductLowStock, formatUomPlural } from "@/lib/uomRegistry";
 
 interface LowProduct extends DeficitProduct {
-  purchase_cost: number; retail_price: number; min_stock_alert: number;
+  purchase_cost: number;
+  retail_price: number;
+  min_stock_alert: number;
+  uom?: string | null;
+  units_per_uom?: number | null;
+  base_unit?: string | null;
+  description?: string | null;
 }
 
 const UserLowStock = () => {
@@ -44,7 +51,7 @@ const UserLowStock = () => {
 
     const res = await supabase
       .from("products")
-      .select("id, name, internal_sku, barcode, category_id, purchase_cost, retail_price, stock_units, min_stock_alert, batch_number, expiry_date")
+      .select("id, name, internal_sku, barcode, category_id, purchase_cost, retail_price, stock_units, min_stock_alert, batch_number, expiry_date, uom, units_per_uom, base_unit, description")
       .eq("business_id", active.id)
       .order("stock_units", { ascending: true });
     data = res.data;
@@ -63,12 +70,7 @@ const UserLowStock = () => {
     const defaultThreshold = active.stock_alert_limit ?? 10;
     const low = (data ?? [])
       .filter((p: any) => !isDemoProduct(p))
-      .filter((p: any) => {
-        const threshold = (p.min_stock_alert !== null && p.min_stock_alert !== undefined && p.min_stock_alert > 0)
-          ? p.min_stock_alert
-          : defaultThreshold;
-        return p.stock_units > 0 && p.stock_units <= threshold;
-      });
+      .filter((p: any) => isProductLowStock(p, defaultThreshold));
     setRows(low as LowProduct[]);
     setLoading(false);
   }, [active]);
@@ -156,7 +158,10 @@ const UserLowStock = () => {
               </thead>
               <tbody>
                 {filtered.map((p) => {
-                  const critical = p.stock_units <= p.min_stock_alert / 2;
+                  const stock = computeProductStock(p.stock_units, p.name, p.description, p.uom, p.units_per_uom, p.base_unit);
+                  const rawThresh = p.min_stock_alert && p.min_stock_alert > 0 ? p.min_stock_alert : (active?.stock_alert_limit ?? 10);
+                  const critical = stock.listingStock <= rawThresh / 2 || stock.totalSubUnits <= (rawThresh * (stock.packSize || 1)) / 2;
+
                   return (
                     <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30">
                       <td className="px-6 py-4">
@@ -170,10 +175,25 @@ const UserLowStock = () => {
                       </td>
                       <td className="px-6 py-4"><span className="text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-md bg-muted text-muted-foreground uppercase">{catName(p.category_id)}</span></td>
                       <td className="px-6 py-4 text-center">
-                        <span className={`text-lg font-bold ${critical ? "text-rose-500" : "text-amber-500"}`}>{p.stock_units}</span>
-                        <p className="text-[10px] text-muted-foreground tracking-wider">UNITS</p>
+                        <span className={`text-base font-bold block ${critical ? "text-rose-500" : "text-amber-500"}`}>
+                          {stock.displayText}
+                        </span>
+                        {stock.packSize > 1 && (
+                          <p className="text-[10px] text-muted-foreground font-medium mt-0.5">
+                            {stock.subText}
+                          </p>
+                        )}
                       </td>
-                      <td className="px-6 py-4 text-center font-bold">{p.min_stock_alert}</td>
+                      <td className="px-6 py-4 text-center">
+                        <span className="font-bold text-sm block">
+                          {rawThresh} {formatUomPlural(stock.uomLabel, rawThresh)}
+                        </span>
+                        {stock.packSize > 1 && rawThresh < stock.packSize && (
+                          <span className="text-[10px] text-muted-foreground font-medium block mt-0.5">
+                            ≈ {rawThresh * stock.packSize} {formatUomPlural(stock.subUnitName, rawThresh * stock.packSize).toLowerCase()}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-center">
                         <span className={`text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full ${critical ? "bg-rose-500/15 text-rose-500" : "bg-amber-500/15 text-amber-500"}`}>{critical ? "CRITICAL" : "LOW STOCK"}</span>
                       </td>

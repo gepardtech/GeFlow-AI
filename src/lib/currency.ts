@@ -228,5 +228,5 @@ export const useMoney = (options: MoneyOptions = {}) => {
     return `${invoicePrefix}-${tail}`;
   };
 
-  return { currency: code, symbol: sym, taxRate, rate, convert, invoicePrefix, invoiceNo, format, price };
+  return { currency: code, symbol: sym, taxRate, rate, convert, invoicePrefix, invoiceNo, format, fmt: format, price };
 };

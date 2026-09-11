@@ -33,11 +33,12 @@ export const isPathAllowedForRole = (role: StaffRole, path: string): boolean => 
     return true;
   }
 
-  // Manager: Full operational access across POS, Inventory, Purchases & Reports
+  // Manager: Full operational access across POS, Inventory, Purchases, Returns & Reports
   if (role === "manager") {
     const allowed = [
       "/dashboard",
       "/dashboard/pos",
+      "/dashboard/returns",
       "/dashboard/inventory",
       "/dashboard/low-stock",
       "/dashboard/out-of-stock",
@@ -51,10 +52,11 @@ export const isPathAllowedForRole = (role: StaffRole, path: string): boolean => 
     return allowed.some((p) => cleanPath === p || cleanPath.startsWith(p + "/"));
   }
 
-  // Inventory Clerk: Stock intake, SKU catalog, and out-of-stock monitoring
+  // Inventory Clerk: Stock intake, SKU catalog, returns, and out-of-stock monitoring
   if (role === "inventory") {
     const allowed = [
       "/dashboard/inventory",
+      "/dashboard/returns",
       "/dashboard/low-stock",
       "/dashboard/out-of-stock",
       "/dashboard/purchases",
@@ -64,10 +66,11 @@ export const isPathAllowedForRole = (role: StaffRole, path: string): boolean => 
     return allowed.some((p) => cleanPath === p || cleanPath.startsWith(p + "/"));
   }
 
-  // Cashier: POS (fully sync with business inventory and show business listed all products in pos terminal page) and Reports
+  // Cashier: POS, Returns, and Reports
   if (role === "cashier") {
     const allowed = [
       "/dashboard/pos",
+      "/dashboard/returns",
       "/dashboard/reports",
       "/dashboard/report",
       "/dashboard/announcements",
@@ -83,6 +86,12 @@ export const useStaffRole = (): StaffRoleState => {
   const { isAdmin } = useIsAdmin();
   const [role, setRole] = useState<StaffRole>(() => {
     try {
+      const mode = localStorage.getItem("geflow.workspaceMode") || "business";
+      if (mode === "employee") {
+        const emp = localStorage.getItem("geflow_employee_role") || localStorage.getItem("geflow_cached_staff_role");
+        if (emp === "manager" || emp === "cashier" || emp === "inventory") return emp as StaffRole;
+        return "cashier";
+      }
       const cached = localStorage.getItem("geflow_cached_staff_role");
       if (cached === "manager" || cached === "cashier" || cached === "inventory" || cached === "admin" || cached === "owner") {
         return cached as StaffRole;

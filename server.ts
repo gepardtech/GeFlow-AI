@@ -623,6 +623,37 @@ app.delete("/api/sync/held-orders", (req: Request, res: Response) => {
   }
 });
 
+// Returns & Refunds System Endpoints
+app.get("/api/sync/returns", (req: Request, res: Response) => {
+  try {
+    const businessId = req.query.businessId as string | undefined;
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "businessId is required." });
+    }
+    const returns = businessDataSyncService.getReturns(businessId);
+    res.json({ success: true, returns });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/sync/return", (req: Request, res: Response) => {
+  try {
+    const { businessId, returnRecord, items, userId } = req.body || {};
+    if (!businessId || !returnRecord || !items || !Array.isArray(items)) {
+      return res.status(400).json({ success: false, error: "businessId, returnRecord, and items are required." });
+    }
+    const result = businessDataSyncService.recordReturn(businessId, {
+      returnRecord,
+      items,
+      userId,
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Synchronize Business & POS Settings across terminals and employee sessions
 app.get("/api/sync/settings", (req: Request, res: Response) => {
   try {

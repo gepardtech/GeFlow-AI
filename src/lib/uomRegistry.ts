@@ -1045,4 +1045,41 @@ export function resolveProductUnits(p: {
   );
 }
 
+/**
+ * Accurately determines if a product is in low stock condition,
+ * properly respecting UoM conversion (e.g. 10 tablets remaining for a Box of 100).
+ */
+export function isProductLowStock(
+  p: {
+    stock_units?: number | string | null;
+    name?: string | null;
+    description?: string | null;
+    uom?: string | null;
+    units_per_uom?: number | null;
+    base_unit?: string | null;
+    min_stock_alert?: number | string | null;
+  },
+  defaultThreshold = 10
+): boolean {
+  const stock = resolveProductUnits(p);
+  // If 0 or negative, it's out-of-stock (handled separately in out of stock view)
+  if (stock.totalSubUnits <= 0) return false;
+
+  const rawThreshold = p.min_stock_alert !== null && p.min_stock_alert !== undefined
+    ? Number(p.min_stock_alert)
+    : defaultThreshold;
+
+  const thresholdValue = isNaN(rawThreshold) || rawThreshold <= 0 ? defaultThreshold : rawThreshold;
+
+  // Case 1: Threshold in listing UoM (e.g. 2 boxes)
+  const thresholdInListingUnits = thresholdValue;
+  // Case 2: Threshold in base units (e.g. 2 boxes * 100 tablets = 200 tablets)
+  const thresholdInBaseUnits = stock.packSize > 1 && thresholdValue < stock.packSize
+    ? thresholdValue * stock.packSize
+    : thresholdValue;
+
+  return stock.listingStock <= thresholdInListingUnits || stock.totalSubUnits <= thresholdInBaseUnits;
+}
+
+
 

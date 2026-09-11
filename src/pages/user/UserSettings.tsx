@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Building2,
   Receipt,
@@ -37,7 +37,9 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   Lock,
+  CreditCard,
 } from "lucide-react";
+import { PaymentMethodsSettings } from "@/components/settings/PaymentMethodsSettings";
 import { useTheme } from "next-themes";
 import UserPanelGate from "@/components/UserPanelGate";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
@@ -66,7 +68,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-type SettingsTab = "info" | "pos" | "alert" | "preference" | "tax";
+type SettingsTab = "info" | "pos" | "alert" | "preference" | "tax" | "billing";
 
 interface TaxBracket {
   id: string;
@@ -816,6 +818,19 @@ export const UserSettings = () => {
           >
             <Percent className="w-4 h-4 text-rose-500" />
             <span>Tax &amp; Fiscal</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("billing")}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              activeTab === "billing"
+                ? "bg-card text-foreground shadow-xs border border-border/60"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+            }`}
+          >
+            <CreditCard className="w-4 h-4 text-sky-500" />
+            <span>Payment Methods</span>
           </button>
         </div>
 
@@ -2094,6 +2109,18 @@ export const UserSettings = () => {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 6: BILLING & PAYMENT METHODS                                          */}
+        {/* ========================================================================= */}
+        {activeTab === "billing" && (
+          <div className="animate-in fade-in-50 duration-200">
+            <PaymentMethodsSettings
+              business={activeBusiness || active}
+              onSaved={refreshActiveBusiness}
+            />
           </div>
         )}
       </div>

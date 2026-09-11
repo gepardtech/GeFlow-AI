@@ -66,6 +66,8 @@ const statusClass = (s: string) => ({
 
 const AdminSupport = () => {
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTab = searchParams.get("tab") || "tickets";
 
   // ---------- TICKETS ----------
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -264,10 +266,11 @@ const AdminSupport = () => {
         </button>
       </div>
 
-      <Tabs defaultValue="tickets">
+      <Tabs value={currentTab} onValueChange={(val) => setSearchParams({ tab: val })}>
         <TabsList className="bg-card border border-border rounded-xl p-1.5 inline-flex flex-wrap h-auto gap-1">
           <TabsTrigger value="tickets" className="data-[state=active]:bg-sky-400/15 data-[state=active]:text-sky-500 rounded-lg gap-2 font-bold"><LifeBuoy className="h-4 w-4" /> User Tickets</TabsTrigger>
           <TabsTrigger value="contacts" className="data-[state=active]:bg-sky-400/15 data-[state=active]:text-sky-500 rounded-lg gap-2 font-bold"><Mail className="h-4 w-4" /> Contact Messages ({contactSubmissions.filter(c => !c.is_read).length})</TabsTrigger>
+          <TabsTrigger value="newsletter" className="data-[state=active]:bg-sky-400/15 data-[state=active]:text-sky-500 rounded-lg gap-2 font-bold"><Mail className="h-4 w-4" /> Newsletter</TabsTrigger>
           <TabsTrigger value="ann" className="rounded-lg gap-2 font-bold"><Megaphone className="h-4 w-4" /> Announcements</TabsTrigger>
           <TabsTrigger value="kb" className="rounded-lg gap-2 font-bold"><BookOpen className="h-4 w-4" /> Knowledge Base</TabsTrigger>
           <TabsTrigger value="team" className="rounded-lg gap-2 font-bold"><Users className="h-4 w-4" /> Support Team</TabsTrigger>
@@ -443,6 +446,11 @@ const AdminSupport = () => {
               </table>
             </div>
           </div>
+        </TabsContent>
+
+        {/* NEWSLETTER */}
+        <TabsContent value="newsletter" className="mt-6">
+          <SupportNewsletterTab />
         </TabsContent>
 
         {/* ANNOUNCEMENTS */}

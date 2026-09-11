@@ -20,6 +20,26 @@ export interface BusinessRow {
 
 const LS_KEY = "geflow.activeBusinessId";
 const LS_MODE_KEY = "geflow.workspaceMode";
+const LS_OWNED_KEY = "geflow_cached_owned_businesses";
+const LS_STAFF_KEY = "geflow_cached_staff_businesses";
+
+const getCachedBusinesses = (key: string): BusinessRow[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    // Ignore JSON error
+  }
+  return [];
+};
+
+const initialOwned = getCachedBusinesses(LS_OWNED_KEY);
+const initialStaff = getCachedBusinesses(LS_STAFF_KEY);
+const hasInitialCached = initialOwned.length > 0 || initialStaff.length > 0;
 
 interface GlobalBusinessStore {
   owned: BusinessRow[];
@@ -37,17 +57,17 @@ interface GlobalBusinessStore {
 }
 
 const store: GlobalBusinessStore = {
-  owned: [],
-  staff: [],
+  owned: initialOwned,
+  staff: initialStaff,
   mode: (localStorage.getItem(LS_MODE_KEY) as "business" | "employee") || "business",
-  activeId: localStorage.getItem(LS_KEY) || null,
+  activeId: localStorage.getItem(LS_KEY) || (initialOwned[0]?.id ?? null),
   industryType: null,
   categoryName: null,
   categorySettings: null,
   enabledModules: null,
   enabledFeatures: null,
-  loading: true,
-  hasLoaded: false,
+  loading: !hasInitialCached,
+  hasLoaded: hasInitialCached,
   currentUserId: null,
 };
 
@@ -217,6 +237,12 @@ async function fetchBusinessData(): Promise<void> {
 
       store.owned = ownedRows;
       store.staff = staffRows;
+      try {
+        localStorage.setItem(LS_OWNED_KEY, JSON.stringify(ownedRows));
+        localStorage.setItem(LS_STAFF_KEY, JSON.stringify(staffRows));
+      } catch {
+        // Ignore storage errors
+      }
 
       // Determine active pool based on stored mode
       let currentMode = (localStorage.getItem(LS_MODE_KEY) as "business" | "employee") || store.mode;
@@ -249,9 +275,13 @@ async function fetchBusinessData(): Promise<void> {
 
       // Sync active staff role for permission gates
       const activeRow = activePool.find((r) => r.id === chosen);
-      if (activeRow?.is_staff && activeRow?.staff_role) {
+      if (currentMode === "employee" && activeRow?.staff_role) {
         localStorage.setItem("geflow_cached_staff_role", activeRow.staff_role);
-      } else if (!activeRow?.is_staff && activeRow) {
+        localStorage.setItem("geflow_employee_role", activeRow.staff_role);
+      } else if (currentMode === "employee") {
+        localStorage.setItem("geflow_cached_staff_role", "cashier");
+        localStorage.setItem("geflow_employee_role", "cashier");
+      } else if (currentMode === "business") {
         localStorage.setItem("geflow_cached_staff_role", "owner");
       }
 
@@ -325,8 +355,6 @@ function ensureRealtime() {
   };
 
   window.addEventListener("geflow:business-updated", handleCustomSync);
-  window.addEventListener("geflow:business-changed", handleCustomSync);
-  window.addEventListener("geflow:mode-changed", handleCustomSync);
   window.addEventListener("geflow:settings-changed", handleCustomSync);
   window.addEventListener("geflow:team-invite-accepted", handleCustomSync);
   window.addEventListener("geflow:invitation-sent", handleCustomSync);
@@ -366,6 +394,17 @@ export const useActiveBusiness = () => {
       localStorage.removeItem(LS_KEY);
     }
 
+    const activeRow = pool.find((r) => r.id === newChosen);
+    if (newMode === "employee" && activeRow?.staff_role) {
+      localStorage.setItem("geflow_cached_staff_role", activeRow.staff_role);
+      localStorage.setItem("geflow_employee_role", activeRow.staff_role);
+    } else if (newMode === "employee") {
+      localStorage.setItem("geflow_cached_staff_role", "cashier");
+      localStorage.setItem("geflow_employee_role", "cashier");
+    } else if (newMode === "business") {
+      localStorage.setItem("geflow_cached_staff_role", "owner");
+    }
+
     notifyListeners();
     window.dispatchEvent(new CustomEvent("geflow:mode-changed", { detail: { mode: newMode } }));
     window.dispatchEvent(new CustomEvent("geflow:business-changed", { detail: { businessId: newChosen } }));
@@ -374,6 +413,14 @@ export const useActiveBusiness = () => {
   const setActive = useCallback((id: string) => {
     localStorage.setItem(LS_KEY, id);
     store.activeId = id;
+    const pool = store.mode === "employee" ? store.staff : store.owned;
+    const activeRow = pool.find((r) => r.id === id);
+    if (store.mode === "employee" && activeRow?.staff_role) {
+      localStorage.setItem("geflow_cached_staff_role", activeRow.staff_role);
+      localStorage.setItem("geflow_employee_role", activeRow.staff_role);
+    } else if (store.mode === "business") {
+      localStorage.setItem("geflow_cached_staff_role", "owner");
+    }
     notifyListeners();
     window.dispatchEvent(new CustomEvent("geflow:business-changed", { detail: { businessId: id } }));
   }, []);

@@ -117,6 +117,29 @@ export interface SyncedHeldOrder {
   updated_at: string;
 }
 
+export interface SyncedReturn {
+  id: string;
+  business_id: string;
+  sale_id: string;
+  customer_name?: string | null;
+  cashier_name?: string | null;
+  total_refund: number;
+  refund_method: string;
+  reason: string;
+  notes?: string | null;
+  items: {
+    product_id?: string | null;
+    product_name: string;
+    return_qty: number;
+    unit_price: number;
+    unit_cost?: number;
+    refund_amount: number;
+    reason: string;
+    restock: boolean;
+  }[];
+  created_at: string;
+}
+
 export interface BusinessDataUnit {
   businessId: string;
   businessName?: string;
@@ -127,6 +150,7 @@ export interface BusinessDataUnit {
   sale_items: SyncedSaleItem[];
   stock_movements: SyncedStockMovement[];
   held_orders: SyncedHeldOrder[];
+  returns?: SyncedReturn[];
   purchases: any[];
   purchase_items: any[];
   categories: any[];
@@ -757,6 +781,109 @@ export class BusinessDataSyncService {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Record a customer return & refund.
+   * Restocks eligible products, registers stock movements, and logs refund record.
+   */
+  public recordReturn(
+    businessId: string,
+    payload: {
+      returnRecord: {
+        id?: string;
+        sale_id: string;
+        customer_name?: string;
+        cashier_name?: string;
+        total_refund: number;
+        refund_method: string;
+        reason: string;
+        notes?: string;
+      };
+      items: {
+        product_id?: string;
+        product_name: string;
+        return_qty: number;
+        unit_price: number;
+        unit_cost?: number;
+        refund_amount: number;
+        reason: string;
+        restock: boolean;
+      }[];
+      userId?: string;
+    }
+  ): {
+    success: boolean;
+    returnRecord: SyncedReturn;
+    updatedProducts: { id: string; stock_units: number }[];
+  } {
+    const unit = this.getOrCreateBusinessUnit(businessId);
+    if (!unit.returns) unit.returns = [];
+    const now = new Date().toISOString();
+    const returnId = payload.returnRecord.id || `ret_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    const savedReturn: SyncedReturn = {
+      id: returnId,
+      business_id: businessId,
+      sale_id: payload.returnRecord.sale_id,
+      customer_name: payload.returnRecord.customer_name || null,
+      cashier_name: payload.returnRecord.cashier_name || "Cashier",
+      total_refund: Number(payload.returnRecord.total_refund) || 0,
+      refund_method: payload.returnRecord.refund_method || "cash",
+      reason: payload.returnRecord.reason || "Customer Return",
+      notes: payload.returnRecord.notes || null,
+      items: payload.items,
+      created_at: now,
+    };
+
+    unit.returns.unshift(savedReturn);
+
+    const updatedProducts: { id: string; stock_units: number }[] = [];
+
+    // Restock products and log stock movement
+    for (const item of payload.items) {
+      if (item.product_id && item.restock !== false) {
+        const pIdx = unit.products.findIndex((p) => p.id === item.product_id);
+        if (pIdx >= 0) {
+          const prod = unit.products[pIdx];
+          const newStock = (prod.stock_units || 0) + (Number(item.return_qty) || 0);
+          prod.stock_units = newStock;
+          prod.updated_at = now;
+          updatedProducts.push({ id: prod.id, stock_units: newStock });
+
+          // Register atomic stock movement
+          unit.stock_movements.unshift({
+            id: `mov_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            business_id: businessId,
+            product_id: prod.id,
+            owner_user_id: unit.ownerUserId,
+            type: "return",
+            quantity: Number(item.return_qty) || 0,
+            reason: `Return/Refund: ${item.reason || "Customer Return"}`,
+            note: `Restocked ${item.return_qty}x for Sale #${payload.returnRecord.sale_id}`,
+            reference_id: returnId,
+            reference_type: "return",
+            created_by: payload.userId,
+            created_at: now,
+          });
+        }
+      }
+    }
+
+    // Adjust corresponding sale status
+    const sIdx = unit.sales.findIndex((s) => s.id === payload.returnRecord.sale_id);
+    if (sIdx >= 0) {
+      unit.sales[sIdx].status = "refunded";
+    }
+
+    unit.lastSyncedAt = now;
+    this.persist();
+    return { success: true, returnRecord: savedReturn, updatedProducts };
+  }
+
+  public getReturns(businessId: string): SyncedReturn[] {
+    const unit = this.getOrCreateBusinessUnit(businessId);
+    return unit.returns || [];
   }
 }
 

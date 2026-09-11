@@ -133,6 +133,17 @@ const Checkout = () => {
       setCouponError("Please enter a coupon code.");
       return;
     }
+
+    // Prevent re-applying the exact same code
+    if (appliedCoupon && appliedCoupon.code === code) {
+      toast({
+        title: "Coupon Already Active",
+        description: `Coupon ${code} (${appliedCoupon.label}) is already applied to this order.`,
+      });
+      return;
+    }
+
+    const previousCouponCode = appliedCoupon?.code;
     setCoupon(code);
     setCouponLoading(true);
     setCouponError("");
@@ -151,17 +162,25 @@ const Checkout = () => {
         setCouponError("");
         clearPendingCoupon();
         userRemovedCouponRef.current = false;
-        toast({
-          title: res.isAnnouncementPromo ? "Announcement Promo Applied!" : "Promo Coupon Applied!",
-          description: `${res.label} activated for your order.`,
-        });
+        
+        if (previousCouponCode && previousCouponCode !== res.code) {
+          toast({
+            title: "Coupon Replaced",
+            description: `Replaced ${previousCouponCode} with ${res.code} (${res.label}). Only one coupon can be active per order.`,
+          });
+        } else {
+          toast({
+            title: res.isAnnouncementPromo ? "Announcement Promo Applied!" : "Promo Coupon Applied!",
+            description: `${res.label} activated for your order.`,
+          });
+        }
       } else {
         setAppliedCoupon(null);
         setCouponError(res.reason || "Invalid or inactive coupon code.");
         if (!isAutoApply) {
           toast({
             title: "Coupon Cannot Be Applied",
-            description: res.reason || "Invalid or expired coupon code.",
+            description: res.reason || "Invalid, expired, or inactive coupon code.",
             variant: "destructive",
           });
         }
@@ -173,7 +192,7 @@ const Checkout = () => {
     } finally {
       setCouponLoading(false);
     }
-  }, [coupon, plan, subtotal, period, toast]);
+  }, [coupon, plan, subtotal, period, toast, appliedCoupon]);
 
   const handleRemoveCoupon = useCallback(() => {
     userRemovedCouponRef.current = true;
