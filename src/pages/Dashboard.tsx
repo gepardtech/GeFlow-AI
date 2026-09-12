@@ -81,7 +81,7 @@ const Stat = ({
 const Dashboard = () => {
   const navigate = useNavigate();
   const { plan, planId, fullName, loading: planLoading } = usePlan();
-  const { active, businesses, staffBusinesses, hasLoaded, loading: bizLoading, mode } = useActiveBusiness();
+  const { active, businesses, staffBusinesses, hasLoaded, loading: bizLoading, mode, reload: reloadBiz } = useActiveBusiness();
   const { isCashier, isInventoryClerk, isManager, isOwner } = useStaffRole();
 
   const [loading, setLoading] = useState(true);
@@ -377,7 +377,10 @@ const Dashboard = () => {
             </div>
             <div className="pt-2 flex items-center justify-center gap-3">
               <button
-                onClick={() => window.location.reload()}
+                onClick={() => {
+                  reloadBiz();
+                  window.dispatchEvent(new CustomEvent("panel:refresh"));
+                }}
                 className="h-10 px-5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition shadow-sm"
               >
                 Refresh Invitations

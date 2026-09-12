@@ -110,17 +110,7 @@ const STORAGE_PREFIX = "geflow_payment_methods_";
 export function getBusinessPaymentMethods(business: any): BusinessPaymentMethod[] {
   if (!business) return getDefaultPaymentMethodsForCountry("default");
 
-  // 1. Check if configured in business object from DB
-  if (business.payment_methods && Array.isArray(business.payment_methods) && business.payment_methods.length > 0) {
-    return business.payment_methods;
-  }
-
-  // 1b. Check if inside business settings or extended metadata
-  if (business.settings?.payment_methods && Array.isArray(business.settings.payment_methods) && business.settings.payment_methods.length > 0) {
-    return business.settings.payment_methods;
-  }
-
-  // 2. Check localStorage
+  // 1. Check client-side configured payment methods in localStorage FIRST (user settings source of truth)
   if (typeof window !== "undefined" && business?.id) {
     try {
       const stored = localStorage.getItem(`${STORAGE_PREFIX}${business.id}`);
@@ -141,6 +131,16 @@ export function getBusinessPaymentMethods(business: any): BusinessPaymentMethod[
     } catch {
       // Fallback
     }
+  }
+
+  // 2. Check if configured in business object from DB
+  if (business.payment_methods && Array.isArray(business.payment_methods) && business.payment_methods.length > 0) {
+    return business.payment_methods;
+  }
+
+  // 2b. Check if inside business settings or extended metadata
+  if (business.settings?.payment_methods && Array.isArray(business.settings.payment_methods) && business.settings.payment_methods.length > 0) {
+    return business.settings.payment_methods;
   }
 
   // 3. Resolve by country

@@ -74,6 +74,11 @@ export interface SyncedSale {
   status: string;
   processed_by?: string;
   created_at: string;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  invoice_no?: string | null;
+  receipt_no?: string | null;
+  payment_method?: string | null;
 }
 
 export interface SyncedSaleItem {
@@ -86,6 +91,9 @@ export interface SyncedSaleItem {
   unit_cost: number;
   owner_user_id?: string;
   created_at: string;
+  barcode?: string | null;
+  batch_number?: string | null;
+  internal_sku?: string | null;
 }
 
 export interface SyncedStockMovement {
@@ -121,12 +129,15 @@ export interface SyncedReturn {
   id: string;
   business_id: string;
   sale_id: string;
+  invoice_no?: string | null;
   customer_name?: string | null;
   cashier_name?: string | null;
   total_refund: number;
   refund_method: string;
   reason: string;
   notes?: string | null;
+  original_sale_total?: number | null;
+  original_sale_date?: string | null;
   items: {
     product_id?: string | null;
     product_name: string;
@@ -631,6 +642,9 @@ export class BusinessDataSyncService {
         unit_price: unitPrice,
         unit_cost: unitCost,
         owner_user_id: unit.ownerUserId,
+        barcode: (item as any).barcode || null,
+        batch_number: (item as any).batch_number || null,
+        internal_sku: (item as any).internal_sku || null,
         created_at: now,
       };
       saleItemsList.push(savedItem);
@@ -677,6 +691,11 @@ export class BusinessDataSyncService {
       profit: payload.sale.profit !== undefined ? Number(payload.sale.profit) : totalProfit,
       status: payload.sale.status || "completed",
       processed_by: processedBy,
+      customer_name: (payload.sale as any).customer_name || null,
+      customer_phone: (payload.sale as any).customer_phone || null,
+      invoice_no: (payload.sale as any).invoice_no || (payload.sale as any).receipt_no || null,
+      receipt_no: (payload.sale as any).receipt_no || (payload.sale as any).invoice_no || null,
+      payment_method: (payload.sale as any).payment_method || null,
       created_at: now,
     };
 
@@ -822,16 +841,26 @@ export class BusinessDataSyncService {
     const now = new Date().toISOString();
     const returnId = payload.returnRecord.id || `ret_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
+    const originalSale = unit.sales.find(
+      (s) =>
+        s.id === payload.returnRecord.sale_id ||
+        (s.invoice_no && s.invoice_no.toLowerCase() === payload.returnRecord.sale_id.toLowerCase()) ||
+        (s.receipt_no && s.receipt_no.toLowerCase() === payload.returnRecord.sale_id.toLowerCase())
+    );
+
     const savedReturn: SyncedReturn = {
       id: returnId,
       business_id: businessId,
-      sale_id: payload.returnRecord.sale_id,
-      customer_name: payload.returnRecord.customer_name || null,
-      cashier_name: payload.returnRecord.cashier_name || "Cashier",
+      sale_id: originalSale?.id || payload.returnRecord.sale_id,
+      invoice_no: (payload.returnRecord as any).invoice_no || originalSale?.invoice_no || originalSale?.receipt_no || null,
+      customer_name: payload.returnRecord.customer_name || originalSale?.customer_name || null,
+      cashier_name: payload.returnRecord.cashier_name || originalSale?.processed_by || "Cashier",
       total_refund: Number(payload.returnRecord.total_refund) || 0,
       refund_method: payload.returnRecord.refund_method || "cash",
       reason: payload.returnRecord.reason || "Customer Return",
       notes: payload.returnRecord.notes || null,
+      original_sale_total: originalSale ? originalSale.total : null,
+      original_sale_date: originalSale ? originalSale.created_at : null,
       items: payload.items,
       created_at: now,
     };
@@ -842,8 +871,22 @@ export class BusinessDataSyncService {
 
     // Restock products and log stock movement
     for (const item of payload.items) {
-      if (item.product_id && item.restock !== false) {
-        const pIdx = unit.products.findIndex((p) => p.id === item.product_id);
+      if (item.restock !== false) {
+        let pIdx = -1;
+        if (item.product_id) {
+          pIdx = unit.products.findIndex((p) => p.id === item.product_id);
+        }
+        if (pIdx < 0 && item.product_name) {
+          const cleanName = item.product_name.replace(/\[.*?\]/g, "").trim().toLowerCase();
+          pIdx = unit.products.findIndex(
+            (p) =>
+              p.name.toLowerCase() === cleanName ||
+              p.name.toLowerCase() === item.product_name.toLowerCase() ||
+              cleanName.includes(p.name.toLowerCase()) ||
+              p.name.toLowerCase().includes(cleanName)
+          );
+        }
+
         if (pIdx >= 0) {
           const prod = unit.products[pIdx];
           const newStock = (prod.stock_units || 0) + (Number(item.return_qty) || 0);
@@ -860,7 +903,7 @@ export class BusinessDataSyncService {
             type: "return",
             quantity: Number(item.return_qty) || 0,
             reason: `Return/Refund: ${item.reason || "Customer Return"}`,
-            note: `Restocked ${item.return_qty}x for Sale #${payload.returnRecord.sale_id}`,
+            note: `Restocked ${item.return_qty}x for Sale #${originalSale?.invoice_no || payload.returnRecord.sale_id}`,
             reference_id: returnId,
             reference_type: "return",
             created_by: payload.userId,
@@ -871,7 +914,12 @@ export class BusinessDataSyncService {
     }
 
     // Adjust corresponding sale status
-    const sIdx = unit.sales.findIndex((s) => s.id === payload.returnRecord.sale_id);
+    const sIdx = unit.sales.findIndex(
+      (s) =>
+        s.id === payload.returnRecord.sale_id ||
+        (s.invoice_no && s.invoice_no.toLowerCase() === payload.returnRecord.sale_id.toLowerCase()) ||
+        (s.receipt_no && s.receipt_no.toLowerCase() === payload.returnRecord.sale_id.toLowerCase())
+    );
     if (sIdx >= 0) {
       unit.sales[sIdx].status = "refunded";
     }

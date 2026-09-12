@@ -62,26 +62,81 @@ export const PaymentMethodsSettings: React.FC<Props> = ({ business, onSaved }) =
 
   const countryKey = resolveBusinessCountry(business);
 
+  const businessId = business?.id;
+
   useEffect(() => {
-    if (business) {
+    if (businessId) {
       setMethods(getBusinessPaymentMethods(business));
     }
-  }, [business]);
+  }, [businessId]);
 
   const handleToggle = (id: string, enabled: boolean) => {
-    setMethods((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, enabled } : m))
-    );
+    setMethods((prev) => {
+      // Must have at least 1 method enabled
+      if (!enabled && prev.filter((m) => m.enabled).length <= 1) {
+        toast({
+          title: "Cannot disable all payment methods",
+          description: "At least one payment method must remain active for POS checkout.",
+          variant: "destructive",
+        });
+        return prev;
+      }
+
+      const updated = prev.map((m) => {
+        if (m.id === id) {
+          return {
+            ...m,
+            enabled,
+            isDefault: !enabled && m.isDefault ? false : m.isDefault,
+          };
+        }
+        return m;
+      });
+
+      // If we disabled the default method, re-assign default to another enabled one
+      const hasDefault = updated.some((m) => m.enabled && m.isDefault);
+      if (!hasDefault) {
+        const firstEnabled = updated.find((m) => m.enabled);
+        if (firstEnabled) firstEnabled.isDefault = true;
+      }
+
+      // Auto-persist immediately to localStorage & sync server
+      if (businessId) {
+        saveBusinessPaymentMethods(businessId, updated).catch(console.warn);
+      }
+
+      const target = prev.find((m) => m.id === id);
+      toast({
+        title: `${target?.name || "Method"} ${enabled ? "Enabled" : "Disabled"}`,
+        description: enabled
+          ? "Now available in POS checkout and customer receipts."
+          : "Hidden from POS terminal.",
+      });
+
+      return updated;
+    });
   };
 
   const handleSetDefault = (id: string) => {
-    setMethods((prev) =>
-      prev.map((m) => ({
+    setMethods((prev) => {
+      const updated = prev.map((m) => ({
         ...m,
         isDefault: m.id === id,
         enabled: m.id === id ? true : m.enabled,
-      }))
-    );
+      }));
+
+      if (businessId) {
+        saveBusinessPaymentMethods(businessId, updated).catch(console.warn);
+      }
+
+      const target = prev.find((m) => m.id === id);
+      toast({
+        title: "Default payment method updated",
+        description: `${target?.name || "Method"} will be preselected during checkout.`,
+      });
+
+      return updated;
+    });
   };
 
   const handleMove = (index: number, direction: "up" | "down") => {
@@ -92,20 +147,39 @@ export const PaymentMethodsSettings: React.FC<Props> = ({ business, onSaved }) =
       const temp = copy[index];
       copy[index] = copy[targetIndex];
       copy[targetIndex] = temp;
-      return copy.map((m, idx) => ({ ...m, sortOrder: idx + 1 }));
+      const updated = copy.map((m, idx) => ({ ...m, sortOrder: idx + 1 }));
+
+      if (businessId) {
+        saveBusinessPaymentMethods(businessId, updated).catch(console.warn);
+      }
+
+      return updated;
     });
   };
 
   const handleDelete = (id: string) => {
-    setMethods((prev) => prev.filter((m) => m.id !== id));
+    setMethods((prev) => {
+      const updated = prev.filter((m) => m.id !== id);
+      if (businessId) {
+        saveBusinessPaymentMethods(businessId, updated).catch(console.warn);
+      }
+      toast({
+        title: "Custom method removed",
+        description: "Payment method deleted successfully.",
+      });
+      return updated;
+    });
   };
 
   const handleResetDefaults = () => {
     const defaults = getDefaultPaymentMethodsForCountry(countryKey);
     setMethods(defaults);
+    if (businessId) {
+      saveBusinessPaymentMethods(businessId, defaults).catch(console.warn);
+    }
     toast({
       title: "Reset to Country Defaults",
-      description: `Loaded standard payment methods for ${countryKey.toUpperCase()}. Click Save to persist.`,
+      description: `Loaded standard payment methods for ${countryKey.toUpperCase()}.`,
     });
   };
 
@@ -288,10 +362,15 @@ export const PaymentMethodsSettings: React.FC<Props> = ({ business, onSaved }) =
               )}
 
               {/* Toggle Switch */}
-              <div className="flex items-center gap-1.5 pl-2 border-l border-border">
+              <div className="flex items-center gap-2 pl-3 border-l border-border">
+                <span className={`text-[11px] font-bold select-none ${method.enabled ? "text-emerald-500" : "text-muted-foreground"}`}>
+                  {method.enabled ? "Enabled" : "Disabled"}
+                </span>
                 <Switch
+                  id={`payment-method-switch-${method.id}`}
                   checked={method.enabled}
                   onCheckedChange={(val) => handleToggle(method.id, val)}
+                  aria-label={`Enable or disable ${method.name}`}
                 />
               </div>
 

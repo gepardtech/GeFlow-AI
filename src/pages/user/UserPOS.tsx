@@ -41,6 +41,7 @@ import {
 import { recordStockMovement } from "@/lib/stockMovementService";
 import { parseProductUOM, computeProductStock } from "@/lib/uomRegistry";
 import { COUNTRIES, detectDefaultCountry } from "@/lib/countries";
+import { generateProfessionalReceiptNo } from "@/lib/receiptUtils";
 
 export interface POSProduct {
   id: string;
@@ -702,6 +703,7 @@ const UserPOS = () => {
 
     setProcessing(true);
     const profit = cart.reduce((s, l) => s + (l.unit - Number(l.proportionalCost)) * l.qty, 0) - discountValue;
+    const professionalReceiptNo = generateProfessionalReceiptNo(active.business_name);
 
     const saleItems = cart.map((l) => ({
       product_id: l.id,
@@ -710,11 +712,18 @@ const UserPOS = () => {
       unit_price: l.unit,
       unit_cost: Number(l.proportionalCost),
       deductionUnits: (l.stockUnitsDeducted || 1) * l.qty,
+      barcode: l.barcode || null,
+      batch_number: l.batch_number || null,
+      internal_sku: l.internal_sku || null,
     }));
 
     // Post to unified sync engine
     const syncRes = await recordSyncedSale(active.id, {
       sale: {
+        invoice_no: professionalReceiptNo,
+        receipt_no: professionalReceiptNo,
+        customer_name: customerName.trim() || undefined,
+        customer_phone: fullCustomerPhone || undefined,
         total: grandTotal,
         profit,
         status: "completed",
@@ -789,8 +798,8 @@ const UserPOS = () => {
 
     setProcessing(false);
 
-    // Build the printable receipt from finalized cart
-    const invoiceNo = makeInvoiceNo(saleId);
+    // Build the printable receipt from finalized cart with professional receipt/invoice ID
+    const invoiceNo = professionalReceiptNo;
     setReceipt({
       invoiceNo,
       date: new Date(),

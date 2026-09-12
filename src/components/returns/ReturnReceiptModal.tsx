@@ -82,12 +82,14 @@ export function ReturnReceiptModal({
 
           <div className="grid grid-cols-2 gap-2 text-[11px] py-1">
             <div>
-              <span className="text-muted-foreground block text-[10px]">RETURN ID</span>
+              <span className="text-muted-foreground block text-[10px]">RETURN VOUCHER</span>
               <span className="font-bold text-foreground truncate block">{record.id}</span>
             </div>
             <div>
-              <span className="text-muted-foreground block text-[10px]">ORIGINAL SALE</span>
-              <span className="font-bold text-foreground truncate block">#{record.sale_id}</span>
+              <span className="text-muted-foreground block text-[10px]">RECEIPT / SLIP NO</span>
+              <span className="font-bold text-sky-500 truncate block">
+                {record.invoice_no ? `RECEIPT #: ${record.invoice_no}` : `#${record.sale_id}`}
+              </span>
             </div>
             <div>
               <span className="text-muted-foreground block text-[10px]">CASHIER</span>
@@ -98,9 +100,21 @@ export function ReturnReceiptModal({
               <span className="font-bold uppercase text-sky-500">{record.refund_method}</span>
             </div>
             {record.customer_name && (
-              <div className="col-span-2">
-                <span className="text-muted-foreground block text-[10px]">CUSTOMER</span>
+              <div>
+                <span className="text-muted-foreground block text-[10px]">BUYER / CLIENT</span>
                 <span className="font-semibold text-foreground">{record.customer_name}</span>
+              </div>
+            )}
+            {record.original_sale_total !== undefined && (
+              <div>
+                <span className="text-muted-foreground block text-[10px]">ORIGINAL PURCHASE TOTAL</span>
+                <span className="font-semibold text-foreground">{currencySymbol}{record.original_sale_total.toFixed(2)}</span>
+              </div>
+            )}
+            {record.original_sale_date && (
+              <div className="col-span-2">
+                <span className="text-muted-foreground block text-[10px]">ORIGINAL PURCHASE DATE</span>
+                <span className="font-medium text-muted-foreground">{new Date(record.original_sale_date).toLocaleString()}</span>
               </div>
             )}
           </div>

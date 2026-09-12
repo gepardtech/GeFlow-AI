@@ -311,6 +311,10 @@ export async function recordSyncedSale(
   payload: {
     sale: {
       id?: string;
+      invoice_no?: string;
+      receipt_no?: string;
+      customer_name?: string;
+      customer_phone?: string;
       total: number;
       profit?: number;
       status?: string;
@@ -324,6 +328,9 @@ export async function recordSyncedSale(
       unit_price: number;
       unit_cost?: number;
       deductionUnits?: number;
+      barcode?: string | null;
+      batch_number?: string | null;
+      internal_sku?: string | null;
     }[];
     cashierName?: string;
     userId?: string;
@@ -353,7 +360,7 @@ export async function recordSyncedSale(
 
   // 2. Always record in Supabase database
   try {
-    const saleRow = {
+    const saleRow: any = {
       id: payload.sale.id || syncResult?.sale?.id,
       business_id: businessId,
       owner_user_id: payload.userId,
@@ -362,6 +369,10 @@ export async function recordSyncedSale(
       status: payload.sale.status || "completed",
       processed_by: payload.cashierName || "Cashier",
     };
+    if (payload.sale.customer_name) saleRow.customer_name = payload.sale.customer_name;
+    if (payload.sale.invoice_no) saleRow.invoice_no = payload.sale.invoice_no;
+    if (payload.sale.receipt_no) saleRow.receipt_no = payload.sale.receipt_no;
+
     await supabase.from("sales").insert(saleRow);
 
     const itemsRows = payload.items.map((i) => ({
