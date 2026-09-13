@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { normalizeReceiptQuery } from "@/lib/receiptUtils";
+import { computeProductStock } from "@/lib/uomRegistry";
 
 export interface ReturnItem {
   product_id?: string | null;
@@ -512,7 +513,7 @@ export async function executeReturnTransaction(input: ProcessReturnInput): Promi
           }
         });
 
-        // Ensure each restocked item is incremented
+        // Ensure each restocked item is incremented accurately by its purchase UOM / packSize
         items.forEach((item) => {
           if (item.restock !== false) {
             let p = prods.find((x: any) => x.id === item.product_id);
@@ -525,7 +526,25 @@ export async function executeReturnTransaction(input: ProcessReturnInput): Promi
               );
             }
             if (p) {
-              p.stock_units = (Number(p.stock_units) || 0) + (Number(item.return_qty) || 0);
+              const stockInfo = computeProductStock(p.stock_units, p.name, p.description, p.uom, p.units_per_uom, p.base_unit);
+              const packSize = Math.max(1, stockInfo.packSize || 1);
+              let baseUnits = Number(item.return_qty) || 0;
+              const bracketMatch = item.product_name?.match(/\[(.*?)\]/);
+              if (bracketMatch && bracketMatch[1]) {
+                const label = bracketMatch[1].trim().toLowerCase();
+                if (label.includes("pack") || label.includes("box") || label.includes("carton")) {
+                  baseUnits = Math.round(baseUnits * packSize);
+                } else if (label.includes("piece") || label.includes("bottle") || label.includes("tab") || label.includes("single")) {
+                  const numMatch = label.match(/(\d+(?:\.\d+)?)/);
+                  const perItem = numMatch && numMatch[1] ? parseFloat(numMatch[1]) : 1;
+                  baseUnits = Math.round(baseUnits * perItem);
+                } else {
+                  baseUnits = Math.round(baseUnits * packSize);
+                }
+              } else {
+                baseUnits = Math.round(baseUnits * packSize);
+              }
+              p.stock_units = (Number(p.stock_units) || 0) + baseUnits;
               p.updated_at = now;
               modified = true;
             }
@@ -545,13 +564,13 @@ export async function executeReturnTransaction(input: ProcessReturnInput): Promi
   for (const item of items) {
     if (item.restock !== false) {
       try {
-        let targetProd: { id: string; stock_units?: number; name?: string } | null = null;
+        let targetProd: any = null;
 
         // 3a. Lookup by product_id
         if (item.product_id) {
           const { data: prod } = await supabase
             .from("products")
-            .select("id, stock_units, name")
+            .select("id, stock_units, name, description, uom, units_per_uom, base_unit, barcode")
             .eq("id", item.product_id)
             .maybeSingle();
 
@@ -565,7 +584,7 @@ export async function executeReturnTransaction(input: ProcessReturnInput): Promi
           const cleanName = item.product_name.replace(/\[.*?\]/g, "").trim().toLowerCase();
           const { data: prodsList } = await supabase
             .from("products")
-            .select("id, stock_units, name, barcode")
+            .select("id, stock_units, name, description, uom, units_per_uom, base_unit, barcode")
             .eq("business_id", businessId);
 
           if (prodsList && prodsList.length > 0) {
@@ -580,24 +599,62 @@ export async function executeReturnTransaction(input: ProcessReturnInput): Promi
         }
 
         if (targetProd) {
+          const stockInfo = computeProductStock(
+            targetProd.stock_units,
+            targetProd.name,
+            targetProd.description,
+            targetProd.uom,
+            targetProd.units_per_uom,
+            targetProd.base_unit
+          );
+          const packSize = Math.max(1, stockInfo.packSize || 1);
+          let baseUnitsToRestock = Number(item.return_qty) || 0;
+          const bracketMatch = item.product_name?.match(/\[(.*?)\]/);
+          if (bracketMatch && bracketMatch[1]) {
+            const label = bracketMatch[1].trim().toLowerCase();
+            if (label.includes("pack") || label.includes("box") || label.includes("carton")) {
+              baseUnitsToRestock = Math.round(baseUnitsToRestock * packSize);
+            } else if (label.includes("piece") || label.includes("bottle") || label.includes("tab") || label.includes("single")) {
+              const numMatch = label.match(/(\d+(?:\.\d+)?)/);
+              const perItem = numMatch && numMatch[1] ? parseFloat(numMatch[1]) : 1;
+              baseUnitsToRestock = Math.round(baseUnitsToRestock * perItem);
+            } else {
+              baseUnitsToRestock = Math.round(baseUnitsToRestock * packSize);
+            }
+          } else {
+            baseUnitsToRestock = Math.round(baseUnitsToRestock * packSize);
+          }
+
           const currentStock = Number(targetProd.stock_units) || 0;
-          const newStock = currentStock + Number(item.return_qty);
+          const newStock = currentStock + baseUnitsToRestock;
+
+          let updatedDesc = targetProd.description;
+          if (targetProd.description && (targetProd.description.includes("[PACK_QTY:") || targetProd.description.includes("[BASE_QTY:"))) {
+            const packQty = packSize > 0 ? +(newStock / packSize).toFixed(2) : newStock;
+            updatedDesc = targetProd.description
+              .replace(/\[PACK_QTY:\s*[0-9.]+\]/gi, `[PACK_QTY: ${packQty}]`)
+              .replace(/\[BASE_QTY:\s*[0-9.]+\]/gi, `[BASE_QTY: ${newStock}]`);
+          }
 
           // Update Supabase product stock
           await supabase
             .from("products")
-            .update({ stock_units: newStock, updated_at: now })
+            .update({
+              stock_units: newStock,
+              ...(updatedDesc ? { description: updatedDesc } : {}),
+              updated_at: now,
+            })
             .eq("id", targetProd.id);
 
-          // Log stock movement in Supabase
+          // Log stock movement in Supabase with exact units & UOM detail
           await supabase.from("stock_movements").insert({
             business_id: businessId,
             product_id: targetProd.id,
             owner_user_id: userId || "",
             type: "return",
-            quantity: item.return_qty,
+            quantity: baseUnitsToRestock,
             reason: `Customer Return: ${item.reason || reason}`,
-            note: `Restocked ${item.return_qty}x for Return #${returnId} (Slip #${invoiceNo || saleId})`,
+            note: `Restocked ${item.return_qty}x (${baseUnitsToRestock} ${stockInfo.baseUnitName || "units"}) for Return #${returnId} (Slip #${invoiceNo || saleId})`,
           });
 
           // Also trigger server-side stock adjustment for synchronized multi-device awareness
@@ -607,10 +664,10 @@ export async function executeReturnTransaction(input: ProcessReturnInput): Promi
             body: JSON.stringify({
               businessId,
               productId: targetProd.id,
-              deltaQuantity: Number(item.return_qty),
+              deltaQuantity: baseUnitsToRestock,
               type: "in",
               reason: `Customer Return: ${item.reason || reason}`,
-              note: `Restocked ${item.return_qty}x for Return #${returnId} (Slip #${invoiceNo || saleId})`,
+              note: `Restocked ${item.return_qty}x (${baseUnitsToRestock} base units) for Return #${returnId} (Slip #${invoiceNo || saleId})`,
               userId,
             }),
           }).catch(() => {});

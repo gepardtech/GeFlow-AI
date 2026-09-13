@@ -91,7 +91,7 @@ export function useBusinessRealtimeSync() {
 
     let isMounted = true;
 
-    async function pollStaffCatalog() {
+    async function fetchStaffCatalog() {
       try {
         const res = await fetch(
           `/api/sync/business-data?businessId=${encodeURIComponent(activeId)}&role=${encodeURIComponent(
@@ -122,12 +122,16 @@ export function useBusinessRealtimeSync() {
       }
     }
 
-    pollStaffCatalog();
-    const interval = setInterval(pollStaffCatalog, 3000);
+    fetchStaffCatalog();
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchStaffCatalog();
+    };
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [activeId, isStaff, active?.staff_role]);
 }

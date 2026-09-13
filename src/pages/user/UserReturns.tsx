@@ -144,11 +144,6 @@ export default function UserReturns() {
     window.addEventListener("geflow:stock-updated", handleSync);
     window.addEventListener("storage", handleSync);
 
-    // 3. Periodic polling interval (every 4s) to ensure 100% realtime sync across all sessions
-    const interval = setInterval(() => {
-      loadInitialData(false);
-    }, 4000);
-
     return () => {
       supabase.removeChannel(channel);
       window.removeEventListener("geflow:returns-updated", handleSync);
@@ -156,7 +151,6 @@ export default function UserReturns() {
       window.removeEventListener("geflow:products-updated", handleSync);
       window.removeEventListener("geflow:stock-updated", handleSync);
       window.removeEventListener("storage", handleSync);
-      clearInterval(interval);
     };
   }, [activeId, loadInitialData]);
 

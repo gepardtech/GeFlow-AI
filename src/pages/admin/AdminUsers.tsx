@@ -308,11 +308,24 @@ const AdminUsers = () => {
     if (!editUser) return;
     setBusy(true);
     try {
-      if (editForm.plan !== editUser.plan) await updateProfile(editUser.user_id, { plan: editForm.plan });
+      if (editForm.plan !== editUser.plan) {
+        await updateProfile(editUser.user_id, { plan: editForm.plan });
+        // Sync subscriptions table so user never reverts
+        await supabase.from("subscriptions").upsert({
+          owner_user_id: editUser.user_id,
+          tier: editForm.plan,
+          status: "active",
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "owner_user_id" });
+
+        // Dispatch instant event for user session
+        window.dispatchEvent(new CustomEvent("geflow:plan-changed", { detail: { planId: editForm.plan } }));
+        window.dispatchEvent(new CustomEvent("panel:refresh"));
+      }
       if ((roles[editUser.user_id] ?? "user") !== editForm.role) {
         await callAdmin({ action: "setRole", user_id: editUser.user_id, role: editForm.role });
       }
-      toast({ title: "Permissions updated" });
+      toast({ title: "Permissions updated", description: `Plan updated to ${editForm.plan.toUpperCase()} in real-time.` });
       setEditUser(null); load();
     } catch (e: any) {
       toast({ title: "Update failed", description: e.message, variant: "destructive" });

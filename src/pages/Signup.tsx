@@ -48,10 +48,10 @@ const Signup = () => {
       toast({ title: "Signup failed", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Account created!", description: "Welcome to GeFlow 🚀" });
-      // With auto-confirm on, the user is signed in. Route by role.
+      // With auto-confirm on, the user is signed in. Route by role to User Panel.
       if (data.session) {
         if (email.toLowerCase() === "gepardwebs@gmail.com") navigate("/admin");
-        else navigate("/setup/business");
+        else navigate("/dashboard");
       } else {
         navigate("/login");
       }

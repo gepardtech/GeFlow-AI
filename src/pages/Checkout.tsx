@@ -434,7 +434,7 @@ const Checkout = () => {
   const handleContinue = () => {
     setShowInvoice(false);
     if (isAdminEmail) { navigate("/admin"); return; }
-    navigate(hasBusiness ? "/dashboard" : "/setup/business");
+    navigate("/dashboard");
   };
   const payProps = {
     plan,

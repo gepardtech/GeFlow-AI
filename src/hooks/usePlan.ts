@@ -99,7 +99,19 @@ export const usePlan = (): PlanState => {
         .eq("user_id", user.id)
         .maybeSingle();
 
-      // 2. Fetch Latest Active Subscription to resolve any desync
+      // 2. Check if user is admin via user_roles or email
+      let isAdmin = user.email?.toLowerCase() === "gepardwebs@gmail.com";
+      if (!isAdmin) {
+        const { data: roleRow } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .eq("role", "admin")
+          .maybeSingle();
+        isAdmin = Boolean(roleRow);
+      }
+
+      // 3. Fetch Latest Active Subscription to resolve any desync
       const { data: subData } = await supabase
         .from("subscriptions")
         .select("tier, status")
@@ -109,20 +121,22 @@ export const usePlan = (): PlanState => {
         .limit(1)
         .maybeSingle();
 
-      let effectivePlan = profData?.plan;
-      if (subData?.tier && normalizePlan(subData.tier) !== "free") {
+      let effectivePlan = profData?.plan || "free";
+      const normalizedProf = normalizePlan(profData?.plan);
+      if (normalizedProf !== "free") {
+        effectivePlan = normalizedProf;
+      }
+
+      if (subData?.tier) {
         const subPlan = normalizePlan(subData.tier);
-        if (normalizePlan(effectivePlan) === "free" || subPlan === "premium" || subPlan === "lifetime") {
+        if (subPlan !== "free") {
           effectivePlan = subPlan;
-          // Auto-heal profile plan
-          if (profData?.plan !== subPlan) {
-            supabase
-              .from("profiles")
-              .update({ plan: subPlan })
-              .eq("user_id", user.id)
-              .then(() => {});
-          }
         }
+      }
+
+      // If user is admin, guarantee Lifetime Enterprise status
+      if (isAdmin && (normalizePlan(effectivePlan) === "free" || !effectivePlan)) {
+        effectivePlan = "lifetime";
       }
 
       applyPlanData(
@@ -143,6 +157,21 @@ export const usePlan = (): PlanState => {
     let subsChannel: ReturnType<typeof supabase.channel> | null = null;
 
     fetchCurrentPlan();
+
+    // Listen to Supabase auth events (sign in, sign out, user switch)
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (!active) return;
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        fetchCurrentPlan();
+      } else if (event === "SIGNED_OUT") {
+        try {
+          localStorage.removeItem(CACHE_KEY);
+        } catch {
+          // Ignore storage error
+        }
+        applyPlanData("free", null, null, null);
+      }
+    });
 
     // Listen to local in-tab updates
     const handlePlanChanged = (e: any) => {
@@ -186,6 +215,7 @@ export const usePlan = (): PlanState => {
 
     return () => {
       active = false;
+      authListener.subscription.unsubscribe();
       window.removeEventListener("geflow:plan-changed", handlePlanChanged);
       if (profilesChannel) supabase.removeChannel(profilesChannel);
       if (subsChannel) supabase.removeChannel(subsChannel);

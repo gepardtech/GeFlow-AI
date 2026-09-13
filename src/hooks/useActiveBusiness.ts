@@ -109,6 +109,13 @@ async function fetchBusinessData(): Promise<void> {
         return;
       }
 
+      // If switching to a different user, clear previous user's businesses immediately
+      if (store.currentUserId && store.currentUserId !== user.id) {
+        store.owned = [];
+        store.staff = [];
+        store.activeId = null;
+      }
+
       store.currentUserId = user.id;
 
       // 1. Fetch businesses owned by current user
@@ -235,6 +242,59 @@ async function fetchBusinessData(): Promise<void> {
         console.warn("Notice loading api staff businesses:", staffErr);
       }
 
+      // If user has no owned businesses yet, check if admin or unowned business exists, or auto-provision
+      if (ownedRows.length === 0) {
+        const isAdmin = user.email?.toLowerCase() === "gepardwebs@gmail.com";
+        const { data: allBiz } = await supabase
+          .from("businesses")
+          .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id")
+          .order("created_at", { ascending: true });
+
+        if (allBiz && allBiz.length > 0) {
+          if (isAdmin) {
+            ownedRows = allBiz as BusinessRow[];
+          } else {
+            const unowned = allBiz.find((b: any) => !b.owner_user_id);
+            if (unowned) {
+              await supabase.from("businesses").update({ owner_user_id: user.id }).eq("id", unowned.id);
+              unowned.owner_user_id = user.id;
+              ownedRows = [unowned as BusinessRow];
+            }
+          }
+        }
+      }
+
+      // If user still has 0 businesses (both owned and staff), provision their default store in Supabase
+      if (ownedRows.length === 0 && staffRows.length === 0) {
+        const defaultName =
+          user.user_metadata?.business_name ||
+          (user.email ? `${user.email.split("@")[0]}'s Store` : "Gepard Store");
+        const newBizId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `biz_${Date.now()}`;
+        const newBizPayload = {
+          id: newBizId,
+          owner_user_id: user.id,
+          business_name: defaultName,
+          business_address: "Main Location",
+          currency: "USD",
+          base_currency: "USD",
+          status: "active",
+          default_tax: 0,
+          stock_alert_limit: 5,
+        };
+
+        const { data: createdBiz, error: createErr } = await supabase
+          .from("businesses")
+          .insert(newBizPayload)
+          .select()
+          .maybeSingle();
+
+        if (!createErr && createdBiz) {
+          ownedRows = [createdBiz as BusinessRow];
+        } else if (!createErr) {
+          ownedRows = [newBizPayload as BusinessRow];
+        }
+      }
+
       store.owned = ownedRows;
       store.staff = staffRows;
       try {
@@ -350,6 +410,27 @@ function ensureRealtime() {
     })
     .subscribe();
 
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+      fetchBusinessData();
+    } else if (event === "SIGNED_OUT") {
+      store.owned = [];
+      store.staff = [];
+      store.activeId = null;
+      store.currentUserId = null;
+      store.loading = false;
+      store.hasLoaded = true;
+      try {
+        localStorage.removeItem(LS_KEY);
+        localStorage.removeItem(LS_OWNED_KEY);
+        localStorage.removeItem(LS_STAFF_KEY);
+      } catch {
+        // Ignore storage errors
+      }
+      notifyListeners();
+    }
+  });
+
   const handleCustomSync = () => {
     fetchBusinessData();
   };
@@ -370,7 +451,8 @@ export const useActiveBusiness = () => {
     const update = () => setTick((t) => t + 1);
     listeners.add(update);
 
-    if (!store.hasLoaded && !isFetching) {
+    // Always ensure fresh data from Supabase on mount
+    if (!isFetching) {
       fetchBusinessData();
     }
 

@@ -296,7 +296,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (bizLoading || !hasLoaded) return;
-    // In employee mode, NEVER redirect to business registration steps
+    // In employee mode, load business data if active store exists
     if (mode === "employee") {
       if (active) {
         load();
@@ -305,15 +305,14 @@ const Dashboard = () => {
       }
       return;
     }
-    // Only redirect Store Owners who have zero businesses registered
-    if (!active && businesses.length === 0 && staffBusinesses.length === 0) {
-      navigate("/setup/business");
-      return;
-    }
+    // In business/owner mode: do NOT force redirect to /setup/business
+    // Users are kept in their User Panel (/dashboard). If an active store exists, load it.
     if (active) {
       load();
+    } else {
+      setLoading(false);
     }
-  }, [bizLoading, hasLoaded, active, businesses.length, staffBusinesses.length, mode, load, navigate]);
+  }, [bizLoading, hasLoaded, active, mode, load]);
 
   // Realtime
   useEffect(() => {
@@ -392,6 +391,26 @@ const Dashboard = () => {
             {/* ========================================================================= */}
             {/* HEADER SECTION (Welcome Title + Action CTAs)                             */}
             {/* ========================================================================= */}
+            {!active && mode !== "employee" && (
+              <div className="p-5 sm:p-6 rounded-2xl bg-card border border-primary/30 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="space-y-1 max-w-xl">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                    <span>Store Setup</span>
+                  </div>
+                  <h3 className="text-base sm:text-lg font-bold text-foreground">Welcome to your Store Workspace!</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    You haven't set up a store yet. Launch your business setup to configure your store name, currency, and begin managing inventory and POS orders.
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigate("/setup/business")}
+                  className="h-10 px-5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-bold inline-flex items-center gap-2 hover:bg-primary/90 transition shadow-sm whitespace-nowrap"
+                >
+                  <Plus className="h-4 w-4" /> Set Up Business
+                </button>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-w-0">
               <div className="min-w-0 flex-1">
                 <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight mb-1 truncate text-foreground">

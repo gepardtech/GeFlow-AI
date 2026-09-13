@@ -59,19 +59,25 @@ const SetupBusiness = () => {
   const handleSubmit = async () => {
     if (!user) return;
     if (!name.trim()) { toast({ title: "Business name required", variant: "destructive" }); return; }
-    if (!categoryId) { toast({ title: "Please select a category", variant: "destructive" }); return; }
     setBusy(true);
     const chosenCurrency = (currency || categories.find((c) => c.id === categoryId)?.currency || "USD").toUpperCase();
-    const { error } = await supabase.from("businesses").insert({
+    const payload: any = {
       owner_user_id: user.id,
       business_name: name.trim(),
       business_address: address.trim() || null,
-      category_id: categoryId,
       currency: chosenCurrency,
       base_currency: chosenCurrency,
-    });
+    };
+    if (categoryId && categoryId.trim()) {
+      payload.category_id = categoryId;
+    }
+    const { error } = await supabase.from("businesses").insert(payload);
     setBusy(false);
     if (error) { toast({ title: "Could not create business", description: error.message, variant: "destructive" }); return; }
+
+    // Dispatch refresh so useActiveBusiness immediately synchronizes
+    window.dispatchEvent(new CustomEvent("panel:refresh"));
+    window.dispatchEvent(new CustomEvent("geflow:business-updated"));
     setStep(3);
   };
 
@@ -134,26 +140,26 @@ const SetupBusiness = () => {
                   <Textarea value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Street, City, Country" rows={2} />
                 </div>
                 <div>
-                  <label className="text-sm font-semibold mb-2 block">Business Category *</label>
-                  <Select value={categoryId} onValueChange={(v) => { setCategoryId(v); setCurrency(categories.find((c) => c.id === v)?.currency ?? "USD"); }}>
-                    <SelectTrigger className="h-11"><SelectValue placeholder={categories.length ? "Choose a category" : "No active categories yet"} /></SelectTrigger>
+                  <label className="text-sm font-semibold mb-2 block">Business Category <span className="text-muted-foreground font-normal">(Optional)</span></label>
+                  <Select value={categoryId} onValueChange={(v) => { setCategoryId(v); setCurrency(categories.find((c) => c.id === v)?.currency ?? currency ?? "USD"); }}>
+                    <SelectTrigger className="h-11"><SelectValue placeholder={categories.length ? "Choose a category" : "General Business"} /></SelectTrigger>
                     <SelectContent>
                       {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name} <span className="text-muted-foreground ml-1">· {c.industry_type}</span></SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {categories.length === 0 && <p className="text-xs text-muted-foreground mt-2">An admin needs to publish a business category before you can continue.</p>}
+                  {categories.length === 0 && <p className="text-xs text-muted-foreground mt-2">You can configure business categories at any time from Settings or Admin Panel.</p>}
                 </div>
                 <div>
-                  <label className="text-sm font-semibold mb-2 block">Operating Currency *</label>
-                  <Select value={currency} onValueChange={setCurrency} disabled={!categoryId}>
-                    <SelectTrigger className="h-11"><SelectValue placeholder={categoryId ? "Choose currency" : "Select a category first"} /></SelectTrigger>
+                  <label className="text-sm font-semibold mb-2 block">Operating Currency</label>
+                  <Select value={currency || "USD"} onValueChange={setCurrency}>
+                    <SelectTrigger className="h-11"><SelectValue placeholder="Choose currency" /></SelectTrigger>
                     <SelectContent>
                       {Object.entries(CURRENCY_SYMBOLS).map(([code, sym]) => (
                         <SelectItem key={code} value={code}>{code} <span className="text-muted-foreground ml-1">{sym}</span></SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground mt-2">Defaults to the currency set by your business category — you can change it any time from My Businesses.</p>
+                  <p className="text-xs text-muted-foreground mt-2">Default currency for your POS orders, invoices, and product pricing.</p>
                 </div>
               </div>
             )}
@@ -172,16 +178,22 @@ const SetupBusiness = () => {
           </div>
 
           <div className="p-6 border-t border-border flex items-center justify-between gap-3 bg-muted/20">
-            {step > 1 && step < 3 ? (
-              <Button variant="outline" onClick={() => setStep(step - 1)}><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>
-            ) : <span />}
             {step === 1 && (
-              <Button onClick={() => setStep(2)} className="ml-auto">Get Started <ArrowRight className="h-4 w-4 ml-2" /></Button>
+              <>
+                <Button variant="ghost" onClick={() => navigate("/dashboard")}>Skip to Dashboard</Button>
+                <Button onClick={() => setStep(2)} className="ml-auto">Get Started <ArrowRight className="h-4 w-4 ml-2" /></Button>
+              </>
             )}
             {step === 2 && (
-              <Button onClick={handleSubmit} disabled={busy || overLimit || !name.trim() || !categoryId} className="ml-auto">
-                {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Building2 className="h-4 w-4 mr-2" />} Create Business
-              </Button>
+              <>
+                <Button variant="outline" onClick={() => setStep(1)}><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>
+                <div className="flex items-center gap-2 ml-auto">
+                  <Button variant="ghost" onClick={() => navigate("/dashboard")}>Cancel</Button>
+                  <Button onClick={handleSubmit} disabled={busy || overLimit || !name.trim()} className="ml-auto">
+                    {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Building2 className="h-4 w-4 mr-2" />} Create Business
+                  </Button>
+                </div>
+              </>
             )}
             {step === 3 && (
               <Button onClick={() => navigate("/dashboard")} className="ml-auto">Go to Dashboard <ArrowRight className="h-4 w-4 ml-2" /></Button>

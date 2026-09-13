@@ -129,8 +129,8 @@ export const AuthCallback = () => {
           targetRoute = validateRedirectPath(nextParam, "/dashboard");
         } else if (isAdmin) {
           targetRoute = "/admin";
-        } else if (type === "signup" || type === "invite") {
-          targetRoute = "/setup/business";
+        } else {
+          targetRoute = "/dashboard";
         }
 
         toast({

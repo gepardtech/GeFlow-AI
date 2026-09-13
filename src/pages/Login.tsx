@@ -26,6 +26,19 @@ const Login = () => {
       toast({ title: "Login failed", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Welcome back!" });
+      // Clear previous user's cached state to ensure clean fresh sync
+      try {
+        localStorage.removeItem("geflow_cached_plan_state");
+        localStorage.removeItem("geflow_cached_owned_businesses");
+        localStorage.removeItem("geflow_cached_staff_businesses");
+        localStorage.removeItem("geflow.activeBusinessId");
+      } catch {
+        // Ignore storage errors
+      }
+
+      window.dispatchEvent(new CustomEvent("panel:refresh"));
+      window.dispatchEvent(new CustomEvent("geflow:business-updated"));
+
       if (email.toLowerCase() === "gepardwebs@gmail.com") navigate("/admin");
       else navigate("/dashboard");
     }
