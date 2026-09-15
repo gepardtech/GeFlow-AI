@@ -92,21 +92,21 @@ const Footer = () => {
     // Initial cached
     const cached = getCachedGeneralSettings();
     if (cached) {
-      if (cached.social_links) setSocialLinks(cached.social_links.filter((l) => l.enabled));
+      if (Array.isArray(cached.social_links)) setSocialLinks(cached.social_links.filter((l) => l.enabled));
       if (cached.footer_copyright) setCopyright(cached.footer_copyright);
     }
 
     // Refresh from API / Supabase
     fetchGeneralSettings().then((fresh) => {
       if (fresh) {
-        if (fresh.social_links) setSocialLinks(fresh.social_links.filter((l) => l.enabled));
+        if (Array.isArray(fresh.social_links)) setSocialLinks(fresh.social_links.filter((l) => l.enabled));
         if (fresh.footer_copyright) setCopyright(fresh.footer_copyright);
       }
     });
 
     // Event listener for live updates
     const handleUpdate = (e: any) => {
-      if (e.detail?.social_links) setSocialLinks(e.detail.social_links.filter((l: any) => l.enabled));
+      if (Array.isArray(e.detail?.social_links)) setSocialLinks(e.detail.social_links.filter((l: any) => l.enabled));
       if (e.detail?.footer_copyright) setCopyright(e.detail.footer_copyright);
     };
 

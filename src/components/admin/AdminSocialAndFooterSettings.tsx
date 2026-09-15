@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,9 @@ import {
   Edit3,
   Image as ImageIcon,
   RotateCcw,
+  Upload,
+  Camera,
+  X,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -134,19 +137,82 @@ export const AdminSocialAndFooterSettings = () => {
   const [aboutMembers, setAboutMembers] = useState<AboutPageMember[]>(DEFAULT_GENERAL_SETTINGS.about_members);
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Partial<AboutPageMember> | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [purgingCache, setPurgingCache] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDeviceImageUpload = (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Invalid File Type",
+        description: "Please select an image file (PNG, JPG, WebP, GIF).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingImage(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Optimize & resize on canvas to maximum 400x400 for crisp, fast loading avatar
+        const maxDim = 400;
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          }
+        } else {
+          if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+          setEditingMember((prev) => (prev ? { ...prev, image_url: dataUrl, imageUrl: dataUrl } : null));
+          toast({
+            title: "Photo Uploaded",
+            description: "Member photo loaded from your device and optimized for web display.",
+          });
+        }
+        setUploadingImage(false);
+      };
+      img.onerror = () => {
+        setUploadingImage(false);
+        toast({ title: "Upload Failed", description: "Could not decode image file.", variant: "destructive" });
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      setUploadingImage(false);
+      toast({ title: "Upload Failed", description: "Failed to read file from device.", variant: "destructive" });
+    };
+    reader.readAsDataURL(file);
+  };
 
   useEffect(() => {
     fetchGeneralSettings()
       .then((settings) => {
         if (settings) {
-          if (settings.social_links) {
+          if (Array.isArray(settings.social_links)) {
             setSocialLinks(settings.social_links);
           }
           if (settings.footer_copyright) {
             setCopyrightText(settings.footer_copyright.text);
             setWordUrls(settings.footer_copyright.wordUrls || []);
           }
-          if (settings.about_members && settings.about_members.length > 0) {
+          if (Array.isArray(settings.about_members) && settings.about_members.length > 0) {
             setAboutMembers(settings.about_members);
           }
         }
@@ -155,7 +221,7 @@ export const AdminSocialAndFooterSettings = () => {
   }, []);
 
   // Save Social Links, Copyright & About Members to Database & Server
-  const handleSaveAll = async (overrideMembers?: AboutPageMember[]) => {
+  const handleSaveAll = async (overrideMembers?: AboutPageMember[], overrideSocial?: SocialMediaLink[]) => {
     setSaving(true);
     try {
       const copyrightSettings: FooterCopyrightSettings = {
@@ -164,9 +230,10 @@ export const AdminSocialAndFooterSettings = () => {
       };
 
       const membersToSave = overrideMembers || aboutMembers;
+      const socialToSave = overrideSocial !== undefined ? overrideSocial : socialLinks;
 
       await saveGeneralSettings({
-        social_links: socialLinks,
+        social_links: socialToSave,
         footer_copyright: copyrightSettings,
         about_members: membersToSave,
       });
@@ -280,36 +347,84 @@ export const AdminSocialAndFooterSettings = () => {
   };
 
   // Cache & Storage purge handler
-  const handlePurgePlatformCache = () => {
+  const handlePurgePlatformCache = async () => {
+    setPurgingCache(true);
     try {
+      // 1. Purge server-side in-memory cache and re-sync from Supabase
+      try {
+        await fetch("/api/settings/cache/clear", { method: "POST" });
+      } catch (e) {
+        console.warn("Notice calling server cache clear:", e);
+      }
+
+      // 2. Clear browser Cache Storage if supported
+      if (typeof window !== "undefined" && "caches" in window) {
+        try {
+          const cacheKeys = await caches.keys();
+          await Promise.all(cacheKeys.map((k) => caches.delete(k)));
+        } catch {
+          /* ignore */
+        }
+      }
+
+      // 3. Clear application localStorage partitions (preserve auth tokens so user stays signed in)
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (
           key &&
-          (key.startsWith("geflow_team_members") ||
-            key.startsWith("geflow_platform_general_settings") ||
-            key.startsWith("geflow_cached_plans") ||
-            key.startsWith("geflow_realtime_cache"))
+          !key.includes("auth-token") &&
+          !key.includes("supabase.auth.token") &&
+          (key.startsWith("geflow") ||
+            key.startsWith("vite") ||
+            key.includes("cache") ||
+            key.includes("settings") ||
+            key.includes("plans") ||
+            key.includes("team"))
         ) {
           keysToRemove.push(key);
         }
       }
       keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+      // 4. Clear sessionStorage
+      try {
+        sessionStorage.clear();
+      } catch {
+        /* ignore */
+      }
+
+      // 5. Re-fetch fresh data from Supabase immediately
+      const fresh = await fetchGeneralSettings();
+      if (fresh) {
+        if (Array.isArray(fresh.social_links)) setSocialLinks(fresh.social_links);
+        if (fresh.footer_copyright) {
+          setCopyrightText(fresh.footer_copyright.text);
+          setWordUrls(fresh.footer_copyright.wordUrls || []);
+        }
+        if (Array.isArray(fresh.about_members)) setAboutMembers(fresh.about_members);
+      }
+
+      // 6. Notify active components
+      window.dispatchEvent(new CustomEvent("panel:refresh"));
+      window.dispatchEvent(new CustomEvent("geflow:settings-updated", { detail: fresh }));
+
       toast({
-        title: "Platform Cache Cleared",
-        description: `Successfully purged ${keysToRemove.length} cached data partitions. Stale browser memory refreshed.`,
+        title: "Platform Cache Cleared & Synced",
+        description: `Purged ${keysToRemove.length} memory partitions, flushed server caches, and re-synchronized directly with Supabase.`,
       });
-    } catch {
+    } catch (err: any) {
       toast({
-        title: "Cache Reset",
-        description: "Cache memory cleared.",
+        title: "Cache Reset Notice",
+        description: err.message || "Cache memory cleared.",
       });
+    } finally {
+      setPurgingCache(false);
     }
   };
 
   // Social Links Handlers
-  const handleAddSocialLink = () => {
+  const handleAddSocialLink = async () => {
     const preset = PLATFORM_PRESETS.find((p) => p.value === newPlatform);
     const newLink: SocialMediaLink = {
       id: "soc_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
@@ -320,15 +435,26 @@ export const AdminSocialAndFooterSettings = () => {
       order: socialLinks.length + 1,
     };
 
-    setSocialLinks([...socialLinks, newLink]);
+    const updated = [...socialLinks, newLink];
+    setSocialLinks(updated);
+    await handleSaveAll(undefined, updated);
   };
 
   const handleUpdateSocialLink = (id: string, updates: Partial<SocialMediaLink>) => {
-    setSocialLinks(socialLinks.map((l) => (l.id === id ? { ...l, ...updates } : l)));
+    const updated = socialLinks.map((l) => (l.id === id ? { ...l, ...updates } : l));
+    setSocialLinks(updated);
   };
 
-  const handleDeleteSocialLink = (id: string) => {
-    setSocialLinks(socialLinks.filter((l) => l.id !== id));
+  const handleToggleSocialLink = async (id: string, enabled: boolean) => {
+    const updated = socialLinks.map((l) => (l.id === id ? { ...l, enabled } : l));
+    setSocialLinks(updated);
+    await handleSaveAll(undefined, updated);
+  };
+
+  const handleDeleteSocialLink = async (id: string) => {
+    const updated = socialLinks.filter((l) => l.id !== id);
+    setSocialLinks(updated);
+    await handleSaveAll(undefined, updated);
   };
 
   // Word URL Handlers
@@ -912,20 +1038,99 @@ export const AdminSocialAndFooterSettings = () => {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-bold">Profile Photo URL</Label>
-                <div className="flex items-center gap-3">
-                  <img
-                    src={editingMember.image_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces"}
-                    alt="Preview"
-                    className="w-12 h-12 rounded-xl object-cover border border-border shrink-0 bg-muted"
-                  />
-                  <Input
-                    value={editingMember.image_url || ""}
-                    onChange={(e) => setEditingMember({ ...editingMember, image_url: e.target.value, imageUrl: e.target.value })}
-                    placeholder="https://images.unsplash.com/... or https://..."
-                    className="h-9 text-xs font-mono rounded-lg flex-1"
-                  />
+              <div className="space-y-2 p-3 bg-muted/30 border border-border/80 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-bold flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-primary" />
+                    Member Profile Photo
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground">Upload from device or enter URL</span>
+                </div>
+
+                {/* Hidden File Input */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleDeviceImageUpload(file);
+                    e.target.value = "";
+                  }}
+                />
+
+                <div className="flex items-center gap-4 flex-wrap sm:flex-nowrap">
+                  <div className="relative group shrink-0">
+                    <img
+                      src={editingMember.image_url || editingMember.imageUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces"}
+                      alt="Preview"
+                      className="w-16 h-16 rounded-2xl object-cover border-2 border-border shadow-xs bg-muted"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImage}
+                      title="Click to change photo from device"
+                      className="absolute inset-0 bg-black/50 text-white rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-[10px] font-semibold cursor-pointer"
+                    >
+                      <Camera className="w-4 h-4 mb-0.5" />
+                      <span>Change</span>
+                    </button>
+                  </div>
+
+                  <div className="flex-1 space-y-2 min-w-[200px]">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingImage}
+                        className="h-8 text-xs font-semibold rounded-lg border-primary/30 hover:bg-primary/5 hover:border-primary text-primary"
+                      >
+                        {uploadingImage ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                            Optimizing...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-3.5 h-3.5 mr-1.5" />
+                            Upload from Device
+                          </>
+                        )}
+                      </Button>
+
+                      {editingMember.image_url && !editingMember.image_url.includes("unsplash.com") && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            setEditingMember({
+                              ...editingMember,
+                              image_url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
+                              imageUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
+                            })
+                          }
+                          className="h-8 text-xs rounded-lg text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                        >
+                          <X className="w-3.5 h-3.5 mr-1" />
+                          Reset
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={editingMember.image_url || ""}
+                        onChange={(e) => setEditingMember({ ...editingMember, image_url: e.target.value, imageUrl: e.target.value })}
+                        placeholder="Or paste external image URL (https://...)"
+                        className="h-8 text-xs font-mono rounded-lg flex-1"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 

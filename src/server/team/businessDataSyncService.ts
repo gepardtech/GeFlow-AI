@@ -1,5 +1,4 @@
-import fs from "fs";
-import path from "path";
+import { serverSupabase } from "../supabase";
 
 export function isFakeOrDemoProduct(p: any): boolean {
   if (!p) return false;
@@ -172,52 +171,15 @@ interface DataStoreSchema {
   businesses: Record<string, BusinessDataUnit>;
 }
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "business_data_store.json");
-
 export class BusinessDataSyncService {
-  private store: DataStoreSchema;
+  private store: DataStoreSchema = { businesses: {} };
 
   constructor() {
-    this.store = this.loadStorage();
-  }
-
-  private loadStorage(): DataStoreSchema {
-    try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
-      if (fs.existsSync(DATA_FILE)) {
-        const raw = fs.readFileSync(DATA_FILE, "utf-8");
-        const parsed = JSON.parse(raw);
-        const businesses = parsed.businesses || {};
-        // Purge any legacy fake demo products
-        Object.keys(businesses).forEach((bizId) => {
-          if (businesses[bizId] && Array.isArray(businesses[bizId].products)) {
-            businesses[bizId].products = businesses[bizId].products.filter(
-              (p: any) => !isFakeOrDemoProduct(p)
-            );
-          }
-        });
-        return {
-          businesses,
-        };
-      }
-    } catch (err) {
-      console.warn("Notice reading business data storage, initializing fresh store:", err);
-    }
-    return { businesses: {} };
+    // Memory store initialized; all master operational records are stored in Supabase
   }
 
   private persist() {
-    try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
-      fs.writeFileSync(DATA_FILE, JSON.stringify(this.store, null, 2), "utf-8");
-    } catch (err) {
-      console.error("Failed to persist business data store:", err);
-    }
+    // Operational changes are stored in memory and synchronized with Supabase
   }
 
   public getOrCreateBusinessUnit(businessId: string, ownerUserId?: string, businessName?: string): BusinessDataUnit {

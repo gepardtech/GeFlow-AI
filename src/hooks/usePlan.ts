@@ -16,91 +16,78 @@ export interface PlanState {
   refreshPlan: () => Promise<void>;
 }
 
-const CACHE_KEY = "geflow_cached_plan_state";
-
-const getInitialCachedState = (): {
+interface InternalPlanStore {
+  loading: boolean;
+  hasLoadedFromSupabase: boolean;
   planId: PlanId;
   fullName: string | null;
   email: string | null;
   userId: string | null;
-} => {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed?.planId) {
-        return {
-          planId: normalizePlan(parsed.planId),
-          fullName: parsed.fullName ?? null,
-          email: parsed.email ?? null,
-          userId: parsed.userId ?? null,
-        };
-      }
-    }
-  } catch (e) {
-    // Ignore JSON error
-  }
-  return {
-    planId: "free",
-    fullName: null,
-    email: null,
-    userId: null,
-  };
+}
+
+// Module-level singleton store to prevent duplicate queries, thrashing, and flickering
+const planStore: InternalPlanStore = {
+  loading: true,
+  hasLoadedFromSupabase: false,
+  planId: "free",
+  fullName: null,
+  email: null,
+  userId: null,
 };
 
-/**
- * Loads the current user's plan and keeps it in sync via realtime and cache.
- * Fully activates all Premium & Lifetime features without UI flicker or locked screen glitches.
- */
-export const usePlan = (): PlanState => {
-  const cached = getInitialCachedState();
-  const [loading, setLoading] = useState<boolean>(!cached.planId);
-  const [planId, setPlanId] = useState<PlanId>(cached.planId);
-  const [fullName, setFullName] = useState<string | null>(cached.fullName);
-  const [email, setEmail] = useState<string | null>(cached.email);
-  const [userId, setUserId] = useState<string | null>(cached.userId);
+const listeners = new Set<() => void>();
 
-  const applyPlanData = useCallback((newPlanRaw: string | null | undefined, name: string | null, mail: string | null, uid: string | null) => {
-    const resolvedId = normalizePlan(newPlanRaw);
-    setPlanId(resolvedId);
-    if (name !== undefined) setFullName(name);
-    if (mail !== undefined) setEmail(mail);
-    if (uid !== undefined) setUserId(uid);
-    setLoading(false);
-
+function notifyPlanListeners() {
+  listeners.forEach((listener) => {
     try {
-      localStorage.setItem(
-        CACHE_KEY,
-        JSON.stringify({
-          planId: resolvedId,
-          fullName: name,
-          email: mail,
-          userId: uid,
-          updatedAt: Date.now(),
-        })
-      );
-    } catch (e) {
-      // Ignore storage errors
+      listener();
+    } catch {
+      /* ignore subscriber error */
     }
-  }, []);
+  });
+}
 
-  const fetchCurrentPlan = useCallback(async () => {
+let isPlanFetching = false;
+let planFetchPromise: Promise<void> | null = null;
+
+async function fetchAuthoritativePlan(): Promise<void> {
+  if (isPlanFetching && planFetchPromise) {
+    return planFetchPromise;
+  }
+
+  isPlanFetching = true;
+  planFetchPromise = (async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData?.user;
+
       if (!user) {
-        setLoading(false);
+        planStore.loading = false;
+        planStore.hasLoadedFromSupabase = true;
+        planStore.planId = "free";
+        planStore.fullName = null;
+        planStore.email = null;
+        planStore.userId = null;
+        notifyPlanListeners();
         return;
       }
 
-      // 1. Fetch Profile Record
+      planStore.userId = user.id;
+      planStore.email = user.email ?? null;
+      planStore.fullName = (user.user_metadata?.full_name as string) || null;
+
+      // 1. Fetch Profile Record directly from Supabase
       const { data: profData } = await supabase
         .from("profiles")
         .select("full_name, email, plan")
         .eq("user_id", user.id)
         .maybeSingle();
 
-      // 2. Check if user is admin via user_roles or email
-      let isAdmin = user.email?.toLowerCase() === "gepardwebs@gmail.com";
+      if (profData?.full_name) planStore.fullName = profData.full_name;
+      if (profData?.email) planStore.email = profData.email;
+
+      // 2. Check Admin role (Admins always get full lifetime enterprise access)
+      let isAdmin = (user.email?.toLowerCase() === "gepardwebs@gmail.com");
       if (!isAdmin) {
         const { data: roleRow } = await supabase
           .from("user_roles")
@@ -111,7 +98,7 @@ export const usePlan = (): PlanState => {
         isAdmin = Boolean(roleRow);
       }
 
-      // 3. Fetch Latest Active Subscription to resolve any desync
+      // 3. Fetch Active Subscriptions directly from Supabase
       const { data: subData } = await supabase
         .from("subscriptions")
         .select("tier, status")
@@ -121,124 +108,131 @@ export const usePlan = (): PlanState => {
         .limit(1)
         .maybeSingle();
 
-      let effectivePlan = profData?.plan || "free";
-      const normalizedProf = normalizePlan(profData?.plan);
-      if (normalizedProf !== "free") {
-        effectivePlan = normalizedProf;
-      }
+      // Resolve authoritative plan from Supabase
+      let resolvedPlan: PlanId = "free";
 
-      if (subData?.tier) {
-        const subPlan = normalizePlan(subData.tier);
-        if (subPlan !== "free") {
-          effectivePlan = subPlan;
+      if (isAdmin) {
+        resolvedPlan = "lifetime";
+      } else {
+        const subPlan = subData?.tier ? normalizePlan(subData.tier) : null;
+        const profPlan = profData?.plan ? normalizePlan(profData.plan) : null;
+        const metaPlan = user.user_metadata?.plan ? normalizePlan(user.user_metadata.plan) : null;
+
+        // Take highest valid plan found in Supabase
+        const candidates = [subPlan, profPlan, metaPlan].filter(Boolean) as PlanId[];
+        if (candidates.includes("lifetime")) {
+          resolvedPlan = "lifetime";
+        } else if (candidates.includes("premium")) {
+          resolvedPlan = "premium";
+        } else if (candidates.includes("standard")) {
+          resolvedPlan = "standard";
+        } else {
+          resolvedPlan = "free";
         }
       }
 
-      // If user is admin, guarantee Lifetime Enterprise status
-      if (isAdmin && (normalizePlan(effectivePlan) === "free" || !effectivePlan)) {
-        effectivePlan = "lifetime";
-      }
-
-      applyPlanData(
-        effectivePlan,
-        profData?.full_name ?? user.user_metadata?.full_name ?? null,
-        profData?.email ?? user.email ?? null,
-        user.id
-      );
+      planStore.planId = resolvedPlan;
+      planStore.hasLoadedFromSupabase = true;
+      planStore.loading = false;
     } catch (err) {
-      console.warn("Failed to load user plan:", err);
-      setLoading(false);
+      console.warn("Notice checking authoritative plan from Supabase:", err);
+      planStore.loading = false;
+      planStore.hasLoadedFromSupabase = true;
+    } finally {
+      isPlanFetching = false;
+      planFetchPromise = null;
+      notifyPlanListeners();
     }
-  }, [applyPlanData]);
+  })();
+
+  return planFetchPromise;
+}
+
+// Set up global single Realtime and Auth subscription
+let isGlobalPlanSubscribed = false;
+function setupGlobalPlanSubscriber() {
+  if (isGlobalPlanSubscribed) return;
+  isGlobalPlanSubscribed = true;
+
+  supabase.auth.onAuthStateChange((event) => {
+    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+      fetchAuthoritativePlan();
+    } else if (event === "SIGNED_OUT") {
+      planStore.planId = "free";
+      planStore.fullName = null;
+      planStore.email = null;
+      planStore.userId = null;
+      planStore.loading = false;
+      planStore.hasLoadedFromSupabase = true;
+      notifyPlanListeners();
+    }
+  });
+
+  // Supabase Realtime for profile & subscription changes
+  supabase
+    .channel("global_user_plan_sync")
+    .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
+      fetchAuthoritativePlan();
+    })
+    .on("postgres_changes", { event: "*", schema: "public", table: "subscriptions" }, () => {
+      fetchAuthoritativePlan();
+    })
+    .subscribe();
+
+  window.addEventListener("geflow:plan-changed", () => {
+    fetchAuthoritativePlan();
+  });
+  window.addEventListener("geflow:cache-purged", () => {
+    fetchAuthoritativePlan();
+  });
+}
+
+/**
+ * Loads the current user's plan and guarantees it comes directly from Supabase (not stale cache).
+ * Eliminates UI flicker and locked screen glitches.
+ */
+export const usePlan = (): PlanState => {
+  const [, setTick] = useState(0);
 
   useEffect(() => {
-    let active = true;
-    let profilesChannel: ReturnType<typeof supabase.channel> | null = null;
-    let subsChannel: ReturnType<typeof supabase.channel> | null = null;
+    setupGlobalPlanSubscriber();
 
-    fetchCurrentPlan();
-
-    // Listen to Supabase auth events (sign in, sign out, user switch)
-    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
-      if (!active) return;
-      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
-        fetchCurrentPlan();
-      } else if (event === "SIGNED_OUT") {
-        try {
-          localStorage.removeItem(CACHE_KEY);
-        } catch {
-          // Ignore storage error
-        }
-        applyPlanData("free", null, null, null);
-      }
-    });
-
-    // Listen to local in-tab updates
-    const handlePlanChanged = (e: any) => {
-      if (!active) return;
-      if (e.detail?.planId) {
-        applyPlanData(e.detail.planId, fullName, email, userId);
-      } else {
-        fetchCurrentPlan();
-      }
+    const handleChange = () => {
+      setTick((t) => t + 1);
     };
-    window.addEventListener("geflow:plan-changed", handlePlanChanged);
+    listeners.add(handleChange);
 
-    // Setup realtime postgres listeners
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user || !active) return;
-
-      profilesChannel = supabase
-        .channel(`profile-plan-${user.id}-${Math.random().toString(36).slice(2)}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "profiles", filter: `user_id=eq.${user.id}` },
-          (payload: any) => {
-            if (payload.new) {
-              applyPlanData(payload.new.plan, payload.new.full_name, payload.new.email, user.id);
-            }
-          }
-        )
-        .subscribe();
-
-      subsChannel = supabase
-        .channel(`subs-plan-${user.id}-${Math.random().toString(36).slice(2)}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "subscriptions", filter: `owner_user_id=eq.${user.id}` },
-          () => {
-            fetchCurrentPlan();
-          }
-        )
-        .subscribe();
-    });
+    if (!planStore.hasLoadedFromSupabase && !isPlanFetching) {
+      fetchAuthoritativePlan();
+    }
 
     return () => {
-      active = false;
-      authListener.subscription.unsubscribe();
-      window.removeEventListener("geflow:plan-changed", handlePlanChanged);
-      if (profilesChannel) supabase.removeChannel(profilesChannel);
-      if (subsChannel) supabase.removeChannel(subsChannel);
+      listeners.delete(handleChange);
     };
-  }, [fetchCurrentPlan, applyPlanData, fullName, email, userId]);
+  }, []);
 
-  const planDef = getPlan(planId);
-  const isPremiumOrLifetime = planId === "premium" || planId === "lifetime";
-  const isStandardOrHigher = planId === "standard" || isPremiumOrLifetime;
-  const isLifetime = planId === "lifetime";
-  const isPaid = planId !== "free";
+  const refreshPlan = useCallback(async () => {
+    await fetchAuthoritativePlan();
+  }, []);
+
+  const planDef = getPlan(planStore.planId);
+  const isPremiumOrLifetime = planStore.planId === "premium" || planStore.planId === "lifetime";
+  const isStandardOrHigher = planStore.planId === "standard" || isPremiumOrLifetime;
+  const isLifetime = planStore.planId === "lifetime";
+  const isPaid = planStore.planId !== "free";
 
   return {
-    loading,
-    planId,
+    loading: planStore.loading,
+    planId: planStore.planId,
     plan: planDef,
-    fullName,
-    email,
-    userId,
+    fullName: planStore.fullName,
+    email: planStore.email,
+    userId: planStore.userId,
     isPremiumOrLifetime,
     isStandardOrHigher,
     isLifetime,
     isPaid,
-    refreshPlan: fetchCurrentPlan,
+    refreshPlan,
   };
 };
+

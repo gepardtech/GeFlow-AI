@@ -195,7 +195,28 @@ export function setCachedGeneralSettings(settings: PlatformGeneralSettings) {
 }
 
 export async function fetchGeneralSettings(): Promise<PlatformGeneralSettings> {
-  // 1. Try fetching from server API
+  // 1. Try fetching from public_settings first (publicly readable by everyone including unauthenticated users)
+  try {
+    const { data: pubData } = await supabase
+      .from("public_settings")
+      .select("social_links, footer_copyright, about_members")
+      .eq("id", "platform_general_settings")
+      .maybeSingle();
+
+    if (pubData) {
+      const result: PlatformGeneralSettings = {
+        social_links: Array.isArray(pubData.social_links) ? pubData.social_links : [],
+        footer_copyright: pubData.footer_copyright || DEFAULT_GENERAL_SETTINGS.footer_copyright,
+        about_members: Array.isArray(pubData.about_members) ? pubData.about_members : [],
+      };
+      setCachedGeneralSettings(result);
+      return result;
+    }
+  } catch (pubErr) {
+    console.warn("Public settings fetch notice:", pubErr);
+  }
+
+  // 2. Try fetching from server API
   try {
     const res = await fetch("/api/settings/general");
     if (res.ok) {
@@ -209,7 +230,7 @@ export async function fetchGeneralSettings(): Promise<PlatformGeneralSettings> {
     console.warn("API general settings notice:", err);
   }
 
-  // 2. Try fetching from Supabase platform_settings.alerts
+  // 3. Try fetching from Supabase platform_settings.alerts
   try {
     const { data } = await supabase
       .from("platform_settings")
@@ -248,7 +269,20 @@ export async function saveGeneralSettings(
     console.warn("Notice saving settings to API:", err);
   }
 
-  // 3. Save to Supabase platform_settings
+  // 3. Save to Supabase public_settings table (publicly accessible across landing and footer)
+  try {
+    await supabase.from("public_settings").upsert({
+      id: "platform_general_settings",
+      social_links: settings.social_links,
+      footer_copyright: settings.footer_copyright,
+      about_members: settings.about_members,
+      updated_at: new Date().toISOString(),
+    });
+  } catch (pubErr) {
+    console.warn("Notice updating Supabase public_settings:", pubErr);
+  }
+
+  // 4. Save to Supabase platform_settings
   try {
     const { data: row } = await supabase
       .from("platform_settings")

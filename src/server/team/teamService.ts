@@ -1,5 +1,4 @@
-import fs from "fs";
-import path from "path";
+import { serverSupabase } from "../supabase";
 
 export interface TeamInvitation {
   id: string;
@@ -59,56 +58,91 @@ interface TeamDataStore {
   notifications: TeamNotification[];
 }
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "team_storage.json");
-
-function ensureStorage(): TeamDataStore {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    if (fs.existsSync(DATA_FILE)) {
-      const content = fs.readFileSync(DATA_FILE, "utf-8");
-      const parsed = JSON.parse(content);
-      return {
-        invitations: parsed.invitations || [],
-        memberships: parsed.memberships || [],
-        notifications: parsed.notifications || [],
-      };
-    }
-  } catch (err) {
-    console.error("Error reading team storage, initializing fresh store:", err);
-  }
-
-  const initial: TeamDataStore = {
+export class TeamService {
+  private store: TeamDataStore = {
     invitations: [],
     memberships: [],
     notifications: [],
   };
-  saveStorage(initial);
-  return initial;
-}
-
-function saveStorage(store: TeamDataStore) {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    fs.writeFileSync(DATA_FILE, JSON.stringify(store, null, 2), "utf-8");
-  } catch (err) {
-    console.error("Error saving team storage:", err);
-  }
-}
-
-export class TeamService {
-  private store: TeamDataStore;
+  private isInitialized = false;
 
   constructor() {
-    this.store = ensureStorage();
+    this.syncFromSupabase();
+  }
+
+  private async syncFromSupabase(): Promise<void> {
+    try {
+      const { data: staffList, error } = await serverSupabase
+        .from("business_staff")
+        .select("*, businesses(id, business_name, business_address, currency, owner_user_id)");
+
+      if (!error && Array.isArray(staffList)) {
+        staffList.forEach((s: any) => {
+          const biz = s.businesses || {};
+          const bizId = s.business_id;
+          const bizName = biz.business_name || "Store";
+          const ownerId = biz.owner_user_id || s.invited_by || "";
+          const role = (s.role || "cashier") as "cashier" | "manager" | "inventory";
+          const perms = Array.isArray(s.permissions) ? s.permissions : ["pos"];
+
+          if (s.status === "pending") {
+            const exists = this.store.invitations.some(
+              (i) => i.businessId === bizId && i.inviteeEmail.toLowerCase() === s.invited_email.toLowerCase()
+            );
+            if (!exists) {
+              this.store.invitations.push({
+                id: s.id,
+                businessId: bizId,
+                businessName: bizName,
+                businessAddress: biz.business_address || undefined,
+                currency: biz.currency || "USD",
+                role,
+                permissions: perms,
+                ownerId,
+                ownerName: "Store Owner",
+                inviteeEmail: s.invited_email,
+                inviteeUserId: s.user_id || undefined,
+                status: "pending",
+                createdAt: s.created_at || new Date().toISOString(),
+                updatedAt: s.updated_at || new Date().toISOString(),
+              });
+            }
+          } else {
+            const exists = this.store.memberships.some(
+              (m) => m.businessId === bizId && (m.userEmail.toLowerCase() === s.invited_email.toLowerCase() || (s.user_id && m.userId === s.user_id))
+            );
+            if (!exists) {
+              this.store.memberships.push({
+                id: s.id,
+                businessId: bizId,
+                businessName: bizName,
+                businessAddress: biz.business_address || undefined,
+                currency: biz.currency || "USD",
+                userId: s.user_id || s.id,
+                userEmail: s.invited_email,
+                userName: s.invited_email.split("@")[0],
+                ownerId,
+                role,
+                permissions: perms,
+                isActive: s.status === "active",
+                createdAt: s.created_at || new Date().toISOString(),
+                updatedAt: s.updated_at || new Date().toISOString(),
+              });
+            }
+          }
+        });
+      }
+      this.isInitialized = true;
+    } catch (err) {
+      console.warn("Supabase staff sync notice:", err);
+      this.isInitialized = true;
+    }
   }
 
   private refresh() {
-    this.store = ensureStorage();
+    if (!this.isInitialized) {
+      this.syncFromSupabase();
+    }
   }
 
   public createInvitation(params: {
@@ -156,7 +190,6 @@ export class TeamService {
     let invitation: TeamInvitation;
 
     if (existingIndex >= 0) {
-      // Refresh pending invitation
       invitation = {
         ...this.store.invitations[existingIndex],
         businessName: cleanBizName,
@@ -207,7 +240,22 @@ export class TeamService {
       createdAt: now,
     });
 
-    saveStorage(this.store);
+    // Mirror to Supabase business_staff if valid UUID business
+    if (params.businessId && params.businessId.length >= 32) {
+      serverSupabase
+        .from("business_staff")
+        .upsert({
+          business_id: params.businessId,
+          invited_email: cleanEmail,
+          role: cleanRole,
+          permissions: invitation.permissions,
+          status: "pending",
+          invited_by: params.ownerId,
+          updated_at: now,
+        })
+        .then();
+    }
+
     return { success: true, invitation };
   }
 
@@ -239,7 +287,6 @@ export class TeamService {
         (i.inviteeEmail.toLowerCase() === cleanEmail || !i.inviteeEmail || i.inviteeUserId === cleanUserId)
     );
 
-    // Fallback: If invite ID matches exactly, allow acceptance
     if (invIndex < 0) {
       invIndex = this.store.invitations.findIndex((i) => i.id === params.invitationId);
     }
@@ -251,13 +298,11 @@ export class TeamService {
     const inv = this.store.invitations[invIndex];
     const now = new Date().toISOString();
 
-    // Mark invitation accepted
     inv.status = "accepted";
     inv.inviteeUserId = cleanUserId;
     inv.updatedAt = now;
     this.store.invitations[invIndex] = inv;
 
-    // Create or update active membership
     const memberIndex = this.store.memberships.findIndex(
       (m) => m.businessId === inv.businessId && (m.userId === cleanUserId || m.userEmail.toLowerCase() === cleanEmail)
     );
@@ -271,7 +316,7 @@ export class TeamService {
         userName: params.userName || this.store.memberships[memberIndex].userName,
         role: inv.role,
         permissions: inv.permissions,
-        businessName: inv.businessName, // REAL NAME!
+        businessName: inv.businessName,
         isActive: true,
         updatedAt: now,
       };
@@ -280,7 +325,7 @@ export class TeamService {
       membership = {
         id: "mem_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9),
         businessId: inv.businessId,
-        businessName: inv.businessName, // REAL NAME!
+        businessName: inv.businessName,
         businessAddress: inv.businessAddress,
         currency: inv.currency || "USD",
         userId: cleanUserId,
@@ -296,14 +341,25 @@ export class TeamService {
       this.store.memberships.push(membership);
     }
 
-    // Mark corresponding invite notifications as read
     this.store.notifications.forEach((n) => {
       if (n.inviteId === inv.id || (n.businessId === inv.businessId && n.targetEmail.toLowerCase() === cleanEmail)) {
         n.isRead = true;
       }
     });
 
-    saveStorage(this.store);
+    // Update Supabase business_staff
+    if (inv.businessId && inv.businessId.length >= 32) {
+      serverSupabase
+        .from("business_staff")
+        .update({
+          status: "active",
+          user_id: cleanUserId,
+          updated_at: now,
+        })
+        .eq("business_id", inv.businessId)
+        .ilike("invited_email", cleanEmail)
+        .then();
+    }
 
     const business = {
       id: inv.businessId,
@@ -338,15 +394,23 @@ export class TeamService {
       return { success: false, error: "Invitation not found." };
     }
 
-    this.store.invitations[invIndex].status = "declined";
-    this.store.invitations[invIndex].updatedAt = new Date().toISOString();
+    const inv = this.store.invitations[invIndex];
+    inv.status = "declined";
+    inv.updatedAt = new Date().toISOString();
 
-    // Mark notifications read
     this.store.notifications.forEach((n) => {
       if (n.inviteId === params.invitationId) n.isRead = true;
     });
 
-    saveStorage(this.store);
+    if (inv.businessId && inv.businessId.length >= 32) {
+      serverSupabase
+        .from("business_staff")
+        .update({ status: "inactive", updated_at: new Date().toISOString() })
+        .eq("business_id", inv.businessId)
+        .ilike("invited_email", cleanEmail)
+        .then();
+    }
+
     return { success: true };
   }
 
@@ -374,7 +438,6 @@ export class TeamService {
     inv.updatedAt = now;
     this.store.invitations[invIndex] = inv;
 
-    // Create fresh notification with Accept CTA
     const roleTitle = inv.role === "cashier" ? "Cashier" : inv.role === "inventory" ? "Inventory Clerk" : "Manager";
     this.store.notifications.push({
       id: "notif_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9),
@@ -391,7 +454,6 @@ export class TeamService {
       createdAt: now,
     });
 
-    saveStorage(this.store);
     return { success: true };
   }
 
@@ -409,7 +471,7 @@ export class TeamService {
 
     return activeMembers.map((m) => ({
       id: m.businessId,
-      business_name: m.businessName, // REAL BUSINESS NAME!
+      business_name: m.businessName,
       business_address: m.businessAddress || "",
       currency: m.currency || "USD",
       status: "active",
@@ -438,7 +500,6 @@ export class TeamService {
       return false;
     };
 
-    // Active members
     const active = this.store.memberships
       .filter((m) => {
         if (!m.isActive && m.isActive !== undefined) return false;
@@ -463,7 +524,6 @@ export class TeamService {
         appointed_by_user_id: m.ownerId,
       }));
 
-    // Inactive members
     const inactive = this.store.memberships
       .filter((m) => {
         if (m.isActive !== false) return false;
@@ -488,7 +548,6 @@ export class TeamService {
         appointed_by_user_id: m.ownerId,
       }));
 
-    // Pending invitations
     const pending = this.store.invitations
       .filter((inv) => {
         if (inv.status !== "pending") return false;
@@ -542,12 +601,10 @@ export class TeamService {
     const now = new Date().toISOString();
     const cleanUserId = params.userId?.trim() || "user_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
 
-    // Remove any existing invitation for this email & business
     this.store.invitations = this.store.invitations.filter(
       (i) => !(i.businessId === params.businessId && i.inviteeEmail.toLowerCase() === cleanEmail)
     );
 
-    // Check if membership exists
     const existingIndex = this.store.memberships.findIndex(
       (m) =>
         m.businessId === params.businessId &&
@@ -586,7 +643,21 @@ export class TeamService {
       this.store.memberships.push(member);
     }
 
-    saveStorage(this.store);
+    if (params.businessId && params.businessId.length >= 32) {
+      serverSupabase
+        .from("business_staff")
+        .upsert({
+          business_id: params.businessId,
+          invited_email: cleanEmail,
+          role: cleanRole,
+          permissions: member.permissions,
+          status: member.isActive ? "active" : "pending",
+          invited_by: params.ownerId,
+          user_id: member.userId.length >= 32 ? member.userId : null,
+          updated_at: now,
+        })
+        .then();
+    }
 
     return {
       success: true,
@@ -623,7 +694,16 @@ export class TeamService {
       const idMatch = i.id === memberId || i.inviteeUserId === memberId || (cleanMemId && i.inviteeEmail.toLowerCase() === cleanMemId);
       return !(bizMatch && idMatch);
     });
-    saveStorage(this.store);
+
+    if (businessId && businessId.length >= 32) {
+      serverSupabase
+        .from("business_staff")
+        .delete()
+        .eq("business_id", businessId)
+        .or(`id.eq.${memberId},invited_email.eq.${cleanMemId}`)
+        .then();
+    }
+
     return { success: true };
   }
 
@@ -639,7 +719,16 @@ export class TeamService {
       mem.isActive = isActive;
       mem.updatedAt = new Date().toISOString();
     }
-    saveStorage(this.store);
+
+    if (businessId && businessId.length >= 32) {
+      serverSupabase
+        .from("business_staff")
+        .update({ status: isActive ? "active" : "inactive", updated_at: new Date().toISOString() })
+        .eq("business_id", businessId)
+        .or(`id.eq.${memberId},invited_email.eq.${cleanMemId}`)
+        .then();
+    }
+
     return { success: true };
   }
 
@@ -664,7 +753,16 @@ export class TeamService {
       inv.role = role;
       inv.updatedAt = new Date().toISOString();
     }
-    saveStorage(this.store);
+
+    if (businessId && businessId.length >= 32) {
+      serverSupabase
+        .from("business_staff")
+        .update({ role, updated_at: new Date().toISOString() })
+        .eq("business_id", businessId)
+        .or(`id.eq.${memberId},invited_email.eq.${cleanMemId}`)
+        .then();
+    }
+
     return { success: true };
   }
 

@@ -142,22 +142,57 @@ const AdminBusinesses = () => {
 
   const load = useCallback(async () => {
     try {
+      let bizList: any[] = [];
+      let profsList: any[] = [];
+      let catsList: any[] = [];
+      let prodRowsList: any[] = [];
+
       const [{ data, error }, { data: profs }, { data: catsData }, { data: prodRows }] = await Promise.all([
         supabase.from("businesses").select("*").order("created_at", { ascending: true }),
         supabase.from("profiles").select("user_id, full_name, email, plan"),
         supabase.from("business_categories").select("id, name, industry_type"),
         supabase.from("products").select("id, business_id"),
       ]);
-      if (error) toast({ title: "Failed to load businesses", description: error.message, variant: "destructive" });
+
+      if (error) {
+        console.warn("Notice loading client Supabase businesses, trying admin API endpoint:", error.message);
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData?.session?.access_token;
+          const res = await fetch("/api/admin/businesses", {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (res.ok) {
+            const json = await res.json();
+            if (json?.success) {
+              bizList = json.businesses || [];
+              profsList = json.profiles || [];
+              catsList = json.categories || [];
+              prodRowsList = json.products || [];
+            }
+          }
+        } catch (apiErr) {
+          console.warn("API fallback error:", apiErr);
+        }
+
+        if (bizList.length === 0) {
+          toast({ title: "Notice loading businesses", description: error.message, variant: "destructive" });
+        }
+      } else {
+        bizList = data || [];
+        profsList = profs || [];
+        catsList = catsData || [];
+        prodRowsList = prodRows || [];
+      }
 
       const bizProdCounts: Record<string, number> = {};
-      (prodRows ?? []).forEach((p: any) => {
+      (prodRowsList ?? []).forEach((p: any) => {
         if (p.business_id) {
           bizProdCounts[p.business_id] = (bizProdCounts[p.business_id] || 0) + 1;
         }
       });
 
-      const enrichedRows = (data as BusinessRow[] ?? []).map((b) => {
+      const enrichedRows = (bizList as BusinessRow[] ?? []).map((b) => {
         const directCount = bizProdCounts[b.id] || 0;
         const recordedCount = Number(b.listed_products) || 0;
         return {
@@ -168,10 +203,10 @@ const AdminBusinesses = () => {
 
       setRows(enrichedRows);
       const oMap: Record<string, OwnerInfo> = {};
-      (profs ?? []).forEach((p: any) => { oMap[p.user_id] = { full_name: p.full_name, email: p.email, plan: p.plan }; });
+      (profsList ?? []).forEach((p: any) => { oMap[p.user_id] = { full_name: p.full_name, email: p.email, plan: p.plan }; });
       setOwners(oMap);
       const cMap: Record<string, CategoryInfo> = {};
-      (catsData ?? []).forEach((c: any) => { cMap[c.id] = { name: c.name, industry_type: c.industry_type }; });
+      (catsList ?? []).forEach((c: any) => { cMap[c.id] = { name: c.name, industry_type: c.industry_type }; });
       setCats(cMap);
     } catch (err: any) {
       console.warn("Failed to load businesses:", err);

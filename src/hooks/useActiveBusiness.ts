@@ -121,15 +121,89 @@ async function fetchBusinessData(): Promise<void> {
       // 1. Fetch businesses owned by current user
       const { data: ownedData, error: ownedErr } = await supabase
         .from("businesses")
-        .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id")
-        .eq("owner_user_id", user.id)
+        .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id, owner_id")
+        .or(`owner_id.eq.${user.id},owner_user_id.eq.${user.id}`)
         .order("created_at", { ascending: true });
 
+      let staffRows: BusinessRow[] = [];
+
       if (ownedErr) {
-        console.warn("Error fetching owned businesses:", ownedErr);
+        console.warn("Client Supabase businesses query notice (invoking resilient API fallback):", ownedErr.message);
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData?.session?.access_token;
+          const apiRes = await fetch("/api/user/businesses", {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (apiRes.ok) {
+            const apiJson = await apiRes.json();
+            if (apiJson?.success) {
+              if (Array.isArray(apiJson.owned)) ownedData = apiJson.owned;
+              if (Array.isArray(apiJson.staff)) staffRows = apiJson.staff;
+            }
+          }
+        } catch (apiErr) {
+          console.warn("Notice calling /api/user/businesses fallback:", apiErr);
+        }
       }
 
-      const ownedRows: BusinessRow[] = (ownedData ?? []) as BusinessRow[];
+      let ownedRows: BusinessRow[] = (ownedData ?? []) as BusinessRow[];
+
+      // 2. Fetch businesses where user is invited as staff / member
+      try {
+        const { data: directStaff } = await supabase
+          .from("business_staff")
+          .select("business_id, role, status")
+          .eq("user_id", user.id)
+          .eq("status", "active");
+
+        if (directStaff && directStaff.length > 0) {
+          const bizIds = directStaff.map((s) => s.business_id);
+          const { data: staffBizs } = await supabase
+            .from("businesses")
+            .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id")
+            .in("id", bizIds);
+
+          if (staffBizs) {
+            staffBizs.forEach((b) => {
+              const s = directStaff.find((x) => x.business_id === b.id);
+              if (!staffRows.some((sr) => sr.id === b.id)) {
+                staffRows.push({ ...b, is_staff: true, staff_role: s?.role || "cashier" });
+              }
+            });
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+
+      // Also check business_members table
+      try {
+        const { data: directMembers } = await supabase
+          .from("business_members")
+          .select("business_id, role, status")
+          .eq("user_id", user.id)
+          .eq("status", "active");
+
+        if (directMembers && directMembers.length > 0) {
+          const bizIds = directMembers.map((s) => s.business_id);
+          const { data: memberBizs } = await supabase
+            .from("businesses")
+            .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id")
+            .in("id", bizIds);
+
+          if (memberBizs) {
+            memberBizs.forEach((b) => {
+              const m = directMembers.find((x) => x.business_id === b.id);
+              if (!staffRows.some((sr) => sr.id === b.id)) {
+                staffRows.push({ ...b, is_staff: true, staff_role: m?.role || "cashier" });
+              }
+            });
+          }
+        }
+      } catch {
+        /* ignore */
+      }
 
       // 2. Fetch businesses where user is invited as staff member
       // Find direct support_team_members for user.id
@@ -159,7 +233,6 @@ async function fetchBusinessData(): Promise<void> {
         console.warn("Error fetching staff memberships:", staffErr);
       }
 
-      let staffRows: BusinessRow[] = [];
       if (staffMemberships && staffMemberships.length > 0) {
         // If any membership was stored under another user_id for the same email, link it to user.id
         for (const sm of staffMemberships) {
@@ -324,13 +397,15 @@ async function fetchBusinessData(): Promise<void> {
       // Select active business ID
       const savedId = localStorage.getItem(LS_KEY);
       const exists = activePool.find((r) => r.id === savedId);
-      const chosen = exists ? exists.id : activePool[0]?.id || null;
+      const chosen = exists ? exists.id : (activePool[0]?.id || store.activeId || null);
 
-      store.activeId = chosen;
       if (chosen) {
-        localStorage.setItem(LS_KEY, chosen);
-      } else {
-        localStorage.removeItem(LS_KEY);
+        store.activeId = chosen;
+        try {
+          localStorage.setItem(LS_KEY, chosen);
+        } catch {
+          /* ignore */
+        }
       }
 
       // Sync active staff role for permission gates

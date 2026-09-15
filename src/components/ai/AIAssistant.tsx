@@ -208,31 +208,55 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
           setLiveAnalytics(currentCtx);
         }
 
-        // Step 2: Try Remote Edge Function (GeCore AI Intelligence Pipeline)
+        // Step 2: Try Server AI Assistant API endpoint
         let replyText = "";
         let succeededRemotely = false;
 
         try {
-          const { data, error } = await supabase.functions.invoke("geflow-ai-assistant", {
-            body: {
+          const apiRes = await fetch("/api/ai/assistant", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
               messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
               mode,
               businessId: activeId ?? "",
               planId,
-            },
+            }),
           });
 
-          if (!error && data?.reply && typeof data.reply === "string") {
-            replyText = data.reply.trim();
-            succeededRemotely = true;
-          } else if (data?.error) {
-            console.debug("Edge function returned error payload:", data.error);
+          if (apiRes.ok) {
+            const data = await apiRes.json();
+            if (data?.reply && typeof data.reply === "string") {
+              replyText = data.reply.trim();
+              succeededRemotely = true;
+            }
           }
-        } catch (edgeErr) {
-          console.debug("Edge function invocation bypassed/failed, engaging smart local analyzer:", edgeErr);
+        } catch (apiErr) {
+          console.debug("Server AI assistant API attempt bypassed:", apiErr);
         }
 
-        // Step 3: If Edge Function did not return a response, execute high-precision plan-aware local analysis
+        // Step 2b: Try Edge function if server API did not return
+        if (!succeededRemotely) {
+          try {
+            const { data, error } = await supabase.functions.invoke("geflow-ai-assistant", {
+              body: {
+                messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
+                mode,
+                businessId: activeId ?? "",
+                planId,
+              },
+            });
+
+            if (!error && data?.reply && typeof data.reply === "string") {
+              replyText = data.reply.trim();
+              succeededRemotely = true;
+            }
+          } catch (edgeErr) {
+            console.debug("Edge function invocation bypassed:", edgeErr);
+          }
+        }
+
+        // Step 3: If remote did not return a response, execute high-precision plan-aware local analysis
         if (!succeededRemotely || !replyText) {
           replyText = generateLocalBusinessAnalysis(content, mode, currentCtx, planId);
         }

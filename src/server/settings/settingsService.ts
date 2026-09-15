@@ -1,5 +1,4 @@
-import fs from "fs";
-import path from "path";
+import { serverSupabase } from "../supabase";
 
 export interface SocialMediaLink {
   id: string;
@@ -43,8 +42,6 @@ export interface PlatformGeneralSettings {
   about_members: AboutPageMember[];
 }
 
-const SETTINGS_FILE = path.join(process.cwd(), "data", "platform_general_settings.json");
-
 const DEFAULT_SETTINGS: PlatformGeneralSettings = {
   social_links: [
     { id: "soc_fb", platform: "facebook", label: "Facebook", url: "https://web.facebook.com/gepardweb/", enabled: true },
@@ -69,71 +66,109 @@ const DEFAULT_SETTINGS: PlatformGeneralSettings = {
 };
 
 class SettingsService {
-  private cache: PlatformGeneralSettings | null = null;
+  private cache: PlatformGeneralSettings = { ...DEFAULT_SETTINGS };
+  private initialized = false;
 
-  private load(): PlatformGeneralSettings {
+  constructor() {
+    this.syncFromSupabase();
+  }
+
+  private async syncFromSupabase(): Promise<void> {
     try {
-      if (!fs.existsSync(SETTINGS_FILE)) {
-        const dir = path.dirname(SETTINGS_FILE);
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(DEFAULT_SETTINGS, null, 2), "utf-8");
-        this.cache = DEFAULT_SETTINGS;
-        return DEFAULT_SETTINGS;
+      const { data, error } = await serverSupabase
+        .from("platform_settings")
+        .select("alerts")
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data?.alerts) {
+        const alerts = data.alerts as any;
+        const gen = alerts.general_settings || {};
+        this.cache = {
+          social_links: Array.isArray(gen.social_links) 
+            ? gen.social_links 
+            : (Array.isArray(alerts.social_links) ? alerts.social_links : this.cache.social_links),
+          footer_copyright: gen.footer_copyright || alerts.footer_copyright || this.cache.footer_copyright,
+          about_members: Array.isArray(gen.about_members) 
+            ? gen.about_members 
+            : (Array.isArray(alerts.about_members) ? alerts.about_members : this.cache.about_members),
+        };
       }
-      const raw = fs.readFileSync(SETTINGS_FILE, "utf-8");
-      this.cache = JSON.parse(raw);
-      return this.cache!;
+      this.initialized = true;
     } catch (err) {
-      console.error("Error reading general settings:", err);
-      return DEFAULT_SETTINGS;
+      console.warn("Supabase general settings sync notice:", err);
+      this.initialized = true;
     }
   }
 
-  private save(settings: PlatformGeneralSettings): void {
+  private async persistToSupabase(settings: PlatformGeneralSettings): Promise<void> {
     try {
-      const dir = path.dirname(SETTINGS_FILE);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), "utf-8");
-      this.cache = settings;
+      const { data: existing } = await serverSupabase
+        .from("platform_settings")
+        .select("id, alerts")
+        .limit(1)
+        .maybeSingle();
+
+      const existingAlerts = (existing?.alerts as any) || {};
+      const updatedAlerts = {
+        ...existingAlerts,
+        general_settings: settings,
+      };
+
+      if (existing?.id) {
+        await serverSupabase
+          .from("platform_settings")
+          .update({ alerts: updatedAlerts, updated_at: new Date().toISOString() })
+          .eq("id", existing.id);
+      } else {
+        await serverSupabase
+          .from("platform_settings")
+          .upsert({ singleton: true, alerts: updatedAlerts });
+      }
     } catch (err) {
-      console.error("Error writing general settings:", err);
+      console.warn("Failed to persist general settings to Supabase:", err);
     }
   }
 
   public getSettings(): PlatformGeneralSettings {
-    return this.load();
+    if (!this.initialized) {
+      this.syncFromSupabase();
+    }
+    return this.cache;
   }
 
   public updateAllSettings(updates: Partial<PlatformGeneralSettings>): PlatformGeneralSettings {
-    const current = this.load();
     const merged: PlatformGeneralSettings = {
-      social_links: updates.social_links ?? current.social_links,
-      footer_copyright: updates.footer_copyright ?? current.footer_copyright,
-      about_members: updates.about_members ?? current.about_members,
+      social_links: updates.social_links ?? this.cache.social_links,
+      footer_copyright: updates.footer_copyright ?? this.cache.footer_copyright,
+      about_members: updates.about_members ?? this.cache.about_members,
     };
-    this.save(merged);
+    this.cache = merged;
+    this.persistToSupabase(merged);
     return merged;
   }
 
   public updateSocialLinks(links: SocialMediaLink[]): PlatformGeneralSettings {
-    const current = this.load();
-    current.social_links = links;
-    this.save(current);
-    return current;
+    this.cache.social_links = links;
+    this.persistToSupabase(this.cache);
+    return this.cache;
   }
 
   public updateFooterCopyright(copyright: FooterCopyrightSettings): PlatformGeneralSettings {
-    const current = this.load();
-    current.footer_copyright = copyright;
-    this.save(current);
-    return current;
+    this.cache.footer_copyright = copyright;
+    this.persistToSupabase(this.cache);
+    return this.cache;
   }
 
   public updateAboutMembers(members: AboutPageMember[]): PlatformGeneralSettings {
-    const current = this.load();
-    current.about_members = members;
-    this.save(current);
-    return current;
+    this.cache.about_members = members;
+    this.persistToSupabase(this.cache);
+    return this.cache;
+  }
+
+  public async reloadFromSupabase(): Promise<PlatformGeneralSettings> {
+    await this.syncFromSupabase();
+    return this.cache;
   }
 }
 

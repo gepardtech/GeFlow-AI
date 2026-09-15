@@ -136,15 +136,15 @@ export const useStaffRole = (): StaffRoleState => {
         supabase
           .from("businesses")
           .select("id, owner_user_id")
-          .eq("owner_user_id", user.id)
+          .or(`owner_user_id.eq.${user.id},owner_id.eq.${user.id}`)
           .limit(1),
       ]);
 
       const teamMembers = teamMembersRes.data || [];
       const hasOwnedBusinesses = (ownedRes.data?.length ?? 0) > 0;
 
-      // If user has no owned businesses but has team memberships, force employee mode
-      if (!hasOwnedBusinesses && teamMembers.length > 0) {
+      // Only switch to employee mode if owned query completed cleanly with 0 rows AND team memberships exist
+      if (!ownedRes.error && !hasOwnedBusinesses && teamMembers.length > 0 && currentMode !== "business") {
         currentMode = "employee";
         localStorage.setItem("geflow.workspaceMode", "employee");
       }

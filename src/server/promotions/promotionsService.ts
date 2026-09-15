@@ -1,5 +1,4 @@
-import fs from "fs";
-import path from "path";
+import { serverSupabase } from "../supabase";
 
 export interface ServerAnnouncement {
   id: string;
@@ -34,10 +33,6 @@ export interface ServerCoupon {
   created_at: string;
   updated_at: string;
 }
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const ANNOUNCEMENTS_FILE = path.join(DATA_DIR, "promotions_announcements.json");
-const COUPONS_FILE = path.join(DATA_DIR, "promotions_coupons.json");
 
 export function formatPlanLabel(appliesTo: string | null | undefined): string {
   if (!appliesTo || appliesTo.toLowerCase() === "all") return "All Plans";
@@ -90,97 +85,114 @@ export function checkPlanMatch(
 
 class PromotionsService {
   private announcements: ServerAnnouncement[] = [];
-  private coupons: ServerCoupon[] = [];
+  private coupons: ServerCoupon[] = [
+    {
+      id: "cpn_promo20",
+      code: "PROMO20",
+      description: "20% off all plans promotion",
+      discount_type: "percent",
+      discount_value: 20,
+      applies_to_plan: "all",
+      min_amount: 0,
+      max_uses: null,
+      used_count: 0,
+      starts_at: null,
+      expires_at: null,
+      active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: "cpn_prem_life_50",
+      code: "LIFETIME50",
+      description: "50% off Premium Lifetime only",
+      discount_type: "percent",
+      discount_value: 50,
+      applies_to_plan: "premium_lifetime",
+      min_amount: 0,
+      max_uses: 100,
+      used_count: 0,
+      starts_at: null,
+      expires_at: null,
+      active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  ];
 
   constructor() {
-    this.ensureDataDir();
-    this.loadAll();
+    this.syncFromSupabase();
   }
 
-  private ensureDataDir(): void {
+  private async syncFromSupabase(): Promise<void> {
     try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
+      const { data, error } = await serverSupabase
+        .from("coupons")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        this.coupons = data.map((c: any) => ({
+          id: c.id,
+          code: c.code,
+          description: c.description,
+          discount_type: c.discount_type,
+          discount_value: Number(c.discount_value) || 0,
+          applies_to_plan: c.applies_to_plan,
+          min_amount: Number(c.min_amount) || 0,
+          max_uses: c.max_uses,
+          used_count: Number(c.used_count) || 0,
+          starts_at: c.starts_at,
+          expires_at: c.expires_at,
+          active: Boolean(c.active),
+          created_at: c.created_at,
+          updated_at: c.updated_at,
+        }));
+      } else {
+        // Seed default coupons to Supabase
+        for (const c of this.coupons) {
+          await serverSupabase.from("coupons").upsert({
+            id: c.id,
+            code: c.code,
+            description: c.description,
+            discount_type: c.discount_type,
+            discount_value: c.discount_value,
+            applies_to_plan: c.applies_to_plan,
+            min_amount: c.min_amount,
+            max_uses: c.max_uses,
+            used_count: c.used_count,
+            active: c.active,
+          });
+        }
       }
     } catch (err) {
-      console.warn("Failed to ensure data dir for promotions:", err);
-    }
-  }
-
-  private loadAll(): void {
-    // Load announcements
-    try {
-      if (fs.existsSync(ANNOUNCEMENTS_FILE)) {
-        this.announcements = JSON.parse(fs.readFileSync(ANNOUNCEMENTS_FILE, "utf-8"));
-      } else {
-        this.announcements = [];
-      }
-    } catch {
-      this.announcements = [];
-    }
-
-    // Load coupons
-    try {
-      if (fs.existsSync(COUPONS_FILE)) {
-        this.coupons = JSON.parse(fs.readFileSync(COUPONS_FILE, "utf-8"));
-      } else {
-        // Initial default coupons
-        this.coupons = [
-          {
-            id: "cpn_promo20",
-            code: "PROMO20",
-            description: "20% off all plans promotion",
-            discount_type: "percent",
-            discount_value: 20,
-            applies_to_plan: "all",
-            min_amount: 0,
-            max_uses: null,
-            used_count: 0,
-            starts_at: null,
-            expires_at: null,
-            active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            id: "cpn_prem_life_50",
-            code: "LIFETIME50",
-            description: "50% off Premium Lifetime only",
-            discount_type: "percent",
-            discount_value: 50,
-            applies_to_plan: "premium_lifetime",
-            min_amount: 0,
-            max_uses: 100,
-            used_count: 0,
-            starts_at: null,
-            expires_at: null,
-            active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ];
-        this.saveCoupons();
-      }
-    } catch {
-      this.coupons = [];
+      console.warn("Notice syncing coupons with Supabase:", err);
     }
   }
 
   private saveAnnouncements(): void {
-    try {
-      this.ensureDataDir();
-      fs.writeFileSync(ANNOUNCEMENTS_FILE, JSON.stringify(this.announcements, null, 2), "utf-8");
-    } catch (err) {
-      console.warn("Failed to save announcements to disk:", err);
-    }
+    // Announcements maintained in memory
   }
 
   private saveCoupons(): void {
-    try {
-      this.ensureDataDir();
-      fs.writeFileSync(COUPONS_FILE, JSON.stringify(this.coupons, null, 2), "utf-8");
-    } catch (err) {
-      console.warn("Failed to save coupons to disk:", err);
+    // Sync coupons with Supabase
+    for (const c of this.coupons) {
+      serverSupabase
+        .from("coupons")
+        .upsert({
+          id: c.id,
+          code: c.code,
+          description: c.description,
+          discount_type: c.discount_type,
+          discount_value: c.discount_value,
+          applies_to_plan: c.applies_to_plan,
+          min_amount: c.min_amount,
+          max_uses: c.max_uses,
+          used_count: c.used_count,
+          active: c.active,
+          updated_at: new Date().toISOString(),
+        })
+        .then();
     }
   }
 

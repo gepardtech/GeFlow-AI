@@ -311,12 +311,36 @@ const AdminUsers = () => {
       if (editForm.plan !== editUser.plan) {
         await updateProfile(editUser.user_id, { plan: editForm.plan });
         // Sync subscriptions table so user never reverts
-        await supabase.from("subscriptions").upsert({
-          owner_user_id: editUser.user_id,
-          tier: editForm.plan,
-          status: "active",
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "owner_user_id" });
+        try {
+          const { data: existingSub } = await supabase
+            .from("subscriptions")
+            .select("id")
+            .eq("owner_user_id", editUser.user_id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (existingSub?.id) {
+            await supabase
+              .from("subscriptions")
+              .update({
+                tier: editForm.plan,
+                status: "active",
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", existingSub.id);
+          } else {
+            await supabase
+              .from("subscriptions")
+              .insert({
+                owner_user_id: editUser.user_id,
+                tier: editForm.plan,
+                status: "active",
+              });
+          }
+        } catch (subErr) {
+          console.warn("Notice updating subscriptions record:", subErr);
+        }
 
         // Dispatch instant event for user session
         window.dispatchEvent(new CustomEvent("geflow:plan-changed", { detail: { planId: editForm.plan } }));

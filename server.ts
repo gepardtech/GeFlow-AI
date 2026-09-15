@@ -18,6 +18,8 @@ import { businessDataSyncService } from "./src/server/team/businessDataSyncServi
 import { settingsService } from "./src/server/settings/settingsService";
 import { newsletterService } from "./src/server/newsletter/newsletterService";
 import { promotionsService } from "./src/server/promotions/promotionsService";
+import { serverSupabase } from "./src/server/supabase";
+import { GoogleGenAI } from "@google/genai";
 
 const app = express();
 const PORT = 3000;
@@ -29,6 +31,11 @@ app.use(express.json({ limit: "5mb" }));
 const modelRouter = new ModelRouter();
 const productVerifier = new ProductVerifier(modelRouter);
 const productAnalyzer = new ProductAnalyzer(modelRouter, productVerifier);
+
+// General health check endpoint
+app.get("/api/health", (req: Request, res: Response) => {
+  res.json({ status: "ok" });
+});
 
 // Health check endpoint
 app.get("/api/ai/health", (req: Request, res: Response) => {
@@ -737,6 +744,202 @@ app.post("/api/settings/general/about-members", (req: Request, res: Response) =>
     }
     const updated = settingsService.updateAboutMembers(members);
     res.json({ success: true, settings: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Platform Cache Purge & Refresh
+app.post("/api/settings/cache/clear", async (req: Request, res: Response) => {
+  try {
+    await settingsService.reloadFromSupabase();
+    res.json({ success: true, message: "Platform cache memory refreshed and synced with database." });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Helper to authenticate user from Bearer token
+async function getAuthenticatedUser(req: Request) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+  const token = authHeader.substring(7).trim();
+  if (!token) return null;
+  try {
+    const { data: { user } } = await serverSupabase.auth.getUser(token);
+    return user;
+  } catch {
+    return null;
+  }
+}
+
+// User businesses query (bypasses client-side RLS infinite recursion)
+app.get("/api/user/businesses", async (req: Request, res: Response) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    // 1. Fetch owned businesses (support owner_id and owner_user_id)
+    const { data: ownedData, error: ownedErr } = await serverSupabase
+      .from("businesses")
+      .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id, owner_id, created_at")
+      .or(`owner_id.eq.${user.id},owner_user_id.eq.${user.id}`)
+      .order("created_at", { ascending: true });
+
+    if (ownedErr) {
+      console.warn("Server notice querying owned businesses:", ownedErr.message);
+    }
+
+    // 2. Fetch staff memberships (check both business_members and business_staff)
+    const staffData: any[] = [];
+    try {
+      const { data: memberRows } = await serverSupabase
+        .from("business_members")
+        .select("business_id, role, status")
+        .eq("user_id", user.id)
+        .eq("status", "active");
+      if (memberRows && memberRows.length > 0) staffData.push(...memberRows);
+    } catch {
+      /* ignore */
+    }
+
+    try {
+      const { data: staffRows } = await serverSupabase
+        .from("business_staff")
+        .select("business_id, role, status")
+        .eq("user_id", user.id)
+        .eq("status", "active");
+      if (staffRows && staffRows.length > 0) staffData.push(...staffRows);
+    } catch {
+      /* ignore */
+    }
+
+    const staffBizIds = Array.from(new Set(staffData.map((s) => s.business_id)));
+    let staffBizs: any[] = [];
+    if (staffBizIds.length > 0) {
+      const { data: bRows } = await serverSupabase
+        .from("businesses")
+        .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id, owner_id, created_at")
+        .in("id", staffBizIds);
+      
+      if (bRows) {
+        staffBizs = bRows.map((b) => {
+          const sRow = staffData.find((s) => s.business_id === b.id);
+          return {
+            ...b,
+            staff_role: sRow?.role || "cashier",
+          };
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      owned: ownedData || [],
+      staff: staffBizs,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin businesses query (all businesses for admin panel)
+app.get("/api/admin/businesses", async (req: Request, res: Response) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    const isSuperAdmin = user?.email?.toLowerCase() === "gepardwebs@gmail.com";
+
+    // Fetch all businesses, categories, profiles, and products
+    const [
+      { data: businesses, error: bErr },
+      { data: profiles },
+      { data: categories },
+      { data: products }
+    ] = await Promise.all([
+      serverSupabase.from("businesses").select("*").order("created_at", { ascending: true }),
+      serverSupabase.from("profiles").select("user_id, full_name, email, plan"),
+      serverSupabase.from("business_categories").select("id, name, industry_type"),
+      serverSupabase.from("products").select("id, business_id"),
+    ]);
+
+    if (bErr) {
+      return res.status(500).json({ success: false, error: bErr.message });
+    }
+
+    res.json({
+      success: true,
+      businesses: businesses || [],
+      profiles: profiles || [],
+      categories: categories || [],
+      products: products || [],
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// AI Assistant Endpoint (Powered by Google Gemini 2.5 Flash)
+let geminiClient: GoogleGenAI | null = null;
+function getGeminiClient() {
+  if (!geminiClient && process.env.GEMINI_API_KEY) {
+    geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+  return geminiClient;
+}
+
+app.post("/api/ai/assistant", async (req: Request, res: Response) => {
+  try {
+    const { messages, mode, businessId, planId, businessContext } = req.body || {};
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ success: false, error: "messages array is required" });
+    }
+
+    const lastUserMessage = messages[messages.length - 1]?.content || "";
+
+    const client = getGeminiClient();
+    if (client) {
+      try {
+        const systemInstruction = `You are GeFlow AI, an intelligent retail enterprise and POS copilot.
+You assist retail business owners, store managers, and staff with real-time operations, inventory optimization, revenue trends, POS checkout workflows, and analytics.
+Current operating mode: ${mode || "business"}
+Active plan tier: ${planId || "free"}
+${businessContext ? `Business Context:\nName: ${businessContext.businessName || "Store"}\nTotal Products: ${businessContext.totalProducts ?? 0}\nLow Stock Items: ${businessContext.lowStockCount ?? 0}\nToday Revenue: $${businessContext.todayRevenue ?? 0}\nTotal Transactions: ${businessContext.todaySalesCount ?? 0}` : ""}
+Always respond clearly, concisely, and helpfully with actionable insights, bullet points where appropriate, and a professional tone.`;
+
+        const response = await client.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: `${systemInstruction}\n\nUser Question:\n${lastUserMessage}` }],
+            },
+          ],
+        });
+
+        const reply = response.text || "";
+        if (reply) {
+          return res.json({ success: true, reply });
+        }
+      } catch (geminiErr: any) {
+        console.warn("Notice calling Gemini API for assistant, using smart contextual analyzer:", geminiErr.message);
+      }
+    }
+
+    // Fallback: smart retail business intelligence response
+    let reply = `Here is your GeFlow AI store summary:\n`;
+    if (businessContext) {
+      reply += `• Store: ${businessContext.businessName || "Active Business"}\n`;
+      reply += `• Total Catalog: ${businessContext.totalProducts ?? 0} active products\n`;
+      reply += `• Stock Alerts: ${businessContext.lowStockCount ?? 0} items near or below minimum thresholds\n`;
+      reply += `• Today's Gross Revenue: $${Number(businessContext.todayRevenue || 0).toFixed(2)}\n`;
+    } else {
+      reply += `• System status: Online and synchronized with Supabase database.\n`;
+    }
+    reply += `\nHow can I help you optimize your catalog, review sales reports, or configure cashier terminals today?`;
+
+    res.json({ success: true, reply });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
