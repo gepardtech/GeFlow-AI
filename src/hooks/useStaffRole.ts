@@ -136,7 +136,7 @@ export const useStaffRole = (): StaffRoleState => {
         supabase
           .from("businesses")
           .select("id, owner_user_id")
-          .or(`owner_user_id.eq.${user.id},owner_id.eq.${user.id}`)
+          .eq("owner_user_id", user.id)
           .limit(1),
       ]);
 

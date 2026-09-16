@@ -85,13 +85,21 @@ function notifyListeners() {
 
 let isFetching = false;
 let fetchPromise: Promise<void> | null = null;
+let lastFetchTime = 0;
+const FETCH_COOLDOWN_MS = 6000;
 
-async function fetchBusinessData(): Promise<void> {
+async function fetchBusinessData(force = false): Promise<void> {
   if (isFetching && fetchPromise) {
     return fetchPromise;
   }
 
+  // Prevent thrashing and flickering from multiple mounting components
+  if (!force && store.hasLoaded && Date.now() - lastFetchTime < FETCH_COOLDOWN_MS) {
+    return;
+  }
+
   isFetching = true;
+  lastFetchTime = Date.now();
   fetchPromise = (async () => {
     try {
       const {
@@ -119,16 +127,23 @@ async function fetchBusinessData(): Promise<void> {
       store.currentUserId = user.id;
 
       // 1. Fetch businesses owned by current user
-      const { data: ownedData, error: ownedErr } = await supabase
-        .from("businesses")
-        .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id, owner_id")
-        .or(`owner_id.eq.${user.id},owner_user_id.eq.${user.id}`)
-        .order("created_at", { ascending: true });
+      let ownedData: any[] | null = null;
+      let ownedErr: any = null;
+      try {
+        const res = await supabase
+          .from("businesses")
+          .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id")
+          .eq("owner_user_id", user.id)
+          .order("created_at", { ascending: true });
+        ownedData = res.data;
+        ownedErr = res.error;
+      } catch (qErr) {
+        ownedErr = qErr;
+      }
 
       let staffRows: BusinessRow[] = [];
 
-      if (ownedErr) {
-        console.warn("Client Supabase businesses query notice (invoking resilient API fallback):", ownedErr.message);
+      if (ownedErr || !ownedData || ownedData.length === 0) {
         try {
           const { data: sessionData } = await supabase.auth.getSession();
           const token = sessionData?.session?.access_token;
@@ -138,7 +153,7 @@ async function fetchBusinessData(): Promise<void> {
           if (apiRes.ok) {
             const apiJson = await apiRes.json();
             if (apiJson?.success) {
-              if (Array.isArray(apiJson.owned)) ownedData = apiJson.owned;
+              if (Array.isArray(apiJson.owned) && apiJson.owned.length > 0) ownedData = apiJson.owned;
               if (Array.isArray(apiJson.staff)) staffRows = apiJson.staff;
             }
           }
@@ -507,7 +522,7 @@ function ensureRealtime() {
   });
 
   const handleCustomSync = () => {
-    fetchBusinessData();
+    fetchBusinessData(true);
   };
 
   window.addEventListener("geflow:business-updated", handleCustomSync);
@@ -583,7 +598,7 @@ export const useActiveBusiness = () => {
   }, []);
 
   const reload = useCallback(() => {
-    return fetchBusinessData();
+    return fetchBusinessData(true);
   }, []);
 
   const pool = store.mode === "employee" ? store.staff : store.owned;

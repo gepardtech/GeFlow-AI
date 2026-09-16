@@ -18,14 +18,27 @@ import { businessDataSyncService } from "./src/server/team/businessDataSyncServi
 import { settingsService } from "./src/server/settings/settingsService";
 import { newsletterService } from "./src/server/newsletter/newsletterService";
 import { promotionsService } from "./src/server/promotions/promotionsService";
-import { serverSupabase } from "./src/server/supabase";
+import { serverSupabase, bgSupabase, verifyUserToken } from "./src/server/supabase";
 import { GoogleGenAI } from "@google/genai";
+import fs from "fs";
 
 const app = express();
 const PORT = 3000;
 
 app.use(cors());
-app.use(express.json({ limit: "5mb" }));
+app.use(express.json({ limit: "25mb" }));
+app.use(express.urlencoded({ extended: true, limit: "25mb" }));
+
+// Serve public uploads statically
+const uploadsDir = path.join(process.cwd(), "public", "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+const membersUploadDir = path.join(uploadsDir, "members");
+if (!fs.existsSync(membersUploadDir)) {
+  fs.mkdirSync(membersUploadDir, { recursive: true });
+}
+app.use("/uploads", express.static(uploadsDir));
 
 // Initialize Core AI Services
 const modelRouter = new ModelRouter();
@@ -701,48 +714,48 @@ app.get("/api/settings/general", (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/settings/general", (req: Request, res: Response) => {
+app.post("/api/settings/general", async (req: Request, res: Response) => {
   try {
-    const updated = settingsService.updateAllSettings(req.body || {});
+    const updated = await settingsService.updateAllSettings(req.body || {});
     res.json({ success: true, settings: updated });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.post("/api/settings/general/social-links", (req: Request, res: Response) => {
+app.post("/api/settings/general/social-links", async (req: Request, res: Response) => {
   try {
     const { links } = req.body || {};
     if (!Array.isArray(links)) {
       return res.status(400).json({ success: false, error: "links must be an array" });
     }
-    const updated = settingsService.updateSocialLinks(links);
+    const updated = await settingsService.updateSocialLinks(links);
     res.json({ success: true, settings: updated });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.post("/api/settings/general/footer-copyright", (req: Request, res: Response) => {
+app.post("/api/settings/general/footer-copyright", async (req: Request, res: Response) => {
   try {
     const { copyright } = req.body || {};
     if (!copyright || typeof copyright.text !== "string") {
       return res.status(400).json({ success: false, error: "valid copyright object is required" });
     }
-    const updated = settingsService.updateFooterCopyright(copyright);
+    const updated = await settingsService.updateFooterCopyright(copyright);
     res.json({ success: true, settings: updated });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.post("/api/settings/general/about-members", (req: Request, res: Response) => {
+app.post("/api/settings/general/about-members", async (req: Request, res: Response) => {
   try {
     const { members } = req.body || {};
     if (!Array.isArray(members)) {
       return res.status(400).json({ success: false, error: "members must be an array" });
     }
-    const updated = settingsService.updateAboutMembers(members);
+    const updated = await settingsService.updateAboutMembers(members);
     res.json({ success: true, settings: updated });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -753,9 +766,55 @@ app.post("/api/settings/general/about-members", (req: Request, res: Response) =>
 app.post("/api/settings/cache/clear", async (req: Request, res: Response) => {
   try {
     await settingsService.reloadFromSupabase();
-    res.json({ success: true, message: "Platform cache memory refreshed and synced with database." });
+    res.json({ 
+      success: true, 
+      message: "Platform cache memory refreshed and re-synchronized directly with database.",
+      timestamp: new Date().toISOString()
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Member Photo Device Upload API
+app.post("/api/upload/member-photo", async (req: Request, res: Response) => {
+  try {
+    const { image, name, memberId } = req.body || {};
+    if (!image || typeof image !== "string") {
+      return res.status(400).json({ success: false, error: "Image data string is required" });
+    }
+
+    // Determine clean file extension and buffer
+    let ext = "jpg";
+    let base64Data = image;
+
+    if (image.startsWith("data:image/png;base64,")) {
+      ext = "png";
+      base64Data = image.replace(/^data:image\/png;base64,/, "");
+    } else if (image.startsWith("data:image/webp;base64,")) {
+      ext = "webp";
+      base64Data = image.replace(/^data:image\/webp;base64,/, "");
+    } else if (image.startsWith("data:image/")) {
+      base64Data = image.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
+    }
+
+    const safeId = (memberId || name || `mem_${Date.now()}`).toString().replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase();
+    const fileName = `member_${safeId}_${Date.now()}.${ext}`;
+    const filePath = path.join(membersUploadDir, fileName);
+
+    const buffer = Buffer.from(base64Data, "base64");
+    fs.writeFileSync(filePath, buffer);
+
+    const publicUrl = `/uploads/members/${fileName}`;
+    res.json({
+      success: true,
+      url: publicUrl,
+      fileName,
+      size: buffer.length,
+    });
+  } catch (err: any) {
+    console.error("Member photo upload error:", err);
+    res.status(500).json({ success: false, error: err.message || "Failed to upload image" });
   }
 });
 
@@ -766,14 +825,13 @@ async function getAuthenticatedUser(req: Request) {
   const token = authHeader.substring(7).trim();
   if (!token) return null;
   try {
-    const { data: { user } } = await serverSupabase.auth.getUser(token);
-    return user;
+    return await verifyUserToken(token);
   } catch {
     return null;
   }
 }
 
-// User businesses query (bypasses client-side RLS infinite recursion)
+// User businesses query (queries both databases safely to bypass RLS recursion)
 app.get("/api/user/businesses", async (req: Request, res: Response) => {
   try {
     const user = await getAuthenticatedUser(req);
@@ -781,18 +839,27 @@ app.get("/api/user/businesses", async (req: Request, res: Response) => {
       return res.status(401).json({ success: false, error: "Unauthorized" });
     }
 
-    // 1. Fetch owned businesses (support owner_id and owner_user_id)
-    const { data: ownedData, error: ownedErr } = await serverSupabase
-      .from("businesses")
-      .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id, owner_id, created_at")
-      .or(`owner_id.eq.${user.id},owner_user_id.eq.${user.id}`)
-      .order("created_at", { ascending: true });
+    // 1. Fetch owned businesses from both Supabase projects
+    const [bgOwnedRes, srvOwnedRes] = await Promise.all([
+      bgSupabase
+        .from("businesses")
+        .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id, created_at")
+        .eq("owner_user_id", user.id)
+        .order("created_at", { ascending: true }),
+      serverSupabase
+        .from("businesses")
+        .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id, created_at")
+        .eq("owner_user_id", user.id)
+        .order("created_at", { ascending: true }),
+    ]);
 
-    if (ownedErr) {
-      console.warn("Server notice querying owned businesses:", ownedErr.message);
-    }
+    const ownedMap = new Map<string, any>();
+    (bgOwnedRes.data || []).forEach((b: any) => ownedMap.set(b.id, b));
+    (srvOwnedRes.data || []).forEach((b: any) => ownedMap.set(b.id, b));
 
-    // 2. Fetch staff memberships (check both business_members and business_staff)
+    let ownedList = Array.from(ownedMap.values());
+
+    // 2. Fetch staff memberships
     const staffData: any[] = [];
     try {
       const { data: memberRows } = await serverSupabase
@@ -819,25 +886,61 @@ app.get("/api/user/businesses", async (req: Request, res: Response) => {
     const staffBizIds = Array.from(new Set(staffData.map((s) => s.business_id)));
     let staffBizs: any[] = [];
     if (staffBizIds.length > 0) {
-      const { data: bRows } = await serverSupabase
-        .from("businesses")
-        .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id, owner_id, created_at")
-        .in("id", staffBizIds);
-      
-      if (bRows) {
-        staffBizs = bRows.map((b) => {
-          const sRow = staffData.find((s) => s.business_id === b.id);
-          return {
-            ...b,
-            staff_role: sRow?.role || "cashier",
-          };
-        });
+      const [bgStaffRes, srvStaffRes] = await Promise.all([
+        bgSupabase
+          .from("businesses")
+          .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id, created_at")
+          .in("id", staffBizIds),
+        serverSupabase
+          .from("businesses")
+          .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id, created_at")
+          .in("id", staffBizIds),
+      ]);
+
+      const staffMap = new Map<string, any>();
+      (bgStaffRes.data || []).forEach((b: any) => staffMap.set(b.id, b));
+      (srvStaffRes.data || []).forEach((b: any) => staffMap.set(b.id, b));
+
+      staffBizs = Array.from(staffMap.values()).map((b) => {
+        const sRow = staffData.find((s) => s.business_id === b.id);
+        return {
+          ...b,
+          staff_role: sRow?.role || "cashier",
+        };
+      });
+    }
+
+    // 3. If user has 0 businesses, auto-provision default store so user panel never displays 0 store
+    if (ownedList.length === 0 && staffBizs.length === 0) {
+      const storeName = user.user_metadata?.business_name || (user.email ? `${user.email.split("@")[0]}'s Store` : "Gepard Store");
+      const newBiz = {
+        id: crypto.randomUUID(),
+        owner_user_id: user.id,
+        business_name: storeName,
+        business_address: "Main Store Location",
+        currency: "USD",
+        base_currency: "USD",
+        status: "active",
+        default_tax: 0,
+        stock_alert_limit: 5,
+        created_at: new Date().toISOString(),
+      };
+
+      try {
+        await Promise.allSettled([
+          bgSupabase.from("businesses").insert(newBiz),
+          serverSupabase.from("businesses").insert(newBiz),
+        ]);
+        ownedList = [newBiz];
+      } catch (insertErr) {
+        console.warn("Auto-provision default store notice:", insertErr);
+        ownedList = [newBiz];
       }
     }
 
     res.json({
       success: true,
-      owned: ownedData || [],
+      owned: ownedList,
       staff: staffBizs,
     });
   } catch (err: any) {
@@ -845,32 +948,76 @@ app.get("/api/user/businesses", async (req: Request, res: Response) => {
   }
 });
 
-// Admin businesses query (all businesses for admin panel)
+// Admin business status update (bypasses RLS using service role)
+app.post("/api/admin/businesses/update-status", async (req: Request, res: Response) => {
+  try {
+    const { businessId, status } = req.body || {};
+    if (!businessId || !status) {
+      return res.status(400).json({ success: false, error: "businessId and status required" });
+    }
+
+    await Promise.allSettled([
+      serverSupabase.from("businesses").update({ status, updated_at: new Date().toISOString() }).eq("id", businessId),
+      bgSupabase.from("businesses").update({ status, updated_at: new Date().toISOString() }).eq("id", businessId),
+    ]);
+
+    res.json({ success: true, businessId, status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin business reset (bypasses RLS)
+app.post("/api/admin/businesses/reset", async (req: Request, res: Response) => {
+  try {
+    const { businessId } = req.body || {};
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "businessId required" });
+    }
+
+    await Promise.allSettled([
+      serverSupabase.from("products").delete().eq("business_id", businessId),
+      serverSupabase.from("sales").delete().eq("business_id", businessId),
+      serverSupabase.from("orders").delete().eq("business_id", businessId),
+      serverSupabase.from("purchases").delete().eq("business_id", businessId),
+    ]);
+
+    res.json({ success: true, businessId });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin businesses query (all businesses for admin panel, merges records and bypasses RLS)
 app.get("/api/admin/businesses", async (req: Request, res: Response) => {
   try {
     const user = await getAuthenticatedUser(req);
     const isSuperAdmin = user?.email?.toLowerCase() === "gepardwebs@gmail.com";
 
-    // Fetch all businesses, categories, profiles, and products
+    // Query both projects to guarantee complete visibility without RLS recursion
     const [
-      { data: businesses, error: bErr },
+      bgBizRes,
+      srvBizRes,
       { data: profiles },
       { data: categories },
       { data: products }
     ] = await Promise.all([
+      bgSupabase.from("businesses").select("*").order("created_at", { ascending: true }),
       serverSupabase.from("businesses").select("*").order("created_at", { ascending: true }),
       serverSupabase.from("profiles").select("user_id, full_name, email, plan"),
       serverSupabase.from("business_categories").select("id, name, industry_type"),
       serverSupabase.from("products").select("id, business_id"),
     ]);
 
-    if (bErr) {
-      return res.status(500).json({ success: false, error: bErr.message });
-    }
+    const bizMap = new Map<string, any>();
+    (bgBizRes.data || []).forEach((b: any) => bizMap.set(b.id, b));
+    (srvBizRes.data || []).forEach((b: any) => bizMap.set(b.id, b));
+
+    const combinedBusinesses = Array.from(bizMap.values());
 
     res.json({
       success: true,
-      businesses: businesses || [],
+      businesses: combinedBusinesses,
       profiles: profiles || [],
       categories: categories || [],
       products: products || [],
@@ -880,7 +1027,7 @@ app.get("/api/admin/businesses", async (req: Request, res: Response) => {
   }
 });
 
-// AI Assistant Endpoint (Powered by Google Gemini 2.5 Flash)
+// AI Assistant Endpoint (Powered by Google Gemini 2.5 Flash with rich Retail Knowledge fallback)
 let geminiClient: GoogleGenAI | null = null;
 function getGeminiClient() {
   if (!geminiClient && process.env.GEMINI_API_KEY) {
@@ -897,16 +1044,17 @@ app.post("/api/ai/assistant", async (req: Request, res: Response) => {
     }
 
     const lastUserMessage = messages[messages.length - 1]?.content || "";
+    const lowerQuery = lastUserMessage.toLowerCase();
 
     const client = getGeminiClient();
     if (client) {
       try {
-        const systemInstruction = `You are GeFlow AI, an intelligent retail enterprise and POS copilot.
-You assist retail business owners, store managers, and staff with real-time operations, inventory optimization, revenue trends, POS checkout workflows, and analytics.
-Current operating mode: ${mode || "business"}
-Active plan tier: ${planId || "free"}
-${businessContext ? `Business Context:\nName: ${businessContext.businessName || "Store"}\nTotal Products: ${businessContext.totalProducts ?? 0}\nLow Stock Items: ${businessContext.lowStockCount ?? 0}\nToday Revenue: $${businessContext.todayRevenue ?? 0}\nTotal Transactions: ${businessContext.todaySalesCount ?? 0}` : ""}
-Always respond clearly, concisely, and helpfully with actionable insights, bullet points where appropriate, and a professional tone.`;
+        const systemInstruction = `You are GeFlow AI, an intelligent retail enterprise copilot and POS assistant.
+You assist retail business owners, store managers, and staff with retail operations, inventory optimization, barcode scanning, POS checkout workflows, pricing, profit margin analysis, returns, and cashier management.
+Operating mode: ${mode || "business"}
+Active plan: ${planId || "free"}
+${businessContext ? `Store Context:\nStore Name: ${businessContext.businessName || "Store"}\nTotal Catalog: ${businessContext.totalProducts ?? 0}\nLow Stock Items: ${businessContext.lowStockCount ?? 0}\nToday Revenue: $${businessContext.todayRevenue ?? 0}\nTransactions: ${businessContext.todaySalesCount ?? 0}` : "No specific business loaded yet."}
+Respond helpfully with concrete, actionable advice and bullet points where appropriate.`;
 
         const response = await client.models.generateContent({
           model: "gemini-2.5-flash",
@@ -919,25 +1067,53 @@ Always respond clearly, concisely, and helpfully with actionable insights, bulle
         });
 
         const reply = response.text || "";
-        if (reply) {
-          return res.json({ success: true, reply });
+        if (reply && reply.trim()) {
+          return res.json({ success: true, reply: reply.trim() });
         }
       } catch (geminiErr: any) {
-        console.warn("Notice calling Gemini API for assistant, using smart contextual analyzer:", geminiErr.message);
+        console.warn("Notice calling Gemini API for assistant:", geminiErr.message);
       }
     }
 
-    // Fallback: smart retail business intelligence response
-    let reply = `Here is your GeFlow AI store summary:\n`;
-    if (businessContext) {
-      reply += `• Store: ${businessContext.businessName || "Active Business"}\n`;
-      reply += `• Total Catalog: ${businessContext.totalProducts ?? 0} active products\n`;
-      reply += `• Stock Alerts: ${businessContext.lowStockCount ?? 0} items near or below minimum thresholds\n`;
-      reply += `• Today's Gross Revenue: $${Number(businessContext.todayRevenue || 0).toFixed(2)}\n`;
+    // High-precision intelligent retail knowledge base
+    let reply = "";
+
+    if (lowerQuery.includes("pos") || lowerQuery.includes("checkout") || lowerQuery.includes("cashier") || lowerQuery.includes("terminal") || lowerQuery.includes("billing")) {
+      reply = `### 🛒 GeFlow POS & Checkout Operations\n\n` +
+        `• **Quick Product Search & Scan**: Type any item name, SKU, or use a USB/Bluetooth barcode scanner directly at the POS screen.\n` +
+        `• **Tender Types**: Supports Cash, Credit/Debit Cards, QR Code, Split Payments, and Customer Account balance.\n` +
+        `• **Hold & Resume Orders**: Save in-progress carts when a customer steps away, and recall them instantly with zero lost cart data.\n` +
+        `• **Receipt Printing**: Compatible with standard 80mm/58mm ESC/POS thermal receipt printers and digital email receipts.\n` +
+        `• **Cashier Shifts**: Track opening float, mid-shift drops, and end-of-day X/Z cash register reconciliation.`;
+    } else if (lowerQuery.includes("product") || lowerQuery.includes("inventory") || lowerQuery.includes("stock") || lowerQuery.includes("item") || lowerQuery.includes("catalog")) {
+      reply = `### 📦 Inventory & Catalog Management\n\n` +
+        `• **Adding Products**: Navigate to **Inventory > Products** and click **+ Add Product**. Fill in Name, Selling Price, Cost Price, Stock Count, and Barcode.\n` +
+        `• **Low Stock Alerts**: Configure minimum threshold limits (default: 5 units). GeFlow automatically badges low-stock items.\n` +
+        `• **Bulk Import**: Import your existing inventory from CSV or Excel sheets directly in the Products table.\n` +
+        `• **Multi-Unit Pricing**: Set piece, pack, or carton ratios for wholesale and retail pricing.`;
+    } else if (lowerQuery.includes("profit") || lowerQuery.includes("margin") || lowerQuery.includes("revenue") || lowerQuery.includes("sales") || lowerQuery.includes("earning")) {
+      const storeName = businessContext?.businessName || "Your Store";
+      const rev = businessContext?.todayRevenue ? `$${Number(businessContext.todayRevenue).toFixed(2)}` : "$0.00";
+      const tx = businessContext?.todaySalesCount ?? 0;
+      reply = `### 📊 Real-Time Financial & Profit Overview: ${storeName}\n\n` +
+        `• **Today's Gross Sales**: ${rev} across ${tx} transactions\n` +
+        `• **Net Margin Formula**: (Selling Price - Cost Price) / Selling Price × 100%\n` +
+        `• **Daily & Weekly Reports**: View gross revenue, product margins, discounts applied, and tax collections in **Analytics > Reports**.\n` +
+        `• **Recommendation**: Review high-margin items in your top sales chart to optimize shelf layout and promotions.`;
+    } else if (lowerQuery.includes("team") || lowerQuery.includes("member") || lowerQuery.includes("staff") || lowerQuery.includes("role") || lowerQuery.includes("invite")) {
+      reply = `### 👥 Team & Staff Access Control\n\n` +
+        `• **Role Hierarchy**: GeFlow supports **Owner**, **Manager**, **Cashier**, and **Auditor** roles.\n` +
+        `• **Inviting Staff**: Go to **Settings > Team / Members** and enter the employee's email address.\n` +
+        `• **Granular Permissions**: Restrict cashiers from editing product prices, viewing store profits, or deleting historical transactions.`;
     } else {
-      reply += `• System status: Online and synchronized with Supabase database.\n`;
+      reply = `### ⚡ GeFlow Retail Copilot\n\n` +
+        `Welcome to your intelligent retail store assistant. Here are quick actions you can perform:\n\n` +
+        `• **POS Terminal**: Launch fast counter sales, scan barcodes, and print receipts.\n` +
+        `• **Stock Tracking**: Monitor low inventory, manage restocking orders, and track expiration dates.\n` +
+        `• **Business Settings**: Configure currencies, tax rates, team members, and social profiles.\n` +
+        `• **Analytics**: Check hourly sales trends, top-moving items, and net profit margins.\n\n` +
+        `*Ask me any question about your store setup, inventory, discounts, or cashier operations!*`;
     }
-    reply += `\nHow can I help you optimize your catalog, review sales reports, or configure cashier terminals today?`;
 
     res.json({ success: true, reply });
   } catch (err: any) {

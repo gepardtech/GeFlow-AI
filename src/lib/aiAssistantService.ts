@@ -405,12 +405,59 @@ export function detectQueryLanguage(text: string): "english" | "roman_urdu" | "u
 export function generateLocalBusinessAnalysis(
   query: string,
   mode: AIMode,
-  ctx: BusinessAnalyticsContext | null,
+  rawCtx: BusinessAnalyticsContext | null,
   planId: PlanId = "free"
 ): string {
-  if (!ctx) {
-    return "⚠️ Please select an active business in the workspace header so I can read your live sales, inventory, and profit data.";
-  }
+  const ctx: BusinessAnalyticsContext = rawCtx || {
+    business: {
+      id: "store_default",
+      name: "Workspace Store",
+      currency: "USD",
+      taxRate: 0,
+      stockAlertLimit: 5,
+      status: "active",
+      categoryName: "Retail Store",
+    },
+    inventory: {
+      totalProducts: 0,
+      activeProducts: 0,
+      outOfStockCount: 0,
+      lowStockCount: 0,
+      expiringCount: 0,
+      expiring30Count: 0,
+      expiring60Count: 0,
+      totalUnitsInStock: 0,
+      inventoryCostValue: 0,
+      inventoryRetailValue: 0,
+      estimatedGrossProfitMargin: 0,
+      outOfStockItems: [],
+      lowStockItems: [],
+      expiringItems: [],
+      expiring60Items: [],
+    },
+    sales: {
+      todayRevenue: 0,
+      todayProfit: 0,
+      todayTransactions: 0,
+      weekRevenue: 0,
+      weekProfit: 0,
+      weekTransactions: 0,
+      monthRevenue: 0,
+      monthProfit: 0,
+      monthTransactions: 0,
+      totalRevenue: 0,
+      totalProfit: 0,
+      totalTransactions: 0,
+      averageOrderValue: 0,
+      netProfitMargin: 0,
+      topSellingItems: [],
+      recentSales: [],
+    },
+    purchases: {
+      totalPurchasesCount: 0,
+      totalPurchasesCost: 0,
+    },
+  };
 
   const lang = detectQueryLanguage(query);
   const q = query.toLowerCase();

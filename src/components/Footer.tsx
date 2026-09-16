@@ -111,7 +111,34 @@ const Footer = () => {
     };
 
     window.addEventListener("geflow:settings-updated", handleUpdate);
-    return () => window.removeEventListener("geflow:settings-updated", handleUpdate);
+
+    // Supabase Realtime channel for cross-tab / cross-device live footer sync
+    const channel = supabase
+      .channel(`footer_settings_sync_${Math.random().toString(36).slice(2)}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "platform_settings" },
+        (payload: any) => {
+          const gen = payload?.new?.alerts?.general_settings;
+          if (gen) {
+            if (Array.isArray(gen.social_links)) setSocialLinks(gen.social_links.filter((l: any) => l.enabled));
+            if (gen.footer_copyright) setCopyright(gen.footer_copyright);
+          } else {
+            fetchGeneralSettings().then((fresh) => {
+              if (fresh) {
+                if (Array.isArray(fresh.social_links)) setSocialLinks(fresh.social_links.filter((l) => l.enabled));
+                if (fresh.footer_copyright) setCopyright(fresh.footer_copyright);
+              }
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      window.removeEventListener("geflow:settings-updated", handleUpdate);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleSubscribe = async (e: React.FormEvent) => {

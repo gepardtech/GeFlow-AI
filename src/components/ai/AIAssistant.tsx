@@ -221,6 +221,20 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
               mode,
               businessId: activeId ?? "",
               planId,
+              businessContext: currentCtx
+                ? {
+                    businessName: currentCtx.business.name,
+                    currency: currentCtx.business.currency,
+                    taxRate: currentCtx.business.taxRate,
+                    totalProducts: currentCtx.inventory.totalProducts,
+                    lowStockCount: currentCtx.inventory.lowStockCount,
+                    outOfStockCount: currentCtx.inventory.outOfStockCount,
+                    todayRevenue: currentCtx.sales.todayRevenue,
+                    todaySalesCount: currentCtx.sales.todayTransactions,
+                    monthRevenue: currentCtx.sales.monthRevenue,
+                    monthProfit: currentCtx.sales.monthProfit,
+                  }
+                : { businessName: activeBiz?.business_name || "Your Store" },
             }),
           });
 

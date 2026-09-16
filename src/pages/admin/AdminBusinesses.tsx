@@ -146,43 +146,46 @@ const AdminBusinesses = () => {
       let profsList: any[] = [];
       let catsList: any[] = [];
       let prodRowsList: any[] = [];
+      let loadedViaApi = false;
 
-      const [{ data, error }, { data: profs }, { data: catsData }, { data: prodRows }] = await Promise.all([
-        supabase.from("businesses").select("*").order("created_at", { ascending: true }),
-        supabase.from("profiles").select("user_id, full_name, email, plan"),
-        supabase.from("business_categories").select("id, name, industry_type"),
-        supabase.from("products").select("id, business_id"),
-      ]);
-
-      if (error) {
-        console.warn("Notice loading client Supabase businesses, trying admin API endpoint:", error.message);
-        try {
-          const { data: sessionData } = await supabase.auth.getSession();
-          const token = sessionData?.session?.access_token;
-          const res = await fetch("/api/admin/businesses", {
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          });
-          if (res.ok) {
-            const json = await res.json();
-            if (json?.success) {
-              bizList = json.businesses || [];
-              profsList = json.profiles || [];
-              catsList = json.categories || [];
-              prodRowsList = json.products || [];
-            }
+      // Primary source: /api/admin/businesses (Runs with service role, 100% bypasses Postgres RLS infinite recursion)
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        const res = await fetch("/api/admin/businesses", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.success) {
+            bizList = json.businesses || [];
+            profsList = json.profiles || [];
+            catsList = json.categories || [];
+            prodRowsList = json.products || [];
+            loadedViaApi = true;
           }
-        } catch (apiErr) {
-          console.warn("API fallback error:", apiErr);
         }
+      } catch (apiErr) {
+        console.warn("Notice loading via admin API, falling back to direct client queries:", apiErr);
+      }
 
-        if (bizList.length === 0) {
-          toast({ title: "Notice loading businesses", description: error.message, variant: "destructive" });
+      // Secondary fallback: Direct Supabase client query
+      if (!loadedViaApi) {
+        const [{ data, error }, { data: profs }, { data: catsData }, { data: prodRows }] = await Promise.all([
+          supabase.from("businesses").select("*").order("created_at", { ascending: true }),
+          supabase.from("profiles").select("user_id, full_name, email, plan"),
+          supabase.from("business_categories").select("id, name, industry_type"),
+          supabase.from("products").select("id, business_id"),
+        ]);
+
+        if (!error && data) {
+          bizList = data || [];
+          profsList = profs || [];
+          catsList = catsData || [];
+          prodRowsList = prodRows || [];
+        } else if (error) {
+          console.warn("Direct query notice:", error.message);
         }
-      } else {
-        bizList = data || [];
-        profsList = profs || [];
-        catsList = catsData || [];
-        prodRowsList = prodRows || [];
       }
 
       const bizProdCounts: Record<string, number> = {};
@@ -263,10 +266,12 @@ const AdminBusinesses = () => {
     if (!suspendBiz) return;
     setBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke("admin-business-ops", {
-        body: { action: "suspend", businessId: suspendBiz.id },
+      const res = await fetch("/api/admin/businesses/update-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: suspendBiz.id, status: "suspended" }),
       });
-      if (!error && !data?.error) {
+      if (res.ok) {
         toast({ title: "Business suspended", description: `${suspendBiz.business_name} suspended.` });
         load();
         setSuspendBiz(null);
@@ -296,10 +301,12 @@ const AdminBusinesses = () => {
     if (!resetBiz) return;
     setBusy(true);
     try {
-      const { data, error } = await supabase.functions.invoke("admin-business-ops", {
-        body: { action: "reset", businessId: resetBiz.id },
+      const res = await fetch("/api/admin/businesses/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: resetBiz.id }),
       });
-      if (!error && !data?.error) {
+      if (res.ok) {
         toast({ title: "Business data reset", description: "Products, sales, purchases and stock were cleared." });
         load();
         setResetBiz(null);

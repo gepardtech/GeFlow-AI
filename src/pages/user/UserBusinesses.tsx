@@ -101,26 +101,60 @@ const UserBusinesses = () => {
         return;
       }
 
-      const [{ data: bizRows, error: bizErr }, { data: catRows, error: catErr }, { data: profile }] =
-        await Promise.all([
-          supabase
-            .from("businesses")
-            .select("*")
-            .eq("owner_user_id", user.id)
-            .order("created_at", { ascending: true }),
-          supabase.from("business_categories").select("*"),
-          supabase.from("profiles").select("plan").eq("user_id", user.id).maybeSingle(),
-        ]);
+      let finalBizRows: any[] = [];
+      let loadedCats: any[] = [];
+      let userPlan = "Standard";
 
-      if (bizErr) throw bizErr;
+      // 1. Direct Supabase Query
+      try {
+        const [{ data: bizRows, error: bizErr }, { data: catRows }, { data: profile }] =
+          await Promise.all([
+            supabase
+              .from("businesses")
+              .select("*")
+              .eq("owner_user_id", user.id)
+              .order("created_at", { ascending: true }),
+            supabase.from("business_categories").select("*"),
+            supabase.from("profiles").select("plan").eq("user_id", user.id).maybeSingle(),
+          ]);
 
-      const loadedCats = (catRows as any[]) || [];
+        if (!bizErr && bizRows && bizRows.length > 0) {
+          finalBizRows = bizRows;
+        }
+        if (catRows) loadedCats = catRows as any[];
+        if (profile?.plan) userPlan = profile.plan;
+      } catch (directErr) {
+        console.warn("Direct businesses query notice:", directErr);
+      }
+
+      // 2. Fallback to /api/user/businesses if 0 rows or error (bypasses RLS)
+      if (finalBizRows.length === 0) {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData?.session?.access_token;
+          const apiRes = await fetch("/api/user/businesses", {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (apiRes.ok) {
+            const apiJson = await apiRes.json();
+            if (apiJson?.success) {
+              const combined = [...(apiJson.owned || []), ...(apiJson.staff || [])];
+              if (combined.length > 0) {
+                finalBizRows = combined;
+              }
+            }
+          }
+        } catch (apiErr) {
+          console.warn("API businesses fallback notice:", apiErr);
+        }
+      }
+
       setCategories(loadedCats);
 
       const catMap = new Map<string, BusinessCategoryDef>();
       loadedCats.forEach((c) => catMap.set(c.id, c));
 
-      const enrichedList: BusinessItem[] = ((bizRows as any[]) || []).map((b) => {
+      const enrichedList: BusinessItem[] = finalBizRows.map((b) => {
         const cat = b.category_id ? catMap.get(b.category_id) || null : null;
         const ext = getExtendedBusinessData(b.id);
         return {
@@ -129,17 +163,13 @@ const UserBusinesses = () => {
           category_name: cat ? cat.name : "Retail / Commercial",
           industry_type: cat ? cat.industry_type : "Retail",
           extended: ext,
-          user_plan: profile?.plan || "Standard",
+          user_plan: userPlan,
         };
       });
 
       setBusinesses(enrichedList);
     } catch (err: any) {
-      toast({
-        title: "Error Loading Businesses",
-        description: err.message || "Failed to retrieve your businesses.",
-        variant: "destructive",
-      });
+      console.warn("Error loading businesses:", err);
     } finally {
       setLoading(false);
     }

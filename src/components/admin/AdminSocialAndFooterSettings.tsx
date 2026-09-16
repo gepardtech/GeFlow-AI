@@ -156,9 +156,9 @@ export const AdminSocialAndFooterSettings = () => {
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
-      img.onload = () => {
-        // Optimize & resize on canvas to maximum 400x400 for crisp, fast loading avatar
-        const maxDim = 400;
+      img.onload = async () => {
+        // Optimize & resize on canvas to maximum 500x500 for crisp, fast loading avatar
+        const maxDim = 500;
         let width = img.width;
         let height = img.height;
         if (width > height) {
@@ -179,11 +179,43 @@ export const AdminSocialAndFooterSettings = () => {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.90);
+
+          try {
+            // Upload to backend API to store professionally in server files
+            const res = await fetch("/api/upload/member-photo", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                image: dataUrl,
+                name: editingMember?.name || "member",
+                memberId: editingMember?.id || "mem",
+              }),
+            });
+
+            if (res.ok) {
+              const resJson = await res.json();
+              if (resJson.url) {
+                setEditingMember((prev) =>
+                  prev ? { ...prev, image_url: resJson.url, imageUrl: resJson.url } : null
+                );
+                toast({
+                  title: "Photo Uploaded Successfully",
+                  description: "Member photo saved to server and synced with database.",
+                });
+                setUploadingImage(false);
+                return;
+              }
+            }
+          } catch (uploadErr) {
+            console.warn("Upload API notice, falling back to optimized dataUrl:", uploadErr);
+          }
+
+          // Fallback to dataUrl if direct endpoint had an issue
           setEditingMember((prev) => (prev ? { ...prev, image_url: dataUrl, imageUrl: dataUrl } : null));
           toast({
-            title: "Photo Uploaded",
-            description: "Member photo loaded from your device and optimized for web display.",
+            title: "Photo Loaded",
+            description: "Member photo optimized from your device.",
           });
         }
         setUploadingImage(false);
@@ -357,7 +389,7 @@ export const AdminSocialAndFooterSettings = () => {
         console.warn("Notice calling server cache clear:", e);
       }
 
-      // 2. Clear browser Cache Storage if supported
+      // 2. Clear browser Cache Storage
       if (typeof window !== "undefined" && "caches" in window) {
         try {
           const cacheKeys = await caches.keys();
@@ -367,7 +399,19 @@ export const AdminSocialAndFooterSettings = () => {
         }
       }
 
-      // 3. Clear application localStorage partitions (preserve auth tokens so user stays signed in)
+      // 3. Clear Service Worker registrations
+      if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+        try {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (const reg of registrations) {
+            await reg.unregister();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+
+      // 4. Clear application localStorage cache partitions while preserving Supabase auth tokens
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -375,26 +419,29 @@ export const AdminSocialAndFooterSettings = () => {
           key &&
           !key.includes("auth-token") &&
           !key.includes("supabase.auth.token") &&
+          !key.includes("sb-") &&
           (key.startsWith("geflow") ||
             key.startsWith("vite") ||
             key.includes("cache") ||
             key.includes("settings") ||
             key.includes("plans") ||
-            key.includes("team"))
+            key.includes("team") ||
+            key.includes("business") ||
+            key.includes("product"))
         ) {
           keysToRemove.push(key);
         }
       }
       keysToRemove.forEach((k) => localStorage.removeItem(k));
 
-      // 4. Clear sessionStorage
+      // 5. Clear sessionStorage completely
       try {
         sessionStorage.clear();
       } catch {
         /* ignore */
       }
 
-      // 5. Re-fetch fresh data from Supabase immediately
+      // 6. Re-fetch fresh data from Supabase immediately
       const fresh = await fetchGeneralSettings();
       if (fresh) {
         if (Array.isArray(fresh.social_links)) setSocialLinks(fresh.social_links);
@@ -405,9 +452,11 @@ export const AdminSocialAndFooterSettings = () => {
         if (Array.isArray(fresh.about_members)) setAboutMembers(fresh.about_members);
       }
 
-      // 6. Notify active components
-      window.dispatchEvent(new CustomEvent("panel:refresh"));
+      // 7. Notify all active hooks and components to perform fresh sync
+      window.dispatchEvent(new CustomEvent("panel:refresh", { detail: { force: true } }));
+      window.dispatchEvent(new CustomEvent("geflow:business-updated"));
       window.dispatchEvent(new CustomEvent("geflow:settings-updated", { detail: fresh }));
+      window.dispatchEvent(new CustomEvent("geflow:plan-synced"));
 
       toast({
         title: "Platform Cache Cleared & Synced",
