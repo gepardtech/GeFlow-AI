@@ -1,6 +1,9 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import dotenv from "dotenv";
+
+dotenv.config({ override: true });
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -12,14 +15,22 @@ export default defineConfig(({ mode }) => ({
   plugins: [react()].filter(Boolean),
   define: {
     "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(
-      process.env.VITE_SUPABASE_URL || "https://bglzohtmgamypgooddru.supabase.co"
+      process.env.VITE_SUPABASE_URL || "https://gvkvljxhufsrgyfsqrkc.supabase.co"
     ),
     "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(
       process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJnbHpvaHRtZ2FteXBnb29kZHJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNzM3OTMsImV4cCI6MjA5MTc0OTc5M30.hMe4xqIqIuLnYaFR2KFP_PpWYDW_P3FJZQayQ42D8W4"
+        process.env.VITE_SUPABASE_ANON_KEY ||
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2a3ZsanhodWZzcmd5ZnNxcmtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1OTAzNDMsImV4cCI6MjA5NjE2NjM0M30.sef1DVX7ysCEXrNlptxJbht-RvsHxxVze6Op5o95NbE"
+    ),
+    "import.meta.env.VITE_SUPABASE_ANON_KEY": JSON.stringify(
+      process.env.VITE_SUPABASE_ANON_KEY ||
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2a3ZsanhodWZzcmd5ZnNxcmtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1OTAzNDMsImV4cCI6MjA5NjE2NjM0M30.sef1DVX7ysCEXrNlptxJbht-RvsHxxVze6Op5o95NbE"
     ),
     "import.meta.env.VITE_SUPABASE_PROJECT_ID": JSON.stringify(
-      process.env.VITE_SUPABASE_PROJECT_ID || "bglzohtmgamypgooddru"
+      process.env.VITE_SUPABASE_PROJECT_ID || "gvkvljxhufsrgyfsqrkc"
+    ),
+    "import.meta.env.VITE_APP_URL": JSON.stringify(
+      process.env.VITE_APP_URL || "https://geflow-415950067555.us-west1.run.app"
     ),
   },
   resolve: {

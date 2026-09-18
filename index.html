@@ -53,7 +53,7 @@
             } catch (err) {
               console.warn("Resilient fetch intercepted network failure:", input, err);
               var url = typeof input === "string" ? input : (input && input.url) ? input.url : String(input || "");
-              if (url.indexOf("/auth/v1/") !== -1) {
+              if (url.indexOf("/auth/") !== -1 || url.indexOf("/api/") !== -1) {
                 throw err;
               }
               if (url.indexOf("/functions/v1/currency-rates") !== -1) {

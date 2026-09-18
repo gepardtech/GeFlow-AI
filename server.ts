@@ -1,4 +1,5 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+dotenv.config({ override: true });
 import express, { Request, Response } from "express";
 import cors from "cors";
 import path from "path";
@@ -24,7 +25,8 @@ import { GoogleGenAI } from "@google/genai";
 import fs from "fs";
 
 const app = express();
-const PORT = 3000;
+// Cloud Run injects process.env.PORT; in local AI Studio environment with internal nginx reverse proxy, 3000 is used
+const PORT = process.env.NGINX_PORT || process.env.DEFAULT_APP_PORT ? 3000 : (Number(process.env.PORT) || 3000);
 
 app.use(cors());
 app.use(express.json({ limit: "25mb" }));
