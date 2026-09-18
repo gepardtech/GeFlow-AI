@@ -54,10 +54,7 @@
               console.warn("Resilient fetch intercepted network failure:", input, err);
               var url = typeof input === "string" ? input : (input && input.url) ? input.url : String(input || "");
               if (url.indexOf("/auth/v1/") !== -1) {
-                return new Response(JSON.stringify({ user: null, session: null }), {
-                  status: 200,
-                  headers: { "Content-Type": "application/json" }
-                });
+                throw err;
               }
               if (url.indexOf("/functions/v1/currency-rates") !== -1) {
                 return new Response(JSON.stringify({

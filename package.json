@@ -1,5 +1,5 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "geflow",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -51,6 +51,7 @@
     "cmdk": "^1.1.1",
     "cors": "^2.8.6",
     "date-fns": "^3.6.0",
+    "dotenv": "^18.0.0",
     "embla-carousel-react": "^8.6.0",
     "express": "^5.2.1",
     "input-otp": "^1.4.2",

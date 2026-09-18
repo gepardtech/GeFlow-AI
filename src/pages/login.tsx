@@ -80,7 +80,9 @@ const Login = () => {
         localStorage.removeItem("geflow_cached_owned_businesses");
         localStorage.removeItem("geflow_cached_staff_businesses");
         localStorage.removeItem("geflow.activeBusinessId");
-      } catch {}
+      } catch (e) {
+        console.warn("Storage reset error", e);
+      }
 
       const isAdmin = email.trim().toLowerCase() === "gepardwebs@gmail.com";
       window.location.replace(isAdmin ? "/admin" : "/dashboard");
