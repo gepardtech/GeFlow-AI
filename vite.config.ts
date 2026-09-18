@@ -10,6 +10,18 @@ export default defineConfig(({ mode }) => ({
     hmr: false,
   },
   plugins: [react()].filter(Boolean),
+  define: {
+    "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(
+      process.env.VITE_SUPABASE_URL || "https://bglzohtmgamypgooddru.supabase.co"
+    ),
+    "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(
+      process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJnbHpvaHRtZ2FteXBnb29kZHJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNzM3OTMsImV4cCI6MjA5MTc0OTc5M30.hMe4xqIqIuLnYaFR2KFP_PpWYDW_P3FJZQayQ42D8W4"
+    ),
+    "import.meta.env.VITE_SUPABASE_PROJECT_ID": JSON.stringify(
+      process.env.VITE_SUPABASE_PROJECT_ID || "bglzohtmgamypgooddru"
+    ),
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

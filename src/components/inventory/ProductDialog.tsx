@@ -197,7 +197,7 @@ const ProductDialog = ({
 }: Props) => {
   const { toast } = useToast();
   const { symbol } = useMoney();
-  const { industryType, categoryName, enabledFeatures, categorySettings } = useActiveBusiness();
+  const { active, industryType, categoryName, enabledFeatures, categorySettings } = useActiveBusiness();
   const { getLimit, isExceeded } = usePlanLimits();
   const { parents, subcategoriesOf, all, loading: categoriesLoading } = useProductCategories(
     industryType,

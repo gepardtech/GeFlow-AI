@@ -1,21 +1,30 @@
-// Resilient Supabase client with graceful offline/placeholder fallback
+// Resilient Supabase client with real project credentials and graceful fallback
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 
-const RAW_SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const RAW_SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const CANONICAL_SUPABASE_URL = "https://bglzohtmgamypgooddru.supabase.co";
+const CANONICAL_SUPABASE_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJnbHpvaHRtZ2FteXBnb29kZHJ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxNzM3OTMsImV4cCI6MjA5MTc0OTc5M30.hMe4xqIqIuLnYaFR2KFP_PpWYDW_P3FJZQayQ42D8W4";
+
+const RAW_SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
+const RAW_SUPABASE_KEY = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)?.trim();
 
 const isPlaceholder =
-  !RAW_SUPABASE_URL ||
-  RAW_SUPABASE_URL.includes("placeholder-project") ||
-  RAW_SUPABASE_URL.includes("example.supabase.co");
+  (RAW_SUPABASE_URL && (RAW_SUPABASE_URL.includes("placeholder-project") || RAW_SUPABASE_URL.includes("example.supabase.co"))) || false;
 
-const SUPABASE_URL = RAW_SUPABASE_URL || "https://placeholder-project.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = RAW_SUPABASE_KEY || "placeholder-anon-key";
+export const SUPABASE_URL =
+  RAW_SUPABASE_URL && !RAW_SUPABASE_URL.includes("placeholder") && !RAW_SUPABASE_URL.includes("example")
+    ? RAW_SUPABASE_URL
+    : CANONICAL_SUPABASE_URL;
+
+export const SUPABASE_PUBLISHABLE_KEY =
+  RAW_SUPABASE_KEY && !RAW_SUPABASE_KEY.includes("placeholder") && !RAW_SUPABASE_KEY.includes("anon-key")
+    ? RAW_SUPABASE_KEY
+    : CANONICAL_SUPABASE_KEY;
 
 /**
- * Resilient fetch wrapper that intercepts unreachable or placeholder Supabase network calls,
- * preventing unhandled 'TypeError: Failed to fetch' exceptions in browser environments.
+ * Resilient fetch wrapper that intercepts edge function fallbacks and RLS recursion,
+ * while allowing all genuine Supabase Auth and Database calls to reach the active backend.
  */
 const safeSupabaseFetch: typeof fetch = async (input, init) => {
   const urlString = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
@@ -32,9 +41,6 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
   };
 
   const handleFallbackResponse = (url: string) => {
-    if (url.includes("/auth/v1/")) {
-      return makeMockResponse({ user: null, session: null, message: "No active session" });
-    }
     if (url.includes("/functions/v1/currency-rates")) {
       return makeMockResponse({
         rates: {
@@ -66,16 +72,13 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
     if (url.includes("/functions/v1/paypal-payments")) {
       return makeMockResponse({ orderId: "demo_paypal_order", status: "COMPLETED" });
     }
-    // For general database queries (/rest/v1/*), return empty collection
+    // For general database queries (/rest/v1/*) when offline
     return makeMockResponse([]);
   };
 
-  if (isPlaceholder) {
-    return handleFallbackResponse(urlString);
-  }
-
   try {
     const res = await fetch(input, init);
+
     // If an edge function returns 401 (unauthorized) or 500 when called, gracefully synthesize a valid 200 mock response
     if (!res.ok && urlString.includes("/functions/v1/")) {
       console.warn("Edge function returned non-2xx status, applying fallback payload:", urlString, res.status);
@@ -109,7 +112,6 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
             });
           }
 
-          // If still failing, return empty array to prevent fatal infinite recursion crash
           return new Response(JSON.stringify([]), {
             status: 200,
             headers: { "Content-Type": "application/json", "content-range": "0-0/0" },
@@ -122,6 +124,22 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
 
     return res;
   } catch (err: any) {
+    // If it's an Auth request, do NOT return a 200 mock response which suppresses errors
+    if (urlString.includes("/auth/v1/")) {
+      console.error("Supabase Auth request network failure:", urlString, err?.message);
+      return new Response(
+        JSON.stringify({
+          error: "auth_network_error",
+          error_description: err?.message || "Unable to reach authentication server. Please check your connection.",
+          message: err?.message || "Unable to reach authentication server. Please check your connection.",
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
     console.warn("Supabase network request failed, applying graceful fallback:", urlString, err?.message);
     return handleFallbackResponse(urlString);
   }
@@ -131,7 +149,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   auth: {
     storage: localStorage,
     persistSession: true,
-    autoRefreshToken: !isPlaceholder,
+    autoRefreshToken: true,
     detectSessionInUrl: false,
   },
   global: {

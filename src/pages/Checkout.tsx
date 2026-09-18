@@ -372,6 +372,27 @@ const Checkout = () => {
         last_active: new Date().toISOString(),
       } as any, { onConflict: "user_id" });
 
+      try {
+        const { data: sData } = await supabase.auth.getSession();
+        const token = sData?.session?.access_token;
+        await fetch("/api/user/plan", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            userId: activeUser.id,
+            email: activeUser.email || email,
+            plan,
+            cycle: period,
+            amount: total,
+          }),
+        });
+      } catch (err) {
+        console.warn("Notice syncing plan update:", err);
+      }
+
       // Check if user has any existing registered businesses
       const { count } = await supabase
         .from("businesses")

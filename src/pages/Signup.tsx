@@ -35,26 +35,70 @@ const Signup = () => {
       return;
     }
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName, plan: "free" },
-        emailRedirectTo: getAuthRedirectUrl("/auth/callback"),
-      },
-    });
-    setLoading(false);
-    if (error) {
-      toast({ title: "Signup failed", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Account created!", description: "Welcome to GeFlow 🚀" });
-      // With auto-confirm on, the user is signed in. Route by role to User Panel.
-      if (data.session) {
-        if (email.toLowerCase() === "gepardwebs@gmail.com") navigate("/admin");
+
+    try {
+      // 1. Try unified auto-confirmed registration endpoint
+      const regRes = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          fullName: fullName.trim(),
+          plan: "free",
+        }),
+      });
+
+      const regJson = await regRes.json();
+
+      if (regRes.ok && regJson.success) {
+        if (regJson.session) {
+          await supabase.auth.setSession({
+            access_token: regJson.session.access_token,
+            refresh_token: regJson.session.refresh_token,
+          });
+        }
+        toast({ title: "Account created!", description: "Welcome to GeFlow 🚀" });
+        if (email.trim().toLowerCase() === "gepardwebs@gmail.com") navigate("/admin");
         else navigate("/dashboard");
-      } else {
-        navigate("/login");
+        return;
       }
+
+      // 2. Fallback to direct client signup
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: { full_name: fullName.trim(), plan: "free" },
+          emailRedirectTo: getAuthRedirectUrl("/auth/callback"),
+        },
+      });
+
+      if (error) {
+        toast({ title: "Signup failed", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Account created!", description: "Welcome to GeFlow 🚀" });
+        if (data.session) {
+          if (email.trim().toLowerCase() === "gepardwebs@gmail.com") navigate("/admin");
+          else navigate("/dashboard");
+        } else {
+          // If email verification not enforced, attempt immediate login
+          const { data: logData } = await supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password,
+          });
+          if (logData?.session) {
+            if (email.trim().toLowerCase() === "gepardwebs@gmail.com") navigate("/admin");
+            else navigate("/dashboard");
+          } else {
+            navigate("/login");
+          }
+        }
+      }
+    } catch (err: any) {
+      toast({ title: "Signup failed", description: err?.message || "Failed to create account", variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
   };
 

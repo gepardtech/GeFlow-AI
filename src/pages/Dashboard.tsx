@@ -101,6 +101,11 @@ const Dashboard = () => {
 
   const { format: money } = useMoney();
 
+  const activeId = active?.id;
+  const isStaff = Boolean(active?.is_staff);
+  const staffRole = active?.staff_role || "manager";
+  const stockAlertLimit = active?.stock_alert_limit;
+
   const load = useCallback(async () => {
     const {
       data: { user },
@@ -109,13 +114,12 @@ const Dashboard = () => {
       navigate("/login");
       return;
     }
-    if (!active) {
+    if (!activeId) {
       setLoading(false);
       return;
     }
 
-    setLoading(true);
-    const bizId = active.id;
+    const bizId = activeId;
     const since = new Date();
     since.setDate(since.getDate() - 29);
     since.setHours(0, 0, 0, 0);
@@ -159,20 +163,13 @@ const Dashboard = () => {
 
     // Only fallback if Supabase query completely failed
     if (products === null && sales === null) {
-      const synced = await fetchSyncedReportsData(bizId, active?.staff_role || "manager", Boolean(active?.is_staff));
+      const synced = await fetchSyncedReportsData(bizId, staffRole, isStaff);
       if (synced.products.length > 0 || synced.sales.length > 0) {
         prods = synced.products;
         allSales = synced.sales;
         allSaleItems = synced.sale_items;
         allMovements = synced.stock_movements;
       }
-    }
-
-    if (bizId && !active?.is_staff) {
-      supabase.from("businesses").update({ listed_products: prods.length }).eq("id", bizId).then();
-    }
-    if (user?.id && !active?.is_staff) {
-      supabase.from("profiles").update({ listed_products: prods.length }).eq("user_id", user.id).then();
     }
 
     // KPIs
@@ -186,7 +183,7 @@ const Dashboard = () => {
       0
     );
     const totalRevenue = completed.reduce((a, s) => a + Number(s.total), 0);
-    const defaultStockThreshold = Number(active?.stock_alert_limit) || 10;
+    const defaultStockThreshold = Number(stockAlertLimit) || 10;
     const lowStock = prods.filter((p) => {
       const threshold = Number(p.min_stock_alert) > 0 ? Number(p.min_stock_alert) : defaultStockThreshold;
       return p.stock_units > 0 && p.stock_units <= threshold;
@@ -292,40 +289,26 @@ const Dashboard = () => {
     setAlerts(al);
 
     setLoading(false);
-  }, [active, navigate]);
+  }, [activeId, isStaff, staffRole, stockAlertLimit, navigate]);
 
+  // Load business data and listen to realtime changes cleanly
   useEffect(() => {
-    if (bizLoading || !hasLoaded) return;
-    // In employee mode, load business data if active store exists
-    if (mode === "employee") {
-      if (active) {
-        load();
-      } else {
-        setLoading(false);
-      }
+    if (!activeId) {
+      if (hasLoaded) setLoading(false);
       return;
     }
-    // In business/owner mode: do NOT force redirect to /setup/business
-    // Users are kept in their User Panel (/dashboard). If an active store exists, load it.
-    if (active) {
-      load();
-    } else {
-      setLoading(false);
-    }
-  }, [bizLoading, hasLoaded, active, mode, load]);
 
-  // Realtime
-  useEffect(() => {
-    if (!active) return;
+    load();
+
     const ch = supabase
-      .channel(`dashboard-${active.id}`)
+      .channel(`dashboard-${activeId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "products",
-          filter: `business_id=eq.${active.id}`,
+          filter: `business_id=eq.${activeId}`,
         },
         () => load()
       )
@@ -335,21 +318,23 @@ const Dashboard = () => {
           event: "*",
           schema: "public",
           table: "sales",
-          filter: `business_id=eq.${active.id}`,
+          filter: `business_id=eq.${activeId}`,
         },
         () => load()
       )
       .subscribe();
+
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [active, load]);
+  }, [activeId, load, hasLoaded]);
 
   const firstName = fullName?.split(" ")[0] || "there";
   const initial = firstName.charAt(0).toUpperCase();
   const hasData = chart.some((c) => c.sales > 0);
 
-  if (planLoading || bizLoading || loading) {
+  // Show full spinner only on initial unresolved bootstrap, never flash on updates
+  if ((loading && !hasLoaded) || (bizLoading && !activeId && !hasLoaded)) {
     return (
       <UserPanelGate pageTitle="Dashboard" module="dashboard">
         <div className="min-h-[60vh] flex flex-col items-center justify-center text-muted-foreground text-sm font-medium gap-3">

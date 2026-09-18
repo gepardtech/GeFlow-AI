@@ -16,6 +16,7 @@ import {
   Globe,
 } from "lucide-react";
 import { usePlatformSettings } from "@/components/PlatformSettingsProvider";
+import { supabase } from "@/integrations/supabase/client";
 import {
   getCachedGeneralSettings,
   fetchGeneralSettings,

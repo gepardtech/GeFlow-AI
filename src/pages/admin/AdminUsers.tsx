@@ -69,6 +69,25 @@ const colorFromName = (name: string) => {
 
 const callAdmin = async (body: Record<string, unknown>) => {
   try {
+    const { data: sData } = await supabase.auth.getSession();
+    const token = sData?.session?.access_token;
+    const res = await fetch("/api/admin/users", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success) return json;
+    }
+  } catch (apiErr) {
+    console.warn("Notice calling /api/admin/users:", apiErr);
+  }
+
+  try {
     const { data, error } = await supabase.functions.invoke("admin-users", { body });
     if (!error && !data?.error) return data;
   } catch (err) {
@@ -125,23 +144,68 @@ const AdminUsers = () => {
 
   const load = useCallback(async () => {
     try {
-      const [
-        { data: profs, error },
-        { data: roleRows },
-        { data: bizRows },
-        { data: prodRows },
-      ] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("user_id, full_name, email, plan, status, usage, listed_products, created_at, last_active")
-          .order("created_at", { ascending: false }),
-        supabase.from("user_roles").select("user_id, role"),
-        supabase.from("businesses").select("id, owner_user_id"),
-        supabase.from("products").select("id, business_id, owner_user_id"),
-      ]);
+      let profs: any[] | null = null;
+      let roleRows: any[] | null = null;
+      let bizRows: any[] | null = null;
+      let prodRows: any[] | null = null;
 
-      if (error) {
-        toast({ title: "Failed to load users", description: error.message, variant: "destructive" });
+      try {
+        const { data: sData } = await supabase.auth.getSession();
+        const token = sData?.session?.access_token;
+        if (token) {
+          const apiRes = await fetch("/api/admin/users-overview", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (apiRes.ok) {
+            const apiJson = await apiRes.json();
+            if (apiJson.success && Array.isArray(apiJson.users)) {
+              profs = apiJson.users;
+              if (apiJson.roles) {
+                setRoles(apiJson.roles);
+              }
+            }
+          }
+        }
+      } catch (apiErr) {
+        console.warn("Notice loading /api/admin/users-overview:", apiErr);
+      }
+
+      if (!profs) {
+        const [
+          { data: pData, error },
+          { data: rRows },
+          { data: bRows },
+          { data: prRows },
+        ] = await Promise.all([
+          supabase
+            .from("profiles")
+            .select("user_id, full_name, email, plan, status, usage, listed_products, created_at, last_active")
+            .order("created_at", { ascending: false }),
+          supabase.from("user_roles").select("user_id, role"),
+          supabase.from("businesses").select("id, owner_user_id"),
+          supabase.from("products").select("id, business_id, owner_user_id"),
+        ]);
+        profs = pData;
+        roleRows = rRows;
+        bizRows = bRows;
+        prodRows = prRows;
+
+        if (error) {
+          toast({ title: "Failed to load users", description: error.message, variant: "destructive" });
+        }
+        const map: Record<string, string> = {};
+        (roleRows ?? []).forEach((r: any) => { map[r.user_id] = r.role; });
+        setRoles(map);
+      } else {
+        const [
+          { data: bRows },
+          { data: prRows },
+        ] = await Promise.all([
+          supabase.from("businesses").select("id, owner_user_id"),
+          supabase.from("products").select("id, business_id, owner_user_id"),
+        ]);
+        bizRows = bRows;
+        prodRows = prRows;
       }
 
       // Map business IDs to owner user ID and collect business listed counts
@@ -186,9 +250,11 @@ const AdminUsers = () => {
       });
 
       setUsers(enrichedProfs);
-      const map: Record<string, string> = {};
-      (roleRows ?? []).forEach((r: any) => { map[r.user_id] = r.role; });
-      setRoles(map);
+      if (roleRows && roleRows.length > 0) {
+        const map: Record<string, string> = {};
+        (roleRows ?? []).forEach((r: any) => { map[r.user_id] = r.role; });
+        setRoles(map);
+      }
     } catch (err: any) {
       console.warn("Failed to load user records:", err);
     } finally {

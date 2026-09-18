@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { serverSupabase } from "../supabase";
 
 export function isFakeOrDemoProduct(p: any): boolean {
@@ -428,6 +429,9 @@ export class BusinessDataSyncService {
     unit.lastSyncedAt = now;
     this.persist();
 
+    // Asynchronously push products to Supabase collection
+    this.syncProductsToSupabase(businessId, unit.products, unit.ownerUserId || payload.ownerUserId);
+
     return {
       success: true,
       syncedCounts: {
@@ -527,6 +531,7 @@ export class BusinessDataSyncService {
 
     unit.lastSyncedAt = now;
     this.persist();
+    this.syncProductsToSupabase(businessId, [finalProduct], unit.ownerUserId);
     return finalProduct;
   }
 
@@ -539,6 +544,10 @@ export class BusinessDataSyncService {
     unit.products = unit.products.filter((p) => p.id !== productId);
     if (unit.products.length !== prevLen) {
       this.persist();
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productId);
+      if (isUUID) {
+        serverSupabase.from("products").delete().eq("id", productId).then(() => {}).catch(() => {});
+      }
       return true;
     }
     return false;
@@ -664,6 +673,8 @@ export class BusinessDataSyncService {
     unit.sales.unshift(savedSale);
     unit.lastSyncedAt = now;
     this.persist();
+
+    this.syncSaleToSupabase(businessId, savedSale, saleItemsList, unit.ownerUserId || payload.userId);
 
     return {
       success: true,
@@ -894,6 +905,103 @@ export class BusinessDataSyncService {
   public getReturns(businessId: string): SyncedReturn[] {
     const unit = this.getOrCreateBusinessUnit(businessId);
     return unit.returns || [];
+  }
+
+  private async syncProductsToSupabase(businessId: string, products: SyncedProduct[], ownerUserId?: string) {
+    try {
+      const isUUID = (str?: string | null) => Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
+      if (!isUUID(businessId)) return;
+
+      let resolvedOwnerId = isUUID(ownerUserId) ? ownerUserId : undefined;
+      if (!resolvedOwnerId) {
+        const { data: bRow } = await serverSupabase.from("businesses").select("owner_user_id").eq("id", businessId).maybeSingle();
+        if (bRow?.owner_user_id && isUUID(bRow.owner_user_id)) {
+          resolvedOwnerId = bRow.owner_user_id;
+        }
+      }
+
+      if (!resolvedOwnerId) return;
+
+      const validRows = products
+        .filter((p) => !isFakeOrDemoProduct(p))
+        .map((p) => {
+          const validId = isUUID(p.id) ? p.id : undefined;
+          return {
+            ...(validId ? { id: validId } : {}),
+            business_id: businessId,
+            owner_user_id: resolvedOwnerId,
+            name: p.name || "Product",
+            internal_sku: p.internal_sku || null,
+            barcode: p.barcode || null,
+            description: p.description || null,
+            category_id: isUUID(p.category_id) ? p.category_id : null,
+            purchase_cost: Number(p.purchase_cost) || 0,
+            retail_price: Number(p.retail_price) || 0,
+            discount_price: p.discount_price ? Number(p.discount_price) : null,
+            stock_units: Number(p.stock_units) || 0,
+            min_stock_alert: Number(p.min_stock_alert) || 5,
+            batch_number: p.batch_number || null,
+            expiry_date: p.expiry_date || null,
+            status: p.status || "active",
+            images: Array.isArray(p.images) ? p.images : [],
+            updated_at: new Date().toISOString(),
+          };
+        });
+
+      if (validRows.length > 0) {
+        for (let i = 0; i < validRows.length; i += 50) {
+          const batch = validRows.slice(i, i + 50);
+          await serverSupabase.from("products").upsert(batch, { onConflict: "id" });
+        }
+        await serverSupabase.from("businesses").update({ listed_products: validRows.length, updated_at: new Date().toISOString() }).eq("id", businessId);
+      }
+    } catch (err) {
+      console.warn("Notice syncing products to Supabase:", err);
+    }
+  }
+
+  private async syncSaleToSupabase(businessId: string, sale: SyncedSale, items: SyncedSaleItem[], ownerUserId?: string) {
+    try {
+      const isUUID = (str?: string | null) => Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
+      if (!isUUID(businessId)) return;
+
+      let resolvedOwnerId = isUUID(ownerUserId) ? ownerUserId : undefined;
+      if (!resolvedOwnerId) {
+        const { data: bRow } = await serverSupabase.from("businesses").select("owner_user_id").eq("id", businessId).maybeSingle();
+        if (bRow?.owner_user_id && isUUID(bRow.owner_user_id)) {
+          resolvedOwnerId = bRow.owner_user_id;
+        }
+      }
+      if (!resolvedOwnerId) return;
+
+      const saleId = isUUID(sale.id) ? sale.id : crypto.randomUUID();
+      const saleRow = {
+        id: saleId,
+        business_id: businessId,
+        owner_user_id: resolvedOwnerId,
+        total: Number(sale.total) || 0,
+        profit: Number(sale.profit) || 0,
+        status: sale.status || "completed",
+        created_at: sale.created_at || new Date().toISOString(),
+      };
+
+      await serverSupabase.from("sales").insert(saleRow);
+
+      if (items && items.length > 0) {
+        const itemRows = items.map((item) => ({
+          sale_id: saleId,
+          owner_user_id: resolvedOwnerId,
+          product_id: isUUID(item.product_id) ? item.product_id : null,
+          product_name: item.product_name,
+          quantity: Number(item.quantity) || 1,
+          unit_price: Number(item.unit_price) || 0,
+          unit_cost: Number(item.unit_cost) || 0,
+        }));
+        await serverSupabase.from("sale_items").insert(itemRows);
+      }
+    } catch (err) {
+      console.warn("Notice syncing sale to Supabase:", err);
+    }
   }
 }
 

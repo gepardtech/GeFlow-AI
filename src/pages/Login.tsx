@@ -20,11 +20,50 @@ const Login = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
-      toast({ title: "Login failed", description: error.message, variant: "destructive" });
-    } else {
+    let session = null;
+    let authError: string | null = null;
+
+    try {
+      // 1. Try unified backend login first
+      const apiRes = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+
+      if (apiRes.ok) {
+        const apiJson = await apiRes.json();
+        if (apiJson?.success && apiJson?.session) {
+          session = apiJson.session;
+          await supabase.auth.setSession({
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+          });
+        }
+      }
+
+      // 2. If backend endpoint did not set session, try client Supabase directly
+      if (!session) {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (error) {
+          authError = error.message;
+        } else if (data?.session) {
+          session = data.session;
+        }
+      }
+
+      if (!session) {
+        toast({
+          title: "Login failed",
+          description: authError || "Invalid email or password. Please verify your credentials or register.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       toast({ title: "Welcome back!" });
       // Clear previous user's cached state to ensure clean fresh sync
       try {
@@ -39,8 +78,16 @@ const Login = () => {
       window.dispatchEvent(new CustomEvent("panel:refresh"));
       window.dispatchEvent(new CustomEvent("geflow:business-updated"));
 
-      if (email.toLowerCase() === "gepardwebs@gmail.com") navigate("/admin");
+      if (email.trim().toLowerCase() === "gepardwebs@gmail.com") navigate("/admin");
       else navigate("/dashboard");
+    } catch (err: any) {
+      toast({
+        title: "Login error",
+        description: err?.message || "Failed to log in. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 

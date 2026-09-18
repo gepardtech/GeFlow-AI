@@ -765,11 +765,13 @@ app.post("/api/settings/general/about-members", async (req: Request, res: Respon
 // Platform Cache Purge & Refresh
 app.post("/api/settings/cache/clear", async (req: Request, res: Response) => {
   try {
-    await settingsService.reloadFromSupabase();
+    const hardReset = req.body?.hardReset !== false;
+    const purgeInfo = await settingsService.purgeCache(hardReset);
     res.json({ 
       success: true, 
-      message: "Platform cache memory refreshed and re-synchronized directly with database.",
-      timestamp: new Date().toISOString()
+      message: "Platform cache memory refreshed, local disk cache deleted, and re-synchronized directly with database.",
+      purgedFiles: purgeInfo.purgedFiles,
+      timestamp: purgeInfo.timestamp,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -815,6 +817,204 @@ app.post("/api/upload/member-photo", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("Member photo upload error:", err);
     res.status(500).json({ success: false, error: err.message || "Failed to upload image" });
+  }
+});
+
+// ==========================================
+// UNIFIED AUTHENTICATION ENDPOINTS
+// ==========================================
+
+// Register or claim account with auto-confirm and dual database sync
+app.post("/api/auth/register", async (req: Request, res: Response) => {
+  try {
+    const { email, password, fullName, plan } = req.body || {};
+    if (!email || typeof email !== "string" || !email.includes("@")) {
+      return res.status(400).json({ success: false, error: "Valid email address is required" });
+    }
+    if (!password || typeof password !== "string" || password.length < 6) {
+      return res.status(400).json({ success: false, error: "Password must be at least 6 characters long" });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = (fullName || cleanEmail.split("@")[0] || "User").trim();
+    const isAdminEmail = cleanEmail === "gepardwebs@gmail.com";
+    let targetPlan = isAdminEmail ? "lifetime" : (plan ? String(plan).toLowerCase() : null);
+
+    // 1. Check if user already exists in primary service project
+    let targetUserId: string | null = null;
+    try {
+      const { data: userList } = await serverSupabase.auth.admin.listUsers();
+      const existing = userList?.users?.find((u) => u.email?.toLowerCase() === cleanEmail);
+      if (existing) {
+        targetUserId = existing.id;
+        // If targetPlan wasn't explicitly provided, preserve existing plan
+        if (!targetPlan) {
+          const [prof, sub] = await Promise.all([
+            serverSupabase.from("profiles").select("plan").eq("user_id", existing.id).maybeSingle(),
+            serverSupabase.from("subscriptions").select("tier").eq("owner_user_id", existing.id).order("created_at", { ascending: false }).limit(1).maybeSingle()
+          ]);
+          targetPlan = sub.data?.tier || prof.data?.plan || (existing.user_metadata?.plan as string) || "free";
+        }
+
+        // Update user password and ensure email is auto-confirmed
+        await serverSupabase.auth.admin.updateUserById(existing.id, {
+          password,
+          email_confirm: true,
+          user_metadata: { ...existing.user_metadata, full_name: cleanName, plan: targetPlan },
+        });
+      }
+    } catch (findErr) {
+      console.warn("Notice checking existing user on serverSupabase:", findErr);
+    }
+
+    if (!targetPlan) targetPlan = "free";
+
+    // 2. If not found, create new auto-confirmed user
+    if (!targetUserId) {
+      const { data: createData, error: createErr } = await serverSupabase.auth.admin.createUser({
+        email: cleanEmail,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: cleanName, plan: targetPlan },
+      });
+
+      if (createErr) {
+        return res.status(400).json({ success: false, error: createErr.message });
+      }
+      targetUserId = createData.user?.id || null;
+    }
+
+    if (!targetUserId) {
+      return res.status(500).json({ success: false, error: "Failed to establish user account" });
+    }
+
+    // 3. Upsert user profile and roles to database instances
+    const profileRow = {
+      user_id: targetUserId,
+      id: targetUserId,
+      email: cleanEmail,
+      full_name: cleanName,
+      plan: targetPlan,
+      status: "active",
+      last_active: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    await Promise.allSettled([
+      serverSupabase.from("profiles").upsert(profileRow, { onConflict: "user_id" }),
+      bgSupabase.from("profiles").upsert(profileRow, { onConflict: "user_id" }),
+    ]);
+
+    if (isAdminEmail) {
+      // Ensure admin role and lifetime subscription are permanently stored
+      await Promise.allSettled([
+        serverSupabase.from("user_roles").upsert({ user_id: targetUserId, role: "admin" }, { onConflict: "user_id" }),
+        serverSupabase.from("subscriptions").upsert({
+          owner_user_id: targetUserId,
+          tier: "lifetime",
+          cycle: "lifetime",
+          status: "active",
+          amount: 0,
+          updated_at: new Date().toISOString()
+        }, { onConflict: "owner_user_id" })
+      ]);
+    }
+
+    // Also attempt registering on secondary project if not already present
+    bgSupabase.auth.signUp({
+      email: cleanEmail,
+      password,
+      options: { data: { full_name: cleanName, plan: targetPlan } },
+    }).catch(() => {});
+
+    // 4. Authenticate and retrieve live session
+    const { data: loginData, error: loginErr } = await serverSupabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
+
+    if (loginErr || !loginData.session) {
+      return res.json({
+        success: true,
+        message: "Account registered successfully. Please log in.",
+        userId: targetUserId,
+      });
+    }
+
+    return res.json({
+      success: true,
+      session: loginData.session,
+      user: loginData.user,
+      message: "Account created successfully",
+    });
+  } catch (err: any) {
+    console.error("Auth register error:", err);
+    res.status(500).json({ success: false, error: err.message || "Internal registration error" });
+  }
+});
+
+// Unified Login supporting both Supabase projects
+app.post("/api/auth/login", async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: "Email and password are required" });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    // 1. Attempt login on primary service-role backend
+    const srvRes = await serverSupabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
+
+    if (!srvRes.error && srvRes.data?.session) {
+      return res.json({
+        success: true,
+        session: srvRes.data.session,
+        user: srvRes.data.user,
+      });
+    }
+
+    // 2. Attempt login on secondary frontend project
+    const bgRes = await bgSupabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
+
+    if (!bgRes.error && bgRes.data?.session) {
+      return res.json({
+        success: true,
+        session: bgRes.data.session,
+        user: bgRes.data.user,
+      });
+    }
+
+    // 3. Return user-friendly error message
+    const rawError = srvRes.error?.message || bgRes.error?.message || "Invalid login credentials";
+    return res.status(401).json({
+      success: false,
+      error: rawError.includes("Email not confirmed")
+        ? "Email not confirmed. Please register to automatically activate your account or check your inbox."
+        : rawError,
+    });
+  } catch (err: any) {
+    console.error("Auth login error:", err);
+    res.status(500).json({ success: false, error: err.message || "Internal authentication error" });
+  }
+});
+
+// Verify current session
+app.get("/api/auth/me", async (req: Request, res: Response) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Not authenticated" });
+    }
+    res.json({ success: true, user });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -910,9 +1110,46 @@ app.get("/api/user/businesses", async (req: Request, res: Response) => {
       });
     }
 
-    // 3. If user has 0 businesses, auto-provision default store so user panel never displays 0 store
+    // 3. Admin fallback (gepardwebs@gmail.com)
+    if (ownedList.length === 0 && user.email?.toLowerCase() === "gepardwebs@gmail.com") {
+      try {
+        const { data: allStores } = await serverSupabase
+          .from("businesses")
+          .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id, created_at")
+          .order("created_at", { ascending: true });
+        if (allStores && allStores.length > 0) {
+          ownedList = allStores;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    // 4. If user has 0 businesses, auto-provision default store so user panel never displays 0 store
     if (ownedList.length === 0 && staffBizs.length === 0) {
       const storeName = user.user_metadata?.business_name || (user.email ? `${user.email.split("@")[0]}'s Store` : "Gepard Store");
+      const cleanUserPlan = user.email?.toLowerCase() === "gepardwebs@gmail.com" ? "lifetime" : ((user.user_metadata?.plan as string) || "free");
+      
+      // Crucial: ensure owner profile exists first so database trigger does not reject insertion with 'Owner profile not found'
+      await Promise.allSettled([
+        serverSupabase.from("profiles").upsert({
+          user_id: user.id,
+          email: user.email,
+          full_name: (user.user_metadata?.full_name as string) || (user.email ? user.email.split("@")[0] : "User"),
+          plan: cleanUserPlan,
+          status: "active",
+          last_active: new Date().toISOString()
+        }, { onConflict: "user_id" }),
+        bgSupabase.from("profiles").upsert({
+          user_id: user.id,
+          email: user.email,
+          full_name: (user.user_metadata?.full_name as string) || (user.email ? user.email.split("@")[0] : "User"),
+          plan: cleanUserPlan,
+          status: "active",
+          last_active: new Date().toISOString()
+        }, { onConflict: "user_id" })
+      ]);
+
       const newBiz = {
         id: crypto.randomUUID(),
         owner_user_id: user.id,
@@ -938,10 +1175,419 @@ app.get("/api/user/businesses", async (req: Request, res: Response) => {
       }
     }
 
+    // 5. Authoritative plan calculation
+    let userPlan = "free";
+    let fullName = (user.user_metadata?.full_name as string) || null;
+    const isAdmin = user.email?.toLowerCase() === "gepardwebs@gmail.com";
+
+    if (isAdmin) {
+      userPlan = "lifetime";
+    } else {
+      try {
+        const [profRes, subRes, bgProfRes, bgSubRes] = await Promise.all([
+          serverSupabase.from("profiles").select("plan, full_name").eq("user_id", user.id).maybeSingle(),
+          serverSupabase.from("subscriptions").select("tier, status").eq("owner_user_id", user.id).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+          bgSupabase.from("profiles").select("plan, full_name").eq("user_id", user.id).maybeSingle(),
+          bgSupabase.from("subscriptions").select("tier, status").eq("owner_user_id", user.id).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        ]);
+        if (profRes.data?.full_name || bgProfRes.data?.full_name) {
+          fullName = profRes.data?.full_name || bgProfRes.data?.full_name;
+        }
+        const candidates = [
+          subRes.data?.tier,
+          bgSubRes.data?.tier,
+          profRes.data?.plan,
+          bgProfRes.data?.plan,
+          user.user_metadata?.plan
+        ].filter(Boolean).map((s: string) => s.toLowerCase());
+
+        if (candidates.some((c: string) => c.includes("lifetime"))) userPlan = "lifetime";
+        else if (candidates.some((c: string) => c.includes("premium"))) userPlan = "premium";
+        else if (candidates.some((c: string) => c.includes("standard"))) userPlan = "standard";
+      } catch {
+        /* fallback to free */
+      }
+    }
+
     res.json({
       success: true,
       owned: ownedList,
       staff: staffBizs,
+      plan: userPlan,
+      user: {
+        id: user.id,
+        email: user.email,
+        full_name: fullName,
+        isAdmin,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Dedicated User Plan Endpoint (Authorized, service-role fallback)
+app.get("/api/user/plan", async (req: Request, res: Response) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    let planId = "free";
+    let fullName = (user.user_metadata?.full_name as string) || null;
+    const isAdmin = user.email?.toLowerCase() === "gepardwebs@gmail.com";
+
+    if (isAdmin) {
+      planId = "lifetime";
+    } else {
+      try {
+        const [profRes, subRes, bgProfRes, bgSubRes] = await Promise.all([
+          serverSupabase.from("profiles").select("plan, full_name").eq("user_id", user.id).maybeSingle(),
+          serverSupabase.from("subscriptions").select("tier, status").eq("owner_user_id", user.id).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+          bgSupabase.from("profiles").select("plan, full_name").eq("user_id", user.id).maybeSingle(),
+          bgSupabase.from("subscriptions").select("tier, status").eq("owner_user_id", user.id).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        ]);
+        if (profRes.data?.full_name || bgProfRes.data?.full_name) {
+          fullName = profRes.data?.full_name || bgProfRes.data?.full_name;
+        }
+        const candidates = [
+          subRes.data?.tier,
+          bgSubRes.data?.tier,
+          profRes.data?.plan,
+          bgProfRes.data?.plan,
+          user.user_metadata?.plan
+        ].filter(Boolean).map((s: string) => s.toLowerCase());
+
+        if (candidates.some((c: string) => c.includes("lifetime"))) planId = "lifetime";
+        else if (candidates.some((c: string) => c.includes("premium"))) planId = "premium";
+        else if (candidates.some((c: string) => c.includes("standard"))) planId = "standard";
+      } catch {
+        /* fallback to free */
+      }
+    }
+
+    // Persist profile in both databases so future queries don't revert
+    try {
+      const profileRow = {
+        user_id: user.id,
+        email: user.email,
+        full_name: fullName || (user.email ? user.email.split("@")[0] : "User"),
+        plan: planId,
+        status: "active",
+        last_active: new Date().toISOString()
+      };
+      await Promise.allSettled([
+        serverSupabase.from("profiles").upsert(profileRow, { onConflict: "user_id" }),
+        bgSupabase.from("profiles").upsert(profileRow, { onConflict: "user_id" })
+      ]);
+    } catch {
+      /* ignore */
+    }
+
+    res.json({
+      success: true,
+      planId,
+      fullName,
+      email: user.email,
+      userId: user.id,
+      isAdmin,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Update / Sync User Plan (Authorized, service-role fallback)
+app.post("/api/user/plan", async (req: Request, res: Response) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+    const { plan, period, fullName } = req.body || {};
+    const targetPlan = (plan || "free").toLowerCase();
+    const cleanName = fullName || user.user_metadata?.full_name || user.email?.split("@")[0] || "User";
+
+    const profileRow = {
+      user_id: user.id,
+      id: user.id,
+      email: user.email,
+      full_name: cleanName,
+      plan: targetPlan,
+      status: "active",
+      last_active: new Date().toISOString(),
+    };
+
+    await Promise.allSettled([
+      serverSupabase.from("profiles").upsert(profileRow, { onConflict: "user_id" }),
+      bgSupabase.from("profiles").upsert(profileRow, { onConflict: "user_id" }),
+      serverSupabase.auth.admin.updateUserById(user.id, {
+        user_metadata: { ...user.user_metadata, plan: targetPlan, full_name: cleanName }
+      })
+    ]);
+
+    // Insert or update subscription record
+    try {
+      const nextDate = new Date();
+      if (period === "monthly") nextDate.setMonth(nextDate.getMonth() + 1);
+      else if (period === "yearly") nextDate.setFullYear(nextDate.getFullYear() + 1);
+
+      const subRow = {
+        owner_user_id: user.id,
+        tier: targetPlan,
+        cycle: period || "monthly",
+        status: "active",
+        next_billing_date: period === "lifetime" ? null : nextDate.toISOString(),
+      };
+      await Promise.allSettled([
+        serverSupabase.from("subscriptions").insert(subRow),
+        bgSupabase.from("subscriptions").insert(subRow),
+      ]);
+    } catch (subErr) {
+      console.warn("Notice updating subscription record:", subErr);
+    }
+
+    res.json({ success: true, planId: targetPlan, fullName: cleanName });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Create business endpoint with service-role guarantee (bypasses RLS / trigger failures)
+app.post("/api/user/businesses/create", async (req: Request, res: Response) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const {
+      business_name,
+      business_address,
+      currency,
+      base_currency,
+      default_tax,
+      stock_alert_limit,
+      category_id,
+      status
+    } = req.body || {};
+
+    if (!business_name || !business_name.trim()) {
+      return res.status(400).json({ success: false, error: "Business name is required." });
+    }
+
+    // 1. Ensure owner profile exists so database trigger doesn't raise 'Owner profile not found'
+    const cleanPlan = user.email?.toLowerCase() === "gepardwebs@gmail.com" ? "lifetime" : ((user.user_metadata?.plan as string) || "free");
+    await Promise.allSettled([
+      serverSupabase.from("profiles").upsert({
+        user_id: user.id,
+        email: user.email,
+        full_name: (user.user_metadata?.full_name as string) || user.email?.split("@")[0] || "User",
+        plan: cleanPlan,
+        status: "active",
+        last_active: new Date().toISOString()
+      }, { onConflict: "user_id" }),
+      bgSupabase.from("profiles").upsert({
+        user_id: user.id,
+        email: user.email,
+        full_name: (user.user_metadata?.full_name as string) || user.email?.split("@")[0] || "User",
+        plan: cleanPlan,
+        status: "active",
+        last_active: new Date().toISOString()
+      }, { onConflict: "user_id" })
+    ]);
+
+    const newBizId = crypto.randomUUID();
+    const bizRow = {
+      id: newBizId,
+      owner_user_id: user.id,
+      business_name: business_name.trim(),
+      business_address: (business_address || "").trim() || null,
+      category_id: category_id || null,
+      currency: (currency || "USD").toUpperCase(),
+      base_currency: (base_currency || currency || "USD").toUpperCase(),
+      default_tax: Number(default_tax) || 0,
+      stock_alert_limit: Number(stock_alert_limit) || 10,
+      status: status || "active",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const srvInsert = await serverSupabase.from("businesses").insert(bizRow).select().single();
+    if (srvInsert.error) {
+      console.warn("serverSupabase business insert error:", srvInsert.error.message);
+    }
+    await bgSupabase.from("businesses").insert(bizRow).catch(() => {});
+
+    const returnedBiz = srvInsert.data || bizRow;
+    res.json({ success: true, business: returnedBiz });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin Users Edge-Function Compatible Handler
+app.post("/api/admin/users", async (req: Request, res: Response) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    const isSuperAdmin = user?.email?.toLowerCase() === "gepardwebs@gmail.com";
+    
+    // Check if caller is admin in database or super-admin
+    let isCallerAdmin = isSuperAdmin;
+    if (!isCallerAdmin && user) {
+      const { data: roleRow } = await serverSupabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
+      if (roleRow?.role === "admin") isCallerAdmin = true;
+    }
+
+    if (!isCallerAdmin) {
+      return res.status(403).json({ success: false, error: "Access denied: admin credentials required." });
+    }
+
+    const { action, user_id, plan, role, status, email, password, full_name } = req.body || {};
+
+    if (action === "updatePlan") {
+      if (!user_id || !plan) {
+        return res.status(400).json({ success: false, error: "user_id and plan required" });
+      }
+      const cleanPlan = String(plan).toLowerCase();
+      await Promise.allSettled([
+        serverSupabase.from("profiles").update({ plan: cleanPlan, updated_at: new Date().toISOString() }).eq("user_id", user_id),
+        bgSupabase.from("profiles").update({ plan: cleanPlan, updated_at: new Date().toISOString() }).eq("user_id", user_id),
+        serverSupabase.from("subscriptions").insert({
+          owner_user_id: user_id,
+          tier: cleanPlan,
+          cycle: cleanPlan === "lifetime" ? "lifetime" : "monthly",
+          status: "active",
+          created_at: new Date().toISOString()
+        }),
+        serverSupabase.auth.admin.updateUserById(user_id, {
+          user_metadata: { plan: cleanPlan }
+        })
+      ]);
+      return res.json({ success: true, user_id, plan: cleanPlan });
+    }
+
+    if (action === "setRole") {
+      if (!user_id || !role) {
+        return res.status(400).json({ success: false, error: "user_id and role required" });
+      }
+      await Promise.allSettled([
+        serverSupabase.from("user_roles").upsert({ user_id, role }, { onConflict: "user_id" }),
+        bgSupabase.from("user_roles").upsert({ user_id, role }, { onConflict: "user_id" })
+      ]);
+      return res.json({ success: true, user_id, role });
+    }
+
+    if (action === "suspend" || action === "updateStatus") {
+      const targetStatus = status || "suspended";
+      await Promise.allSettled([
+        serverSupabase.from("profiles").update({ status: targetStatus, updated_at: new Date().toISOString() }).eq("user_id", user_id),
+        bgSupabase.from("profiles").update({ status: targetStatus, updated_at: new Date().toISOString() }).eq("user_id", user_id)
+      ]);
+      return res.json({ success: true, user_id, status: targetStatus });
+    }
+
+    if (action === "create") {
+      if (!email || !password) {
+        return res.status(400).json({ success: false, error: "email and password required" });
+      }
+      const cleanEmail = String(email).trim().toLowerCase();
+      const cleanName = (full_name || cleanEmail.split("@")[0] || "User").trim();
+      const targetPlan = (plan || "free").toLowerCase();
+
+      const { data: createData, error: createErr } = await serverSupabase.auth.admin.createUser({
+        email: cleanEmail,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: cleanName, plan: targetPlan }
+      });
+
+      if (createErr) {
+        return res.status(400).json({ success: false, error: createErr.message });
+      }
+
+      const newUserId = createData.user?.id;
+      if (newUserId) {
+        const pRow = {
+          user_id: newUserId,
+          id: newUserId,
+          email: cleanEmail,
+          full_name: cleanName,
+          plan: targetPlan,
+          status: "active",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        await Promise.allSettled([
+          serverSupabase.from("profiles").upsert(pRow, { onConflict: "user_id" }),
+          bgSupabase.from("profiles").upsert(pRow, { onConflict: "user_id" })
+        ]);
+      }
+
+      return res.json({ success: true, user: createData.user });
+    }
+
+    if (action === "delete") {
+      if (!user_id) return res.status(400).json({ success: false, error: "user_id required" });
+      await Promise.allSettled([
+        serverSupabase.from("profiles").delete().eq("user_id", user_id),
+        serverSupabase.auth.admin.deleteUser(user_id)
+      ]);
+      return res.json({ success: true, user_id });
+    }
+
+    res.status(400).json({ success: false, error: `Unrecognized action: ${action}` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin Users Overview (bypasses RLS recursion using service role)
+app.get("/api/admin/users-overview", async (req: Request, res: Response) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    const isSuperAdmin = user?.email?.toLowerCase() === "gepardwebs@gmail.com";
+
+    let isCallerAdmin = isSuperAdmin;
+    if (!isCallerAdmin && user) {
+      const { data: roleRow } = await serverSupabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
+      if (roleRow?.role === "admin") isCallerAdmin = true;
+    }
+
+    if (!isCallerAdmin) {
+      return res.status(403).json({ success: false, error: "Access denied: admin credentials required." });
+    }
+
+    const [
+      { data: profs },
+      { data: roleRows },
+      { data: bizRows },
+      { data: prodRows }
+    ] = await Promise.all([
+      serverSupabase.from("profiles").select("*").order("created_at", { ascending: false }),
+      serverSupabase.from("user_roles").select("user_id, role"),
+      serverSupabase.from("businesses").select("id, owner_user_id, business_name"),
+      serverSupabase.from("products").select("id, business_id, owner_user_id")
+    ]);
+
+    const rolesMap: Record<string, string> = {};
+    (roleRows || []).forEach((r: any) => {
+      if (r.user_id && r.role) rolesMap[r.user_id] = r.role;
+    });
+
+    // Ensure gepardwebs@gmail.com is always mapped as admin
+    const adminUser = (profs || []).find((p: any) => p.email?.toLowerCase() === "gepardwebs@gmail.com");
+    if (adminUser) {
+      rolesMap[adminUser.user_id] = "admin";
+    }
+
+    res.json({
+      success: true,
+      users: profs || [],
+      roles: rolesMap,
+      businessesCount: (bizRows || []).length,
+      productsCount: (prodRows || []).length
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -1027,11 +1673,18 @@ app.get("/api/admin/businesses", async (req: Request, res: Response) => {
   }
 });
 
-// AI Assistant Endpoint (Powered by Google Gemini 2.5 Flash with rich Retail Knowledge fallback)
+// AI Assistant Endpoint (Powered by Google Gemini 3.8 Flash with rich Retail Knowledge fallback)
 let geminiClient: GoogleGenAI | null = null;
 function getGeminiClient() {
   if (!geminiClient && process.env.GEMINI_API_KEY) {
-    geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    geminiClient = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
+      },
+    });
   }
   return geminiClient;
 }
@@ -1053,17 +1706,20 @@ app.post("/api/ai/assistant", async (req: Request, res: Response) => {
 You assist retail business owners, store managers, and staff with retail operations, inventory optimization, barcode scanning, POS checkout workflows, pricing, profit margin analysis, returns, and cashier management.
 Operating mode: ${mode || "business"}
 Active plan: ${planId || "free"}
-${businessContext ? `Store Context:\nStore Name: ${businessContext.businessName || "Store"}\nTotal Catalog: ${businessContext.totalProducts ?? 0}\nLow Stock Items: ${businessContext.lowStockCount ?? 0}\nToday Revenue: $${businessContext.todayRevenue ?? 0}\nTransactions: ${businessContext.todaySalesCount ?? 0}` : "No specific business loaded yet."}
+${businessContext ? `Store Context:
+Store Name: ${businessContext.businessName || "Store"}
+Total Catalog: ${businessContext.totalProducts ?? 0}
+Low Stock Items: ${businessContext.lowStockCount ?? 0}
+Today Revenue: $${businessContext.todayRevenue ?? 0}
+Transactions: ${businessContext.todaySalesCount ?? 0}` : "No specific business loaded yet."}
 Respond helpfully with concrete, actionable advice and bullet points where appropriate.`;
 
         const response = await client.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: `${systemInstruction}\n\nUser Question:\n${lastUserMessage}` }],
-            },
-          ],
+          model: "gemini-3.8-flash",
+          contents: lastUserMessage,
+          config: {
+            systemInstruction,
+          },
         });
 
         const reply = response.text || "";

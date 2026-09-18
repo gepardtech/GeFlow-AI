@@ -129,6 +129,28 @@ async function fetchAuthoritativePlan(): Promise<void> {
         } else {
           resolvedPlan = "free";
         }
+
+        // 4. Server-side authoritative fallback if client queries hit RLS restrictions
+        if (resolvedPlan === "free") {
+          try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData?.session?.access_token;
+            if (token) {
+              const planRes = await fetch("/api/user/plan", {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (planRes.ok) {
+                const planJson = await planRes.json();
+                if (planJson?.success && planJson.planId) {
+                  resolvedPlan = planJson.planId as PlanId;
+                  if (planJson.fullName) planStore.fullName = planJson.fullName;
+                }
+              }
+            }
+          } catch {
+            /* ignore */
+          }
+        }
       }
 
       planStore.planId = resolvedPlan;

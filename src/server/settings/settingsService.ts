@@ -273,6 +273,24 @@ class SettingsService {
     await this.syncFromSupabase();
     return this.cache;
   }
+
+  public async purgeCache(hardReset: boolean = true): Promise<{ purgedFiles: string[]; timestamp: string }> {
+    const purgedFiles: string[] = [];
+    if (hardReset && fs.existsSync(BACKUP_PATH)) {
+      try {
+        fs.unlinkSync(BACKUP_PATH);
+        purgedFiles.push(BACKUP_PATH);
+      } catch (err) {
+        console.warn("Notice deleting backup file during cache purge:", err);
+      }
+    }
+    this.cache = { ...DEFAULT_SETTINGS };
+    await this.syncFromSupabase();
+    return {
+      purgedFiles,
+      timestamp: new Date().toISOString(),
+    };
+  }
 }
 
 export const settingsService = new SettingsService();

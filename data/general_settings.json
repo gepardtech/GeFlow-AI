@@ -2,83 +2,73 @@
   "social_links": [
     {
       "id": "soc_fb",
-      "url": "https://web.facebook.com/gepardweb/",
-      "label": "Facebook",
-      "enabled": true,
       "platform": "facebook",
-      "updated_test": true
+      "label": "Facebook",
+      "url": "https://web.facebook.com/gepardweb/",
+      "enabled": true
     },
     {
       "id": "soc_ig",
-      "url": "https://www.instagram.com/gepardweb/",
-      "label": "Instagram",
-      "enabled": true,
       "platform": "instagram",
-      "updated_test": true
+      "label": "Instagram",
+      "url": "https://www.instagram.com/gepardweb/",
+      "enabled": true
     },
     {
       "id": "soc_x",
-      "url": "https://x.com/gepardweb",
-      "label": "X (Twitter)",
-      "enabled": true,
       "platform": "x",
-      "updated_test": true
+      "label": "X (Twitter)",
+      "url": "https://x.com/gepardweb",
+      "enabled": true
     },
     {
       "id": "soc_in",
-      "url": "https://www.linkedin.com/company/gepardweb",
-      "label": "LinkedIn",
-      "enabled": true,
       "platform": "linkedin",
-      "updated_test": true
+      "label": "LinkedIn",
+      "url": "https://www.linkedin.com/company/gepardweb",
+      "enabled": true
     },
     {
       "id": "soc_pin",
-      "url": "https://www.pinterest.com/gepardwebs",
-      "label": "Pinterest",
-      "enabled": true,
       "platform": "pinterest",
-      "updated_test": true
+      "label": "Pinterest",
+      "url": "https://www.pinterest.com/gepardwebs",
+      "enabled": true
     },
     {
       "id": "soc_gh",
-      "url": "https://github.com/gepardweb",
-      "label": "GitHub",
-      "enabled": true,
       "platform": "github",
-      "updated_test": true
+      "label": "GitHub",
+      "url": "https://github.com/gepardweb",
+      "enabled": true
     },
     {
       "id": "soc_yt",
-      "url": "https://youtube.com/@gepardweb",
-      "label": "YouTube",
-      "enabled": false,
       "platform": "youtube",
-      "updated_test": true
+      "label": "YouTube",
+      "url": "https://youtube.com/@gepardweb",
+      "enabled": false
     },
     {
       "id": "soc_disc",
-      "url": "https://discord.gg/geflow",
-      "label": "Discord",
-      "enabled": false,
       "platform": "discord",
-      "updated_test": true
+      "label": "Discord",
+      "url": "https://discord.gg/geflow",
+      "enabled": false
     },
     {
       "id": "soc_tg",
-      "url": "https://t.me/geflow",
-      "label": "Telegram",
-      "enabled": false,
       "platform": "telegram",
-      "updated_test": true
+      "label": "Telegram",
+      "url": "https://t.me/geflow",
+      "enabled": false
     },
     {
       "id": "soc_mail",
-      "url": "mailto:gepardwebs@gmail.com",
-      "label": "Official Email",
-      "enabled": true,
       "platform": "email",
-      "updated_test": true
+      "label": "Official Email",
+      "url": "mailto:gepardwebs@gmail.com",
+      "enabled": true
     }
   ],
   "footer_copyright": {
@@ -101,65 +91,65 @@
   "about_members": [
     {
       "id": "mem_1",
+      "bio": "Founder of Gepard Tech — the parent ecosystem behind GeFlow — SG Bilal is a full-stack developer and applied AI specialist. He architected GeFlow's real-time POS, inventory, and analytics engine.",
       "name": "SG Bilal",
       "role": "Chairman & Chief Executive Officer",
-      "bio": "Founder of Gepard Tech — the parent ecosystem behind GeFlow — SG Bilal is a full-stack developer and applied AI specialist. He architected GeFlow's real-time POS, inventory, and analytics engine.",
-      "image_url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
       "order": 1,
       "enabled": true,
+      "image_url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
       "social_links": {
-        "facebook": "https://web.facebook.com/gepardweb/",
-        "instagram": "https://www.instagram.com/gepardweb/",
-        "twitter": "https://x.com/gepardweb",
         "x": "https://x.com/gepardweb",
-        "linkedin": "https://www.linkedin.com/company/gepardweb",
-        "pinterest": "https://www.pinterest.com/gepardwebs",
+        "email": "gepardwebs@gmail.com",
         "github": "https://github.com/gepardweb",
-        "email": "gepardwebs@gmail.com"
+        "twitter": "https://x.com/gepardweb",
+        "facebook": "https://web.facebook.com/gepardweb/",
+        "linkedin": "https://www.linkedin.com/company/gepardweb",
+        "instagram": "https://www.instagram.com/gepardweb/",
+        "pinterest": "https://www.pinterest.com/gepardwebs"
       }
     },
     {
       "id": "mem_2",
+      "bio": "Specializes in high-concurrency offline-first database synchronization and zero-latency retail checkout workflows across thousands of enterprise retail chains.",
       "name": "Sarah Jenkins",
       "role": "Chief Product Officer & Architecture Lead",
-      "bio": "Specializes in high-concurrency offline-first database synchronization and zero-latency retail checkout workflows across thousands of enterprise retail chains.",
-      "image_url": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop&crop=faces",
       "order": 2,
       "enabled": true,
+      "image_url": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=400&fit=crop&crop=faces",
       "social_links": {
-        "linkedin": "https://linkedin.com/in/sarah-jenkins",
-        "twitter": "https://x.com/sarah_pos",
         "x": "https://x.com/sarah_pos",
-        "email": "sarah@geflow.team"
+        "email": "sarah@geflow.team",
+        "twitter": "https://x.com/sarah_pos",
+        "linkedin": "https://linkedin.com/in/sarah-jenkins"
       }
     },
     {
       "id": "mem_3",
+      "bio": "Cloud infrastructure architect dedicated to 99.999% uptime, microsecond ledger consistency, distributed replication, and automated failover.",
       "name": "Alex Chen",
       "role": "VP of Engineering & Systems",
-      "bio": "Cloud infrastructure architect dedicated to 99.999% uptime, microsecond ledger consistency, distributed replication, and automated failover.",
-      "image_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=faces",
       "order": 3,
       "enabled": true,
+      "image_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=faces",
       "social_links": {
-        "linkedin": "https://linkedin.com/in/alexchen",
+        "email": "alex@geflow.team",
         "github": "https://github.com/alexchen",
-        "email": "alex@geflow.team"
+        "linkedin": "https://linkedin.com/in/alexchen"
       }
     },
     {
       "id": "mem_4",
+      "bio": "Passionate advocate for merchant productivity, omni-channel scaling, customer retention, and onboarding multi-branch retail and pharmacy networks.",
       "name": "Elena Rostova",
       "role": "Head of Merchant Success & Growth",
-      "bio": "Passionate advocate for merchant productivity, omni-channel scaling, customer retention, and onboarding multi-branch retail and pharmacy networks.",
-      "image_url": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop&crop=faces",
       "order": 4,
       "enabled": true,
+      "image_url": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop&crop=faces",
       "social_links": {
-        "linkedin": "https://linkedin.com/in/elenarostova",
-        "twitter": "https://x.com/elena_merchants",
         "x": "https://x.com/elena_merchants",
-        "email": "elena@geflow.team"
+        "email": "elena@geflow.team",
+        "twitter": "https://x.com/elena_merchants",
+        "linkedin": "https://linkedin.com/in/elenarostova"
       }
     }
   ]
