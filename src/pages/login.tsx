@@ -33,7 +33,6 @@ const Login = () => {
     let authError: string | null = null;
 
     try {
-      // 1. Try backend login first
       const apiRes = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -51,7 +50,6 @@ const Login = () => {
         }
       }
 
-      // 2. Fallback: direct Supabase login
       if (!session) {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: email.trim(),
@@ -82,13 +80,9 @@ const Login = () => {
         localStorage.removeItem("geflow_cached_owned_businesses");
         localStorage.removeItem("geflow_cached_staff_businesses");
         localStorage.removeItem("geflow.activeBusinessId");
-      } catch {
-        // ignore
-      }
+      } catch {}
 
-      // Hard redirect — soft navigate se AuthGuard race hota hai
-      const isAdmin =
-        email.trim().toLowerCase() === "gepardwebs@gmail.com";
+      const isAdmin = email.trim().toLowerCase() === "gepardwebs@gmail.com";
       window.location.replace(isAdmin ? "/admin" : "/dashboard");
     } catch (err: any) {
       toast({
@@ -105,7 +99,6 @@ const Login = () => {
     <Layout>
       <section className="min-h-[calc(100vh-140px)] flex items-center justify-center px-3 sm:px-6 py-6 sm:py-12 bg-background">
         <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xl shadow-primary/5 border border-border bg-card min-w-0">
-          {/* LEFT — Form */}
           <div className="p-5 sm:p-8 md:p-10 lg:p-12 flex flex-col justify-center min-w-0">
             <div className="mb-6 sm:mb-8">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold mb-3">
@@ -116,17 +109,13 @@ const Login = () => {
                 Sign In
               </h1>
               <p className="text-xs sm:text-sm text-muted-foreground mt-1.5">
-                Enter your registered credentials to access your store
-                workspace.
+                Enter your registered credentials to access your store workspace.
               </p>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5">
               <div className="space-y-1.5">
-                <Label
-                  htmlFor="login-email"
-                  className="text-xs font-bold text-foreground"
-                >
+                <Label htmlFor="login-email" className="text-xs font-bold text-foreground">
                   Email Address
                 </Label>
                 <div className="relative">
@@ -146,10 +135,7 @@ const Login = () => {
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <Label
-                    htmlFor="login-password"
-                    className="text-xs font-bold text-foreground"
-                  >
+                  <Label htmlFor="login-password" className="text-xs font-bold text-foreground">
                     Password
                   </Label>
                   <Link
@@ -175,15 +161,9 @@ const Login = () => {
                     type="button"
                     onClick={() => setShowPassword((s) => !s)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                    aria-label={
-                      showPassword ? "Hide password" : "Show password"
-                    }
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
@@ -196,9 +176,7 @@ const Login = () => {
                     onChange={(e) => setRemember(e.target.checked)}
                     className="h-4 w-4 rounded border-border text-primary accent-primary focus:ring-primary"
                   />
-                  <span className="text-muted-foreground font-medium">
-                    Keep me signed in
-                  </span>
+                  <span className="text-muted-foreground font-medium">Keep me signed in</span>
                 </label>
               </div>
 
@@ -220,16 +198,12 @@ const Login = () => {
 
             <p className="text-center text-xs sm:text-sm text-muted-foreground mt-6">
               Don't have an account yet?{" "}
-              <Link
-                to="/signup"
-                className="text-primary font-bold hover:underline"
-              >
+              <Link to="/signup" className="text-primary font-bold hover:underline">
                 Create Free Account
               </Link>
             </p>
           </div>
 
-          {/* RIGHT — Welcome Panel */}
           <div className="relative bg-hero-gradient p-6 sm:p-8 md:p-10 lg:p-12 flex flex-col justify-center text-primary-foreground overflow-hidden">
             <div className="absolute -top-20 -right-20 h-60 w-60 rounded-full bg-white/10 blur-3xl pointer-events-none" />
             <div className="absolute -bottom-20 -left-20 h-60 w-60 rounded-full bg-secondary/30 blur-3xl pointer-events-none" />
@@ -240,8 +214,7 @@ const Login = () => {
                   Welcome Back <span className="text-2xl sm:text-3xl">🚀</span>
                 </h2>
                 <p className="text-primary-foreground/90 text-xs sm:text-sm leading-relaxed max-w-md">
-                  Log in to manage your inventory, process high-speed POS
-                  orders, and track your multi-store margins in real time.
+                  Log in to manage your inventory, process high-speed POS orders, and track your multi-store margins in real time.
                 </p>
               </div>
 
@@ -271,12 +244,8 @@ const Login = () => {
                       <Icon className="h-4 w-4 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-xs sm:text-sm font-bold text-white leading-tight">
-                        {title}
-                      </p>
-                      <p className="text-[11px] text-white/80 leading-tight mt-0.5">
-                        {desc}
-                      </p>
+                      <p className="text-xs sm:text-sm font-bold text-white leading-tight">{title}</p>
+                      <p className="text-[11px] text-white/80 leading-tight mt-0.5">{desc}</p>
                     </div>
                   </li>
                 ))}
