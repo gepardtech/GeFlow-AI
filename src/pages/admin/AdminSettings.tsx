@@ -53,8 +53,11 @@ const AdminSettings = () => {
     try {
       const { data, error } = await supabase.from("platform_settings").select("*").limit(1).maybeSingle();
       if (data) {
-        setRow(data);
-        setForm(data);
+        const alerts = (data.alerts as any) || {};
+        const parentCompany = data.parent_company || alerts.parent_company || alerts.general_settings?.parent_company || "Gepard Techs";
+        const merged = { ...data, parent_company: parentCompany };
+        setRow(merged);
+        setForm(merged);
         setLoading(false);
         return;
       }
@@ -69,8 +72,11 @@ const AdminSettings = () => {
     try {
       const { data: pubData } = await supabase.from("public_settings").select("*").limit(1).maybeSingle();
       if (pubData) {
-        setRow(pubData);
-        setForm(pubData);
+        const alerts = (pubData.alerts as any) || {};
+        const parentCompany = pubData.parent_company || alerts.parent_company || alerts.general_settings?.parent_company || "Gepard Techs";
+        const merged = { ...pubData, parent_company: parentCompany };
+        setRow(merged);
+        setForm(merged);
         setLoading(false);
         return;
       }
@@ -83,6 +89,7 @@ const AdminSettings = () => {
       id: "390fccbd-964a-4fa3-b0cb-986fb4ee032d",
       app_name: "GeFlow AI POS & Inventory",
       tagline: "Modern retail architecture & inventory orchestration",
+      parent_company: "Gepard Techs",
       system_timezone: "UTC",
       interface_language: "en-US",
       primary_accent: "#50c8fb",
@@ -118,6 +125,23 @@ const AdminSettings = () => {
     if (!row) return;
     setSaving(true);
     const { id, created_at, updated_at, singleton, ...payload } = form;
+    const parentComp = (form.parent_company || "Gepard Techs").trim();
+    payload.parent_company = parentComp;
+    payload.alerts = {
+      ...((payload.alerts as any) || {}),
+      parent_company: parentComp,
+    };
+
+    // Also sync to general settings API for immediate platform-wide sync
+    try {
+      await fetch("/api/settings/general", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parent_company: parentComp }),
+      });
+    } catch {
+      /* ignore */
+    }
 
     let savedSuccessfully = false;
     // 1. Try updating platform_settings by ID
@@ -194,6 +218,13 @@ const AdminSettings = () => {
           <Card title="Platform Identity" desc="Core naming and regional defaults.">
             <Field label="Application Name"><Input value={form.app_name ?? ""} onChange={(e) => set("app_name", e.target.value)} /></Field>
             <Field label="Tagline"><Input value={form.tagline ?? ""} onChange={(e) => set("tagline", e.target.value)} placeholder="Short slogan shown across the app" /></Field>
+            <Field label="Parent Company">
+              <Input
+                value={form.parent_company ?? "Gepard Techs"}
+                onChange={(e) => set("parent_company", e.target.value)}
+                placeholder="Parent company name (e.g. Gepard Techs)"
+              />
+            </Field>
             <div className="grid sm:grid-cols-2 gap-4">
               <Field label="System Timezone">
                 <Select value={form.system_timezone ?? "UTC"} onValueChange={(v) => set("system_timezone", v)}>

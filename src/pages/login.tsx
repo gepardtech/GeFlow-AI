@@ -84,8 +84,9 @@ const Login = () => {
         console.warn("Storage reset error", e);
       }
 
-      const isAdmin = email.trim().toLowerCase() === "gepardwebs@gmail.com";
-      window.location.replace(isAdmin ? "/admin" : "/dashboard");
+      const params = new URLSearchParams(window.location.search);
+      const redirectUrl = params.get("redirect") || "/dashboard";
+      window.location.replace(redirectUrl);
     } catch (err: any) {
       toast({
         title: "Login error",

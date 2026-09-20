@@ -50,12 +50,14 @@ export interface AboutPageMember {
 }
 
 export interface PlatformGeneralSettings {
+  parent_company?: string;
   social_links: SocialMediaLink[];
   footer_copyright: FooterCopyrightSettings;
   about_members: AboutPageMember[];
 }
 
 export const DEFAULT_GENERAL_SETTINGS: PlatformGeneralSettings = {
+  parent_company: "Gepard Techs",
   social_links: [
     { id: "soc_fb", platform: "facebook", label: "Facebook", url: "https://web.facebook.com/gepardweb/", enabled: true },
     { id: "soc_ig", platform: "instagram", label: "Instagram", url: "https://www.instagram.com/gepardweb/", enabled: true },

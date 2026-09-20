@@ -87,6 +87,25 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
     return makeMockResponse([]);
   };
 
+  // Route Supabase requests through the local proxy first to guarantee database sync and bypass iframe CORS restrictions
+  if (urlString.includes("gvkvljxhufsrgyfsqrkc.supabase.co")) {
+    try {
+      const proxyUrl = urlString.replace(
+        "https://gvkvljxhufsrgyfsqrkc.supabase.co",
+        "/api/supabase-proxy"
+      );
+      const proxyRes = await fetch(proxyUrl, init);
+      if (proxyRes.ok || (proxyRes.status >= 200 && proxyRes.status < 500)) {
+        return proxyRes;
+      }
+    } catch (err: any) {
+      if (err?.name === "AbortError" || (init as any)?.signal?.aborted) {
+        throw err;
+      }
+      console.warn("Notice: proxy request error, falling back to direct fetch:", err);
+    }
+  }
+
   try {
     const res = await fetch(input, init);
 
@@ -149,8 +168,39 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
 
     return res;
   } catch (err: any) {
+    // If request was aborted by component unmount or user navigation, don't retry
+    if (err?.name === "AbortError" || (init as any)?.signal?.aborted) {
+      throw err;
+    }
+
+    // 1. If direct fetch to Supabase was blocked (CORS / iframe sandbox / network), retry via local server proxy
+    if (urlString.includes("gvkvljxhufsrgyfsqrkc.supabase.co")) {
+      try {
+        const proxyUrl = urlString.replace(
+          "https://gvkvljxhufsrgyfsqrkc.supabase.co",
+          "/api/supabase-proxy"
+        );
+        const proxyRes = await fetch(proxyUrl, init);
+        if (proxyRes.ok || proxyRes.status < 500) {
+          return proxyRes;
+        }
+      } catch {
+        /* Fall through to graceful mock or fallback */
+      }
+    }
+
+    // 2. Handle session check without throwing uncaught errors
+    if (urlString.includes("/auth/v1/user")) {
+      return new Response(
+        JSON.stringify({ error: "unauthenticated", message: "User is not signed in" }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
     if (urlString.includes("/auth/v1/")) {
-      console.error("Supabase Auth network failure:", urlString, err?.message);
       return new Response(
         JSON.stringify({
           error: "auth_network_error",
@@ -168,11 +218,6 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
       );
     }
 
-    console.warn(
-      "Supabase network request failed, applying fallback:",
-      urlString,
-      err?.message
-    );
     return handleFallbackResponse(urlString);
   }
 };

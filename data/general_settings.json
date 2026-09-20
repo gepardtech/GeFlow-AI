@@ -2,73 +2,73 @@
   "social_links": [
     {
       "id": "soc_fb",
-      "platform": "facebook",
-      "label": "Facebook",
       "url": "https://web.facebook.com/gepardweb/",
-      "enabled": true
+      "label": "Facebook",
+      "enabled": true,
+      "platform": "facebook"
     },
     {
       "id": "soc_ig",
-      "platform": "instagram",
-      "label": "Instagram",
       "url": "https://www.instagram.com/gepardweb/",
-      "enabled": true
+      "label": "Instagram",
+      "enabled": true,
+      "platform": "instagram"
     },
     {
       "id": "soc_x",
-      "platform": "x",
-      "label": "X (Twitter)",
       "url": "https://x.com/gepardweb",
-      "enabled": true
+      "label": "X (Twitter)",
+      "enabled": true,
+      "platform": "x"
     },
     {
       "id": "soc_in",
-      "platform": "linkedin",
-      "label": "LinkedIn",
       "url": "https://www.linkedin.com/company/gepardweb",
-      "enabled": true
+      "label": "LinkedIn",
+      "enabled": true,
+      "platform": "linkedin"
     },
     {
       "id": "soc_pin",
-      "platform": "pinterest",
-      "label": "Pinterest",
       "url": "https://www.pinterest.com/gepardwebs",
-      "enabled": true
+      "label": "Pinterest",
+      "enabled": true,
+      "platform": "pinterest"
     },
     {
       "id": "soc_gh",
-      "platform": "github",
-      "label": "GitHub",
       "url": "https://github.com/gepardweb",
-      "enabled": true
+      "label": "GitHub",
+      "enabled": true,
+      "platform": "github"
     },
     {
       "id": "soc_yt",
-      "platform": "youtube",
-      "label": "YouTube",
       "url": "https://youtube.com/@gepardweb",
-      "enabled": false
+      "label": "YouTube",
+      "enabled": false,
+      "platform": "youtube"
     },
     {
       "id": "soc_disc",
-      "platform": "discord",
-      "label": "Discord",
       "url": "https://discord.gg/geflow",
-      "enabled": false
+      "label": "Discord",
+      "enabled": false,
+      "platform": "discord"
     },
     {
       "id": "soc_tg",
-      "platform": "telegram",
-      "label": "Telegram",
       "url": "https://t.me/geflow",
-      "enabled": false
+      "label": "Telegram",
+      "enabled": false,
+      "platform": "telegram"
     },
     {
       "id": "soc_mail",
-      "platform": "email",
-      "label": "Official Email",
       "url": "mailto:gepardwebs@gmail.com",
-      "enabled": true
+      "label": "Official Email",
+      "enabled": true,
+      "platform": "email"
     }
   ],
   "footer_copyright": {

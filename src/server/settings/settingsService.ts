@@ -42,12 +42,14 @@ export interface AboutPageMember {
 }
 
 export interface PlatformGeneralSettings {
+  parent_company?: string;
   social_links: SocialMediaLink[];
   footer_copyright: FooterCopyrightSettings;
   about_members: AboutPageMember[];
 }
 
 const DEFAULT_SETTINGS: PlatformGeneralSettings = {
+  parent_company: "Gepard Techs",
   social_links: [
     { id: "soc_fb", platform: "facebook", label: "Facebook", url: "https://web.facebook.com/gepardweb/", enabled: true },
     { id: "soc_ig", platform: "instagram", label: "Instagram", url: "https://www.instagram.com/gepardweb/", enabled: true },
@@ -182,6 +184,7 @@ class SettingsService {
         const alerts = data.alerts as any;
         const gen = alerts.general_settings || {};
         const merged: PlatformGeneralSettings = {
+          parent_company: gen.parent_company || alerts.parent_company || this.cache.parent_company || "Gepard Techs",
           social_links: Array.isArray(gen.social_links) 
             ? gen.social_links 
             : (Array.isArray(alerts.social_links) ? alerts.social_links : this.cache.social_links),
@@ -213,6 +216,7 @@ class SettingsService {
       const updatedAlerts = {
         ...existingAlerts,
         general_settings: settings,
+        parent_company: settings.parent_company || "Gepard Techs",
         social_links: settings.social_links,
         footer_copyright: settings.footer_copyright,
         about_members: settings.about_members,

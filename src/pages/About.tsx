@@ -49,7 +49,7 @@ const pillars = [
 ];
 
 const faqs = [
-  { q: "Who founded GeFlow?", a: "GeFlow was founded by SG Bilal under the Gepard Webs ecosystem, with a vision to redefine business operations through intelligent, lightweight cloud architecture." },
+  { q: "Who founded GeFlow?", a: "GeFlow was founded by SG Bilal under the Gepard Techs ecosystem, with a vision to redefine business operations through intelligent, lightweight cloud architecture." },
   { q: "What industries does GeFlow serve?", a: "We primarily serve pharmacies, retail outlets, supermarkets, warehouses, and small-to-medium enterprises that require precise inventory and sales control." },
   { q: "How secure is the platform?", a: "GeFlow uses end-to-end encryption, role-based access control, and PCI-DSS compliant payment infrastructure to keep your business data fully protected." },
   { q: "Does GeFlow work offline?", a: "Yes. Our POS terminal is designed with offline-first architecture — transactions sync automatically once connectivity is restored." },
@@ -376,7 +376,7 @@ const About = () => {
           <div className="premium-card p-10 md:p-14 text-center bg-gradient-to-br from-primary/5 to-secondary/5">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to Scale with Intelligence?</h2>
             <p className="text-muted-foreground text-sm mb-7 max-w-md mx-auto">
-              Join the Gepard Webs ecosystem today and transform your operational data into a strategic asset.
+              Join the Gepard Techs ecosystem today and transform your operational data into a strategic asset.
             </p>
             <div className="flex flex-wrap gap-3 justify-center">
               <Button asChild className="cta-btn rounded-full px-7 h-12 text-xs font-bold tracking-wider">

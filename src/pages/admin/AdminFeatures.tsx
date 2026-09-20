@@ -289,7 +289,13 @@ export const AdminFeatures = () => {
         const patch = pendingChanges[id];
         const dbPayload: any = { ...patch };
         delete dbPayload.test_scenario;
-        await supabase.from("feature_modules").update(dbPayload).eq("id", id);
+        const targetRow = rows.find((r) => r.id === id);
+        const moduleCode = targetRow?.module_code;
+        if (moduleCode) {
+          await supabase.from("feature_modules").update(dbPayload).eq("module_code", moduleCode);
+        } else {
+          await supabase.from("feature_modules").update(dbPayload).eq("id", id);
+        }
       }
     } catch (e) {
       console.warn("DB update sync skipped, local changes saved:", e);

@@ -360,31 +360,48 @@ export async function recordSyncedSale(
 
   // 2. Always record in Supabase database
   try {
+    const isUuid = (str?: string | null): boolean =>
+      Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
+
     const saleRow: any = {
-      id: payload.sale.id || syncResult?.sale?.id,
       business_id: businessId,
       owner_user_id: payload.userId,
-      total: payload.sale.total,
-      profit: payload.sale.profit || 0,
+      total: Number(payload.sale.total) || 0,
+      profit: Number(payload.sale.profit) || 0,
       status: payload.sale.status || "completed",
       processed_by: payload.cashierName || "Cashier",
     };
-    if (payload.sale.customer_name) saleRow.customer_name = payload.sale.customer_name;
-    if (payload.sale.invoice_no) saleRow.invoice_no = payload.sale.invoice_no;
-    if (payload.sale.receipt_no) saleRow.receipt_no = payload.sale.receipt_no;
 
-    await supabase.from("sales").insert(saleRow);
+    if (isUuid(payload.sale.id)) {
+      saleRow.id = payload.sale.id;
+    } else if (isUuid(syncResult?.sale?.id)) {
+      saleRow.id = syncResult.sale.id;
+    }
 
-    const itemsRows = payload.items.map((i) => ({
-      sale_id: saleRow.id,
-      owner_user_id: payload.userId,
-      product_id: i.product_id,
-      product_name: i.product_name,
-      quantity: i.quantity,
-      unit_price: i.unit_price,
-      unit_cost: i.unit_cost || 0,
-    }));
-    await supabase.from("sale_items").insert(itemsRows);
+    const { data: insertedSale, error: saleInsertError } = await supabase
+      .from("sales")
+      .insert(saleRow)
+      .select("id")
+      .maybeSingle();
+
+    if (saleInsertError) {
+      console.warn("Notice recording sale in Supabase:", saleInsertError.message);
+    }
+
+    const finalSaleId = insertedSale?.id || (isUuid(saleRow.id) ? saleRow.id : null);
+
+    if (finalSaleId && Array.isArray(payload.items) && payload.items.length > 0) {
+      const itemsRows = payload.items.map((i) => ({
+        sale_id: finalSaleId,
+        owner_user_id: payload.userId,
+        product_id: isUuid(i.product_id) ? i.product_id : null,
+        product_name: i.product_name,
+        quantity: Math.max(1, Math.round(Number(i.quantity) || 1)),
+        unit_price: Number(i.unit_price) || 0,
+        unit_cost: Number(i.unit_cost) || 0,
+      }));
+      await supabase.from("sale_items").insert(itemsRows);
+    }
   } catch (supErr) {
     console.warn("Notice recording sale in Supabase:", supErr);
   }
@@ -426,14 +443,24 @@ export async function saveSyncedProduct(
 
   // 2. Always save to Supabase
   try {
+    const isUuid = (str?: string | null): boolean =>
+      Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
+
     const payload: any = {
       ...product,
       business_id: businessId,
       owner_user_id: userId,
     };
-    if (product.id) {
+    // Strip non-column/client-only helper fields if any
+    delete payload.displayText;
+    delete payload.stockStatus;
+
+    if (product.id && isUuid(product.id)) {
       await supabase.from("products").update(payload).eq("id", product.id);
     } else {
+      if (!isUuid(payload.id)) {
+        delete payload.id;
+      }
       await supabase.from("products").insert(payload);
     }
   } catch (supErr) {

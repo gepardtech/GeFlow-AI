@@ -1,4 +1,4 @@
-// Polyfill/guard against uncaught network rejections and ensure robust window.fetch
+// Polyfill/guard against uncaught network rejections
 try {
   if (typeof window !== "undefined") {
     window.addEventListener(
