@@ -177,8 +177,22 @@ const Footer = () => {
 
   // Render clickable dynamic copyright text
   const renderCopyrightText = () => {
-    const fullText = copyright?.text || `© ${new Date().getFullYear()} GeFlow AI. All rights reserved. Powered by Gepard Techs.`;
-    const wordUrls = copyright?.wordUrls || [];
+    const parentComp = settings?.parent_company || "Gepard Techs";
+    let fullText = copyright?.text || `© ${new Date().getFullYear()} GeFlow AI. All rights reserved. Powered by ${parentComp}.`;
+    if (fullText.includes("Gepard Webs")) {
+      fullText = fullText.replace(/Gepard Webs/g, parentComp);
+    }
+
+    const wordUrls = (copyright?.wordUrls || []).map((w) => {
+      if (w.word === "Gepard Webs" || w.id === "w_gepard") {
+        return {
+          ...w,
+          word: parentComp,
+          url: w.url?.includes("gepardwebs") ? "https://gepardtechs.com" : (w.url || "https://gepardtechs.com"),
+        };
+      }
+      return w;
+    });
 
     if (!wordUrls || wordUrls.length === 0) {
       return <span>{fullText}</span>;

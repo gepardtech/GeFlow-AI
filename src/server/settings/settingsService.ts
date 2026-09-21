@@ -74,7 +74,7 @@ const DEFAULT_SETTINGS: PlatformGeneralSettings = {
       id: "mem_1",
       name: "SG Bilal",
       role: "Chairman & Chief Executive Officer",
-      bio: "Founder of Gepard Tech — the parent ecosystem behind GeFlow — SG Bilal is a full-stack developer and applied AI specialist. He architected GeFlow's real-time POS, inventory, and analytics engine.",
+      bio: "Founder of Gepard Techs — the parent ecosystem behind GeFlow — SG Bilal is a full-stack developer and applied AI specialist. He architected GeFlow's real-time POS, inventory, and analytics engine.",
       image_url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
       order: 1,
       enabled: true,

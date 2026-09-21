@@ -50,6 +50,27 @@ const AdminSettings = () => {
   const faviconRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
+    // 1. Primary: Load via authoritative /api/admin/settings endpoint
+    try {
+      const res = await fetch("/api/admin/settings");
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.success && json?.settings) {
+          const s = json.settings;
+          const alerts = (s.alerts as any) || {};
+          const parentCompany = s.parent_company || alerts.parent_company || alerts.general_settings?.parent_company || "Gepard Techs";
+          const merged = { ...s, parent_company: parentCompany };
+          setRow(merged);
+          setForm(merged);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("Notice loading via admin settings API:", e);
+    }
+
+    // 2. Direct Supabase query fallback
     try {
       const { data, error } = await supabase.from("platform_settings").select("*").limit(1).maybeSingle();
       if (data) {
@@ -122,51 +143,55 @@ const AdminSettings = () => {
   };
 
   const save = async () => {
-    if (!row) return;
     setSaving(true);
-    const { id, created_at, updated_at, singleton, ...payload } = form;
     const parentComp = (form.parent_company || "Gepard Techs").trim();
-    payload.parent_company = parentComp;
-    payload.alerts = {
-      ...((payload.alerts as any) || {}),
+    const payload = {
+      ...form,
       parent_company: parentComp,
     };
 
-    // Also sync to general settings API for immediate platform-wide sync
+    let savedSuccessfully = false;
+
+    // 1. Primary: Save via dedicated backend admin settings API (bypasses schema cache errors, updates database + mirror + local storage)
     try {
-      await fetch("/api/settings/general", {
+      const res = await fetch("/api/admin/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parent_company: parentComp }),
+        body: JSON.stringify(payload),
       });
-    } catch {
-      /* ignore */
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.success && json?.settings) {
+          savedSuccessfully = true;
+          setRow(json.settings);
+          setForm(json.settings);
+        }
+      }
+    } catch (apiErr) {
+      console.warn("API settings update notice:", apiErr);
     }
 
-    let savedSuccessfully = false;
-    // 1. Try updating platform_settings by ID
-    const { error: updateErr } = await supabase.from("platform_settings").update(payload as any).eq("id", row.id);
-    if (!updateErr) {
-      savedSuccessfully = true;
-    } else {
-      console.warn("Direct update on platform_settings:", updateErr.message);
-      // Try upserting singleton row
-      const { error: upsertErr } = await supabase
+    // 2. Direct Supabase update as fallback
+    if (!savedSuccessfully && row) {
+      const { id, created_at, updated_at, singleton, parent_company, ...directCols } = payload;
+      const alerts = {
+        ...((directCols.alerts as any) || {}),
+        parent_company: parentComp,
+      };
+      const { error: updateErr } = await supabase
         .from("platform_settings")
-        .upsert({ ...payload, id: row.id, singleton: true } as any);
-      if (!upsertErr) {
-        savedSuccessfully = true;
-      }
+        .update({ ...directCols, alerts } as any)
+        .eq("singleton", true);
+      if (!updateErr) savedSuccessfully = true;
     }
 
     setSaving(false);
-    applyPlatformSettings(form);
+    applyPlatformSettings(payload);
 
     if (savedSuccessfully) {
-      toast({ title: "Settings saved", description: "Changes are now live across the platform." });
-      load();
+      toast({ title: "Settings saved", description: "Changes are permanently saved and live across the platform." });
+      window.dispatchEvent(new CustomEvent("geflow:settings-updated", { detail: payload }));
     } else {
-      // Applied in session and local store
       toast({
         title: "Settings applied",
         description: "Applied to active platform session.",

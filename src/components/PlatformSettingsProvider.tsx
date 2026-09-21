@@ -68,25 +68,60 @@ export const PlatformSettingsProvider = ({ children }: { children: ReactNode }) 
 
   useEffect(() => {
     let active = true;
-    // public_settings is a safe, public-readable mirror of platform_settings.
-    // Reading it directly (instead of an RPC) lets us subscribe to realtime
-    // changes so every visitor — signed-in or not — sees updates instantly.
+
     const load = async () => {
       try {
-        const { data } = await supabase.from("public_settings").select("*").limit(1).maybeSingle();
-        if (active && data) { setSettings(data); applyPlatformSettings(data); }
+        const [pubRes, genRes] = await Promise.allSettled([
+          supabase.from("public_settings").select("*").limit(1).maybeSingle(),
+          fetch("/api/settings/general").then((r) => r.json()).catch(() => null),
+        ]);
+
+        let combined: PlatformSettings = {};
+        if (pubRes.status === "fulfilled" && pubRes.value.data) {
+          combined = { ...pubRes.value.data };
+        }
+        if (genRes.status === "fulfilled" && genRes.value?.settings) {
+          const gen = genRes.value.settings;
+          combined.parent_company = gen.parent_company || combined.parent_company || "Gepard Techs";
+        }
+        if (!combined.parent_company) {
+          combined.parent_company = "Gepard Techs";
+        }
+
+        if (active && Object.keys(combined).length > 0) {
+          setSettings(combined);
+          applyPlatformSettings(combined);
+        }
       } catch (err) {
         console.warn("Public settings load note:", err);
       } finally {
         if (active) setLoading(false);
       }
     };
+
     load();
+
+    const onSettingsUpdated = (e: any) => {
+      if (e.detail && typeof e.detail === "object") {
+        setSettings((prev) => {
+          const next = { ...(prev || {}), ...e.detail };
+          applyPlatformSettings(next);
+          return next;
+        });
+      }
+    };
+    window.addEventListener("geflow:settings-updated", onSettingsUpdated);
+
     const ch = supabase
       .channel(`public_settings_global_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "public_settings" }, () => load())
       .subscribe();
-    return () => { active = false; supabase.removeChannel(ch); };
+
+    return () => {
+      active = false;
+      window.removeEventListener("geflow:settings-updated", onSettingsUpdated);
+      supabase.removeChannel(ch);
+    };
   }, []);
 
   return (

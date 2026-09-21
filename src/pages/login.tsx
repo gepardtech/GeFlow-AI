@@ -33,26 +33,28 @@ const Login = () => {
     let authError: string | null = null;
 
     try {
+      const cleanEmail = email.trim().toLowerCase();
       const apiRes = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email: cleanEmail, password }),
       });
 
-      if (apiRes.ok) {
-        const apiJson = await apiRes.json();
-        if (apiJson?.success && apiJson?.session) {
-          session = apiJson.session;
-          await supabase.auth.setSession({
-            access_token: session.access_token,
-            refresh_token: session.refresh_token,
-          });
-        }
+      const apiJson = await apiRes.json().catch(() => null);
+
+      if (apiRes.ok && apiJson?.success && apiJson?.session) {
+        session = apiJson.session;
+        await supabase.auth.setSession({
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+        });
+      } else if (apiJson?.error) {
+        authError = apiJson.error;
       }
 
-      if (!session) {
+      if (!session && !authError) {
         const { data, error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
+          email: cleanEmail,
           password,
         });
         if (error) {
@@ -76,6 +78,7 @@ const Login = () => {
       toast({ title: "Welcome back!" });
 
       try {
+        localStorage.setItem("geflow.user_email", cleanEmail);
         localStorage.removeItem("geflow_cached_plan_state");
         localStorage.removeItem("geflow_cached_owned_businesses");
         localStorage.removeItem("geflow_cached_staff_businesses");
@@ -85,7 +88,10 @@ const Login = () => {
       }
 
       const params = new URLSearchParams(window.location.search);
-      const redirectUrl = params.get("redirect") || "/dashboard";
+      let redirectUrl = params.get("redirect");
+      if (!redirectUrl) {
+        redirectUrl = cleanEmail === "gepardwebs@gmail.com" ? "/admin" : "/dashboard";
+      }
       window.location.replace(redirectUrl);
     } catch (err: any) {
       toast({

@@ -375,7 +375,11 @@ const AdminUsers = () => {
     setBusy(true);
     try {
       if (editForm.plan !== editUser.plan) {
-        await updateProfile(editUser.user_id, { plan: editForm.plan });
+        try {
+          await callAdmin({ action: "updatePlan", user_id: editUser.user_id, plan: editForm.plan });
+        } catch {
+          await updateProfile(editUser.user_id, { plan: editForm.plan });
+        }
         // Sync subscriptions table so user never reverts
         try {
           const { data: existingSub } = await supabase
@@ -443,8 +447,13 @@ const AdminUsers = () => {
     if (!suspendUser) return;
     setBusy(true);
     const next = suspendUser.status === "suspended" ? "active" : "suspended";
-    const ok = await updateProfile(suspendUser.user_id, { status: next });
-    if (ok) toast({ title: next === "suspended" ? "Account suspended" : "Account activated" });
+    try {
+      await callAdmin({ action: "updateStatus", user_id: suspendUser.user_id, status: next });
+      toast({ title: next === "suspended" ? "Account suspended" : "Account activated" });
+    } catch {
+      const ok = await updateProfile(suspendUser.user_id, { status: next });
+      if (ok) toast({ title: next === "suspended" ? "Account suspended" : "Account activated" });
+    }
     setSuspendUser(null); setBusy(false);
   };
 
