@@ -56,10 +56,34 @@ import {
   FeatureModuleDefinition,
   FEATURE_GROUPS,
   VERSION_ROADMAP_META,
-  MASTER_FEATURE_CATALOG,
-  getLocalFeatureCatalog,
-  saveLocalFeatureCatalog,
 } from "@/lib/featureCatalog";
+
+/** Map a Supabase feature_modules row → UI shape (no local catalog). */
+function mapDbRow(d: any): FeatureModuleDefinition {
+  const group = FEATURE_GROUPS.find((g) => g.key === d.function_group);
+  const phase = (d.lifecycle_phase || "live") as FeatureModuleDefinition["lifecycle_phase"];
+  const version_target: FeatureModuleDefinition["version_target"] =
+    phase === "live" || phase === "beta" ? "v1" : "v2";
+  const versionMeta = VERSION_ROADMAP_META.find((v) => v.version === version_target);
+  return {
+    id: d.id,
+    module_code: d.module_code,
+    name: d.name,
+    function_group: d.function_group || "pos",
+    group_title: group?.title || "Feature Group",
+    description: d.description || "",
+    version_target,
+    version_title: versionMeta?.title || "Platform Feature",
+    lifecycle_phase: phase,
+    global_active: Boolean(d.global_active),
+    plan_free: Boolean(d.plan_free),
+    plan_standard: Boolean(d.plan_standard),
+    plan_premium: Boolean(d.plan_premium),
+    health: (d.health || "high") as FeatureModuleDefinition["health"],
+    latency_ms: Number(d.latency_ms ?? 0),
+    source_file_url: d.source_file_url || undefined,
+  };
+}
 
 const getGroupIcon = (groupKey: string) => {
   switch (groupKey) {
@@ -144,7 +168,7 @@ const blankForm = () => ({
 
 export const AdminFeatures = () => {
   const { toast } = useToast();
-  const [rows, setRows] = useState<FeatureModuleDefinition[]>(() => getLocalFeatureCatalog());
+  const [rows, setRows] = useState<FeatureModuleDefinition[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedVersion, setSelectedVersion] = useState<string>("all");
@@ -168,31 +192,20 @@ export const AdminFeatures = () => {
   // Sync with DB / Catalog
   const load = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from("feature_modules").select("*").order("created_at");
-      if (!error && data && data.length > 0) {
-        const merged: FeatureModuleDefinition[] = MASTER_FEATURE_CATALOG.map((masterItem) => {
-          const dbItem = (data as any[]).find((d) => d.module_code === masterItem.module_code || d.id === masterItem.id);
-          if (dbItem) {
-            return {
-              ...masterItem,
-              global_active: dbItem.global_active,
-              lifecycle_phase: dbItem.lifecycle_phase || masterItem.lifecycle_phase,
-              plan_free: dbItem.plan_free ?? masterItem.plan_free,
-              plan_standard: dbItem.plan_standard ?? masterItem.plan_standard,
-              plan_premium: dbItem.plan_premium ?? masterItem.plan_premium,
-            };
-          }
-          return masterItem;
-        });
-        setRows(merged);
-        saveLocalFeatureCatalog(merged);
+      const { data, error } = await supabase
+        .from("feature_modules")
+        .select("*")
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        console.error("Failed to load feature_modules:", error.message);
+        setRows([]);
       } else {
-        const local = getLocalFeatureCatalog();
-        setRows(local);
+        setRows(((data as any[]) || []).map(mapDbRow));
       }
     } catch (err) {
-      console.warn("Using local catalog:", err);
-      setRows(getLocalFeatureCatalog());
+      console.error("feature_modules load exception:", err);
+      setRows([]);
     } finally {
       setLoading(false);
     }
@@ -267,7 +280,6 @@ export const AdminFeatures = () => {
     setPendingChanges((p) => ({ ...p, [id]: { ...(p[id] ?? {}), ...patch } }));
     setRows((rs) => {
       const updated = rs.map((r) => (r.id === id ? { ...r, ...patch } : r));
-      saveLocalFeatureCatalog(updated);
       return updated;
     });
   };
@@ -281,24 +293,46 @@ export const AdminFeatures = () => {
     const ids = Object.keys(pendingChanges);
     if (ids.length === 0) return;
 
-    saveLocalFeatureCatalog(rows);
-    window.dispatchEvent(new Event("storage"));
-
     try {
       for (const id of ids) {
-        const patch = pendingChanges[id];
-        const dbPayload: any = { ...patch };
-        delete dbPayload.test_scenario;
+        const patch = pendingChanges[id] || {};
+        const dbPayload: Record<string, unknown> = {};
+        const allowed = [
+          "name",
+          "function_group",
+          "description",
+          "lifecycle_phase",
+          "global_active",
+          "plan_free",
+          "plan_standard",
+          "plan_premium",
+          "health",
+          "latency_ms",
+          "source_file_url",
+        ] as const;
+        for (const key of allowed) {
+          if (key in patch) dbPayload[key] = (patch as any)[key];
+        }
+        if (Object.keys(dbPayload).length === 0) continue;
+
         const targetRow = rows.find((r) => r.id === id);
         const moduleCode = targetRow?.module_code;
+        let error;
         if (moduleCode) {
-          await supabase.from("feature_modules").update(dbPayload).eq("module_code", moduleCode);
+          ({ error } = await supabase.from("feature_modules").update(dbPayload).eq("module_code", moduleCode));
         } else {
-          await supabase.from("feature_modules").update(dbPayload).eq("id", id);
+          ({ error } = await supabase.from("feature_modules").update(dbPayload).eq("id", id));
         }
+        if (error) throw error;
       }
-    } catch (e) {
-      console.warn("DB update sync skipped, local changes saved:", e);
+    } catch (e: any) {
+      console.error("feature_modules update failed:", e);
+      toast({
+        title: "Save failed",
+        description: e?.message || "Could not sync feature modules to Supabase.",
+        variant: "destructive",
+      });
+      return;
     }
 
     toast({
@@ -310,18 +344,17 @@ export const AdminFeatures = () => {
 
   // Quick Action: Reset to Pure V1.0 Launch Baseline (Only V1 Active, V2-V5 Disabled)
   const handleResetToV1 = () => {
-    const updated = MASTER_FEATURE_CATALOG.map((m) => {
+    // Activate only features currently marked version_target v1 (live/beta mapped as v1)
+    const updated = rows.map((m) => {
       const isV1 = m.version_target === "v1";
       return {
         ...m,
         global_active: isV1,
-        lifecycle_phase: (isV1 ? "live" : "staging") as any,
+        lifecycle_phase: (isV1 ? "live" : "staging") as FeatureModuleDefinition["lifecycle_phase"],
       };
     });
 
     setRows(updated);
-    saveLocalFeatureCatalog(updated);
-    window.dispatchEvent(new Event("storage"));
 
     const batch: Record<string, Partial<FeatureModuleDefinition>> = {};
     updated.forEach((u) => {
@@ -334,7 +367,7 @@ export const AdminFeatures = () => {
 
     toast({
       title: "Version 1.0 Baseline Restored",
-      description: `Only the ${stats.v1Total} Core V1 features are active. V2 to V5 features are safely staged.`,
+      description: "Only V1 features are active. Other features are staged. Click Save to sync Supabase.",
     });
   };
 
@@ -350,8 +383,6 @@ export const AdminFeatures = () => {
     }));
 
     setRows(updated);
-    saveLocalFeatureCatalog(updated);
-    window.dispatchEvent(new Event("storage"));
 
     const batch: Record<string, Partial<FeatureModuleDefinition>> = {};
     updated.forEach((u) => {
@@ -385,8 +416,6 @@ export const AdminFeatures = () => {
     });
 
     setRows(updated);
-    saveLocalFeatureCatalog(updated);
-    window.dispatchEvent(new Event("storage"));
 
     const batch: Record<string, Partial<FeatureModuleDefinition>> = { ...pendingChanges };
     updated
@@ -469,8 +498,6 @@ export const AdminFeatures = () => {
     }
 
     setRows(nextRows);
-    saveLocalFeatureCatalog(nextRows);
-    window.dispatchEvent(new Event("storage"));
 
     toast({ title: editing ? "Feature Module Updated" : "Custom Feature Module Registered" });
     setOpenRegister(false);
@@ -482,8 +509,6 @@ export const AdminFeatures = () => {
     if (!delItem) return;
     const nextRows = rows.filter((r) => r.id !== delItem.id);
     setRows(nextRows);
-    saveLocalFeatureCatalog(nextRows);
-    window.dispatchEvent(new Event("storage"));
     toast({ title: "Feature Module Removed" });
     setDelItem(null);
   };
