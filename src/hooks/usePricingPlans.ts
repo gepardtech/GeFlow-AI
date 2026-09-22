@@ -20,47 +20,10 @@ export interface PricingPlanRow {
 
 export type BillingCycle = "monthly" | "yearly" | "lifetime";
 
-/** Fallback used only until the live rows arrive (prevents empty flash). */
-const FALLBACK: Record<string, Partial<PricingPlanRow>> = {
-  free: {
-    name: "Free",
-    tagline: "Always free",
-    monthly_price: 0,
-    yearly_price: 0,
-    lifetime_price: 0,
-    badge_text: "FOREVER FREE",
-    badge_position: "top",
-    badge_cycle: "all",
-    is_popular: false,
-  },
-  standard: {
-    name: "Standard",
-    tagline: "For growing retailers",
-    monthly_price: 4.99,
-    yearly_price: 14.99,
-    lifetime_price: 49.99,
-    badge_text: "MOST POPULAR",
-    badge_position: "top",
-    badge_cycle: "monthly",
-    is_popular: true,
-  },
-  premium: {
-    name: "Premium",
-    tagline: "For advanced operations",
-    monthly_price: 9.99,
-    yearly_price: 24.99,
-    lifetime_price: 99.99,
-    badge_text: "20% OFF",
-    badge_position: "top",
-    badge_cycle: "yearly",
-    is_popular: false,
-  },
-};
-
 /**
- * Live pricing plans straight from the admin Billing → Pricing Plans table.
- * Subscribes to realtime so any admin price/feature/badge edit lands on the
- * landing page, checkout and user upgrade screens within a second.
+ * Live pricing plans from Supabase only (admin → Billing → Pricing).
+ * Realtime: price / badge / feature edits update landing, checkout, upgrade instantly.
+ * No local FALLBACK data.
  */
 export const usePricingPlans = () => {
   const [plans, setPlans] = useState<PricingPlanRow[]>([]);
@@ -68,42 +31,59 @@ export const usePricingPlans = () => {
 
   const load = useCallback(async () => {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("pricing_plans")
         .select("*")
         .order("sort_order", { ascending: true });
-      setPlans(((data ?? []) as unknown as PricingPlanRow[]).filter((p) => p.is_active));
+
+      if (error) {
+        console.error("Failed to load pricing_plans:", error.message);
+        setPlans([]);
+      } else {
+        const rows = (data ?? []) as unknown as PricingPlanRow[];
+        setPlans(rows.filter((p) => p.is_active !== false));
+      }
     } catch (err) {
-      console.warn("Failed to load pricing plans:", err);
+      console.error("pricing_plans load exception:", err);
+      setPlans([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    setLoading(true);
     load();
+
     const ch = supabase
-      .channel(`pricing_plans_rt_${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "pricing_plans" }, () => load())
+      .channel("pricing_plans_rt")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pricing_plans" },
+        () => {
+          load();
+        }
+      )
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+
+    return () => {
+      supabase.removeChannel(ch);
+    };
   }, [load]);
 
   const byKey = (key: string): PricingPlanRow | null => {
-    const row = plans.find((p) => p.plan_key?.toLowerCase() === key.toLowerCase());
-    if (row) return row;
-    const fb = FALLBACK[key];
-    return fb ? ({ plan_key: key, features: [], is_active: true, ...fb } as PricingPlanRow) : null;
+    const row = plans.find(
+      (p) => p.plan_key?.toLowerCase() === key.toLowerCase()
+    );
+    return row ?? null;
   };
 
   const nameOf = (key: string, fallback = ""): string => {
-    const p = byKey(key);
-    return p?.name || fallback;
+    return byKey(key)?.name || fallback;
   };
 
   const taglineOf = (key: string, fallback = ""): string => {
-    const p = byKey(key);
-    return p?.tagline || fallback;
+    return byKey(key)?.tagline || fallback;
   };
 
   const priceOf = (key: string, cycle: BillingCycle, fallback = 0): number => {
@@ -122,27 +102,28 @@ export const usePricingPlans = () => {
   const badgeOf = (key: string, cycle: BillingCycle): string | null => {
     const p = byKey(key);
     if (!p) return null;
+
     if (p.badge_text && p.badge_text.trim()) {
       if (!p.badge_cycle || p.badge_cycle === "all" || p.badge_cycle === cycle) {
         return p.badge_text.trim();
       }
       return null;
     }
-    // If no custom badge_text is specified, but plan is marked popular
+
     if (p.is_popular && (cycle === "monthly" || cycle === "lifetime")) {
       return "MOST POPULAR";
     }
+
     return null;
   };
 
   const isPopular = (key: string): boolean => {
-    const p = byKey(key);
-    return Boolean(p?.is_popular);
+    return Boolean(byKey(key)?.is_popular);
   };
 
   const badgePositionOf = (key: string): "top" | "bottom" => {
     const p = byKey(key);
-    return (p?.badge_position === "bottom") ? "bottom" : "top";
+    return p?.badge_position === "bottom" ? "bottom" : "top";
   };
 
   return {
