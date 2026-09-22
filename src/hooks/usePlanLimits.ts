@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePlan } from "@/hooks/usePlan";
-import { PLANS, PlanId } from "@/lib/plans";
 
 export interface PlanLimitRow {
   plan_key: string;
@@ -26,43 +25,15 @@ export interface PlanLimitsState {
   reload: () => Promise<void>;
 }
 
-const getFallbackLimit = (planId: PlanId, resourceKey: string): number | null => {
-  const planDef = PLANS[planId] || PLANS.free;
-  if (resourceKey === "products") {
-    const v = planDef.limits.productsMax;
-    return v === "unlimited" ? null : v;
-  }
-  if (resourceKey === "low_stock") {
-    const v = planDef.limits.lowStockMax;
-    return v === "unlimited" ? null : v;
-  }
-  if (resourceKey === "out_of_stock") {
-    const v = planDef.limits.outOfStockMax;
-    return v === "unlimited" ? null : v;
-  }
-  if (resourceKey === "branches") {
-    const v = planDef.limits.branchesMax;
-    return v === "unlimited" ? null : v;
-  }
-  if (resourceKey === "categories") {
-    const v = planDef.limits.businessCategoriesMax;
-    return v === "unlimited" ? null : v;
-  }
-  if (resourceKey === "reports_days") {
-    const v = planDef.limits.reportsWindowDays;
-    return v === "lifetime" ? null : v;
-  }
-  if (resourceKey === "ai_requests") {
-    if (planId === "free") return 20;
-    if (planId === "standard") return 200;
-    return null;
-  }
-  return null;
+/** Map old caller aliases → DB resource_key */
+const normalizeResourceKey = (resourceKey: string): string => {
+  if (resourceKey === "categories") return "business_categories";
+  return resourceKey;
 };
 
 /**
- * Loads the live plan_limits rows for the current user's plan and keeps
- * them in sync via realtime. Used to enforce quotas on Inventory, POS etc.
+ * Live plan_limits from Supabase only (no local plans.ts fallback).
+ * Realtime subscription keeps quotas in sync across the app.
  */
 export const usePlanLimits = (): PlanLimitsState => {
   const { planId, loading: planLoading } = usePlan();
@@ -70,15 +41,27 @@ export const usePlanLimits = (): PlanLimitsState => {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!planId) return;
+    if (!planId) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("plan_limits")
         .select("plan_key, resource_key, label, limit_value, is_locked")
         .eq("plan_key", planId);
-      setRows((data as PlanLimitRow[]) ?? []);
+
+      if (error) {
+        console.error("Failed to load plan_limits from Supabase:", error.message);
+        setRows([]);
+      } else {
+        setRows((data as PlanLimitRow[]) ?? []);
+      }
     } catch (err) {
-      console.warn("Failed to load plan limits:", err);
+      console.error("plan_limits load exception:", err);
+      setRows([]);
     } finally {
       setLoading(false);
     }
@@ -86,10 +69,20 @@ export const usePlanLimits = (): PlanLimitsState => {
 
   useEffect(() => {
     if (planLoading) return;
+
+    setLoading(true);
     load();
+
+    const channelName = `plan_limits_${planId ?? "none"}`;
     const ch = supabase
-      .channel(`plan_limits_${planId}_${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "plan_limits" }, () => load())
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "plan_limits" },
+        () => {
+          load();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -98,30 +91,37 @@ export const usePlanLimits = (): PlanLimitsState => {
   }, [planId, planLoading, load]);
 
   const limits: Record<string, PlanLimitRow> = {};
-  rows.forEach((r) => { limits[r.resource_key] = r; });
+  rows.forEach((r) => {
+    limits[r.resource_key] = r;
+  });
 
+  const getRow = (resourceKey: string): PlanLimitRow | undefined => {
+    const key = normalizeResourceKey(resourceKey);
+    return limits[key];
+  };
+
+  /**
+   * DB row missing → treat as locked quota (fail-closed).
+   * limit_value null in DB → unlimited.
+   */
   const getLimit = (resourceKey: string): number | null => {
-    const row = limits[resourceKey];
-    if (row !== undefined) return row.limit_value;
-    return getFallbackLimit(planId, resourceKey);
+    const row = getRow(resourceKey);
+    if (!row) return 0;
+    return row.limit_value;
   };
 
   const isLocked = (resourceKey: string): boolean => {
-    const row = limits[resourceKey];
-    if (row !== undefined) return row.is_locked;
-    return false;
+    const row = getRow(resourceKey);
+    if (!row) return true;
+    return row.is_locked === true;
   };
 
   const isExceeded = (resourceKey: string, usage: number): boolean => {
-    const row = limits[resourceKey];
-    if (row) {
-      if (row.is_locked) return true;
-      if (row.limit_value === null) return false;
-      return usage >= row.limit_value;
-    }
-    const fallback = getFallbackLimit(planId, resourceKey);
-    if (fallback === null) return false;
-    return usage >= fallback;
+    const row = getRow(resourceKey);
+    if (!row) return true;
+    if (row.is_locked) return true;
+    if (row.limit_value === null) return false;
+    return usage >= row.limit_value;
   };
 
   const remaining = (resourceKey: string, usage: number): number | null => {
