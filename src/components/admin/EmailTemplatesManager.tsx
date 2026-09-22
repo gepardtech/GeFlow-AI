@@ -1,5 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { EMAIL_TEMPLATES, EmailTemplate } from "@/lib/emailTemplates";
+import {
+  fetchEmailTemplateConfigs,
+  saveEmailTemplateConfig,
+  saveAllEmailTemplateConfigs,
+} from "@/lib/emailTemplateConfigService";
 import { getAppUrl, getRecommendedSupabaseRedirectUrls } from "@/lib/appUrl";
 import { usePlatformSettings } from "@/components/PlatformSettingsProvider";
 import { useToast } from "@/hooks/use-toast";
@@ -173,8 +178,6 @@ const SHORTCODE_TAGS = [
   { tag: "{{ .TokenHash }}", label: "Token Hash", desc: "Hashed security token for custom URL verification" },
   { tag: "{{ .Email }}", label: "User Email", desc: "Recipient user email address" },
 ];
-
-const STORAGE_KEY = "geflow_admin_email_templates_custom_v5";
 
 const DEFAULT_CONFIGS: Record<string, TemplateCustomFields> = {
   magic_link: {
@@ -399,19 +402,36 @@ export const EmailTemplatesManager = () => {
   const activeAppUrl = getAppUrl();
   const recommendedRedirects = getRecommendedSupabaseRedirectUrls();
 
-  // Load custom template configs from LocalStorage or fallback to default
-  const [templateConfigs, setTemplateConfigs] = useState<Record<string, TemplateCustomFields>>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return { ...DEFAULT_CONFIGS, ...parsed };
+  // Load custom template configs from Supabase (DEFAULT_CONFIGS until loaded)
+  const [templateConfigs, setTemplateConfigs] = useState<Record<string, TemplateCustomFields>>(DEFAULT_CONFIGS);
+  const [configsLoading, setConfigsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const fromDb = await fetchEmailTemplateConfigs();
+        if (cancelled) return;
+        if (fromDb && Object.keys(fromDb).length > 0) {
+          const merged: Record<string, TemplateCustomFields> = { ...DEFAULT_CONFIGS };
+          for (const [id, cfg] of Object.entries(fromDb)) {
+            merged[id] = {
+              ...(DEFAULT_CONFIGS[id] || DEFAULT_CONFIGS.magic_link),
+              ...(cfg as TemplateCustomFields),
+            };
+          }
+          setTemplateConfigs(merged);
+        }
+      } catch (e) {
+        console.error("Failed to load email template configs:", e);
+      } finally {
+        if (!cancelled) setConfigsLoading(false);
       }
-    } catch (e) {
-      console.warn("Failed to parse custom email templates", e);
-    }
-    return DEFAULT_CONFIGS;
-  });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const currentTpl = EMAIL_TEMPLATES.find((t) => t.id === selectedId) || EMAIL_TEMPLATES[0];
   const currentConfig = templateConfigs[selectedId] || DEFAULT_CONFIGS[selectedId] || DEFAULT_CONFIGS.magic_link;
@@ -420,18 +440,16 @@ export const EmailTemplatesManager = () => {
   // Real-time update handler with instant LocalStorage caching
   const updateField = (field: keyof TemplateCustomFields, value: any) => {
     setTemplateConfigs((prev) => {
+      const nextConfig = {
+        ...(prev[selectedId] || DEFAULT_CONFIGS[selectedId]),
+        [field]: value,
+      };
       const updated = {
         ...prev,
-        [selectedId]: {
-          ...(prev[selectedId] || DEFAULT_CONFIGS[selectedId]),
-          [field]: value,
-        },
+        [selectedId]: nextConfig,
       };
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      } catch (e) {
-        // ignore
-      }
+      // Persist this template to Supabase (fire-and-forget)
+      void saveEmailTemplateConfig(selectedId, nextConfig as unknown as Record<string, unknown>);
       return updated;
     });
   };
@@ -456,7 +474,7 @@ export const EmailTemplatesManager = () => {
     if (defaults) {
       setTemplateConfigs((prev) => {
         const updated = { ...prev, [selectedId]: { ...defaults } };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        void saveEmailTemplateConfig(selectedId, updated[selectedId] as unknown as Record<string, unknown>);
         return updated;
       });
       toast({
