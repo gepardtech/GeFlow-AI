@@ -1,9 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { LogItem, LogSeverity, LogStatus, LogCategory } from "@/types/logs";
 
-const STORAGE_KEY = "pos_admin_audit_logs_v2";
-const BLOCKED_IPS_KEY = "pos_admin_blocked_ips";
-
 export interface LogServiceFilter {
   category?: string;
   severity?: string;
@@ -47,47 +44,24 @@ export const formatLogDate = (isoString: string): string => {
   }
 };
 
-// Retrieve locally saved override actions (e.g. resolved logs, manual logs)
-export const getLocalLogOverrides = (): Record<string, Partial<LogItem>> => {
-  try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : {};
-  } catch {
-    return {};
-  }
-};
+// In-memory only (no localStorage). Resolve/block persist for this browser session until reload.
+const sessionOverrides: Record<string, Partial<LogItem>> = {};
+const sessionBlockedIps = new Set<string>();
+
+export const getLocalLogOverrides = (): Record<string, Partial<LogItem>> => ({ ...sessionOverrides });
 
 export const saveLocalLogOverride = (id: string, updates: Partial<LogItem>) => {
-  try {
-    const existing = getLocalLogOverrides();
-    existing[id] = { ...existing[id], ...updates };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
-  } catch (e) {
-    console.error("Failed to save log override", e);
-  }
+  sessionOverrides[id] = { ...sessionOverrides[id], ...updates };
 };
 
-export const getBlockedIps = (): string[] => {
-  try {
-    const data = localStorage.getItem(BLOCKED_IPS_KEY);
-    return data ? JSON.parse(data) : ["198.51.100.24", "203.0.113.89"];
-  } catch {
-    return ["198.51.100.24"];
-  }
-};
+export const getBlockedIps = (): string[] => Array.from(sessionBlockedIps);
 
 export const blockIpAddress = (ip: string): void => {
-  const current = getBlockedIps();
-  if (!current.includes(ip)) {
-    const updated = [ip, ...current];
-    localStorage.setItem(BLOCKED_IPS_KEY, JSON.stringify(updated));
-  }
+  if (ip) sessionBlockedIps.add(ip);
 };
 
 export const unblockIpAddress = (ip: string): void => {
-  const current = getBlockedIps();
-  const updated = current.filter((item) => item !== ip);
-  localStorage.setItem(BLOCKED_IPS_KEY, JSON.stringify(updated));
+  sessionBlockedIps.delete(ip);
 };
 
 /**
@@ -323,115 +297,9 @@ export async function fetchLiveAuditLogs(): Promise<LogItem[]> {
   }
 
   // 7. Inject System & Security Telemetry Events (Real health & security telemetry)
-  const now = Date.now();
-  const sysTime = (mins: number) => new Date(now - mins * 60 * 1000).toISOString();
 
-  const systemTelemetry: LogItem[] = [
-    {
-      id: "SYS-DB-001",
-      timestamp: sysTime(1),
-      module: "Database Engine",
-      event: "PostgreSQL Connection Pool Verified",
-      category: "system",
-      severity: "info",
-      status: "healthy",
-      ip: "10.0.4.12",
-      description: "Postgres connection pool healthy. Active pool: 14 connections, query latency 18ms, zero deadlocks.",
-      systemData: {
-        serviceName: "Supabase PostgreSQL 15.1",
-        latencyMs: 18,
-        version: "v15.1-cloud",
-        cpuPercent: 12.4,
-        memoryPercent: 28.6,
-        uptime: "99.99%",
-      },
-    },
-    {
-      id: "SEC-WAF-089",
-      timestamp: sysTime(6),
-      module: "Security & WAF",
-      event: "Brute Force Threshold Mitigation",
-      category: "security",
-      severity: "critical",
-      status: "blocked",
-      ip: "198.51.100.24",
-      country: "Russian Federation",
-      countryCode: "RU",
-      description: "Rate limiter blocked IP 198.51.100.24 after 15 failed authentication attempts against /auth/v1/token in 60s.",
-      securityData: {
-        threatType: "Credential Stuffing / Brute Force",
-        riskScore: 94,
-        detectionMethod: "WAF IP Rate Analyzer",
-        isBlocked: true,
-        recommendedAction: "IP blacklisted for 24 hours.",
-      },
-    },
-    {
-      id: "AI-GEN-410",
-      timestamp: sysTime(12),
-      module: "AI Intelligence",
-      event: "Sales Forecast Inference Computed",
-      category: "ai",
-      severity: "info",
-      status: "completed",
-      ip: "35.201.88.14",
-      description: "GeCore AI System Engine executed predictive 30-day inventory demand forecast across 142 catalog SKUs.",
-      aiData: {
-        feature: "Demand Forecasting",
-        model: "gecore-ai-engine",
-        provider: "GeCore AI",
-        latencyMs: 412,
-        promptTokens: 820,
-        completionTokens: 340,
-        totalTokens: 1160,
-        estimatedCost: 0.0008,
-      },
-    },
-    {
-      id: "ERR-GW-502",
-      timestamp: sysTime(28),
-      module: "API Gateway",
-      event: "Webhook Handshake Retry Succeeded",
-      category: "errors",
-      severity: "warning",
-      status: "resolved",
-      ip: "54.187.20.91",
-      description: "Stripe invoice webhook encountered a 504 gateway timeout on initial attempt. Handshake resolved on retry #2.",
-      errorData: {
-        errorType: "GatewayTimeout (504)",
-        errorCode: "HTTP_504_RETRY",
-        isRetryable: true,
-        isResolved: true,
-        resolutionNote: "Auto-retried successfully after 1.8s backoff.",
-      },
-    },
-    {
-      id: "SYS-AUTH-099",
-      timestamp: sysTime(45),
-      module: "Authentication",
-      event: "Admin Session Token Refresh",
-      category: "auth",
-      severity: "info",
-      status: "success",
-      user: {
-        name: "Super Administrator",
-        email: "admin@platform.internal",
-      },
-      ip: "127.0.0.1",
-      description: "JWT session token refreshed via secure HTTP-only refresh rotation.",
-      authData: {
-        action: "login",
-        method: "session",
-        sessionId: "sess_admin_master_active",
-      },
-    },
-  ];
-
-  // Merge database logs and system logs
-  const combined = [...logs, ...systemTelemetry];
-
-  // Apply any local user overrides (e.g. if user resolved an error, changed status, blocked an IP)
-  const finalLogs = combined.map((item) => {
+  // Session overrides only (status resolved etc.) — no fake system telemetry
+  const finalLogs = logs.map((item) => {
     if (overrides[item.id]) {
       return { ...item, ...overrides[item.id] };
     }
