@@ -5,7 +5,7 @@ import {
   SlidersHorizontal, Megaphone, TriangleAlert, Bell, ScrollText, GitBranch, Mail,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { PlanId } from "@/lib/plans";
+import type { PlanId } from "@/hooks/usePlan";
 
 export interface NavChild { label: string; to: string; }
 export interface NavItem {

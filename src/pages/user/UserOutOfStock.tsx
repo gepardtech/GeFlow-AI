@@ -6,6 +6,7 @@ import UserPanelGate from "@/components/UserPanelGate";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
 import { useProductCategories } from "@/hooks/useProductCategories";
 import { usePlan } from "@/hooks/usePlan";
+import { usePlanLimits } from "@/hooks/usePlanLimits";
 import { supabase } from "@/integrations/supabase/client";
 import { useMoney } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ const UserOutOfStock = () => {
   const { active, industryType, categoryName, loading: bizLoading } = useActiveBusiness();
   const { all: categories } = useProductCategories(industryType, categoryName);
   const { plan, email } = usePlan();
+  const { getLimit } = usePlanLimits();
   const { format: fmt } = useMoney();
 
   const [rows, setRows] = useState<OOSProduct[]>([]);
@@ -36,7 +38,9 @@ const UserOutOfStock = () => {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [stockTarget, setStockTarget] = useState<ProductRecord | null>(null);
 
-  const maxItems = plan.limits.outOfStockMax === "unlimited" ? 999 : plan.limits.outOfStockMax;
+  // Supabase plan_limits — null = unlimited
+  const limitRaw = getLimit("out_of_stock");
+  const maxItems = limitRaw === null ? 999999 : limitRaw;
   const catName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? "General";
 
   const load = useCallback(async () => {
