@@ -1,11 +1,17 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getPlan, normalizePlan, PlanId, PlanDefinition } from "@/lib/plans";
+
+export type PlanId = "free" | "standard" | "premium" | "lifetime";
+
+export interface PlanSummary {
+  id: PlanId;
+  label: string;
+}
 
 export interface PlanState {
   loading: boolean;
   planId: PlanId;
-  plan: PlanDefinition;
+  plan: PlanSummary;
   fullName: string | null;
   email: string | null;
   userId: string | null;
@@ -16,6 +22,26 @@ export interface PlanState {
   refreshPlan: () => Promise<void>;
 }
 
+const PLAN_LABELS: Record<PlanId, string> = {
+  free: "Free",
+  standard: "Standard",
+  premium: "Premium",
+  lifetime: "Lifetime VIP",
+};
+
+export const normalizePlan = (raw?: string | null): PlanId => {
+  const p = (raw || "free").toLowerCase().trim();
+  if (p === "standard") return "standard";
+  if (p === "premium") return "premium";
+  if (p === "lifetime" || p === "unlimited") return "lifetime";
+  return "free";
+};
+
+const toSummary = (id: PlanId): PlanSummary => ({
+  id,
+  label: PLAN_LABELS[id],
+});
+
 interface InternalPlanStore {
   loading: boolean;
   hasLoadedFromSupabase: boolean;
@@ -25,7 +51,6 @@ interface InternalPlanStore {
   userId: string | null;
 }
 
-// Module-level singleton store to prevent duplicate queries, thrashing, and flickering
 const planStore: InternalPlanStore = {
   loading: true,
   hasLoadedFromSupabase: false,
@@ -42,7 +67,7 @@ function notifyPlanListeners() {
     try {
       listener();
     } catch {
-      /* ignore subscriber error */
+      /* ignore */
     }
   });
 }
@@ -76,7 +101,7 @@ async function fetchAuthoritativePlan(): Promise<void> {
       planStore.email = user.email ?? null;
       planStore.fullName = (user.user_metadata?.full_name as string) || null;
 
-      // 1. Fetch Profile Record directly from Supabase
+      // 1. Profile from Supabase
       const { data: profData } = await supabase
         .from("profiles")
         .select("full_name, email, plan")
@@ -86,8 +111,8 @@ async function fetchAuthoritativePlan(): Promise<void> {
       if (profData?.full_name) planStore.fullName = profData.full_name;
       if (profData?.email) planStore.email = profData.email;
 
-      // 2. Check Admin role (Admins always get full lifetime enterprise access)
-      let isAdmin = (user.email?.toLowerCase() === "gepardwebs@gmail.com");
+      // 2. Admin → lifetime
+      let isAdmin = user.email?.toLowerCase() === "gepardwebs@gmail.com";
       if (!isAdmin) {
         const { data: roleRow } = await supabase
           .from("user_roles")
@@ -98,7 +123,7 @@ async function fetchAuthoritativePlan(): Promise<void> {
         isAdmin = Boolean(roleRow);
       }
 
-      // 3. Fetch Active Subscriptions directly from Supabase
+      // 3. Active subscription from Supabase
       const { data: subData } = await supabase
         .from("subscriptions")
         .select("tier, status")
@@ -108,7 +133,6 @@ async function fetchAuthoritativePlan(): Promise<void> {
         .limit(1)
         .maybeSingle();
 
-      // Resolve authoritative plan from Supabase
       let resolvedPlan: PlanId = "free";
 
       if (isAdmin) {
@@ -116,21 +140,17 @@ async function fetchAuthoritativePlan(): Promise<void> {
       } else {
         const subPlan = subData?.tier ? normalizePlan(subData.tier) : null;
         const profPlan = profData?.plan ? normalizePlan(profData.plan) : null;
-        const metaPlan = user.user_metadata?.plan ? normalizePlan(user.user_metadata.plan) : null;
+        const metaPlan = user.user_metadata?.plan
+          ? normalizePlan(user.user_metadata.plan as string)
+          : null;
 
-        // Take highest valid plan found in Supabase
         const candidates = [subPlan, profPlan, metaPlan].filter(Boolean) as PlanId[];
-        if (candidates.includes("lifetime")) {
-          resolvedPlan = "lifetime";
-        } else if (candidates.includes("premium")) {
-          resolvedPlan = "premium";
-        } else if (candidates.includes("standard")) {
-          resolvedPlan = "standard";
-        } else {
-          resolvedPlan = "free";
-        }
+        if (candidates.includes("lifetime")) resolvedPlan = "lifetime";
+        else if (candidates.includes("premium")) resolvedPlan = "premium";
+        else if (candidates.includes("standard")) resolvedPlan = "standard";
+        else resolvedPlan = "free";
 
-        // 4. Server-side authoritative fallback if client queries hit RLS restrictions
+        // Optional server route if RLS blocks client reads
         if (resolvedPlan === "free") {
           try {
             const { data: sessionData } = await supabase.auth.getSession();
@@ -142,7 +162,7 @@ async function fetchAuthoritativePlan(): Promise<void> {
               if (planRes.ok) {
                 const planJson = await planRes.json();
                 if (planJson?.success && planJson.planId) {
-                  resolvedPlan = planJson.planId as PlanId;
+                  resolvedPlan = normalizePlan(planJson.planId);
                   if (planJson.fullName) planStore.fullName = planJson.fullName;
                 }
               }
@@ -157,7 +177,7 @@ async function fetchAuthoritativePlan(): Promise<void> {
       planStore.hasLoadedFromSupabase = true;
       planStore.loading = false;
     } catch (err) {
-      console.warn("Notice checking authoritative plan from Supabase:", err);
+      console.error("Failed to resolve plan from Supabase:", err);
       planStore.loading = false;
       planStore.hasLoadedFromSupabase = true;
     } finally {
@@ -170,14 +190,17 @@ async function fetchAuthoritativePlan(): Promise<void> {
   return planFetchPromise;
 }
 
-// Set up global single Realtime and Auth subscription
 let isGlobalPlanSubscribed = false;
 function setupGlobalPlanSubscriber() {
   if (isGlobalPlanSubscribed) return;
   isGlobalPlanSubscribed = true;
 
   supabase.auth.onAuthStateChange((event) => {
-    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+    if (
+      event === "SIGNED_IN" ||
+      event === "TOKEN_REFRESHED" ||
+      event === "USER_UPDATED"
+    ) {
       fetchAuthoritativePlan();
     } else if (event === "SIGNED_OUT") {
       planStore.planId = "free";
@@ -190,15 +213,18 @@ function setupGlobalPlanSubscriber() {
     }
   });
 
-  // Supabase Realtime for profile & subscription changes
   supabase
     .channel("global_user_plan_sync")
-    .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, () => {
-      fetchAuthoritativePlan();
-    })
-    .on("postgres_changes", { event: "*", schema: "public", table: "subscriptions" }, () => {
-      fetchAuthoritativePlan();
-    })
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "profiles" },
+      () => fetchAuthoritativePlan()
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "subscriptions" },
+      () => fetchAuthoritativePlan()
+    )
     .subscribe();
 
   window.addEventListener("geflow:plan-changed", () => {
@@ -210,8 +236,8 @@ function setupGlobalPlanSubscriber() {
 }
 
 /**
- * Loads the current user's plan and guarantees it comes directly from Supabase (not stale cache).
- * Eliminates UI flicker and locked screen glitches.
+ * Current user plan — Supabase only (subscriptions + profiles + roles).
+ * Limits/modules ab usePlanLimits + usePlatformFeatures se aate hain.
  */
 export const usePlan = (): PlanState => {
   const [, setTick] = useState(0);
@@ -219,9 +245,7 @@ export const usePlan = (): PlanState => {
   useEffect(() => {
     setupGlobalPlanSubscriber();
 
-    const handleChange = () => {
-      setTick((t) => t + 1);
-    };
+    const handleChange = () => setTick((t) => t + 1);
     listeners.add(handleChange);
 
     if (!planStore.hasLoadedFromSupabase && !isPlanFetching) {
@@ -237,16 +261,16 @@ export const usePlan = (): PlanState => {
     await fetchAuthoritativePlan();
   }, []);
 
-  const planDef = getPlan(planStore.planId);
-  const isPremiumOrLifetime = planStore.planId === "premium" || planStore.planId === "lifetime";
-  const isStandardOrHigher = planStore.planId === "standard" || isPremiumOrLifetime;
-  const isLifetime = planStore.planId === "lifetime";
-  const isPaid = planStore.planId !== "free";
+  const planId = planStore.planId;
+  const isPremiumOrLifetime = planId === "premium" || planId === "lifetime";
+  const isStandardOrHigher = planId === "standard" || isPremiumOrLifetime;
+  const isLifetime = planId === "lifetime";
+  const isPaid = planId !== "free";
 
   return {
     loading: planStore.loading,
-    planId: planStore.planId,
-    plan: planDef,
+    planId,
+    plan: toSummary(planId),
     fullName: planStore.fullName,
     email: planStore.email,
     userId: planStore.userId,
@@ -257,4 +281,3 @@ export const usePlan = (): PlanState => {
     refreshPlan,
   };
 };
-
