@@ -144,11 +144,6 @@ export async function fetchSyncedProducts(
 
     if (!error && data && data.length > 0) {
       const cleanData = (data as SyncedProductItem[]).filter((p) => !isDemoProduct(p));
-      try {
-        localStorage.setItem(`geflow_products_${businessId}`, JSON.stringify(cleanData));
-      } catch {
-        /* ignore */
-      }
       return cleanData;
     }
   } catch (err) {
@@ -162,11 +157,6 @@ export async function fetchSyncedProducts(
       const data = await res.json();
       if (data.success && Array.isArray(data.products)) {
         const cleanProducts = (data.products as SyncedProductItem[]).filter((p) => !isDemoProduct(p));
-        try {
-          localStorage.setItem(`geflow_products_${businessId}`, JSON.stringify(cleanProducts));
-        } catch {
-          /* ignore */
-        }
         return cleanProducts;
       }
     }
@@ -174,55 +164,9 @@ export async function fetchSyncedProducts(
     console.warn("Notice querying sync engine:", err);
   }
 
-  // 3. Fallback to localStorage cache if network is offline
-  try {
-    const cached = localStorage.getItem(`geflow_products_${businessId}`);
-    if (cached) {
-      const parsed = JSON.parse(cached) as SyncedProductItem[];
-      const cleaned = parsed.filter((p: any) => !isDemoProduct(p));
-      return cleaned;
-    }
-  } catch {
-    /* ignore */
-  }
-
   return [];
 }
 
-// Global purge of legacy cached demo items in browser localStorage
-if (typeof window !== "undefined") {
-  try {
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith("geflow_products_") || key.startsWith("cached_reports_"))) {
-        const val = localStorage.getItem(key);
-        if (
-          val &&
-          (val.includes("prod_espresso") ||
-            val.includes("Organic Espresso") ||
-            val.includes("Caramel Macchiato") ||
-            val.includes("Butter Croissant") ||
-            val.includes("Barcode Scanner") ||
-            val.includes("Receipt Paper") ||
-            val.includes("Cash Drawer") ||
-            val.includes("Receipt Printer") ||
-            val.includes("Tablet Stand") ||
-            val.includes("Price Label Stickers") ||
-            val.includes("SCAN-WL-01") ||
-            val.includes("PPR-THM-80") ||
-            val.includes("CSH-DRW-HD") ||
-            val.includes("PRN-POS-80"))
-        ) {
-          keysToRemove.push(key);
-        }
-      }
-    }
-    keysToRemove.forEach((k) => localStorage.removeItem(k));
-  } catch {
-    /* ignore */
-  }
-}
 
 /**
  * Fetch synchronized operational dataset for Reports & Analytics
