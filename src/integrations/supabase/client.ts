@@ -189,7 +189,7 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
       }
     }
 
-    // 2. Handle session check without throwing uncaught errors
+    // 2. Session check when offline → unauthenticated (expected)
     if (urlString.includes("/auth/v1/user")) {
       return new Response(
         JSON.stringify({ error: "unauthenticated", message: "User is not signed in" }),
@@ -200,22 +200,14 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
       );
     }
 
+    // 3. Auth token/login/signup MUST surface real network errors (do NOT fake 400)
     if (urlString.includes("/auth/v1/")) {
-      return new Response(
-        JSON.stringify({
-          error: "auth_network_error",
-          error_description:
+      throw err instanceof Error
+        ? err
+        : new Error(
             err?.message ||
-            "Unable to reach authentication server. Please check your connection.",
-          message:
-            err?.message ||
-            "Unable to reach authentication server. Please check your connection.",
-        }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+              "Unable to reach authentication server. Please check your connection."
+          );
     }
 
     return handleFallbackResponse(urlString);

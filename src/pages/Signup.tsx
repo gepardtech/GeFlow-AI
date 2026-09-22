@@ -37,36 +37,15 @@ const Signup = () => {
     setLoading(true);
 
     try {
-      // 1. Try unified auto-confirmed registration endpoint
-      const regRes = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim(),
-          password,
-          fullName: fullName.trim(),
-          plan: "free",
-        }),
-      });
-
-      const regJson = await regRes.json();
-
-      if (regRes.ok && regJson.success) {
-        if (regJson.session) {
-          await supabase.auth.setSession({
-            access_token: regJson.session.access_token,
-            refresh_token: regJson.session.refresh_token,
-          });
-        }
-        toast({ title: "Account created!", description: "Welcome to GeFlow 🚀" });
-        if (email.trim().toLowerCase() === "gepardwebs@gmail.com") navigate("/admin");
+      const cleanEmail = email.trim().toLowerCase();
+      const goHome = () => {
+        if (cleanEmail === "gepardwebs@gmail.com") navigate("/admin");
         else navigate("/dashboard");
-        return;
-      }
+      };
 
-      // 2. Fallback to direct client signup
+      // 1) PRIMARY: direct Supabase signUp
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: cleanEmail,
         password,
         options: {
           data: { full_name: fullName.trim(), plan: "free" },
@@ -74,27 +53,69 @@ const Signup = () => {
         },
       });
 
-      if (error) {
-        toast({ title: "Signup failed", description: error.message, variant: "destructive" });
-      } else {
+      if (!error && data?.session) {
         toast({ title: "Account created!", description: "Welcome to GeFlow 🚀" });
-        if (data.session) {
-          if (email.trim().toLowerCase() === "gepardwebs@gmail.com") navigate("/admin");
-          else navigate("/dashboard");
-        } else {
-          // If email verification not enforced, attempt immediate login
-          const { data: logData } = await supabase.auth.signInWithPassword({
-            email: email.trim(),
-            password,
-          });
-          if (logData?.session) {
-            if (email.trim().toLowerCase() === "gepardwebs@gmail.com") navigate("/admin");
-            else navigate("/dashboard");
-          } else {
-            navigate("/login");
-          }
+        goHome();
+        return;
+      }
+
+      // 2) No session yet (email confirm may be on) — try password login
+      if (!error && data?.user) {
+        const { data: logData, error: logErr } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password,
+        });
+        if (!logErr && logData?.session) {
+          toast({ title: "Account created!", description: "Welcome to GeFlow 🚀" });
+          goHome();
+          return;
         }
       }
+
+      // 3) FALLBACK: server register (auto-confirm via service role)
+      try {
+        const regRes = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: cleanEmail,
+            password,
+            fullName: fullName.trim(),
+            plan: "free",
+          }),
+        });
+        const regJson = await regRes.json().catch(() => null);
+
+        if (regRes.ok && regJson?.success && regJson?.session) {
+          const { error: setErr } = await supabase.auth.setSession({
+            access_token: regJson.session.access_token,
+            refresh_token: regJson.session.refresh_token,
+          });
+          if (!setErr) {
+            toast({ title: "Account created!", description: "Welcome to GeFlow 🚀" });
+            goHome();
+            return;
+          }
+        }
+      } catch {
+        /* server optional */
+      }
+
+      if (error) {
+        toast({
+          title: "Signup failed",
+          description: error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Check your email",
+        description:
+          "Account created. Confirm your email if required, then sign in from the login page.",
+      });
+      navigate("/login");
     } catch (err: any) {
       toast({ title: "Signup failed", description: err?.message || "Failed to create account", variant: "destructive" });
     } finally {

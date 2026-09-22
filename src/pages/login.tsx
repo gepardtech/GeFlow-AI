@@ -29,38 +29,61 @@ const Login = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    let session = null;
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !password) {
+      toast({
+        title: "Missing fields",
+        description: "Email and password are required.",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+
+    let session: { access_token: string; refresh_token: string } | null = null;
     let authError: string | null = null;
 
     try {
-      const cleanEmail = email.trim().toLowerCase();
-      const apiRes = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail, password }),
+      // 1) PRIMARY: direct Supabase Auth (most reliable — no server dependency)
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password,
       });
 
-      const apiJson = await apiRes.json().catch(() => null);
-
-      if (apiRes.ok && apiJson?.success && apiJson?.session) {
-        session = apiJson.session;
-        await supabase.auth.setSession({
-          access_token: session.access_token,
-          refresh_token: session.refresh_token,
-        });
-      } else if (apiJson?.error) {
-        authError = apiJson.error;
+      if (!error && data?.session) {
+        session = data.session;
+      } else if (error) {
+        authError = error.message;
       }
 
-      if (!session && !authError) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password,
-        });
-        if (error) {
-          authError = error.message;
-        } else if (data?.session) {
-          session = data.session;
+      // 2) FALLBACK: server /api/auth/login (service-role helpers) only if client failed
+      if (!session) {
+        try {
+          const apiRes = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: cleanEmail, password }),
+          });
+          const apiJson = await apiRes.json().catch(() => null);
+
+          if (apiRes.ok && apiJson?.success && apiJson?.session) {
+            session = apiJson.session;
+            const { error: setErr } = await supabase.auth.setSession({
+              access_token: session.access_token,
+              refresh_token: session.refresh_token,
+            });
+            if (setErr) {
+              authError = setErr.message;
+              session = null;
+            } else {
+              authError = null;
+            }
+          } else if (apiJson?.error && !authError) {
+            authError = apiJson.error;
+          }
+        } catch {
+          /* server optional — keep client error */
         }
       }
 
@@ -83,14 +106,15 @@ const Login = () => {
         localStorage.removeItem("geflow_cached_owned_businesses");
         localStorage.removeItem("geflow_cached_staff_businesses");
         localStorage.removeItem("geflow.activeBusinessId");
-      } catch (e) {
-        console.warn("Storage reset error", e);
+      } catch {
+        /* ignore */
       }
 
       const params = new URLSearchParams(window.location.search);
       let redirectUrl = params.get("redirect");
       if (!redirectUrl) {
-        redirectUrl = cleanEmail === "gepardwebs@gmail.com" ? "/admin" : "/dashboard";
+        redirectUrl =
+          cleanEmail === "gepardwebs@gmail.com" ? "/admin" : "/dashboard";
       }
       window.location.replace(redirectUrl);
     } catch (err: any) {
