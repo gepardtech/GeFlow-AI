@@ -6,7 +6,7 @@ import { usePlan } from "@/hooks/usePlan";
 import { useNavigate, Link } from "react-router-dom";
 import UserPanelGate from "@/components/UserPanelGate";
 import { BusinessCategoryDef, BusinessItem } from "@/types/business";
-import { getExtendedBusinessData } from "@/lib/businessStorage";
+import { fetchExtendedBusinessData } from "@/lib/businessStorage";
 import { CURRENCY_SYMBOLS, currencyLabel, currencySymbol } from "@/lib/currencies";
 import { refreshBusinessMoney } from "@/lib/currency";
 import { CreateBusinessWizard } from "@/components/business/CreateBusinessWizard";
@@ -154,18 +154,20 @@ const UserBusinesses = () => {
       const catMap = new Map<string, BusinessCategoryDef>();
       loadedCats.forEach((c) => catMap.set(c.id, c));
 
-      const enrichedList: BusinessItem[] = finalBizRows.map((b) => {
-        const cat = b.category_id ? catMap.get(b.category_id) || null : null;
-        const ext = getExtendedBusinessData(b.id);
-        return {
-          ...b,
-          category: cat,
-          category_name: cat ? cat.name : "Retail / Commercial",
-          industry_type: cat ? cat.industry_type : "Retail",
-          extended: ext,
-          user_plan: userPlan,
-        };
-      });
+      const enrichedList: BusinessItem[] = await Promise.all(
+        finalBizRows.map(async (b) => {
+          const cat = b.category_id ? catMap.get(b.category_id) || null : null;
+          const ext = await fetchExtendedBusinessData(b.id);
+          return {
+            ...b,
+            category: cat,
+            category_name: cat ? cat.name : "Retail / Commercial",
+            industry_type: cat ? cat.industry_type : "Retail",
+            extended: ext,
+            user_plan: userPlan,
+          };
+        })
+      );
 
       setBusinesses(enrichedList);
     } catch (err: any) {

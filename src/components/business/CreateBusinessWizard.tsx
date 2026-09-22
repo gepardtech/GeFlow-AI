@@ -400,7 +400,7 @@ export const CreateBusinessWizard = ({
       };
 
       if (newBiz?.id) {
-        saveExtendedBusinessData(newBiz.id, extendedData);
+        await saveExtendedBusinessData(newBiz.id, extendedData);
       }
 
       // Trigger currency and active business refresh

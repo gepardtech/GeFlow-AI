@@ -1,5 +1,6 @@
+import { useState, useEffect } from "react";
 import { BusinessItem } from "@/types/business";
-import { getExtendedBusinessData } from "@/lib/businessStorage";
+import { fetchExtendedBusinessData, EMPTY_EXTENDED_BUSINESS } from "@/lib/businessStorage";
 import { currencyLabel, currencySymbol } from "@/lib/currencies";
 import {
   Dialog,
@@ -46,10 +47,24 @@ export const BusinessDetailsDrawer = ({
   isActive,
 }: BusinessDetailsDrawerProps) => {
   const { toast } = useToast();
+  const [ext, setExt] = useState(EMPTY_EXTENDED_BUSINESS);
+
+  useEffect(() => {
+    if (!business?.id) {
+      setExt(EMPTY_EXTENDED_BUSINESS);
+      return;
+    }
+    let cancelled = false;
+    fetchExtendedBusinessData(business.id).then((data) => {
+      if (!cancelled) setExt(data);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [business?.id]);
 
   if (!business) return null;
 
-  const ext = getExtendedBusinessData(business.id);
   const cur = (business.currency || "USD").toUpperCase();
 
   const handleCopyId = () => {

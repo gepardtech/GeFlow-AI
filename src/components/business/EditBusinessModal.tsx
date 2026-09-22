@@ -4,7 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CURRENCIES, currencyLabel } from "@/lib/currencies";
 import { COUNTRIES, TIMEZONES } from "@/lib/countries";
 import { BusinessCategoryDef, BusinessItem } from "@/types/business";
-import { getExtendedBusinessData, saveExtendedBusinessData } from "@/lib/businessStorage";
+import { fetchExtendedBusinessData, saveExtendedBusinessData } from "@/lib/businessStorage";
 import { refreshBusinessMoney } from "@/lib/currency";
 import {
   Dialog,
@@ -73,7 +73,7 @@ export const EditBusinessModal = ({
   const [stockAlertLimit, setStockAlertLimit] = useState(10);
   const [status, setStatus] = useState("active");
 
-  // Load Categories & Current Values
+  // Load Categories & Current Values from Supabase
   useEffect(() => {
     if (!open || !business) return;
 
@@ -87,12 +87,16 @@ export const EditBusinessModal = ({
     setStockAlertLimit(business.stock_alert_limit ?? 10);
     setStatus(business.status || "active");
 
-    const ext = getExtendedBusinessData(business.id);
-    setPhone(ext.phone || "");
-    setEmail(ext.email || "");
-    setWebsite(ext.website || "");
-    setDescription(ext.description || "");
-    setTimezone(ext.timezone || "UTC");
+    let cancelled = false;
+    (async () => {
+      const ext = await fetchExtendedBusinessData(business.id);
+      if (cancelled) return;
+      setPhone(ext.phone || "");
+      setEmail(ext.email || "");
+      setWebsite(ext.website || "");
+      setDescription(ext.description || "");
+      setTimezone(ext.timezone || "UTC");
+    })();
 
     const fetchCategories = async () => {
       setLoadingCategories(true);
@@ -106,6 +110,9 @@ export const EditBusinessModal = ({
     };
 
     fetchCategories();
+    return () => {
+      cancelled = true;
+    };
   }, [open, business]);
 
   const currencyChanged = currency !== originalCurrency;
@@ -139,9 +146,9 @@ export const EditBusinessModal = ({
 
       if (error) throw error;
 
-      // Save extended info
-      const ext = getExtendedBusinessData(business.id);
-      saveExtendedBusinessData(business.id, {
+      // Save extended info to Supabase
+      const ext = await fetchExtendedBusinessData(business.id);
+      await saveExtendedBusinessData(business.id, {
         ...ext,
         phone: phone.trim() || undefined,
         email: email.trim() || undefined,
