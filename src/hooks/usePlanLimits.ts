@@ -27,8 +27,55 @@ export interface PlanLimitsState {
 
 /** Map old caller aliases → DB resource_key */
 const normalizeResourceKey = (resourceKey: string): string => {
-  if (resourceKey === "categories") return "business_categories";
-  return resourceKey;
+  const k = resourceKey.toLowerCase().trim();
+  if (k === "categories") return "business_categories";
+  if (k === "items") return "products";
+  if (k === "stores") return "branches";
+  return k;
+};
+
+/** Default resource limits per plan when database row is not yet cached or offline */
+const DEFAULT_FALLBACK_LIMITS: Record<string, Record<string, { limit_value: number | null; is_locked: boolean }>> = {
+  free: {
+    products: { limit_value: 50, is_locked: false },
+    branches: { limit_value: 1, is_locked: false },
+    low_stock: { limit_value: 5, is_locked: false },
+    out_of_stock: { limit_value: 5, is_locked: false },
+    reports_days: { limit_value: 7, is_locked: false },
+    team_members: { limit_value: 0, is_locked: true },
+    business_categories: { limit_value: 1, is_locked: false },
+    businesses: { limit_value: 1, is_locked: false },
+  },
+  standard: {
+    products: { limit_value: 100, is_locked: false },
+    branches: { limit_value: 3, is_locked: false },
+    low_stock: { limit_value: 25, is_locked: false },
+    out_of_stock: { limit_value: 25, is_locked: false },
+    reports_days: { limit_value: 30, is_locked: false },
+    team_members: { limit_value: 5, is_locked: false },
+    business_categories: { limit_value: 5, is_locked: false },
+    businesses: { limit_value: 3, is_locked: false },
+  },
+  premium: {
+    products: { limit_value: null, is_locked: false },
+    branches: { limit_value: null, is_locked: false },
+    low_stock: { limit_value: null, is_locked: false },
+    out_of_stock: { limit_value: null, is_locked: false },
+    reports_days: { limit_value: null, is_locked: false },
+    team_members: { limit_value: null, is_locked: false },
+    business_categories: { limit_value: null, is_locked: false },
+    businesses: { limit_value: null, is_locked: false },
+  },
+  lifetime: {
+    products: { limit_value: null, is_locked: false },
+    branches: { limit_value: null, is_locked: false },
+    low_stock: { limit_value: null, is_locked: false },
+    out_of_stock: { limit_value: null, is_locked: false },
+    reports_days: { limit_value: null, is_locked: false },
+    team_members: { limit_value: null, is_locked: false },
+    business_categories: { limit_value: null, is_locked: false },
+    businesses: { limit_value: null, is_locked: false },
+  },
 };
 
 /**
@@ -106,22 +153,43 @@ export const usePlanLimits = (): PlanLimitsState => {
    */
   const getLimit = (resourceKey: string): number | null => {
     const row = getRow(resourceKey);
-    if (!row) return 0;
-    return row.limit_value;
+    if (row) return row.limit_value;
+
+    const p = (planId || "free").toLowerCase();
+    const fallback = DEFAULT_FALLBACK_LIMITS[p]?.[normalizeResourceKey(resourceKey)];
+    if (fallback !== undefined) return fallback.limit_value;
+    if (p === "premium" || p === "lifetime") return null;
+    return null;
   };
 
   const isLocked = (resourceKey: string): boolean => {
     const row = getRow(resourceKey);
-    if (!row) return true;
-    return row.is_locked === true;
+    if (row) return row.is_locked === true;
+
+    const p = (planId || "free").toLowerCase();
+    const fallback = DEFAULT_FALLBACK_LIMITS[p]?.[normalizeResourceKey(resourceKey)];
+    if (fallback !== undefined) return fallback.is_locked;
+    if (p === "premium" || p === "lifetime") return false;
+    return false;
   };
 
   const isExceeded = (resourceKey: string, usage: number): boolean => {
     const row = getRow(resourceKey);
-    if (!row) return true;
-    if (row.is_locked) return true;
-    if (row.limit_value === null) return false;
-    return usage >= row.limit_value;
+    if (row) {
+      if (row.is_locked) return true;
+      if (row.limit_value === null) return false;
+      return usage >= row.limit_value;
+    }
+
+    const p = (planId || "free").toLowerCase();
+    const fallback = DEFAULT_FALLBACK_LIMITS[p]?.[normalizeResourceKey(resourceKey)];
+    if (fallback) {
+      if (fallback.is_locked) return true;
+      if (fallback.limit_value === null) return false;
+      return usage >= fallback.limit_value;
+    }
+    if (p === "premium" || p === "lifetime") return false;
+    return false;
   };
 
   const remaining = (resourceKey: string, usage: number): number | null => {

@@ -317,7 +317,11 @@ class PromotionsService {
     const prevLen = this.coupons.length;
     this.coupons = this.coupons.filter((c) => c.id !== id);
     if (this.coupons.length !== prevLen) {
-      this.saveCoupons();
+      serverSupabase
+        .from("coupons")
+        .delete()
+        .eq("id", id)
+        .then();
       return true;
     }
     return false;

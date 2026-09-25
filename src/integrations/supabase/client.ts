@@ -2,29 +2,12 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 
-const CANONICAL_SUPABASE_URL = "https://gvkvljxhufsrgyfsqrkc.supabase.co";
-const CANONICAL_ANON_KEY =
+export const CANONICAL_SUPABASE_URL = "https://gvkvljxhufsrgyfsqrkc.supabase.co";
+export const CANONICAL_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2a3ZsanhodWZzcmd5ZnNxcmtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1OTAzNDMsImV4cCI6MjA5NjE2NjM0M30.sef1DVX7ysCEXrNlptxJbht-RvsHxxVze6Op5o95NbE";
 
-const RAW_SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
-const RAW_SUPABASE_KEY = (
-  (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ||
-  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined)
-)?.trim();
-
-export const SUPABASE_URL =
-  RAW_SUPABASE_URL &&
-  !RAW_SUPABASE_URL.includes("placeholder") &&
-  !RAW_SUPABASE_URL.includes("example")
-    ? RAW_SUPABASE_URL
-    : CANONICAL_SUPABASE_URL;
-
-export const SUPABASE_PUBLISHABLE_KEY =
-  RAW_SUPABASE_KEY &&
-  !RAW_SUPABASE_KEY.includes("placeholder") &&
-  !RAW_SUPABASE_KEY.includes("anon-key")
-    ? RAW_SUPABASE_KEY
-    : CANONICAL_ANON_KEY;
+export const SUPABASE_URL = CANONICAL_SUPABASE_URL;
+export const SUPABASE_PUBLISHABLE_KEY = CANONICAL_ANON_KEY;
 
 const safeSupabaseFetch: typeof fetch = async (input, init) => {
   const urlString =
@@ -87,16 +70,27 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
     return makeMockResponse([]);
   };
 
-  // Route Supabase requests through the local proxy first to guarantee database sync and bypass iframe CORS restrictions
-  if (urlString.includes("gvkvljxhufsrgyfsqrkc.supabase.co")) {
+  // Route Supabase requests through the local proxy to guarantee database sync and bypass iframe CORS restrictions.
+  // CRITICAL: Supabase Auth (/auth/v1/) has full native CORS support and must talk directly to Gotrue
+  // to ensure session persistence, refresh tokens, PKCE callbacks, and onAuthStateChange listeners sync cleanly.
+  const isAuthRequest = urlString.includes("/auth/v1/");
+
+  if (urlString.includes(".supabase.co") && !isAuthRequest) {
     try {
       const proxyUrl = urlString.replace(
-        "https://gvkvljxhufsrgyfsqrkc.supabase.co",
+        /https:\/\/[^/]+\.supabase\.co/,
         "/api/supabase-proxy"
       );
       const proxyRes = await fetch(proxyUrl, init);
-      if (proxyRes.ok || (proxyRes.status >= 200 && proxyRes.status < 500)) {
+      const contentType = proxyRes.headers.get("content-type") || "";
+      const isHtml = contentType.toLowerCase().includes("text/html");
+
+      // Reject HTML responses from proxy (e.g. dev server warmup or Vite fallback HTML)
+      if (!isHtml && (proxyRes.ok || (proxyRes.status >= 200 && proxyRes.status < 500))) {
         return proxyRes;
+      }
+      if (isHtml) {
+        console.warn("Notice: proxy returned HTML document instead of data payload, falling back:", proxyUrl);
       }
     } catch (err: any) {
       if (err?.name === "AbortError" || (init as any)?.signal?.aborted) {
@@ -174,10 +168,10 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
     }
 
     // 1. If direct fetch to Supabase was blocked (CORS / iframe sandbox / network), retry via local server proxy
-    if (urlString.includes("gvkvljxhufsrgyfsqrkc.supabase.co")) {
+    if (urlString.includes(".supabase.co")) {
       try {
         const proxyUrl = urlString.replace(
-          "https://gvkvljxhufsrgyfsqrkc.supabase.co",
+          /https:\/\/[^/]+\.supabase\.co/,
           "/api/supabase-proxy"
         );
         const proxyRes = await fetch(proxyUrl, init);
@@ -189,10 +183,14 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
       }
     }
 
-    // 2. Session check when offline → unauthenticated (expected)
-    if (urlString.includes("/auth/v1/user")) {
+    // 2. Session check or token refresh when offline → unauthenticated Response rather than throwing
+    if (
+      urlString.includes("/auth/v1/user") ||
+      urlString.includes("grant_type=refresh_token") ||
+      urlString.includes("/auth/v1/token")
+    ) {
       return new Response(
-        JSON.stringify({ error: "unauthenticated", message: "User is not signed in" }),
+        JSON.stringify({ error: "unauthenticated", message: "User session expired or network unavailable" }),
         {
           status: 401,
           headers: { "Content-Type": "application/json" },
@@ -200,14 +198,41 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
       );
     }
 
-    // 3. Auth token/login/signup MUST surface real network errors (do NOT fake 400)
+    if (urlString.includes("/auth/v1/settings")) {
+      return new Response(
+        JSON.stringify({
+          external: { email: true },
+          disable_signup: false,
+          mailer_autoconfirm: false,
+          phone_autoconfirm: false,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (urlString.includes("/auth/v1/logout") || urlString.includes("/auth/v1/signout")) {
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // 3. Auth login/signup when unreachable returns a structured error Response (never throws unhandled TypeError)
     if (urlString.includes("/auth/v1/")) {
-      throw err instanceof Error
-        ? err
-        : new Error(
-            err?.message ||
-              "Unable to reach authentication server. Please check your connection."
-          );
+      return new Response(
+        JSON.stringify({
+          error: "network_error",
+          error_description: "Unable to reach authentication server. Please check your connection.",
+          msg: "Unable to reach authentication server. Please check your connection.",
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     }
 
     return handleFallbackResponse(urlString);

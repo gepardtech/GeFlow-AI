@@ -84,11 +84,26 @@ const AdminBillingInvoices = () => {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    let q = supabase.from("invoices").select("*").order("created_at", { ascending: false });
-    if (!search) q = q.limit(10);
-    const { data } = await q;
-    setRows((data as Inv[]) ?? []);
-    setLoading(false);
+    try {
+      const qUrl = search ? `/api/admin/invoices?search=${encodeURIComponent(search)}` : "/api/admin/invoices";
+      const res = await fetch(qUrl);
+      const json = await res.json();
+      if (json.success && Array.isArray(json.invoices)) {
+        setRows(json.invoices as Inv[]);
+      } else {
+        let q = supabase.from("invoices").select("*").order("created_at", { ascending: false });
+        if (!search) q = q.limit(50);
+        const { data } = await q;
+        setRows((data as Inv[]) ?? []);
+      }
+    } catch {
+      let q = supabase.from("invoices").select("*").order("created_at", { ascending: false });
+      if (!search) q = q.limit(50);
+      const { data } = await q;
+      setRows((data as Inv[]) ?? []);
+    } finally {
+      setLoading(false);
+    }
   }, [search]);
 
   useEffect(() => {
@@ -111,28 +126,57 @@ const AdminBillingInvoices = () => {
     setBusy(true);
     const prefix = (settings?.invoice_prefix?.trim() || "INV").replace(/-+$/, "");
     const num = `${prefix}-${Date.now().toString().slice(-6)}`;
-    const { data: { user } } = await supabase.auth.getUser();
-    const { error, data } = await supabase.from("invoices").insert({
-      invoice_number: num, owner_user_id: user?.id ?? null,
-      client_name: form.client_name.trim(), billing_email: form.billing_email.trim(),
-      plan: form.plan, payment_method: form.payment_method,
-      amount: Number(form.amount), status: form.status, issue_date: form.issue_date,
+    const payload = {
+      invoice_number: num,
+      client_name: form.client_name.trim(),
+      billing_email: form.billing_email.trim(),
+      plan: form.plan,
+      payment_method: form.payment_method,
+      amount: Number(form.amount),
+      status: form.status,
+      issue_date: form.issue_date,
       notes: form.notes || null,
-    }).select().single();
-    setBusy(false);
-    if (error) { toast({ title: "Save failed", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Invoice created" });
-    setOpen(false);
-    if (data) downloadInvoicePdf(data as any, brand);
-    setForm(blank());
+    };
+
+    try {
+      const res = await fetch("/api/admin/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Failed to create invoice");
+      }
+      toast({ title: "Invoice created" });
+      setOpen(false);
+      if (json.invoice) downloadInvoicePdf(json.invoice as any, brand);
+      setForm(blank());
+      load();
+    } catch (err: any) {
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const confirmDelete = async () => {
     if (!delTarget) return;
-    const { error } = await supabase.from("invoices").delete().eq("id", delTarget.id);
-    if (error) { toast({ title: "Delete failed", description: error.message, variant: "destructive" }); }
-    else { toast({ title: "Invoice deleted", description: delTarget.invoice_number }); load(); }
-    setDelTarget(null);
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/invoices/${delTarget.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Failed to delete invoice");
+      }
+      toast({ title: "Invoice deleted", description: delTarget.invoice_number });
+      setDelTarget(null);
+      load();
+    } catch (err: any) {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
   };
 
 

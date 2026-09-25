@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import {
   Search, Filter, Building2, TrendingUp, Zap, Ban, MoreVertical, Eye, BarChart3,
-  ShieldOff, RotateCcw, Loader2,
+  ShieldOff, RotateCcw, Loader2, Trash2,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -86,6 +86,7 @@ const AdminBusinesses = () => {
   const [analytics, setAnalytics] = useState<BusinessRow | null>(null);
   const [suspendBiz, setSuspendBiz] = useState<BusinessRow | null>(null);
   const [resetBiz, setResetBiz] = useState<BusinessRow | null>(null);
+  const [deleteBiz, setDeleteBiz] = useState<BusinessRow | null>(null);
   const [stats, setStats] = useState<BizStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -195,12 +196,11 @@ const AdminBusinesses = () => {
         }
       });
 
-      const enrichedRows = (bizList as BusinessRow[] ?? []).map((b) => {
+      const enrichedRows = ((bizList as BusinessRow[]) ?? []).map((b) => {
         const directCount = bizProdCounts[b.id] || 0;
-        const recordedCount = Number(b.listed_products) || 0;
         return {
           ...b,
-          listed_products: Math.max(directCount, recordedCount),
+          listed_products: directCount,
         };
       });
 
@@ -330,6 +330,46 @@ const AdminBusinesses = () => {
     }
     setResetBiz(null);
     setBusy(false);
+  };
+
+  const submitDelete = async () => {
+    if (!deleteBiz) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/businesses/${deleteBiz.id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast({
+          title: "Business deleted permanently",
+          description: `${deleteBiz.business_name} and all related inventory, sales, and settings were removed.`,
+        });
+        load();
+        setDeleteBiz(null);
+        setBusy(false);
+        return;
+      }
+    } catch {
+      /* proceed to direct DB fallback */
+    }
+
+    try {
+      await Promise.allSettled([
+        supabase.from("products").delete().eq("business_id", deleteBiz.id),
+        supabase.from("sales").delete().eq("business_id", deleteBiz.id),
+        supabase.from("held_orders").delete().eq("business_id", deleteBiz.id),
+        supabase.from("business_staff").delete().eq("business_id", deleteBiz.id),
+        supabase.from("businesses").delete().eq("id", deleteBiz.id),
+      ]);
+      toast({
+        title: "Business deleted permanently",
+        description: `${deleteBiz.business_name} was removed from the database.`,
+      });
+      load();
+    } catch (err: any) {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    } finally {
+      setDeleteBiz(null);
+      setBusy(false);
+    }
   };
 
   const StatCard = ({ label, value, icon: Icon, accent }: any) => (
@@ -487,6 +527,10 @@ const AdminBusinesses = () => {
                         <DropdownMenuItem onClick={() => setResetBiz(r)} className="text-rose-500 focus:text-rose-500">
                           <RotateCcw className="h-4 w-4 mr-2" /> Reset Business Data
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => setDeleteBiz(r)} className="text-destructive focus:text-destructive">
+                          <Trash2 className="h-4 w-4 mr-2" /> Delete Business
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </td>
@@ -593,6 +637,25 @@ const AdminBusinesses = () => {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={submitReset} disabled={busy} className="bg-rose-500 hover:bg-rose-600">{busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Reset Data</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete business */}
+      <AlertDialog open={!!deleteBiz} onOpenChange={(o) => !o && setDeleteBiz(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this business permanently?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes <span className="font-bold">{deleteBiz?.business_name}</span>, including all its inventory products,
+              sales history, staff allocations, and configuration. This action is irreversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={submitDelete} disabled={busy} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Delete Business
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

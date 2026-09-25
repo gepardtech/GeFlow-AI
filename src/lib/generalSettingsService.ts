@@ -124,7 +124,7 @@ export function setCachedGeneralSettings(settings: PlatformGeneralSettings) {
 }
 
 /**
- * Load general settings from Supabase only.
+ * Load general settings from Supabase or server backend.
  * Stored at: platform_settings.alerts.general_settings
  */
 export async function fetchGeneralSettings(): Promise<PlatformGeneralSettings> {
@@ -135,17 +135,25 @@ export async function fetchGeneralSettings(): Promise<PlatformGeneralSettings> {
       .limit(1)
       .maybeSingle();
 
-    if (error) {
-      console.error("platform_settings fetch failed:", error.message);
-      return { ...DEFAULT_GENERAL_SETTINGS };
+    if (!error && data?.alerts) {
+      const alerts = (data.alerts as any) || {};
+      const general = alerts.general_settings;
+      if (general) {
+        const normalized = normalizeSettings(general);
+        notify(normalized);
+        return normalized;
+      }
     }
 
-    const alerts = (data?.alerts as any) || {};
-    const general = alerts.general_settings;
-    if (general) {
-      const normalized = normalizeSettings(general);
-      notify(normalized);
-      return normalized;
+    // Fallback to backend API endpoint if Supabase direct query had no data or was restricted
+    const res = await fetch("/api/admin/general-settings");
+    if (res.ok) {
+      const json = await res.json();
+      if (json?.settings) {
+        const normalized = normalizeSettings(json.settings);
+        notify(normalized);
+        return normalized;
+      }
     }
 
     return { ...DEFAULT_GENERAL_SETTINGS };
@@ -156,13 +164,44 @@ export async function fetchGeneralSettings(): Promise<PlatformGeneralSettings> {
 }
 
 /**
- * Save general settings to Supabase only (merge into platform_settings.alerts).
+ * Save general settings with dual resilience:
+ * 1. Primary: dedicated server endpoint `/api/admin/general-settings` (runs service-role, persists alerts & settingsService)
+ * 2. Fallback: direct Supabase platform_settings mutation
  */
 export async function saveGeneralSettings(
   settings: PlatformGeneralSettings
 ): Promise<PlatformGeneralSettings> {
   const normalized = normalizeSettings(settings);
 
+  // Helper to sanitize any HTML responses (e.g. server warmup pages) into clean human text
+  const sanitizeErrorMessage = (err: any): string => {
+    const rawMsg = err?.message || String(err || "");
+    if (rawMsg.includes("<!doctype") || rawMsg.includes("<html") || rawMsg.includes("Starting Server")) {
+      return "The server is currently initializing. Please retry in a few moments.";
+    }
+    return rawMsg || "Failed to save settings.";
+  };
+
+  // Primary: Attempt direct server endpoint with service role
+  try {
+    const res = await fetch("/api/admin/general-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings: normalized }),
+    });
+
+    if (res.ok) {
+      const result = await res.json();
+      if (result.success) {
+        notify(normalized);
+        return normalized;
+      }
+    }
+  } catch (backendErr) {
+    console.warn("Notice: server endpoint save failed, falling back to Supabase client:", backendErr);
+  }
+
+  // Fallback: direct Supabase client write
   try {
     const { data: row, error: readError } = await supabase
       .from("platform_settings")
@@ -172,7 +211,7 @@ export async function saveGeneralSettings(
 
     if (readError) {
       console.error("platform_settings read failed:", readError.message);
-      throw readError;
+      throw new Error(sanitizeErrorMessage(readError));
     }
 
     const existingAlerts =
@@ -191,7 +230,7 @@ export async function saveGeneralSettings(
 
       if (updateError) {
         console.error("platform_settings update failed:", updateError.message);
-        throw updateError;
+        throw new Error(sanitizeErrorMessage(updateError));
       }
     } else {
       const { error: insertError } = await supabase
@@ -200,14 +239,15 @@ export async function saveGeneralSettings(
 
       if (insertError) {
         console.error("platform_settings insert failed:", insertError.message);
-        throw insertError;
+        throw new Error(sanitizeErrorMessage(insertError));
       }
     }
 
     notify(normalized);
     return normalized;
-  } catch (err) {
-    console.error("saveGeneralSettings exception:", err);
-    throw err;
+  } catch (err: any) {
+    const cleanErrorMsg = sanitizeErrorMessage(err);
+    console.error("saveGeneralSettings exception:", cleanErrorMsg);
+    throw new Error(cleanErrorMsg);
   }
 }

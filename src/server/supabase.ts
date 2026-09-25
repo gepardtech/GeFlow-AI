@@ -6,10 +6,13 @@ const SERVICE_ROLE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2a3ZsanhodWZzcmd5ZnNxcmtjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDU5MDM0MywiZXhwIjoyMDk2MTY2MzQzfQ.LEwFjg1t256dibB7MaWlm3fnL6g6NCD7D-BceawDTLA";
 
-const ANON_KEY =
-  process.env.VITE_SUPABASE_ANON_KEY ||
-  process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+const CANONICAL_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2a3ZsanhodWZzcmd5ZnNxcmtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1OTAzNDMsImV4cCI6MjA5NjE2NjM0M30.sef1DVX7ysCEXrNlptxJbht-RvsHxxVze6Op5o95NbE";
+
+const ANON_KEY =
+  (process.env.VITE_SUPABASE_ANON_KEY?.includes("gvkvljxhufsrgyfsqrkc")
+    ? process.env.VITE_SUPABASE_ANON_KEY
+    : null) || CANONICAL_ANON_KEY;
 
 export const serverSupabase: SupabaseClient = createClient(PROJECT_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },

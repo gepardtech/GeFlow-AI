@@ -12,33 +12,45 @@ export default function ScrollToTop() {
 
     if (!hash) {
       const resetScroll = () => {
-        window.scrollTo(0, 0);
-        if (document.documentElement) {
-          document.documentElement.scrollTop = 0;
-          document.documentElement.scrollLeft = 0;
-        }
-        if (document.body) {
-          document.body.scrollTop = 0;
-          document.body.scrollLeft = 0;
+        try {
+          if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
+            window.scrollTo(0, 0);
+          }
+          if (document.documentElement) {
+            document.documentElement.scrollTop = 0;
+            document.documentElement.scrollLeft = 0;
+          }
+          if (document.body) {
+            document.body.scrollTop = 0;
+            document.body.scrollLeft = 0;
+          }
+        } catch {
+          // Ignore scroll errors in restricted iframes
         }
       };
 
       // Run immediately
       resetScroll();
       // Run on next animation frame
-      const raf = requestAnimationFrame(resetScroll);
+      const raf = typeof requestAnimationFrame === "function" ? requestAnimationFrame(resetScroll) : 0;
       // Run shortly after DOM paint
       const t = setTimeout(resetScroll, 20);
 
       return () => {
-        cancelAnimationFrame(raf);
+        if (typeof cancelAnimationFrame === "function" && raf) {
+          cancelAnimationFrame(raf);
+        }
         clearTimeout(t);
       };
     } else {
-      const id = hash.replace("#", "");
-      const element = document.getElementById(id);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth" });
+      try {
+        const id = hash.replace("#", "");
+        const element = document.getElementById(id);
+        if (element && typeof element.scrollIntoView === "function") {
+          element.scrollIntoView({ behavior: "smooth" });
+        }
+      } catch {
+        // Ignore scrollIntoView errors
       }
     }
   }, [pathname, search, hash]);

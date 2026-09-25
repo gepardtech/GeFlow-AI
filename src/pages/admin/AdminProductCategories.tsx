@@ -37,10 +37,20 @@ const AdminProductCategories = () => {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.from("product_categories").select("*").order("created_at", { ascending: true });
-    if (error) toast({ title: "Failed to load", description: error.message, variant: "destructive" });
-    setRows((data as CatRow[]) ?? []);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/admin/product-categories");
+      const json = await res.json();
+      if (json.success && Array.isArray(json.categories)) {
+        setRows(json.categories);
+      } else {
+        const { data } = await supabase.from("product_categories").select("*").order("created_at", { ascending: true });
+        setRows((data as CatRow[]) ?? []);
+      }
+    } catch (err: any) {
+      toast({ title: "Failed to load", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   }, [toast]);
 
   useEffect(() => {
@@ -91,30 +101,56 @@ const AdminProductCategories = () => {
     const baseSlug = slugify(form.name);
     const slug = editing ? editing.slug : `${baseSlug}-${Math.random().toString(36).slice(2,6)}`;
     const payload: any = {
-      name: form.name.trim(), slug, parent_id: form.parent_id, description: form.description.trim() || null,
+      id: editing?.id,
+      name: form.name.trim(),
+      slug,
+      parent_id: form.parent_id,
+      description: form.description.trim() || null,
       industry_assignments: form.industries,
-      inherit_expiry: form.expiry, inherit_batch: form.batch, inherit_barcode: form.barcode, inherit_alerts: form.alerts,
+      inherit_expiry: form.expiry,
+      inherit_batch: form.batch,
+      inherit_barcode: form.barcode,
+      inherit_alerts: form.alerts,
     };
-    let error;
-    if (editing) ({ error } = await supabase.from("product_categories").update(payload).eq("id", editing.id));
-    else {
-      const { data: { user } } = await supabase.auth.getUser();
-      ({ error } = await supabase.from("product_categories").insert({ ...payload, created_by_user_id: user!.id }));
+
+    try {
+      const res = await fetch("/api/admin/product-categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Failed to save category");
+      }
+      toast({ title: editing ? "Category updated" : "Category created" });
+      setEditing(null);
+      setForm(blank());
+      load();
+    } catch (err: any) {
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
-    if (error) { toast({ title: "Save failed", description: error.message, variant: "destructive" }); return; }
-    toast({ title: editing ? "Category updated" : "Category created" });
-    setEditing(null); setForm(blank());
   };
 
   const confirmDelete = async () => {
     if (!del) return;
     setBusy(true);
-    const { error } = await supabase.from("product_categories").delete().eq("id", del.id);
-    setBusy(false);
-    if (error) { toast({ title: "Delete failed", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Category deleted" });
-    setDel(null);
+    try {
+      const res = await fetch(`/api/admin/product-categories/${del.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Failed to delete category");
+      }
+      toast({ title: "Category deleted" });
+      setDel(null);
+      load();
+    } catch (err: any) {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const toggleIndustry = (i: string) =>

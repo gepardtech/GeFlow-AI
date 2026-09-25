@@ -362,35 +362,24 @@ const Checkout = () => {
     let userHasBusiness = !!result.hasBusiness;
 
     if (activeUser) {
-      // Ensure user profile plan is updated in database
-      await supabase.from("profiles").upsert({
-        user_id: activeUser.id,
-        email: activeUser.email || email,
-        full_name: resolvedName || fullName || activeUser.email?.split("@")[0] || "Customer",
-        plan,
-        status: "active",
-        last_active: new Date().toISOString(),
-      } as any, { onConflict: "user_id" });
-
+      const invNumber = result.invoiceNumber || invoiceNo(Date.now().toString());
       try {
-        const { data: sData } = await supabase.auth.getSession();
-        const token = sData?.session?.access_token;
-        await fetch("/api/user/plan", {
+        await fetch("/api/checkout/activate-plan", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             userId: activeUser.id,
             email: activeUser.email || email,
+            fullName: resolvedName || fullName || activeUser.email?.split("@")[0] || "Customer",
             plan,
             cycle: period,
-            amount: total,
+            amount: Number(total),
+            paymentMethod: result.method,
+            invoiceNumber: invNumber,
           }),
         });
       } catch (err) {
-        console.warn("Notice syncing plan update:", err);
+        console.warn("Error calling activate-plan:", err);
       }
 
       // Check if user has any existing registered businesses
@@ -399,34 +388,6 @@ const Checkout = () => {
         .select("id", { count: "exact", head: true })
         .eq("owner_user_id", activeUser.id);
       userHasBusiness = (count ?? 0) > 0;
-
-      // Calculate next billing date
-      const next = new Date();
-      if (period === "monthly") next.setMonth(next.getMonth() + 1);
-      else if (period === "yearly") next.setFullYear(next.getFullYear() + 1);
-
-      // Record subscription in database
-      await supabase.from("subscriptions").insert({
-        owner_user_id: activeUser.id,
-        tier: plan,
-        cycle: period,
-        status: "active",
-        amount: total,
-        next_billing_date: period === "lifetime" ? null : next.toISOString(),
-      } as any);
-
-      // Record invoice in database
-      const invNumber = result.invoiceNumber || invoiceNo(Date.now().toString());
-      await supabase.from("invoices").insert({
-        invoice_number: invNumber,
-        owner_user_id: activeUser.id,
-        client_name: resolvedName || fullName || activeUser.email?.split("@")[0] || "Customer",
-        billing_email: email || activeUser.email || "",
-        plan,
-        payment_method: result.method,
-        amount: total,
-        status: "paid",
-      } as any);
     }
 
     const inv: InvoiceData = {

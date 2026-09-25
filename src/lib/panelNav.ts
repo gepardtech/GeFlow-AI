@@ -102,17 +102,37 @@ export const USER_NAV: NavItem[] = [
 ];
 
 /** Returns the nav items a given plan is allowed to see. */
-export const userNavForPlan = (_planId?: PlanId): NavItem[] => USER_NAV;
+export const userNavForPlan = (planId?: PlanId): NavItem[] => {
+  return userNavForPlanAndModules(planId);
+};
 
 /**
- * Returns nav items allowed by the user workspace.
- * All standard and core modules remain accessible to ensure seamless navigation across pages.
+ * Returns nav items allowed by the user workspace, business category modules, and plan feature controls.
  */
 export const userNavForPlanAndModules = (
   _planId?: PlanId,
-  _modules?: string[] | null,
-  _isFeatureEnabled: (code?: string | null) => boolean = () => true,
-): NavItem[] => USER_NAV;
+  modules?: string[] | null,
+  isFeatureEnabled: (code?: string | null) => boolean = () => true,
+): NavItem[] => {
+  return USER_NAV.filter((item) => {
+    // Core platform modules are always available
+    if (isCoreModule(item.module)) return true;
+
+    // Check business category module assignment
+    if (modules && modules.length > 0 && item.module) {
+      const mod = item.module.toLowerCase();
+      const hasCategoryModule = modules.some((m) => m.toLowerCase() === mod);
+      if (!hasCategoryModule) return false;
+    }
+
+    // Check platform Feature Control (global active + plan tier)
+    if (item.module && !isFeatureEnabled(item.module)) {
+      return false;
+    }
+
+    return true;
+  });
+};
 
 
 

@@ -246,6 +246,7 @@ class SettingsService {
 
   public async updateAllSettings(updates: Partial<PlatformGeneralSettings>): Promise<PlatformGeneralSettings> {
     const merged: PlatformGeneralSettings = {
+      parent_company: updates.parent_company !== undefined ? updates.parent_company : this.cache.parent_company,
       social_links: updates.social_links !== undefined ? updates.social_links : this.cache.social_links,
       footer_copyright: updates.footer_copyright !== undefined ? updates.footer_copyright : this.cache.footer_copyright,
       about_members: updates.about_members !== undefined ? updates.about_members : this.cache.about_members,

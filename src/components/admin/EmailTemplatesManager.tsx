@@ -310,82 +310,134 @@ function buildHtmlFromFields(
     ? fields.logoUrl?.trim()
     : defaultProjectLogoUrl || fields.logoUrl?.trim();
 
+  const brandAccent = fields.brandAccent || "#38bdf8";
+  const badgeColor = fields.badgeColor || brandAccent;
+  const ctaBgColor = fields.ctaBgColor || brandAccent;
+  const ctaTextColor = fields.ctaTextColor || "#041017";
+  const ctaBorderRadius = fields.ctaBorderRadius || "12px";
+
   const logoMarkup = activeLogoUrl
-    ? `<img src="${activeLogoUrl}" alt="${fields.brandName || "GeFlow"}" style="max-height: ${fields.logoHeight || 36}px; max-width: 180px; height: auto; display: inline-block; object-fit: contain;" />`
-    : `<span style="font-size: 26px; font-weight: 800; letter-spacing: -0.5px; color: #ffffff; text-decoration: none; display: inline-block;">${fields.brandName || "GeFlow"}</span>`;
+    ? `<img src="${activeLogoUrl}" alt="${fields.brandName || "GeFlow"}" style="max-height: ${fields.logoHeight || 38}px; max-width: 180px; height: auto; display: inline-block; object-fit: contain; margin: 0 auto;" />`
+    : `<span style="font-size: 24px; font-weight: 800; letter-spacing: -0.5px; color: #ffffff; text-decoration: none; display: inline-block;">${fields.brandName || "GeFlow"}</span>`;
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${fields.title}</title>
+  <title>${fields.title || "Notification"}</title>
   <style>
-    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0c0f17; color: #f1f5f9; }
-    .container { max-width: 580px; margin: 40px auto; background: #131825; border: 1px solid #1e293b; border-radius: 24px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
-    .header { padding: 36px 40px 24px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06); background: linear-gradient(180deg, rgba(56,189,248,0.08) 0%, rgba(19,24,37,0) 100%); }
-    .badge { display: inline-block; padding: 6px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: ${fields.badgeColor || "#38bdf8"}; background: rgba(56,189,248,0.12); border: 1px solid ${fields.badgeColor || "#38bdf8"}40; border-radius: 100px; margin-top: 12px; }
-    .content { padding: 36px 40px; text-align: center; }
-    .title { font-size: 24px; font-weight: 700; color: #ffffff; margin: 0 0 12px; }
-    .desc { font-size: 15px; line-height: 1.6; color: #94a3b8; margin: 0 0 28px; }
-    .code-box { background: #0b0e14; border: 1px dashed ${fields.brandAccent || "#38bdf8"}; border-radius: 16px; padding: 18px 24px; margin: 0 auto 28px; display: inline-block; min-width: 240px; }
-    .code-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #64748b; margin-bottom: 6px; }
-    .code-value { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 32px; font-weight: 800; letter-spacing: 6px; color: ${fields.brandAccent || "#38bdf8"}; }
-    .btn { display: inline-block; background: ${fields.ctaBgColor || "#38bdf8"}; color: ${fields.ctaTextColor || "#041017"} !important; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 36px; border-radius: ${fields.ctaBorderRadius || "12px"}; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
-    .divider { height: 1px; background: #1e293b; margin: 32px 0 24px; }
-    .footer { padding: 0 40px 36px; text-align: center; font-size: 12px; color: #64748b; line-height: 1.5; }
-    .footer a { color: #94a3b8; text-decoration: underline; }
-    .security-note { font-size: 12px; color: #64748b; margin-top: 24px; }
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+    body { margin: 0; padding: 0; width: 100% !important; background-color: #0c0f17; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f1f5f9; }
+    
+    @media only screen and (max-width: 620px) {
+      .email-wrapper { width: 100% !important; padding: 12px !important; }
+      .email-container { width: 100% !important; max-width: 100% !important; border-radius: 16px !important; }
+      .header-cell { padding: 24px 18px 16px !important; }
+      .content-cell { padding: 24px 18px !important; }
+      .footer-cell { padding: 20px 16px 24px !important; }
+      .title-text { font-size: 20px !important; line-height: 1.3 !important; }
+      .desc-text { font-size: 14px !important; line-height: 1.5 !important; }
+      .code-box-inner { width: 100% !important; max-width: 100% !important; padding: 14px 12px !important; box-sizing: border-box !important; }
+      .code-digit { font-size: 26px !important; letter-spacing: 4px !important; }
+      .btn-wrap { width: 100% !important; }
+      .btn-link { display: block !important; width: 100% !important; padding: 14px 16px !important; text-align: center !important; box-sizing: border-box !important; }
+    }
   </style>
 </head>
-<body>
-  <div class="container">
-    <div class="header">
-      <div>${logoMarkup}</div>
-      ${fields.badgeText ? `<div><span class="badge">${fields.badgeText}</span></div>` : ""}
-    </div>
-    
-    <div class="content">
-      <h1 class="title">${fields.title}</h1>
-      <p class="desc">${fields.description}</p>
+<body style="margin: 0; padding: 0; background-color: #0c0f17;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #0c0f17;">
+    <tr>
+      <td align="center" style="padding: 30px 12px;" class="email-wrapper">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 580px; background-color: #131825; border: 1px solid #1e293b; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5);" class="email-container">
+          
+          <!-- Header -->
+          <tr>
+            <td align="center" style="padding: 32px 36px 20px; border-bottom: 1px solid rgba(255,255,255,0.06); background: linear-gradient(180deg, rgba(56,189,248,0.08) 0%, rgba(19,24,37,0) 100%);" class="header-cell">
+              <div style="margin-bottom: 8px;">${logoMarkup}</div>
+              ${fields.badgeText ? `
+                <div style="margin-top: 10px;">
+                  <span style="display: inline-block; padding: 5px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: ${badgeColor}; background-color: rgba(56,189,248,0.1); border: 1px solid ${badgeColor}33; border-radius: 100px;">
+                    ${fields.badgeText}
+                  </span>
+                </div>` : ""}
+            </td>
+          </tr>
+          
+          <!-- Content Body -->
+          <tr>
+            <td align="center" style="padding: 32px 36px;" class="content-cell">
+              <h1 class="title-text" style="font-size: 22px; font-weight: 700; color: #ffffff; margin: 0 0 14px; line-height: 1.35; text-align: center;">
+                ${fields.title}
+              </h1>
+              
+              <p class="desc-text" style="font-size: 14px; line-height: 1.6; color: #94a3b8; margin: 0 0 24px; text-align: center;">
+                ${fields.description}
+              </p>
 
-      ${
-        isMagicLink
-          ? `<!-- 6-digit OTP Code Box -->
-      <div class="code-box">
-        <div class="code-label">One-Time Security Code</div>
-        <div class="code-value">{{ .Token }}</div>
-      </div>`
-          : ""
-      }
+              ${isMagicLink ? `
+                <!-- 6-digit OTP Code Box -->
+                <div style="margin: 0 auto 24px; text-align: center;">
+                  <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="display: inline-table; margin: 0 auto;">
+                    <tr>
+                      <td align="center" style="background-color: #0b0e14; border: 1px dashed ${brandAccent}; border-radius: 14px; padding: 14px 28px;" class="code-box-inner">
+                        <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #64748b; margin-bottom: 4px;">
+                          Verification Code
+                        </div>
+                        <div class="code-digit" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 28px; font-weight: 800; letter-spacing: 6px; color: ${brandAccent};">
+                          {{ .Token }}
+                        </div>
+                      </td>
+                    </tr>
+                  </table>
+                </div>
+              ` : ""}
 
-      <div>
-        <a href="${fields.ctaLink || "{{ .ConfirmationURL }}"}" class="btn" target="_blank">
-          ${fields.ctaText}
-        </a>
-      </div>
+              <!-- Action Button -->
+              <div style="margin: 8px 0 24px; text-align: center;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto;" class="btn-wrap">
+                  <tr>
+                    <td align="center" style="border-radius: ${ctaBorderRadius}; background-color: ${ctaBgColor};">
+                      <a href="${fields.ctaLink || "{{ .ConfirmationURL }}"}" target="_blank" class="btn-link" style="font-size: 14px; font-weight: 700; color: ${ctaTextColor}; text-decoration: none; padding: 14px 32px; border-radius: ${ctaBorderRadius}; display: inline-block; mso-padding-alt: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.25);">
+                        ${fields.ctaText}
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </div>
 
-      ${
-        fields.securityNote
-          ? `<p class="security-note">${fields.securityNote}</p>`
-          : ""
-      }
+              ${fields.securityNote ? `
+                <p style="font-size: 11px; color: #64748b; line-height: 1.5; margin: 0 0 20px; text-align: center;">
+                  ${fields.securityNote}
+                </p>
+              ` : ""}
 
-      <div class="divider"></div>
+              <div style="height: 1px; background-color: #1e293b; margin: 20px 0 16px;"></div>
 
-      <p style="font-size: 12px; color: #64748b; margin: 0;">
-        Trouble clicking the button? Copy and paste this URL into your browser:<br>
-        <span style="color: ${fields.brandAccent || "#38bdf8"}; word-break: break-all;">${fields.ctaLink || "{{ .ConfirmationURL }}"}</span>
-      </p>
-    </div>
+              <p style="font-size: 11px; color: #64748b; margin: 0; text-align: center; line-height: 1.5; word-break: break-word;">
+                Trouble clicking the button? Copy and paste this URL into your browser:<br>
+                <span style="color: ${brandAccent}; word-break: break-all;">${fields.ctaLink || "{{ .ConfirmationURL }}"}</span>
+              </p>
+            </td>
+          </tr>
 
-    <div class="footer">
-      <p style="margin: 0 0 6px;">${fields.footerText || "GeFlow Business Management Platform"}</p>
-      <p style="margin: 0;">
-        Support: <a href="mailto:${fields.footerSupportEmail || "support@geflowai.com"}">${fields.footerSupportEmail || "support@geflowai.com"}</a> &bull; <a href="${fields.footerSiteUrl || "{{ .SiteURL }}"}">Visit Workspace</a>
-      </p>
-    </div>
-  </div>
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding: 0 36px 30px; text-align: center; font-size: 11px; color: #64748b; line-height: 1.5;" class="footer-cell">
+              <p style="margin: 0 0 6px;">${fields.footerText || "GeFlow Business Management Platform"}</p>
+              <p style="margin: 0;">
+                Support: <a href="mailto:${fields.footerSupportEmail || "support@geflowai.com"}" style="color: #94a3b8; text-decoration: underline;">${fields.footerSupportEmail || "support@geflowai.com"}</a> &bull; <a href="${fields.footerSiteUrl || "{{ .SiteURL }}"}" style="color: #94a3b8; text-decoration: underline;">Visit Workspace</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`;
 }
@@ -788,30 +840,30 @@ export const EmailTemplatesManager = () => {
       <Dialog open={isEditorPopupOpen} onOpenChange={setIsEditorPopupOpen}>
         <DialogContent className="max-w-6xl w-[96vw] h-[92vh] max-h-[92vh] p-0 overflow-hidden flex flex-col rounded-2xl border-border bg-card shadow-2xl">
           {/* Modal Header */}
-          <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-muted/20 flex-shrink-0">
+          <div className="px-5 md:px-6 py-3.5 border-b border-border flex items-center justify-between bg-muted/20 flex-shrink-0">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center font-bold">
+              <div className="h-9 w-9 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center font-bold flex-shrink-0">
                 <Sliders className="h-4 w-4" />
               </div>
-              <div>
-                <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
+              <div className="min-w-0">
+                <DialogTitle className="text-sm md:text-base font-bold text-foreground flex items-center gap-2 truncate">
                   Visual Email Customizer — {currentTpl.name}
-                  <Badge variant="outline" className="text-sky-500 border-sky-500/30 text-[10px]">
+                  <Badge variant="outline" className="hidden sm:inline-flex text-sky-500 border-sky-500/30 text-[10px]">
                     Elementor-Style
                   </Badge>
                 </DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground">
-                  Customize CTA action URLs, preset destination links, shortcodes, button styling, and brand assets.
+                <DialogDescription className="text-[11px] md:text-xs text-muted-foreground truncate">
+                  Customize CTA action URLs, preset destination links, shortcodes, and brand assets.
                 </DialogDescription>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleResetCurrentTemplate}
-                className="h-8 text-xs text-muted-foreground hover:text-foreground gap-1"
+                className="h-8 text-xs text-muted-foreground hover:text-foreground gap-1 hidden sm:inline-flex"
               >
                 <RotateCcw className="h-3 w-3" /> Reset Defaults
               </Button>
@@ -829,24 +881,24 @@ export const EmailTemplatesManager = () => {
           </div>
 
           {/* Modal Body: Split 2-Column Visual Builder */}
-          <div className="grid lg:grid-cols-12 flex-1 overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-12 flex-1 overflow-y-auto lg:overflow-hidden min-h-0">
             {/* Left Column: Form Controls with Section Tabs */}
-            <div className="lg:col-span-6 border-r border-border flex flex-col h-full overflow-hidden bg-background">
+            <div className="lg:col-span-6 border-b lg:border-b-0 lg:border-r border-border flex flex-col h-auto lg:h-full overflow-visible lg:overflow-hidden bg-background">
               {/* Tabs Switcher */}
-              <div className="flex items-center gap-1 p-2 border-b border-border bg-muted/30 overflow-x-auto">
+              <div className="flex items-center gap-1 p-2 border-b border-border bg-muted/30 overflow-x-auto flex-shrink-0">
                 <button
                   type="button"
                   onClick={() => setActiveTab("cta")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap ${
                     activeTab === "cta" ? "bg-background text-foreground shadow-xs border" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  <MousePointerClick className="h-3.5 w-3.5 text-sky-500" /> CTA & URL Router
+                  <MousePointerClick className="h-3.5 w-3.5 text-sky-500" /> CTA & Router
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab("content")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap ${
                     activeTab === "content" ? "bg-background text-foreground shadow-xs border" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -855,7 +907,7 @@ export const EmailTemplatesManager = () => {
                 <button
                   type="button"
                   onClick={() => setActiveTab("branding")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap ${
                     activeTab === "branding" ? "bg-background text-foreground shadow-xs border" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -864,7 +916,7 @@ export const EmailTemplatesManager = () => {
                 <button
                   type="button"
                   onClick={() => setActiveTab("footer")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap ${
                     activeTab === "footer" ? "bg-background text-foreground shadow-xs border" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -873,7 +925,7 @@ export const EmailTemplatesManager = () => {
                 <button
                   type="button"
                   onClick={() => setActiveTab("code")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap ${
                     activeTab === "code" ? "bg-background text-foreground shadow-xs border" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -882,7 +934,7 @@ export const EmailTemplatesManager = () => {
               </div>
 
               {/* Controls Scrollable Form Area */}
-              <div className="flex-1 p-6 overflow-y-auto space-y-5">
+              <div className="flex-1 p-5 md:p-6 overflow-y-auto space-y-5">
                 {/* 1. CTA BUTTON & URL CONFIGURATION TAB */}
                 {activeTab === "cta" && (
                   <div className="space-y-4">

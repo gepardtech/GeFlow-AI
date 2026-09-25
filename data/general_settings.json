@@ -1,0 +1,109 @@
+{
+  "parent_company": "Gepard Techs",
+  "social_links": [
+    {
+      "url": "https://www.facebook.com/geflow.official",
+      "enabled": true,
+      "platform": "facebook"
+    },
+    {
+      "id": "soc_1790267852299_7aqr",
+      "url": "https://www.instagram.com/geflow.ai/",
+      "label": "",
+      "order": 2,
+      "enabled": true,
+      "platform": "instagram"
+    },
+    {
+      "id": "soc_1790267878129_9lbi",
+      "url": "https://www.pinterest.com/geflow.ai",
+      "label": "",
+      "order": 3,
+      "enabled": true,
+      "platform": "pinterest"
+    },
+    {
+      "id": "soc_1790267908545_9rkr",
+      "url": "mailto:support@geflowai.com",
+      "label": "",
+      "order": 4,
+      "enabled": true,
+      "platform": "email"
+    }
+  ],
+  "footer_copyright": {
+    "text": "© 2026 GeFlow AI. All rights reserved. Powered by Gepard Techs.",
+    "wordUrls": [
+      {
+        "id": "w_geflow",
+        "url": "/",
+        "word": "GeFlow AI",
+        "openInNewTab": false
+      },
+      {
+        "id": "w_gepard",
+        "url": "https://gepardtechs.com",
+        "word": "Gepard Techs",
+        "openInNewTab": true
+      }
+    ]
+  },
+  "about_members": [
+    {
+      "id": "mem_1",
+      "bio": "Founder of Gepard Tech — the parent ecosystem behind GeFlow — SG Bilal is a full-stack developer and applied AI specialist. He architected GeFlow's real-time POS, inventory, and analytics engine.",
+      "name": "SG Bilal",
+      "role": "Chairman & Chief Technical Officer (CTO)",
+      "order": 1,
+      "enabled": true,
+      "imageUrl": "/uploads/members/member_mem_1_1790345317731.jpg",
+      "image_url": "/uploads/members/member_mem_1_1790345317731.jpg",
+      "socialLinks": {
+        "x": "",
+        "email": "support@geflowai.com",
+        "github": "",
+        "facebook": "https://www.facebook.com/geflow.official",
+        "linkedin": "",
+        "instagram": "https://www.instagram.com/geflow.ai/",
+        "pinterest": "https://www.pinterest.com/geflow.ai"
+      },
+      "social_links": {
+        "x": "",
+        "email": "support@geflowai.com",
+        "github": "",
+        "facebook": "https://www.facebook.com/geflow.official",
+        "linkedin": "",
+        "instagram": "https://www.instagram.com/geflow.ai/",
+        "pinterest": "https://www.pinterest.com/geflow.ai"
+      }
+    },
+    {
+      "id": "mem_2",
+      "bio": "CEO of Gepard Tech, drives the company’s strategy, product vision, and growth, focused on building practical technology that creates lasting business value.",
+      "name": "Rana Anas Nazakat",
+      "role": "Chief Executive Officer (CEO)",
+      "order": 2,
+      "enabled": true,
+      "imageUrl": "/uploads/members/member_mem_2_1790269050288.jpg",
+      "image_url": "/uploads/members/member_mem_2_1790269050288.jpg",
+      "socialLinks": {
+        "x": "",
+        "email": "support@geflowai.com",
+        "github": "",
+        "facebook": "",
+        "linkedin": "",
+        "instagram": "",
+        "pinterest": ""
+      },
+      "social_links": {
+        "x": "",
+        "email": "support@geflowai.com",
+        "github": "",
+        "facebook": "",
+        "linkedin": "",
+        "instagram": "",
+        "pinterest": ""
+      }
+    }
+  ]
+}

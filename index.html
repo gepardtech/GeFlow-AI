@@ -3,101 +3,167 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- TODO: Set the document title to the name of your application -->
     <title>GeFlow — Fast. Smart. Reliable.</title>
     <meta name="description" content="GeFlow manages inventory, sales, purchases, and profit tracking for pharmacies, retail stores, and warehouses.">
     <meta name="author" content="GeFlow" />
 
-    
-    
     <meta property="og:type" content="website" />
-    
-
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@GeFlow" />
-  <meta property="og:title" content="GeFlow — Fast. Smart. Reliable.">
-  <meta name="twitter:title" content="GeFlow — Fast. Smart. Reliable.">
-  <meta property="og:description" content="GeFlow manages inventory, sales, purchases, and profit tracking for pharmacies, retail stores, and warehouses.">
-  <meta name="twitter:description" content="GeFlow manages inventory, sales, purchases, and profit tracking for pharmacies, retail stores, and warehouses.">
-  <meta property="og:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/49e56264-c461-460e-9149-247322211274">
-  <meta name="twitter:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/49e56264-c461-460e-9149-247322211274">
-  <script>
-    (function() {
-      // Ensure window.fetch has both a getter and setter to prevent "Cannot set property fetch of #<Window> which has only a getter"
-      try {
-        if (typeof window !== "undefined" && typeof window.fetch === "function") {
-          var nativeFetch = window.fetch.bind(window);
-          var activeFetch = nativeFetch;
+    <meta property="og:title" content="GeFlow — Fast. Smart. Reliable.">
+    <meta name="twitter:title" content="GeFlow — Fast. Smart. Reliable.">
+    <meta property="og:description" content="GeFlow manages inventory, sales, purchases, and profit tracking for pharmacies, retail stores, and warehouses.">
+    <meta name="twitter:description" content="GeFlow manages inventory, sales, purchases, and profit tracking for pharmacies, retail stores, and warehouses.">
+    <meta property="og:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/49e56264-c461-460e-9149-247322211274">
+    <meta name="twitter:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/49e56264-c461-460e-9149-247322211274">
 
-          try {
-            Object.defineProperty(window, "fetch", {
+    <style>
+      #geflow-boot-screen {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #090d16;
+        color: #f3f4f6;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+      .geflow-spinner {
+        width: 44px;
+        height: 44px;
+        border: 3px solid rgba(80, 200, 251, 0.15);
+        border-top-color: #50c8fb;
+        border-radius: 50%;
+        animation: geflow-spin 0.8s linear infinite;
+        margin-bottom: 20px;
+      }
+      @keyframes geflow-spin {
+        to { transform: rotate(360deg); }
+      }
+      .geflow-brand {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        color: #ffffff;
+        margin-bottom: 6px;
+      }
+      .geflow-sub {
+        font-size: 13px;
+        color: #9ca3af;
+        letter-spacing: 0.02em;
+      }
+    </style>
+
+    <script>
+      (function() {
+        // Ensure window.fetch, Window.prototype.fetch and globalThis.fetch have both getter and setter
+        // so any script or polyfill assigning window.fetch = ... or fetch = ... never throws TypeError
+        try {
+          var _origFetch = (typeof window !== "undefined" && window.fetch) ? window.fetch.bind(window) : (typeof fetch !== "undefined" ? fetch : undefined);
+          var _curFetch = _origFetch;
+          var getPropDef = function() {
+            return {
               get: function() {
-                return activeFetch;
+                return _curFetch || _origFetch;
               },
               set: function(fn) {
-                activeFetch = typeof fn === "function" ? fn : activeFetch;
+                _curFetch = fn;
               },
               configurable: true,
-              enumerable: true
-            });
-          } catch (_) {}
+              enumerable: true,
+            };
+          };
 
-          try {
-            if (typeof Window !== "undefined" && Window.prototype) {
-              var pDesc = Object.getOwnPropertyDescriptor(Window.prototype, "fetch");
-              if (pDesc && pDesc.configurable && !pDesc.set) {
-                Object.defineProperty(Window.prototype, "fetch", {
-                  get: function() {
-                    return activeFetch;
-                  },
-                  set: function(fn) {
-                    activeFetch = typeof fn === "function" ? fn : activeFetch;
-                  },
-                  configurable: true,
-                  enumerable: true
-                });
-              }
+          if (typeof Window !== "undefined" && Window.prototype) {
+            try {
+              Object.defineProperty(Window.prototype, "fetch", getPropDef());
+            } catch (_) {}
+          }
+          if (typeof window !== "undefined") {
+            try {
+              Object.defineProperty(window, "fetch", getPropDef());
+            } catch (_) {}
+          }
+          if (typeof globalThis !== "undefined" && globalThis !== (typeof window !== "undefined" ? window : null)) {
+            try {
+              Object.defineProperty(globalThis, "fetch", getPropDef());
+            } catch (_) {}
+          }
+        } catch (_fe) {
+          // Ignore if environment is strictly sealed
+        }
+
+        // Global unhandledrejection guard: prevents any unhandled network 'Failed to fetch' error from bubbling as uncaught fatal
+        if (typeof window !== "undefined") {
+          window.addEventListener("unhandledrejection", function(event) {
+            var reason = event && event.reason;
+            var msg = (reason && (reason.message || String(reason))) || "";
+            if (msg.includes("Failed to fetch") || msg.includes("NetworkError") || (reason && reason.name === "TypeError" && msg.includes("fetch"))) {
+              console.warn("Handled network fetch rejection:", msg);
+              event.preventDefault();
             }
-          } catch (_) {}
-
-          try {
-            if (typeof globalThis !== "undefined" && globalThis !== window) {
-              Object.defineProperty(globalThis, "fetch", {
-                get: function() {
-                  return activeFetch;
-                },
-                set: function(fn) {
-                  activeFetch = typeof fn === "function" ? fn : activeFetch;
-                },
-                configurable: true,
-                enumerable: true
-              });
-            }
-          } catch (_) {}
+          });
         }
-      } catch (_) {}
 
-      // Early capture of unhandled network errors
-      window.addEventListener("unhandledrejection", function(event) {
-        var reason = event.reason;
-        var msg = (reason && reason.message) ? reason.message : String(reason || "");
-        if (/failed to fetch|networkerror|load failed|aborted|edge function returned a non-2xx/i.test(msg)) {
-          console.warn("Caught unhandled network rejection safely:", msg);
+        // Safe matchMedia polyfill for webviews & strict iframes
+        if (typeof window !== "undefined" && !window.matchMedia) {
+          window.matchMedia = function(query) {
+            return {
+              matches: false,
+              media: query,
+              onchange: null,
+              addListener: function() {},
+              removeListener: function() {},
+              addEventListener: function() {},
+              removeEventListener: function() {},
+              dispatchEvent: function() { return false; }
+            };
+          };
         }
-      }, true);
 
-      window.addEventListener("error", function(event) {
-        var msg = (event && event.message) ? event.message : "";
-        if (/failed to fetch|networkerror|load failed|script error/i.test(msg)) {
-          console.warn("Caught global network error safely:", msg);
+        // Safe scrollTo polyfill
+        if (typeof window !== "undefined" && typeof window.scrollTo !== "function") {
+          window.scrollTo = function() {};
         }
-      }, true);
-    })();
-  </script>
-</head>
+
+        // Global recovery watchdog: If React does not mount within 5.5s or on fatal error, show recovery options
+        var bootTimeout = setTimeout(function() {
+          var bootScreen = document.getElementById("geflow-boot-screen");
+          if (bootScreen) {
+            bootScreen.innerHTML = [
+              '<div style="max-width:420px;width:100%;text-align:center;background:#111827;border:1px solid #1f2937;border-radius:16px;padding:32px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);">',
+                '<div style="width:48px;height:48px;border-radius:12px;background:rgba(80,200,251,0.12);color:#50c8fb;display:inline-flex;align-items:center;justify-content:center;font-size:20px;font-weight:bold;margin-bottom:16px;">GF</div>',
+                '<h2 style="font-size:18px;font-weight:700;margin:0 0 8px 0;color:#fff;">Loading GeFlow Workspace</h2>',
+                '<p style="font-size:13px;color:#9ca3af;margin:0 0 20px 0;line-height:1.5;">The connection is taking a moment. Tap below to refresh or restore the session.</p>',
+                '<div style="display:flex;gap:10px;justify-content:center;">',
+                  '<button onclick="window.location.reload();" style="padding:9px 20px;border-radius:10px;background:#50c8fb;color:#030712;font-weight:600;font-size:13px;border:none;cursor:pointer;">Refresh Now</button>',
+                  '<button onclick="try{sessionStorage.clear();localStorage.removeItem(\'supabase.auth.token\');}catch(e){}window.location.reload();" style="padding:9px 18px;border-radius:10px;background:#1f2937;color:#d1d5db;font-weight:500;font-size:13px;border:1px solid #374151;cursor:pointer;">Reset Cache</button>',
+                '</div>',
+              '</div>'
+            ].join("");
+          }
+        }, 5500);
+
+        window.addEventListener("DOMContentLoaded", function() {
+          // If React already mounted, cancel the timeout
+          if (!document.getElementById("geflow-boot-screen")) {
+            clearTimeout(bootTimeout);
+          }
+        });
+      })();
+    </script>
+  </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="geflow-boot-screen">
+        <div class="geflow-spinner"></div>
+        <div class="geflow-brand">GeFlow</div>
+        <div class="geflow-sub">Fast. Smart. Reliable.</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

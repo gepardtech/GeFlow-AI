@@ -11,10 +11,26 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Activity, Banknote, ChevronDown, Copy, CreditCard, Eye, EyeOff, Loader2,
-  Plug, RefreshCw, Save, ShieldCheck, Wallet, ArrowRight, Landmark,
+  Plug, RefreshCw, Save, ShieldCheck, Wallet, ArrowRight, Landmark, Plus, Trash2,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+
+export interface TransactionItem {
+  id: string;
+  gateway: string;
+  amount: number;
+  currency: string;
+  status: string;
+  customer_email?: string | null;
+  customer_name?: string | null;
+  plan?: string | null;
+  transaction_reference?: string | null;
+  created_at: string;
+}
 
 interface Gateway {
   id: string;
@@ -86,12 +102,36 @@ const AdminPayments = () => {
   const [search, setSearch] = useState("");
   const [stats, setStats] = useState({ total: 0, completed: 0, failed: 0, volume: 0 });
   const [testing, setTesting] = useState(false);
+  const [transactions, setTransactions] = useState<TransactionItem[]>([]);
+  const [openAddTx, setOpenAddTx] = useState(false);
+  const [addTxForm, setAddTxForm] = useState({
+    gateway: "stripe",
+    amount: "29.00",
+    currency: "USD",
+    customer_email: "",
+    customer_name: "",
+    plan: "standard",
+    status: "completed",
+  });
 
   const load = useCallback(async () => {
+    let apiTransactions: TransactionItem[] = [];
+    try {
+      const txRes = await fetch("/api/admin/payment-transactions");
+      const txJson = await txRes.json();
+      if (txJson.success && Array.isArray(txJson.transactions)) {
+        apiTransactions = txJson.transactions;
+      }
+    } catch {
+      // Fallback to direct supabase query
+    }
+
     const [{ data: gs }, { data: st }, { data: tx }] = await Promise.all([
       supabase.from("payment_gateways").select("*").order("sort_order", { ascending: true }),
       supabase.from("payment_settings").select("*").limit(1).maybeSingle(),
-      supabase.from("payment_transactions").select("status, amount").limit(500),
+      apiTransactions.length === 0
+        ? supabase.from("payment_transactions").select("*").order("created_at", { ascending: false }).limit(100)
+        : Promise.resolve({ data: apiTransactions }),
     ]);
     const list = ((gs as unknown as Gateway[]) ?? []).map((g) => {
       if (g.gateway_key === "paypal") {
@@ -105,12 +145,13 @@ const AdminPayments = () => {
     });
     setGateways(list);
     setSettings((st as unknown as Settings) ?? null);
-    const rows = (tx as { status: string; amount: number }[]) ?? [];
+    const txData = (tx as TransactionItem[]) ?? apiTransactions ?? [];
+    setTransactions(txData);
     setStats({
-      total: rows.length,
-      completed: rows.filter((r) => r.status === "completed").length,
-      failed: rows.filter((r) => r.status === "failed").length,
-      volume: rows.filter((r) => r.status === "completed").reduce((s, r) => s + Number(r.amount || 0), 0),
+      total: txData.length,
+      completed: txData.filter((r) => r.status === "completed").length,
+      failed: txData.filter((r) => r.status === "failed").length,
+      volume: txData.filter((r) => r.status === "completed").reduce((s, r) => s + Number(r.amount || 0), 0),
     });
     setLoading(false);
   }, []);
@@ -129,21 +170,26 @@ const AdminPayments = () => {
 
   const saveAll = async () => {
     setSaving(true);
-    for (const g of gateways) {
-      await supabase.from("payment_gateways").update({
-        enabled: g.enabled,
-        mode: g.mode,
-        public_config: g.public_config,
-        credentials: g.credentials,
-        webhook_url: g.webhook_url,
-      } as any).eq("id", g.id);
+    try {
+      const res = await fetch("/api/admin/payment-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gateways,
+          settings,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Failed to save payment settings");
+      }
+      toast({ title: "Payment settings saved", description: "Gateways are now live on checkout and synced with pricing." });
+      load();
+    } catch (err: any) {
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
-    if (settings) {
-      const { id, ...rest } = settings;
-      await supabase.from("payment_settings").update(rest as any).eq("id", id);
-    }
-    setSaving(false);
-    toast({ title: "Payment settings saved", description: "Gateways are now live on checkout." });
   };
 
   const testConnection = async () => {
@@ -157,6 +203,55 @@ const AdminPayments = () => {
       return;
     }
     toast({ title: "PayPal connected", description: "Credentials verified — checkout is ready." });
+  };
+
+  const submitAddTx = async () => {
+    if (!addTxForm.amount) {
+      toast({ title: "Amount is required", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/payment-transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(addTxForm),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Failed to record payment transaction");
+      }
+      toast({ title: "Transaction recorded", description: `Recorded ${addTxForm.currency} ${addTxForm.amount}` });
+      setOpenAddTx(false);
+      setAddTxForm({
+        gateway: "stripe",
+        amount: "29.00",
+        currency: "USD",
+        customer_email: "",
+        customer_name: "",
+        plan: "standard",
+        status: "completed",
+      });
+      load();
+    } catch (err: any) {
+      toast({ title: "Failed to record", description: err.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteTx = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/payment-transactions/${id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Failed to delete transaction");
+      }
+      toast({ title: "Transaction deleted" });
+      load();
+    } catch (err: any) {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    }
   };
 
   const successRate = stats.total ? ((stats.completed / stats.total) * 100).toFixed(1) : "100.0";
@@ -319,6 +414,74 @@ const AdminPayments = () => {
                   </div>
                 );
               })}
+            </div>
+          </section>
+
+          {/* Realtime Original Payment Transactions */}
+          <section className="premium-card p-6">
+            <div className="flex items-center justify-between gap-4 flex-wrap mb-4">
+              <div>
+                <h2 className="text-2xl font-bold">Payment Transactions</h2>
+                <p className="text-sm text-muted-foreground">Original real-time records from payment_transactions collection.</p>
+              </div>
+              <Button onClick={() => setOpenAddTx(true)} className="h-10 px-4 rounded-xl gap-2 font-bold bg-gradient-to-r from-sky-500 to-blue-500 text-white">
+                <Plus className="h-4 w-4" /> Record Payment
+              </Button>
+            </div>
+
+            <div className="border border-border rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[10px] font-bold tracking-widest text-muted-foreground border-b border-border bg-muted/20">
+                    <th className="text-left px-4 py-3">DATE</th>
+                    <th className="text-left px-4 py-3">REFERENCE</th>
+                    <th className="text-left px-4 py-3">CUSTOMER</th>
+                    <th className="text-left px-4 py-3">GATEWAY</th>
+                    <th className="text-center px-4 py-3">AMOUNT</th>
+                    <th className="text-center px-4 py-3">STATUS</th>
+                    <th className="text-right px-4 py-3">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                        No payment transactions recorded yet. Live checkout payments and manual entries will appear here.
+                      </td>
+                    </tr>
+                  ) : (
+                    transactions.map((t) => (
+                      <tr key={t.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                          {t.created_at ? new Date(t.created_at).toLocaleDateString() : "—"}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs">{t.transaction_reference || t.id.slice(0, 8)}</td>
+                        <td className="px-4 py-3">
+                          <p className="font-semibold text-xs">{t.customer_name || "Guest"}</p>
+                          <p className="text-[11px] text-muted-foreground">{t.customer_email || "—"}</p>
+                        </td>
+                        <td className="px-4 py-3 text-xs uppercase font-bold text-sky-500">{t.gateway}</td>
+                        <td className="px-4 py-3 text-center font-bold text-xs">
+                          {t.currency || "USD"} {Number(t.amount).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                            t.status === "completed" ? "bg-emerald-500/15 text-emerald-500" :
+                            t.status === "failed" ? "bg-rose-500/15 text-rose-500" : "bg-amber-500/15 text-amber-500"
+                          }`}>
+                            {t.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button onClick={() => deleteTx(t.id)} className="text-destructive hover:opacity-80 p-1" title="Delete transaction">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </section>
 
@@ -489,6 +652,90 @@ const AdminPayments = () => {
           </section>
         </div>
       </div>
+
+      {/* Record Payment Transaction Dialog */}
+      <Dialog open={openAddTx} onOpenChange={setOpenAddTx}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Payment Transaction</DialogTitle>
+            <DialogDescription>Store an original transaction in payment_transactions collection.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-sm">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold block mb-1">Amount</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={addTxForm.amount}
+                  onChange={(e) => setAddTxForm({ ...addTxForm, amount: e.target.value })}
+                  placeholder="29.00"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold block mb-1">Currency</label>
+                <Input
+                  value={addTxForm.currency}
+                  onChange={(e) => setAddTxForm({ ...addTxForm, currency: e.target.value.toUpperCase() })}
+                  placeholder="USD"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold block mb-1">Gateway</label>
+                <Select value={addTxForm.gateway} onValueChange={(v) => setAddTxForm({ ...addTxForm, gateway: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="stripe">Stripe</SelectItem>
+                    <SelectItem value="paypal">PayPal</SelectItem>
+                    <SelectItem value="bank">Bank Transfer</SelectItem>
+                    <SelectItem value="jazzcash">JazzCash</SelectItem>
+                    <SelectItem value="razorpay">Razorpay</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-bold block mb-1">Status</label>
+                <Select value={addTxForm.status} onValueChange={(v) => setAddTxForm({ ...addTxForm, status: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold block mb-1">Customer Name</label>
+              <Input
+                value={addTxForm.customer_name}
+                onChange={(e) => setAddTxForm({ ...addTxForm, customer_name: e.target.value })}
+                placeholder="e.g. John Doe"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold block mb-1">Customer Email</label>
+              <Input
+                type="email"
+                value={addTxForm.customer_email}
+                onChange={(e) => setAddTxForm({ ...addTxForm, customer_email: e.target.value })}
+                placeholder="e.g. client@example.com"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpenAddTx(false)}>Cancel</Button>
+            <Button onClick={submitAddTx} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />} Save Transaction
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PanelLayout>
   );
 };

@@ -217,10 +217,11 @@ const Footer = () => {
       const matched = sortedWords.find((w) => w.word.toLowerCase() === part.toLowerCase());
       if (matched && matched.url) {
         const isExternal = matched.url.startsWith("http://") || matched.url.startsWith("https://");
+        const linkKey = `footer-copyright-${matched.id || matched.word || "link"}-${idx}`;
         if (isExternal || matched.openInNewTab) {
           return (
             <a
-              key={idx}
+              key={linkKey}
               href={matched.url}
               target="_blank"
               rel="noopener noreferrer"
@@ -232,7 +233,7 @@ const Footer = () => {
         }
         return (
           <Link
-            key={idx}
+            key={linkKey}
             to={matched.url}
             className="font-semibold text-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
           >
@@ -240,7 +241,7 @@ const Footer = () => {
           </Link>
         );
       }
-      return <span key={idx}>{part}</span>;
+      return <span key={`footer-copyright-txt-${idx}`}>{part}</span>;
     });
   };
 
@@ -274,9 +275,9 @@ const Footer = () => {
             {/* Dynamic Social Media Links */}
             <div className="flex flex-wrap gap-2">
               {socialLinks.length > 0 ? (
-                socialLinks.map((item) => (
+                socialLinks.map((item, sIdx) => (
                   <a
-                    key={item.id}
+                    key={`footer-soc-${item.id || item.platform || "link"}-${sIdx}`}
                     href={item.url}
                     target={item.url.startsWith("http") ? "_blank" : undefined}
                     rel={item.url.startsWith("http") ? "noopener noreferrer" : undefined}

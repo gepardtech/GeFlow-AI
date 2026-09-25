@@ -28,6 +28,7 @@ import PlatformSettingsProvider from "./components/PlatformSettingsProvider";
 import AdminGuard from "./components/AdminGuard";
 import I18nProvider from "./components/I18nProvider";
 import AuthGuard from "./components/AuthGuard";
+import ErrorBoundary from "./components/ErrorBoundary";
 import AdminBillingCoupons from "./pages/admin/AdminBillingCoupons";
 
 import AdminUsers from "./pages/admin/AdminUsers";
@@ -76,17 +77,19 @@ function BusinessSyncObserver() {
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <PlatformSettingsProvider>
-      <I18nProvider>
-      <BusinessSyncObserver />
-      <BrowserRouter>
-        <ScrollToTop />
-        <Routes>
+  <ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <PlatformSettingsProvider>
+            <I18nProvider>
+              <BusinessSyncObserver />
+              <BrowserRouter>
+                <ScrollToTop />
+                <ErrorBoundary>
+                  <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/features" element={<Features />} />
           <Route path="/pricing" element={<Pricing />} />
@@ -150,12 +153,14 @@ const App = () => (
           <Route path="/disclaimer" element={<Disclaimer />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </ErrorBoundary>
       </BrowserRouter>
       </I18nProvider>
       </PlatformSettingsProvider>
     </TooltipProvider>
     </ThemeProvider>
   </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;

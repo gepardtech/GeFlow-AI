@@ -192,16 +192,22 @@ export const AdminFeatures = () => {
   // Sync with DB / Catalog
   const load = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from("feature_modules")
-        .select("*")
-        .order("created_at", { ascending: true });
-
-      if (error) {
-        console.error("Failed to load feature_modules:", error.message);
-        setRows([]);
+      const res = await fetch("/api/admin/feature-modules");
+      const json = await res.json();
+      if (json.success && Array.isArray(json.modules)) {
+        setRows(json.modules.map(mapDbRow));
       } else {
-        setRows(((data as any[]) || []).map(mapDbRow));
+        const { data, error } = await supabase
+          .from("feature_modules")
+          .select("*")
+          .order("created_at", { ascending: true });
+
+        if (error) {
+          console.error("Failed to load feature_modules:", error.message);
+          setRows([]);
+        } else {
+          setRows(((data as any[]) || []).map(mapDbRow));
+        }
       }
     } catch (err) {
       console.error("feature_modules load exception:", err);
@@ -294,36 +300,25 @@ export const AdminFeatures = () => {
     if (ids.length === 0) return;
 
     try {
+      const updates = [];
       for (const id of ids) {
         const patch = pendingChanges[id] || {};
-        const dbPayload: Record<string, unknown> = {};
-        const allowed = [
-          "name",
-          "function_group",
-          "description",
-          "lifecycle_phase",
-          "global_active",
-          "plan_free",
-          "plan_standard",
-          "plan_premium",
-          "health",
-          "latency_ms",
-          "source_file_url",
-        ] as const;
-        for (const key of allowed) {
-          if (key in patch) dbPayload[key] = (patch as any)[key];
-        }
-        if (Object.keys(dbPayload).length === 0) continue;
-
         const targetRow = rows.find((r) => r.id === id);
-        const moduleCode = targetRow?.module_code;
-        let error;
-        if (moduleCode) {
-          ({ error } = await supabase.from("feature_modules").update(dbPayload).eq("module_code", moduleCode));
-        } else {
-          ({ error } = await supabase.from("feature_modules").update(dbPayload).eq("id", id));
-        }
-        if (error) throw error;
+        updates.push({
+          id,
+          module_code: targetRow?.module_code,
+          ...patch,
+        });
+      }
+
+      const res = await fetch("/api/admin/feature-modules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Failed to sync feature modules");
       }
     } catch (e: any) {
       console.error("feature_modules update failed:", e);
@@ -340,6 +335,7 @@ export const AdminFeatures = () => {
       description: `${ids.length} feature module${ids.length > 1 ? "s" : ""} updated and active across all store panels.`,
     });
     setPendingChanges({});
+    load();
   };
 
   // Quick Action: Reset to Pure V1.0 Launch Baseline (Only V1 Active, V2-V5 Disabled)
@@ -490,27 +486,70 @@ export const AdminFeatures = () => {
         VERSION_ROADMAP_META.find((v) => v.version === form.version_target)?.title || "Roadmap Feature",
     };
 
-    let nextRows: FeatureModuleDefinition[];
-    if (editing) {
-      nextRows = rows.map((r) => (r.id === editing.id ? { ...r, ...payload } : r));
-    } else {
-      nextRows = [payload, ...rows];
+    try {
+      if (editing?.id) {
+        await fetch("/api/admin/feature-modules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: editing.id,
+            updates: {
+              name: payload.name,
+              module_code: payload.module_code,
+              description: payload.description,
+              function_group: payload.function_group,
+              plan_free: payload.plan_free,
+              plan_standard: payload.plan_standard,
+              plan_premium: payload.plan_premium,
+              global_active: payload.global_active,
+            },
+          }),
+        });
+      } else {
+        const res = await fetch("/api/admin/feature-modules/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: payload.name,
+            module_code: payload.module_code,
+            description: payload.description,
+            function_group: payload.function_group,
+            plan_free: payload.plan_free,
+            plan_standard: payload.plan_standard,
+            plan_premium: payload.plan_premium,
+            global_active: payload.global_active,
+          }),
+        });
+        const json = await res.json();
+        if (json?.module?.id) {
+          payload.id = json.module.id;
+        }
+      }
+
+      toast({ title: editing ? "Feature Module Updated" : "Custom Feature Module Registered" });
+      setOpenRegister(false);
+      setEditing(null);
+      setForm(blankForm());
+      load();
+    } catch (err: any) {
+      toast({ title: "Operation failed", description: err.message, variant: "destructive" });
     }
-
-    setRows(nextRows);
-
-    toast({ title: editing ? "Feature Module Updated" : "Custom Feature Module Registered" });
-    setOpenRegister(false);
-    setEditing(null);
-    setForm(blankForm());
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!delItem) return;
-    const nextRows = rows.filter((r) => r.id !== delItem.id);
-    setRows(nextRows);
-    toast({ title: "Feature Module Removed" });
-    setDelItem(null);
+    try {
+      const res = await fetch(`/api/admin/feature-modules/${delItem.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Failed to remove feature module");
+      }
+      toast({ title: "Feature Module Removed", description: `${delItem.name} deleted from database.` });
+      setDelItem(null);
+      load();
+    } catch (err: any) {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    }
   };
 
   const dirty = Object.keys(pendingChanges).length > 0;

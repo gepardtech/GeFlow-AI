@@ -36,9 +36,21 @@ const AdminBillingPricing = () => {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from("pricing_plans").select("*").order("sort_order");
-    setRows((data as PlanRow[]) ?? []);
-    setLoading(false);
+    try {
+      const res = await fetch("/api/admin/pricing-plans");
+      const json = await res.json();
+      if (json.success && Array.isArray(json.plans)) {
+        setRows(json.plans as PlanRow[]);
+      } else {
+        const { data } = await supabase.from("pricing_plans").select("*").order("sort_order");
+        setRows((data as PlanRow[]) ?? []);
+      }
+    } catch {
+      const { data } = await supabase.from("pricing_plans").select("*").order("sort_order");
+      setRows((data as PlanRow[]) ?? []);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -63,27 +75,59 @@ const AdminBillingPricing = () => {
     if (!form.name.trim() || !form.plan_key.trim()) { toast({ title: "Plan key and name required", variant: "destructive" }); return; }
     setBusy(true);
     const payload = {
-      plan_key: form.plan_key.toLowerCase().trim(), name: form.name.trim(), tagline: form.tagline.trim() || null,
-      monthly_price: Number(form.monthly_price), yearly_price: Number(form.yearly_price), lifetime_price: Number(form.lifetime_price),
+      id: editing?.id,
+      plan_key: form.plan_key.toLowerCase().trim(),
+      name: form.name.trim(),
+      tagline: form.tagline.trim() || null,
+      monthly_price: Number(form.monthly_price),
+      yearly_price: Number(form.yearly_price),
+      lifetime_price: Number(form.lifetime_price),
       features: form.features.split("\n").map((s) => s.trim()).filter(Boolean),
-      is_active: form.is_active, is_popular: form.is_popular, sort_order: Number(form.sort_order),
-      badge_text: form.badge_text?.trim() || null, badge_position: form.badge_position, badge_cycle: form.badge_cycle,
+      is_active: form.is_active,
+      is_popular: form.is_popular,
+      sort_order: Number(form.sort_order),
+      badge_text: form.badge_text?.trim() || null,
+      badge_position: form.badge_position,
+      badge_cycle: form.badge_cycle,
     };
-    let error;
-    if (editing) ({ error } = await supabase.from("pricing_plans").update(payload).eq("id", editing.id));
-    else ({ error } = await supabase.from("pricing_plans").insert(payload));
-    setBusy(false);
-    if (error) { toast({ title: "Save failed", description: error.message, variant: "destructive" }); return; }
-    toast({ title: editing ? "Plan updated" : "Plan created" });
-    setOpen(false);
+
+    try {
+      const res = await fetch("/api/admin/pricing-plans", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Failed to save plan");
+      }
+      toast({ title: editing ? "Plan updated" : "Plan created" });
+      setOpen(false);
+      load();
+    } catch (err: any) {
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const confirmDelete = async () => {
     if (!del) return;
-    const { error } = await supabase.from("pricing_plans").delete().eq("id", del.id);
-    if (error) { toast({ title: "Delete failed", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Plan deleted" });
-    setDel(null);
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/pricing-plans/${del.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Failed to delete plan");
+      }
+      toast({ title: "Plan deleted" });
+      setDel(null);
+      load();
+    } catch (err: any) {
+      toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const anySynced = rows.some((r) => r.payment_method_synced);

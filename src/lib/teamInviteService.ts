@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "@/integrations/supabase/client";
 
 export interface PendingInvitation {
   id: string;
@@ -121,8 +121,8 @@ export async function inviteNewUser({
   // 1. If password provided, attempt Supabase Auth signup
   if (cleanPassword && cleanPassword.length >= 6) {
     try {
-      const rawUrl = import.meta.env.VITE_SUPABASE_URL || "https://placeholder-project.supabase.co";
-      const rawKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "placeholder-anon-key";
+      const rawUrl = SUPABASE_URL;
+      const rawKey = SUPABASE_PUBLISHABLE_KEY;
 
       const tempClient = createClient(rawUrl, rawKey, {
         auth: {

@@ -27,7 +27,9 @@ const PLAN_RANK: Record<PlanId, number> = {
 
 /** Minimum plan required for each dashboard route prefix */
 const ROUTE_MIN_PLAN: { prefix: string; min: PlanId }[] = [
+  { prefix: "/dashboard/returns", min: "standard" },
   { prefix: "/dashboard/purchases", min: "standard" },
+  { prefix: "/dashboard/reports", min: "standard" },
   { prefix: "/dashboard/analytics", min: "premium" },
   { prefix: "/dashboard/team", min: "premium" },
 ];

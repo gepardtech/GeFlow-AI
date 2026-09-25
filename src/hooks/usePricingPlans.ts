@@ -31,17 +31,24 @@ export const usePricingPlans = () => {
 
   const load = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from("pricing_plans")
-        .select("*")
-        .order("sort_order", { ascending: true });
-
-      if (error) {
-        console.error("Failed to load pricing_plans:", error.message);
-        setPlans([]);
-      } else {
-        const rows = (data ?? []) as unknown as PricingPlanRow[];
+      const res = await fetch("/api/admin/pricing-plans");
+      const json = await res.json();
+      if (json.success && Array.isArray(json.plans)) {
+        const rows = json.plans as PricingPlanRow[];
         setPlans(rows.filter((p) => p.is_active !== false));
+      } else {
+        const { data, error } = await supabase
+          .from("pricing_plans")
+          .select("*")
+          .order("sort_order", { ascending: true });
+
+        if (error) {
+          console.error("Failed to load pricing_plans:", error.message);
+          setPlans([]);
+        } else {
+          const rows = (data ?? []) as unknown as PricingPlanRow[];
+          setPlans(rows.filter((p) => p.is_active !== false));
+        }
       }
     } catch (err) {
       console.error("pricing_plans load exception:", err);

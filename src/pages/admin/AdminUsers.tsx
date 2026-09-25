@@ -67,59 +67,29 @@ const colorFromName = (name: string) => {
   return colors[(name?.charCodeAt(0) || 0) % colors.length];
 };
 
+const ROLE_STYLES: Record<string, string> = {
+  admin: "bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30",
+  manager: "bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30",
+  cashier: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30",
+  user: "bg-slate-500/15 text-slate-600 dark:text-slate-400 border border-slate-500/30",
+};
+
 const callAdmin = async (body: Record<string, unknown>) => {
-  try {
-    const { data: sData } = await supabase.auth.getSession();
-    const token = sData?.session?.access_token;
-    const res = await fetch("/api/admin/users", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      const json = await res.json();
-      if (json.success) return json;
-    }
-  } catch (apiErr) {
-    console.warn("Notice calling /api/admin/users:", apiErr);
+  const { data: sData } = await supabase.auth.getSession();
+  const token = sData?.session?.access_token;
+  const res = await fetch("/api/admin/users", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json.success) {
+    throw new Error(json.error || `Admin operation failed with status ${res.status}`);
   }
-
-  try {
-    const { data, error } = await supabase.functions.invoke("admin-users", { body });
-    if (!error && !data?.error) return data;
-  } catch (err) {
-    console.warn("Edge function admin-users call note:", err);
-  }
-
-  // Fallback direct operations
-  if (body.action === "setRole" && body.user_id && body.role) {
-    const { error: roleErr } = await supabase
-      .from("user_roles")
-      .upsert({ user_id: String(body.user_id), role: String(body.role) });
-    if (!roleErr) return { success: true };
-  }
-  if (body.action === "delete" && body.user_id) {
-    await supabase.from("profiles").update({ status: "suspended" }).eq("user_id", String(body.user_id));
-    return { success: true };
-  }
-  if (body.action === "create" && body.email && body.password) {
-    const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-      email: String(body.email),
-      password: String(body.password),
-      options: {
-        data: {
-          full_name: String(body.full_name || ""),
-          plan: String(body.plan || "free"),
-        },
-      },
-    });
-    if (signUpErr) throw signUpErr;
-    return { success: true, user: signUpData.user };
-  }
-  return { success: true };
+  return json;
 };
 
 const AdminUsers = () => {
@@ -152,17 +122,18 @@ const AdminUsers = () => {
       try {
         const { data: sData } = await supabase.auth.getSession();
         const token = sData?.session?.access_token;
-        if (token) {
-          const apiRes = await fetch("/api/admin/users-overview", {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (apiRes.ok) {
-            const apiJson = await apiRes.json();
-            if (apiJson.success && Array.isArray(apiJson.users)) {
-              profs = apiJson.users;
-              if (apiJson.roles) {
-                setRoles(apiJson.roles);
-              }
+        const apiRes = await fetch("/api/admin/users-overview", {
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        if (apiRes.ok) {
+          const apiJson = await apiRes.json();
+          if (apiJson.success && Array.isArray(apiJson.users)) {
+            profs = apiJson.users;
+            if (apiJson.roles) {
+              setRoles(apiJson.roles);
             }
           }
         }
@@ -236,15 +207,9 @@ const AdminUsers = () => {
 
       const enrichedProfs: UserRow[] = (profs ?? []).map((p: any) => {
         const directCount = userProductCounts[p.user_id] || 0;
-        const bizSumCount = ownerBizListedSum[p.user_id] || 0;
-        const profileCount = Number(p.listed_products) || 0;
-
-        // Take the highest confirmed count across direct product rows, business aggregates, and profile record
-        const count = Math.max(directCount, bizSumCount, profileCount);
-
         return {
           ...p,
-          listed_products: count,
+          listed_products: directCount,
           business_count: ownerBizCount[p.user_id] ?? 0,
         };
       });
@@ -365,65 +330,47 @@ const AdminUsers = () => {
     } finally { setBusy(false); }
   };
 
-  // ---------- Edit Permission ----------
-  const [editForm, setEditForm] = useState({ role: "user", plan: "free" });
+  // ---------- Edit Permission & Profile ----------
+  const [editForm, setEditForm] = useState({ full_name: "", role: "user", plan: "free", status: "active" });
   useEffect(() => {
-    if (editUser) setEditForm({ role: roles[editUser.user_id] ?? "user", plan: editUser.plan });
+    if (editUser) {
+      setEditForm({
+        full_name: editUser.full_name || "",
+        role: roles[editUser.user_id] ?? "user",
+        plan: editUser.plan || "free",
+        status: editUser.status || "active",
+      });
+    }
   }, [editUser, roles]);
+
   const submitEdit = async () => {
     if (!editUser) return;
     setBusy(true);
     try {
-      if (editForm.plan !== editUser.plan) {
-        try {
-          await callAdmin({ action: "updatePlan", user_id: editUser.user_id, plan: editForm.plan });
-        } catch {
-          await updateProfile(editUser.user_id, { plan: editForm.plan });
-        }
-        // Sync subscriptions table so user never reverts
-        try {
-          const { data: existingSub } = await supabase
-            .from("subscriptions")
-            .select("id")
-            .eq("owner_user_id", editUser.user_id)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
+      await callAdmin({
+        action: "updateUser",
+        user_id: editUser.user_id,
+        full_name: editForm.full_name,
+        role: editForm.role,
+        plan: editForm.plan,
+        status: editForm.status,
+      });
 
-          if (existingSub?.id) {
-            await supabase
-              .from("subscriptions")
-              .update({
-                tier: editForm.plan,
-                status: "active",
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", existingSub.id);
-          } else {
-            await supabase
-              .from("subscriptions")
-              .insert({
-                owner_user_id: editUser.user_id,
-                tier: editForm.plan,
-                status: "active",
-              });
-          }
-        } catch (subErr) {
-          console.warn("Notice updating subscriptions record:", subErr);
-        }
+      // Dispatch instant events for current session if editing active user
+      window.dispatchEvent(new CustomEvent("geflow:plan-changed", { detail: { planId: editForm.plan } }));
+      window.dispatchEvent(new CustomEvent("panel:refresh"));
 
-        // Dispatch instant event for user session
-        window.dispatchEvent(new CustomEvent("geflow:plan-changed", { detail: { planId: editForm.plan } }));
-        window.dispatchEvent(new CustomEvent("panel:refresh"));
-      }
-      if ((roles[editUser.user_id] ?? "user") !== editForm.role) {
-        await callAdmin({ action: "setRole", user_id: editUser.user_id, role: editForm.role });
-      }
-      toast({ title: "Permissions updated", description: `Plan updated to ${editForm.plan.toUpperCase()} in real-time.` });
-      setEditUser(null); load();
+      toast({
+        title: "User updated successfully",
+        description: `${editForm.full_name || editUser.email} is now ${editForm.role.toUpperCase()} on ${editForm.plan.toUpperCase()} plan.`,
+      });
+      setEditUser(null);
+      load();
     } catch (e: any) {
       toast({ title: "Update failed", description: e.message, variant: "destructive" });
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
   // ---------- Reset Password ----------
@@ -546,6 +493,7 @@ const AdminUsers = () => {
             <thead>
               <tr className="text-[10px] font-bold tracking-widest text-muted-foreground border-b border-border">
                 <th className="text-left px-6 py-4">USER</th>
+                <th className="text-left px-4 py-4">ROLE</th>
                 <th className="text-left px-4 py-4">PLAN</th>
                 <th className="text-left px-4 py-4">STATUS</th>
                 <th className="text-left px-4 py-4">JOINED</th>
@@ -556,12 +504,13 @@ const AdminUsers = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="p-12 text-center text-muted-foreground">Loading users...</td></tr>
+                <tr><td colSpan={8} className="p-12 text-center text-muted-foreground">Loading users...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} className="p-12 text-center text-muted-foreground">No users match your filters.</td></tr>
+                <tr><td colSpan={8} className="p-12 text-center text-muted-foreground">No users match your filters.</td></tr>
               ) : filtered.map((u) => {
                 const initial = (u.full_name || u.email || "?").charAt(0).toUpperCase();
                 const isSuspended = u.status === "suspended";
+                const userRole = roles[u.user_id] || (u.email?.toLowerCase() === "gepardwebs@gmail.com" ? "admin" : "user");
                 return (
                   <tr key={u.user_id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="px-6 py-4">
@@ -572,6 +521,11 @@ const AdminUsers = () => {
                           <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className={`text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full uppercase ${ROLE_STYLES[userRole] || ROLE_STYLES.user}`}>
+                        {userRole}
+                      </span>
                     </td>
                     <td className="px-4 py-4">
                       <span className={`text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full uppercase ${PLAN_STYLES[u.plan] || PLAN_STYLES.free}`}>{u.plan}</span>
@@ -677,35 +631,77 @@ const AdminUsers = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Permission */}
+      {/* Edit User & Permissions */}
       <Dialog open={!!editUser} onOpenChange={(v) => !v && setEditUser(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit Permission</DialogTitle>
-            <DialogDescription>Assign role and subscription plan.</DialogDescription>
+            <DialogTitle>Edit User & Permissions</DialogTitle>
+            <DialogDescription>Modify user name, role, subscription plan tier, and account status.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-4 py-2">
             <div>
-              <Label>Role</Label>
-              <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user">User</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Full Name</Label>
+              <Input
+                value={editForm.full_name}
+                onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+                placeholder="User Full Name"
+                className="mt-1"
+              />
             </div>
             <div>
-              <Label>Plan</Label>
+              <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Email (Login Identity)</Label>
+              <Input
+                value={editUser?.email || ""}
+                disabled
+                className="mt-1 bg-muted/50 cursor-not-allowed"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">System Role</Label>
+                <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v })}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="admin">System Admin</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="cashier">Cashier</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Account Status</Label>
+                <Select value={editForm.status} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="suspended">Suspended</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Subscription Plan Tier</Label>
               <Select value={editForm.plan} onValueChange={(v) => setEditForm({ ...editForm, plan: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{PLANS.map((p) => <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>)}</SelectContent>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PLANS.map((p) => (
+                    <SelectItem key={p} value={p} className="capitalize">
+                      {p.toUpperCase()} Plan
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Pages and features are dynamically enabled or locked according to the selected plan tier.
+              </p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditUser(null)}>Cancel</Button>
-            <Button onClick={submitEdit} disabled={busy}>{busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Save</Button>
+            <Button onClick={submitEdit} disabled={busy}>
+              {busy && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Save Changes
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

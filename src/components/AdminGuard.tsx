@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "@/hooks/use-toast";
 
 interface Props {
   children: ReactNode;
@@ -18,7 +18,6 @@ let cachedIsAdmin = false;
 const AdminGuard = ({ children }: Props) => {
   const [allowed, setAllowed] = useState<boolean | null>(cachedIsAdmin ? true : null);
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   useEffect(() => {
     let active = true;
@@ -60,7 +59,7 @@ const AdminGuard = ({ children }: Props) => {
       setAllowed(true);
     })();
     return () => { active = false; };
-  }, [navigate, toast]);
+  }, [navigate]);
 
   if (allowed !== true) {
     return (

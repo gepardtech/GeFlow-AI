@@ -174,24 +174,27 @@ const AdminPlanLimits = () => {
     const ids = Object.keys(pending);
     if (!ids.length) return;
     setSaving(true);
-    let hasError = false;
-    for (const id of ids) {
-      const { error } = await supabase
-        .from("plan_limits")
-        .update(pending[id] as any)
-        .eq("id", id);
-      if (error) {
-        hasError = true;
-        toast({ title: "Failed to update limit", description: error.message, variant: "destructive" });
+    try {
+      const updates = ids.map((id) => ({ id, ...pending[id] }));
+      const res = await fetch("/api/admin/plan-limits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ updates }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Failed to update limits");
       }
-    }
-    setSaving(false);
-    if (!hasError) {
       setPending({});
       toast({
         title: "Plan limits saved successfully",
         description: `${ids.length} quota configuration${ids.length > 1 ? "s" : ""} updated and synchronized live across user workspace.`,
       });
+      load();
+    } catch (err: any) {
+      toast({ title: "Failed to update limit", description: err.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
   };
 
