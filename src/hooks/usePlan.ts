@@ -144,11 +144,16 @@ async function fetchAuthoritativePlan(): Promise<void> {
           ? normalizePlan(user.user_metadata.plan as string)
           : null;
 
-        const candidates = [subPlan, profPlan, metaPlan].filter(Boolean) as PlanId[];
-        if (candidates.includes("lifetime")) resolvedPlan = "lifetime";
-        else if (candidates.includes("premium")) resolvedPlan = "premium";
-        else if (candidates.includes("standard")) resolvedPlan = "standard";
-        else resolvedPlan = "free";
+        // Authoritative precedence: 1) Admin profile record, 2) active subscription, 3) auth metadata
+        if (profPlan) {
+          resolvedPlan = profPlan;
+        } else if (subPlan) {
+          resolvedPlan = subPlan;
+        } else if (metaPlan) {
+          resolvedPlan = metaPlan;
+        } else {
+          resolvedPlan = "free";
+        }
 
         // Optional server route if RLS blocks client reads
         if (resolvedPlan === "free") {

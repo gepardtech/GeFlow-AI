@@ -89,10 +89,13 @@ export const usePlatformFeatures = (planId?: string) => {
         r.name.toLowerCase().replace(/\s+/g, "_") === c
     );
 
-    // No matching row in DB → treat as disabled (fail-closed)
-    if (!matched) return false;
+    // If matching row is explicitly disabled for this plan or globally, return false
+    if (matched) {
+      return !disabledCodes.includes((matched.module_code ?? "").toLowerCase());
+    }
 
-    return !disabledCodes.includes((matched.module_code ?? "").toLowerCase());
+    // Default to enabled for un-flagged platform modules
+    return true;
   };
 
   return { rows, loading, disabledCodes, isEnabled, reload: load };

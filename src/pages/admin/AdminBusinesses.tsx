@@ -335,34 +335,61 @@ const AdminBusinesses = () => {
   const submitDelete = async () => {
     if (!deleteBiz) return;
     setBusy(true);
+    const targetId = deleteBiz.id;
+    const targetName = deleteBiz.business_name;
+
     try {
-      const res = await fetch(`/api/admin/businesses/${deleteBiz.id}`, { method: "DELETE" });
-      if (res.ok) {
+      const { data: sData } = await supabase.auth.getSession();
+      const token = sData?.session?.access_token;
+      const res = await fetch(`/api/admin/businesses/${targetId}`, {
+        method: "DELETE",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && (json.success || json.id)) {
         toast({
           title: "Business deleted permanently",
-          description: `${deleteBiz.business_name} and all related inventory, sales, and settings were removed.`,
+          description: `${targetName} and all related inventory, sales, products, and settings were removed completely from the database.`,
         });
-        load();
+        setRows((prev) => prev.filter((r) => r.id !== targetId));
+        localStorage.removeItem("geflow_cached_owned_businesses");
+        localStorage.removeItem("geflow.activeBusinessId");
+        window.dispatchEvent(new CustomEvent("panel:refresh"));
+        window.dispatchEvent(new CustomEvent("geflow:business-updated"));
         setDeleteBiz(null);
         setBusy(false);
+        load();
         return;
+      }
+      if (!res.ok && json.error) {
+        throw new Error(json.error);
       }
     } catch {
       /* proceed to direct DB fallback */
     }
 
     try {
-      await Promise.allSettled([
-        supabase.from("products").delete().eq("business_id", deleteBiz.id),
-        supabase.from("sales").delete().eq("business_id", deleteBiz.id),
-        supabase.from("held_orders").delete().eq("business_id", deleteBiz.id),
-        supabase.from("business_staff").delete().eq("business_id", deleteBiz.id),
-        supabase.from("businesses").delete().eq("id", deleteBiz.id),
-      ]);
+      await supabase.from("stock_movements").delete().eq("business_id", targetId);
+      await supabase.from("sales").delete().eq("business_id", targetId);
+      await supabase.from("held_orders").delete().eq("business_id", targetId);
+      await supabase.from("purchases").delete().eq("business_id", targetId);
+      await supabase.from("business_staff").delete().eq("business_id", targetId);
+      await supabase.from("products").delete().eq("business_id", targetId);
+      const { error: delErr } = await supabase.from("businesses").delete().eq("id", targetId);
+
+      if (delErr) throw delErr;
+
       toast({
         title: "Business deleted permanently",
-        description: `${deleteBiz.business_name} was removed from the database.`,
+        description: `${targetName} was removed from the database.`,
       });
+      setRows((prev) => prev.filter((r) => r.id !== targetId));
+      localStorage.removeItem("geflow_cached_owned_businesses");
+      localStorage.removeItem("geflow.activeBusinessId");
+      window.dispatchEvent(new CustomEvent("panel:refresh"));
+      window.dispatchEvent(new CustomEvent("geflow:business-updated"));
       load();
     } catch (err: any) {
       toast({ title: "Delete failed", description: err.message, variant: "destructive" });

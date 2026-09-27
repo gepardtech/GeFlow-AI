@@ -8,6 +8,7 @@ import { usePlatformFeatures } from "@/hooks/usePlatformFeatures";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { useStaffRole, isPathAllowedForRole } from "@/hooks/useStaffRole";
 import { usePlatformSettings } from "@/components/PlatformSettingsProvider";
+import { useActiveBusiness } from "@/hooks/useActiveBusiness";
 import PlanLockedScreen from "@/components/PlanLockedScreen";
 import RoleRestrictedScreen from "@/components/RoleRestrictedScreen";
 import MaintenanceScreen from "@/components/MaintenanceScreen";
@@ -62,6 +63,7 @@ const UserPanelGate = ({ children, pageTitle }: Props) => {
   const { isEnabled } = usePlatformFeatures(planId);
   const { isAdmin } = useIsAdmin();
   const { staffRole, isCashier, isInventoryClerk, loading: roleLoading } = useStaffRole();
+  const { businesses, staffBusinesses, hasLoaded, loading: bizLoading } = useActiveBusiness();
   const { settings } = usePlatformSettings();
   const location = useLocation();
 
@@ -99,6 +101,18 @@ const UserPanelGate = ({ children, pageTitle }: Props) => {
 
   if (settings?.maintenance_mode && !isAdmin) {
     return <MaintenanceScreen />;
+  }
+
+  // If user has no registered business, redirect to business registration setup steps
+  if (
+    !isAdmin &&
+    hasLoaded &&
+    !bizLoading &&
+    businesses.length === 0 &&
+    staffBusinesses.length === 0 &&
+    !location.pathname.startsWith("/setup-business")
+  ) {
+    return <Navigate to="/setup-business" replace />;
   }
 
   if (

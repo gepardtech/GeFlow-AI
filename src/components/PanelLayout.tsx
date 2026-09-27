@@ -643,6 +643,18 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
               </PopoverContent>
             </Popover>
 
+            {!isPathAdmin && (
+              <button
+                onClick={() => setAiOpen(true)}
+                className="h-10 px-3 rounded-xl border border-primary/20 bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all hover:scale-105 active:scale-95"
+                title="GeFlow AI Retail Assistant"
+                aria-label="GeFlow AI Retail Assistant"
+              >
+                <Sparkles className="h-4 w-4 text-primary animate-pulse" />
+                <span className="hidden sm:inline">AI Copilot</span>
+              </button>
+            )}
+
             <button
               onClick={handleRefresh}
               className="h-10 w-10 rounded-xl hover:bg-muted flex items-center justify-center transition-all hover:scale-105"
@@ -689,6 +701,16 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-3.5 sm:p-5 md:p-8 min-w-0 w-full">{children}</main>
       </div>
       {!isPathAdmin && <AIAssistant open={aiOpen} onOpenChange={setAiOpen} />}
+      {!isPathAdmin && !aiOpen && (
+        <button
+          onClick={() => setAiOpen(true)}
+          className="fixed bottom-6 right-6 z-40 h-13 w-13 rounded-full bg-gradient-to-tr from-sky-500 via-primary to-indigo-600 text-white shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 flex items-center justify-center transition-all border-2 border-white/20 group"
+          title="Open GeFlow AI Assistant"
+          aria-label="Open GeFlow AI Assistant"
+        >
+          <Sparkles className="h-6 w-6 text-white animate-pulse group-hover:rotate-12 transition-transform" />
+        </button>
+      )}
     </div>
   );
 };

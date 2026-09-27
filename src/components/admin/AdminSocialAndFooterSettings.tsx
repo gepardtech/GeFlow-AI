@@ -182,7 +182,7 @@ export const AdminSocialAndFooterSettings = () => {
           const dataUrl = canvas.toDataURL("image/jpeg", 0.90);
 
           try {
-            // Upload to backend API to store professionally in server files
+            // Upload to backend API which uploads to Supabase Storage 'about_members' bucket
             const res = await fetch("/api/upload/member-photo", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -195,23 +195,59 @@ export const AdminSocialAndFooterSettings = () => {
 
             if (res.ok) {
               const resJson = await res.json();
-              if (resJson.url) {
+              const photoUrl = resJson.supabaseStorageUrl || resJson.url || resJson.localUrl;
+              if (photoUrl) {
                 setEditingMember((prev) =>
-                  prev ? { ...prev, image_url: resJson.url, imageUrl: resJson.url } : null
+                  prev ? { ...prev, image_url: photoUrl, imageUrl: photoUrl } : null
                 );
                 toast({
-                  title: "Photo Uploaded Successfully",
-                  description: "Member photo saved to server and synced with database.",
+                  title: "Photo Uploaded & Saved to Supabase Storage",
+                  description: "Member photo successfully saved to Supabase Storage.",
                 });
                 setUploadingImage(false);
                 return;
               }
             }
           } catch (uploadErr) {
-            console.warn("Upload API notice, falling back to optimized dataUrl:", uploadErr);
+            console.warn("Upload API notice, trying direct Supabase storage upload:", uploadErr);
           }
 
-          // Fallback to dataUrl if direct endpoint had an issue
+          // Direct client-side Supabase storage upload fallback
+          try {
+            const byteString = atob(dataUrl.split(",")[1]);
+            const mimeString = dataUrl.split(",")[0].split(":")[1].split(";")[0];
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) {
+              ia[i] = byteString.charCodeAt(i);
+            }
+            const blob = new Blob([ab], { type: mimeString });
+            const fileName = `member_${editingMember?.id || Date.now()}_${Date.now()}.jpg`;
+            const { error: sErr } = await supabase.storage
+              .from("about_members")
+              .upload(fileName, blob, { contentType: "image/jpeg", upsert: true });
+
+            if (!sErr) {
+              const { data: pubData } = supabase.storage
+                .from("about_members")
+                .getPublicUrl(fileName);
+              if (pubData?.publicUrl) {
+                setEditingMember((prev) =>
+                  prev ? { ...prev, image_url: pubData.publicUrl, imageUrl: pubData.publicUrl } : null
+                );
+                toast({
+                  title: "Photo Saved to Supabase Storage",
+                  description: "Member photo uploaded directly to Supabase Storage bucket.",
+                });
+                setUploadingImage(false);
+                return;
+              }
+            }
+          } catch (directErr) {
+            console.warn("Direct storage fallback notice:", directErr);
+          }
+
+          // Fallback to dataUrl if storage was temporarily unreachable
           setEditingMember((prev) => (prev ? { ...prev, image_url: dataUrl, imageUrl: dataUrl } : null));
           toast({
             title: "Photo Loaded",

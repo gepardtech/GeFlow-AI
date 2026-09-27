@@ -39,8 +39,11 @@ interface CategoryRow {
 }
 
 const INDUSTRIES = [
-  "Pharmacy", "Supermarket", "Warehouse", "Electronics", "Restaurant", "Salon",
-  "Repair Shop", "Office", "Retail", "Wholesale", "Boutique", "Bakery", "Hardware", "Other",
+  "Pharmacy", "Supermarket", "Grocery", "Electronics", "Mobile Shop", "IT Store",
+  "Boutique", "Footwear", "Restaurant", "Fast Food", "Cafe", "Bakery", "Hardware",
+  "Electrical", "Plumbing", "Automotive", "Repair Shop", "Beauty", "Salon",
+  "Books & Stationery", "Jewelry", "Furniture", "Home Goods", "Sports",
+  "Pet Care", "Optical", "Wholesale", "Agriculture", "Retail", "Warehouse", "Office", "Other",
 ];
 const MODULES = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -186,14 +189,45 @@ const AdminBusinessCategories = () => {
     };
 
     try {
+      const { data: sData } = await supabase.auth.getSession();
+      const token = sData?.session?.access_token;
       const res = await fetch("/api/admin/business-categories", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || "Failed to save category");
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && (json.success || json.category || json.id)) {
+        toast({ title: editing ? "Category updated" : "Category created" });
+        setOpenForm(false);
+        load();
+        return;
+      }
+    } catch {
+      // Proceed to fallback
+    }
+
+    try {
+      const dbPayload = {
+        name: payload.name,
+        industry_type: payload.industry_type,
+        status: payload.status,
+        enabled_modules: payload.enabled_modules,
+        enabled_features: payload.enabled_features,
+        default_tax: payload.default_tax,
+        currency: payload.currency,
+        stock_alert_limit: payload.stock_alert_limit,
+      };
+
+      if (editing?.id) {
+        const { error: upErr } = await supabase.from("business_categories").update(dbPayload).eq("id", editing.id);
+        if (upErr) throw upErr;
+      } else {
+        const { error: inErr } = await supabase.from("business_categories").insert(dbPayload);
+        if (inErr) throw inErr;
       }
       toast({ title: editing ? "Category updated" : "Category created" });
       setOpenForm(false);
@@ -208,17 +242,38 @@ const AdminBusinessCategories = () => {
   const confirmDelete = async () => {
     if (!del) return;
     setBusy(true);
+    const targetId = del.id;
+    setRows((prev) => prev.filter((r) => r.id !== targetId));
+
     try {
-      const res = await fetch(`/api/admin/business-categories/${del.id}`, { method: "DELETE" });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || "Failed to delete category");
+      const { data: sData } = await supabase.auth.getSession();
+      const token = sData?.session?.access_token;
+      const res = await fetch(`/api/admin/business-categories/${targetId}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && (json.success || json.id)) {
+        toast({ title: "Category deleted" });
+        setDel(null);
+        load();
+        return;
       }
+    } catch {
+      // Proceed to fallback
+    }
+
+    try {
+      await supabase.from("businesses").update({ category_id: null }).eq("category_id", targetId);
+      await supabase.from("business_category_internal").delete().eq("category_id", targetId);
+      const { error: delErr } = await supabase.from("business_categories").delete().eq("id", targetId);
+      if (delErr) throw delErr;
       toast({ title: "Category deleted" });
       setDel(null);
       load();
     } catch (err: any) {
       toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+      load();
     } finally {
       setBusy(false);
     }

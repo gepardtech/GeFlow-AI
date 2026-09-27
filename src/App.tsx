@@ -124,22 +124,27 @@ const App = () => (
           <Route path="/admin/newsletter" element={<AdminGuard><AdminNewsletter /></AdminGuard>} />
           <Route path="/admin/settings" element={<AdminGuard><AdminSettings /></AdminGuard>} />
           <Route path="/setup/business" element={<AuthGuard><SetupBusiness /></AuthGuard>} />
+          <Route path="/setup-business" element={<AuthGuard><SetupBusiness /></AuthGuard>} />
+          <Route path="/business-setup" element={<AuthGuard><SetupBusiness /></AuthGuard>} />
           <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
           <Route path="/dashboard/inventory" element={<AuthGuard><UserInventory /></AuthGuard>} />
           <Route path="/dashboard/low-stock" element={<AuthGuard><UserLowStock /></AuthGuard>} />
           <Route path="/dashboard/businesses" element={<AuthGuard><UserBusinesses /></AuthGuard>} />
+          <Route path="/dashboard/my-businesses" element={<AuthGuard><UserBusinesses /></AuthGuard>} />
           <Route path="/businesses" element={<AuthGuard><UserBusinesses /></AuthGuard>} />
           <Route path="/dashboard/out-of-stock" element={<AuthGuard><UserOutOfStock /></AuthGuard>} />
           <Route path="/dashboard/pos" element={<AuthGuard><UserPOS /></AuthGuard>} />
           <Route path="/dashboard/returns" element={<AuthGuard><UserReturns /></AuthGuard>} />
           <Route path="/returns" element={<AuthGuard><UserReturns /></AuthGuard>} />
           <Route path="/dashboard/purchases" element={<AuthGuard><UserPurchases /></AuthGuard>} />
+          <Route path="/dashboard/purchase" element={<AuthGuard><UserPurchases /></AuthGuard>} />
           <Route path="/dashboard/reports" element={<AuthGuard><UserReports /></AuthGuard>} />
           <Route path="/dashboard/report" element={<AuthGuard><UserReports /></AuthGuard>} />
           <Route path="/reports" element={<AuthGuard><UserReports /></AuthGuard>} />
           <Route path="/report" element={<AuthGuard><UserReports /></AuthGuard>} />
           <Route path="/dashboard/analytics" element={<AuthGuard><UserAnalytics /></AuthGuard>} />
           <Route path="/dashboard/team" element={<AuthGuard><UserTeam /></AuthGuard>} />
+          <Route path="/dashboard/team-hub" element={<AuthGuard><UserTeam /></AuthGuard>} />
           <Route path="/dashboard/subscription" element={<AuthGuard><UserSubscription /></AuthGuard>} />
           <Route path="/dashboard/announcements" element={<AuthGuard><UserAnnouncements /></AuthGuard>} />
           <Route path="/dashboard/announcements/notifications" element={<AuthGuard><UserNotifications /></AuthGuard>} />

@@ -293,6 +293,11 @@ const Dashboard = () => {
 
   // Load business data and listen to realtime changes cleanly
   useEffect(() => {
+    if (hasLoaded && !bizLoading && !activeId && businesses.length === 0 && staffBusinesses.length === 0) {
+      navigate("/setup-business", { replace: true });
+      return;
+    }
+
     if (!activeId) {
       if (hasLoaded) setLoading(false);
       return;

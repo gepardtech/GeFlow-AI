@@ -112,10 +112,41 @@ const Login = () => {
 
       const params = new URLSearchParams(window.location.search);
       let redirectUrl = params.get("redirect");
-      if (!redirectUrl) {
-        redirectUrl =
-          cleanEmail === "gepardwebs@gmail.com" ? "/admin" : "/dashboard";
+
+      if (cleanEmail === "gepardwebs@gmail.com") {
+        redirectUrl = "/admin";
+      } else {
+        // Check if login user already has a registered business (as owner or staff)
+        let hasBusiness = false;
+        try {
+          const [{ data: userBiz }, { data: staffBiz }] = await Promise.all([
+            supabase
+              .from("businesses")
+              .select("id")
+              .eq("owner_user_id", session.user.id)
+              .limit(1),
+            supabase
+              .from("business_staff")
+              .select("id")
+              .eq("user_id", session.user.id)
+              .limit(1),
+          ]);
+
+          if ((userBiz && userBiz.length > 0) || (staffBiz && staffBiz.length > 0)) {
+            hasBusiness = true;
+          }
+        } catch {
+          // fallback
+        }
+
+        if (hasBusiness) {
+          redirectUrl = redirectUrl && redirectUrl !== "/setup-business" ? redirectUrl : "/dashboard";
+        } else {
+          // User does not have a registered business -> redirect to business registration setup
+          redirectUrl = "/setup-business";
+        }
       }
+
       window.location.replace(redirectUrl);
     } catch (err: any) {
       toast({

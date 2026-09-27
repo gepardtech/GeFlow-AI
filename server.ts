@@ -21,6 +21,7 @@ import { settingsService } from "./src/server/settings/settingsService";
 import { newsletterService } from "./src/server/newsletter/newsletterService";
 import { promotionsService } from "./src/server/promotions/promotionsService";
 import { serverSupabase, bgSupabase, verifyUserToken } from "./src/server/supabase";
+import { syncRealCategoriesToDatabase } from "./src/server/syncRealCategories";
 import { GoogleGenAI } from "@google/genai";
 import fs from "fs";
 
@@ -1132,9 +1133,37 @@ app.post("/api/upload/member-photo", async (req: Request, res: Response) => {
     fs.writeFileSync(filePath, buffer);
 
     const publicUrl = `/uploads/members/${fileName}`;
+
+    // Upload buffer to Supabase Storage bucket 'about_members'
+    let supabaseStorageUrl = "";
+    try {
+      const mimeType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+      const { error: storageErr } = await serverSupabase.storage
+        .from("about_members")
+        .upload(fileName, buffer, {
+          contentType: mimeType,
+          upsert: true,
+        });
+
+      if (!storageErr) {
+        const { data: pubData } = serverSupabase.storage
+          .from("about_members")
+          .getPublicUrl(fileName);
+        supabaseStorageUrl = pubData?.publicUrl || "";
+      } else {
+        console.warn("Notice: Supabase storage upload warning:", storageErr.message);
+      }
+    } catch (sErr) {
+      console.warn("Supabase storage error:", sErr);
+    }
+
+    const finalUrl = supabaseStorageUrl || publicUrl;
+
     res.json({
       success: true,
-      url: publicUrl,
+      url: finalUrl,
+      supabaseStorageUrl,
+      localUrl: publicUrl,
       fileName,
       size: buffer.length,
     });
@@ -1815,10 +1844,13 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
     const isSuperAdmin = user?.email?.toLowerCase() === "gepardwebs@gmail.com";
     
     // Check if caller is admin in database or super-admin
-    let isCallerAdmin = isSuperAdmin;
+    let isCallerAdmin = isSuperAdmin || (user as any)?.user_metadata?.role === "admin";
     if (!isCallerAdmin && user) {
-      const { data: roleRow } = await serverSupabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
-      if (roleRow?.role === "admin") isCallerAdmin = true;
+      const [{ data: roleRow }, { data: profRow }] = await Promise.all([
+        serverSupabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle(),
+        serverSupabase.from("profiles").select("role").eq("user_id", user.id).maybeSingle(),
+      ]);
+      if (roleRow?.role === "admin" || (profRow as any)?.role === "admin") isCallerAdmin = true;
     }
     // Allow internal requests when admin token is verified or session is in admin context
     if (!user) {
@@ -1851,13 +1883,24 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
         profileUpdates.status = String(status).toLowerCase();
       }
 
+      // Resolve the actual Auth UUID if user_id passed might be the profiles.id
+      let authUserId = user_id;
+      const { data: matchedProf } = await serverSupabase
+        .from("profiles")
+        .select("id, user_id")
+        .or(`user_id.eq.${user_id},id.eq.${user_id}`)
+        .maybeSingle();
+      if (matchedProf?.user_id) {
+        authUserId = matchedProf.user_id;
+      }
+
       const tasks: Promise<any>[] = [
-        serverSupabase.from("profiles").update(profileUpdates).eq("user_id", user_id),
-        bgSupabase.from("profiles").update(profileUpdates).eq("user_id", user_id),
+        serverSupabase.from("profiles").update(profileUpdates).or(`user_id.eq.${user_id},id.eq.${user_id}`),
+        bgSupabase.from("profiles").update(profileUpdates).or(`user_id.eq.${user_id},id.eq.${user_id}`).then(() => {}).catch(() => {}),
       ];
 
-      if (Object.keys(metadataUpdates).length > 0) {
-        tasks.push(serverSupabase.auth.admin.updateUserById(user_id, { user_metadata: metadataUpdates }));
+      if (Object.keys(metadataUpdates).length > 0 && authUserId) {
+        tasks.push(serverSupabase.auth.admin.updateUserById(authUserId, { user_metadata: metadataUpdates }).catch(() => {}));
       }
 
       if (role !== undefined) {
@@ -1865,24 +1908,28 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
         metadataUpdates.role = cleanRole;
         tasks.push(
           (async () => {
-            await serverSupabase.from("user_roles").delete().eq("user_id", user_id);
-            await serverSupabase.from("user_roles").insert({ user_id, role: cleanRole });
-            await bgSupabase.from("user_roles").delete().eq("user_id", user_id).catch(() => {});
-            await bgSupabase.from("user_roles").insert({ user_id, role: cleanRole }).catch(() => {});
+            await serverSupabase.from("user_roles").delete().or(`user_id.eq.${authUserId},user_id.eq.${user_id}`).then(() => {}).catch(() => {});
+            await serverSupabase.from("user_roles").insert({ user_id: authUserId, role: cleanRole }).then(() => {}).catch(() => {});
+            await bgSupabase.from("user_roles").delete().or(`user_id.eq.${authUserId},user_id.eq.${user_id}`).then(() => {}).catch(() => {});
+            await bgSupabase.from("user_roles").insert({ user_id: authUserId, role: cleanRole }).then(() => {}).catch(() => {});
           })()
         );
       }
 
-      if (plan !== undefined) {
+      if (plan !== undefined && authUserId) {
         const cleanPlan = String(plan).toLowerCase();
         tasks.push(
-          serverSupabase.from("subscriptions").insert({
-            owner_user_id: user_id,
-            tier: cleanPlan,
-            cycle: cleanPlan === "lifetime" ? "lifetime" : "monthly",
-            status: status === "suspended" ? "suspended" : "active",
-            created_at: new Date().toISOString(),
-          })
+          (async () => {
+            // Cancel older active subscriptions to avoid candidate collisions
+            await serverSupabase.from("subscriptions").update({ status: "superseded" }).eq("owner_user_id", authUserId).eq("status", "active").then(() => {}).catch(() => {});
+            await serverSupabase.from("subscriptions").insert({
+              owner_user_id: authUserId,
+              tier: cleanPlan,
+              cycle: cleanPlan === "lifetime" ? "lifetime" : "monthly",
+              status: status === "suspended" ? "suspended" : "active",
+              created_at: new Date().toISOString(),
+            }).then(() => {}).catch(() => {});
+          })()
         );
       }
 
@@ -1895,19 +1942,32 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, error: "user_id and plan required" });
       }
       const cleanPlan = String(plan).toLowerCase();
+      let authUserId = user_id;
+      const { data: matchedProf } = await serverSupabase
+        .from("profiles")
+        .select("id, user_id")
+        .or(`user_id.eq.${user_id},id.eq.${user_id}`)
+        .maybeSingle();
+      if (matchedProf?.user_id) {
+        authUserId = matchedProf.user_id;
+      }
+
       await Promise.allSettled([
-        serverSupabase.from("profiles").update({ plan: cleanPlan, updated_at: new Date().toISOString() }).eq("user_id", user_id),
-        bgSupabase.from("profiles").update({ plan: cleanPlan, updated_at: new Date().toISOString() }).eq("user_id", user_id),
-        serverSupabase.from("subscriptions").insert({
-          owner_user_id: user_id,
-          tier: cleanPlan,
-          cycle: cleanPlan === "lifetime" ? "lifetime" : "monthly",
-          status: "active",
-          created_at: new Date().toISOString()
-        }),
-        serverSupabase.auth.admin.updateUserById(user_id, {
+        serverSupabase.from("profiles").update({ plan: cleanPlan, updated_at: new Date().toISOString() }).or(`user_id.eq.${user_id},id.eq.${user_id}`),
+        bgSupabase.from("profiles").update({ plan: cleanPlan, updated_at: new Date().toISOString() }).or(`user_id.eq.${user_id},id.eq.${user_id}`).then(() => {}).catch(() => {}),
+        (async () => {
+          await serverSupabase.from("subscriptions").update({ status: "superseded" }).eq("owner_user_id", authUserId).eq("status", "active").then(() => {}).catch(() => {});
+          await serverSupabase.from("subscriptions").insert({
+            owner_user_id: authUserId,
+            tier: cleanPlan,
+            cycle: cleanPlan === "lifetime" ? "lifetime" : "monthly",
+            status: "active",
+            created_at: new Date().toISOString()
+          });
+        })(),
+        serverSupabase.auth.admin.updateUserById(authUserId, {
           user_metadata: { plan: cleanPlan }
-        })
+        }).catch(() => {})
       ]);
       return res.json({ success: true, user_id, plan: cleanPlan });
     }
@@ -2066,20 +2126,26 @@ app.get("/api/admin/users-overview", async (req: Request, res: Response) => {
       serverSupabase.auth.admin.listUsers().catch(() => ({ data: { users: [] } })),
       serverSupabase.from("profiles").select("*").order("created_at", { ascending: false }),
       serverSupabase.from("user_roles").select("id, user_id, role"),
-      serverSupabase.from("businesses").select("id, owner_user_id, business_name"),
-      serverSupabase.from("products").select("id, business_id, owner_user_id")
+      serverSupabase.from("businesses").select("id, owner_user_id, business_name, currency, status, created_at, category_id"),
+      serverSupabase.from("products").select("id, business_id, owner_user_id, name, retail_price, stock_units, category_id, sku")
     ]);
 
     const authUsers = (authRes as any)?.data?.users || [];
     const profilesList = [...(profs || [])];
     const profileUserIds = new Set(profilesList.map((p: any) => p.user_id));
 
-    // Auto-sync any user registered in Supabase Auth who is missing a profile row
+    // Auto-sync any user registered in Supabase Auth who is missing a profile row, and sync real names
+    const authUserMap = new Map<string, any>();
+    authUsers.forEach((au: any) => {
+      authUserMap.set(au.id, au);
+      if (au.email) authUserMap.set(au.email.toLowerCase(), au);
+    });
+
     for (const au of authUsers) {
       if (!profileUserIds.has(au.id)) {
         const email = au.email || "";
-        const fullName = au.user_metadata?.full_name || au.user_metadata?.name || email.split("@")[0] || "User";
-        const plan = au.user_metadata?.plan || "free";
+        const fullName = au.user_metadata?.full_name || au.user_metadata?.name || (email.toLowerCase() === "gepardwebs@gmail.com" ? "SG Bilal" : email.split("@")[0]) || "User";
+        const plan = au.user_metadata?.plan || (email.toLowerCase() === "gepardwebs@gmail.com" ? "lifetime" : "free");
         const newProf = {
           id: au.id,
           user_id: au.id,
@@ -2098,6 +2164,20 @@ app.get("/api/admin/users-overview", async (req: Request, res: Response) => {
       }
     }
 
+    // Resolve real original name from Supabase Auth metadata for all profiles
+    for (const p of profilesList) {
+      const au = authUserMap.get(p.user_id) || authUserMap.get(p.id) || (p.email ? authUserMap.get(p.email.toLowerCase()) : null);
+      const isSuperAdminEmail = p.email?.toLowerCase() === "gepardwebs@gmail.com";
+      const realName = isSuperAdminEmail
+        ? "SG Bilal"
+        : (au?.user_metadata?.full_name || au?.user_metadata?.name || (p.full_name && p.full_name !== p.email?.split("@")[0] ? p.full_name : null) || p.full_name);
+      
+      if (realName && p.full_name !== realName) {
+        p.full_name = realName;
+        await serverSupabase.from("profiles").update({ full_name: realName }).or(`user_id.eq.${p.user_id},id.eq.${p.user_id}`).then(() => {}).catch(() => {});
+      }
+    }
+
     const rolesMap: Record<string, string> = {};
     (roleRows || []).forEach((r: any) => {
       if (r.user_id && r.role) {
@@ -2109,14 +2189,76 @@ app.get("/api/admin/users-overview", async (req: Request, res: Response) => {
     for (const p of profilesList) {
       if (p.email?.toLowerCase() === "gepardwebs@gmail.com") {
         rolesMap[p.user_id] = "admin";
+        if (p.id) rolesMap[p.id] = "admin";
       } else if (!rolesMap[p.user_id]) {
         rolesMap[p.user_id] = "user";
       }
     }
 
+    // Build user -> businesses mapping and business product counts
+    const userBusinessesMap: Record<string, any[]> = {};
+    const bizToOwnerMap: Record<string, string> = {};
+    const bizProductsCount: Record<string, number> = {};
+
+    (bizRows || []).forEach((b: any) => {
+      if (b.owner_user_id) {
+        if (!userBusinessesMap[b.owner_user_id]) userBusinessesMap[b.owner_user_id] = [];
+        userBusinessesMap[b.owner_user_id].push({
+          id: b.id,
+          name: b.business_name,
+          currency: b.currency,
+          status: b.status,
+          created_at: b.created_at,
+          category_id: b.category_id,
+        });
+        bizToOwnerMap[b.id] = b.owner_user_id;
+      }
+    });
+
+    const userProductsMap: Record<string, any[]> = {};
+    const userProductCounts: Record<string, number> = {};
+
+    (prodRows || []).forEach((p: any) => {
+      let ownerId = p.owner_user_id;
+      if (!ownerId && p.business_id && bizToOwnerMap[p.business_id]) {
+        ownerId = bizToOwnerMap[p.business_id];
+      }
+      if (p.business_id) {
+        bizProductsCount[p.business_id] = (bizProductsCount[p.business_id] || 0) + 1;
+      }
+      if (ownerId) {
+        userProductCounts[ownerId] = (userProductCounts[ownerId] || 0) + 1;
+        if (!userProductsMap[ownerId]) userProductsMap[ownerId] = [];
+        if (userProductsMap[ownerId].length < 100) {
+          userProductsMap[ownerId].push({
+            id: p.id,
+            name: p.name,
+            sku: p.sku,
+            price: p.retail_price,
+            stock: p.stock_units,
+            business_id: p.business_id,
+          });
+        }
+      }
+    });
+
+    // Enrich users with accurate live business details and listed product counts
+    const enrichedUsers = profilesList.map((p: any) => {
+      const uBiz = userBusinessesMap[p.user_id] || (p.id ? userBusinessesMap[p.id] : null) || [];
+      const prodCount = userProductCounts[p.user_id] || (p.id ? userProductCounts[p.id] : 0) || p.listed_products || 0;
+      return {
+        ...p,
+        business_count: uBiz.length,
+        businesses: uBiz.map((b) => ({ ...b, products_count: bizProductsCount[b.id] || 0 })),
+        business_names: uBiz.map((b) => b.name).join(", "),
+        listed_products: prodCount,
+        products_sample: userProductsMap[p.user_id] || (p.id ? userProductsMap[p.id] : []) || [],
+      };
+    });
+
     res.json({
       success: true,
-      users: profilesList,
+      users: enrichedUsers,
       roles: rolesMap,
       businessesCount: (bizRows || []).length,
       productsCount: (prodRows || []).length
@@ -2126,24 +2268,81 @@ app.get("/api/admin/users-overview", async (req: Request, res: Response) => {
   }
 });
 
-// Admin business delete (complete removal of business, catalog, staff, orders, sales and setup)
+// Admin business delete (complete sequential removal of business, catalog, staff, orders, sales, movements and setup)
+const executeBusinessCascadeDelete = async (businessId: string) => {
+  if (!businessId) throw new Error("businessId is required");
+
+  // 1. Gather child IDs to delete dependent sub-items first
+  const [
+    { data: bSales },
+    { data: bPurchases },
+    { data: bProducts },
+    { data: bOrders },
+  ] = await Promise.all([
+    serverSupabase.from("sales").select("id").eq("business_id", businessId),
+    serverSupabase.from("purchases").select("id").eq("business_id", businessId),
+    serverSupabase.from("products").select("id").eq("business_id", businessId),
+    serverSupabase.from("orders").select("id").eq("business_id", businessId).catch(() => ({ data: [] })),
+  ]);
+
+  const saleIds = (bSales || []).map((s: any) => s.id);
+  const purchaseIds = (bPurchases || []).map((p: any) => p.id);
+  const productIds = (bProducts || []).map((p: any) => p.id);
+  const orderIds = (bOrders || []).map((o: any) => o.id);
+
+  // 2. Delete grandchild records (sale_items, purchase_items, order_items, stock_movements)
+  if (saleIds.length > 0) {
+    await serverSupabase.from("sale_items").delete().in("sale_id", saleIds).catch(() => {});
+  }
+  if (purchaseIds.length > 0) {
+    await serverSupabase.from("purchase_items").delete().in("purchase_id", purchaseIds).catch(() => {});
+  }
+  if (orderIds.length > 0) {
+    await serverSupabase.from("order_items").delete().in("order_id", orderIds).catch(() => {});
+  }
+  if (productIds.length > 0) {
+    await Promise.allSettled([
+      serverSupabase.from("sale_items").delete().in("product_id", productIds),
+      serverSupabase.from("purchase_items").delete().in("product_id", productIds),
+      serverSupabase.from("order_items").delete().in("product_id", productIds),
+      serverSupabase.from("stock_movements").delete().in("product_id", productIds),
+    ]);
+  }
+
+  // 3. Delete transactional & operational business tables
+  await Promise.allSettled([
+    serverSupabase.from("stock_movements").delete().eq("business_id", businessId),
+    serverSupabase.from("held_orders").delete().eq("business_id", businessId),
+    serverSupabase.from("order_items").delete().eq("business_id", businessId),
+    serverSupabase.from("orders").delete().eq("business_id", businessId),
+    serverSupabase.from("refund_requests").delete().eq("business_id", businessId),
+    serverSupabase.from("invoices").delete().eq("business_id", businessId),
+    serverSupabase.from("sales").delete().eq("business_id", businessId),
+    serverSupabase.from("purchases").delete().eq("business_id", businessId),
+    serverSupabase.from("business_staff").delete().eq("business_id", businessId),
+    serverSupabase.from("business_settings").delete().eq("business_id", businessId),
+    serverSupabase.from("customers").delete().eq("business_id", businessId),
+    serverSupabase.from("suppliers").delete().eq("business_id", businessId),
+    serverSupabase.from("products").delete().eq("business_id", businessId),
+    serverSupabase.from("subscriptions").update({ business_id: null }).eq("business_id", businessId),
+  ]);
+
+  // 4. Delete the business record itself from both databases
+  const { error: delErr } = await serverSupabase.from("businesses").delete().eq("id", businessId);
+  if (delErr) {
+    console.error("serverSupabase business delete error:", delErr.message);
+    throw new Error(delErr.message);
+  }
+  await bgSupabase.from("businesses").delete().eq("id", businessId).catch(() => {});
+  return true;
+};
+
 app.delete("/api/admin/businesses/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     if (!id) return res.status(400).json({ success: false, error: "business ID is required" });
 
-    await Promise.allSettled([
-      serverSupabase.from("products").delete().eq("business_id", id),
-      serverSupabase.from("sales").delete().eq("business_id", id),
-      serverSupabase.from("orders").delete().eq("business_id", id),
-      serverSupabase.from("purchases").delete().eq("business_id", id),
-      serverSupabase.from("held_orders").delete().eq("business_id", id),
-      serverSupabase.from("business_staff").delete().eq("business_id", id),
-      serverSupabase.from("business_settings").delete().eq("business_id", id),
-      serverSupabase.from("businesses").delete().eq("id", id),
-      bgSupabase.from("businesses").delete().eq("id", id).catch(() => {}),
-    ]);
-
+    await executeBusinessCascadeDelete(id);
     return res.json({ success: true, id });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
@@ -2155,18 +2354,7 @@ app.post("/api/admin/businesses/delete", async (req: Request, res: Response) => 
     const { businessId } = req.body || {};
     if (!businessId) return res.status(400).json({ success: false, error: "businessId is required" });
 
-    await Promise.allSettled([
-      serverSupabase.from("products").delete().eq("business_id", businessId),
-      serverSupabase.from("sales").delete().eq("business_id", businessId),
-      serverSupabase.from("orders").delete().eq("business_id", businessId),
-      serverSupabase.from("purchases").delete().eq("business_id", businessId),
-      serverSupabase.from("held_orders").delete().eq("business_id", businessId),
-      serverSupabase.from("business_staff").delete().eq("business_id", businessId),
-      serverSupabase.from("business_settings").delete().eq("business_id", businessId),
-      serverSupabase.from("businesses").delete().eq("id", businessId),
-      bgSupabase.from("businesses").delete().eq("id", businessId).catch(() => {}),
-    ]);
-
+    await executeBusinessCascadeDelete(businessId);
     return res.json({ success: true, businessId });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
@@ -2388,6 +2576,71 @@ app.post("/api/admin/general-settings", async (req: Request, res: Response) => {
     const rawSettings = req.body?.settings || req.body || {};
     const parentComp = (rawSettings.parent_company || "Gepard Techs").toString().trim();
 
+    const processedMembers = await Promise.all(
+      (Array.isArray(rawSettings.about_members) ? rawSettings.about_members : []).map(async (m: any) => {
+        let img = m.image_url || m.imageUrl || "";
+        // If image is a base64 dataUrl, upload directly to Supabase storage bucket
+        if (typeof img === "string" && img.startsWith("data:image/")) {
+          try {
+            let ext = "jpg";
+            let base64Data = img;
+            if (img.startsWith("data:image/png;base64,")) {
+              ext = "png";
+              base64Data = img.replace(/^data:image\/png;base64,/, "");
+            } else if (img.startsWith("data:image/jpeg;base64,") || img.startsWith("data:image/jpg;base64,")) {
+              ext = "jpg";
+              base64Data = img.replace(/^data:image\/jpe?g;base64,/, "");
+            } else if (img.startsWith("data:image/webp;base64,")) {
+              ext = "webp";
+              base64Data = img.replace(/^data:image\/webp;base64,/, "");
+            } else {
+              base64Data = img.replace(/^data:image\/[a-zA-Z+]+;base64,/, "");
+            }
+            const buf = Buffer.from(base64Data, "base64");
+            const fName = `member_${(m.id || "mem").replace(/[^a-zA-Z0-9_-]/g, "_")}_${Date.now()}.${ext}`;
+            const mimeType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+            const { error: sErr } = await serverSupabase.storage
+              .from("about_members")
+              .upload(fName, buf, { contentType: mimeType, upsert: true });
+            if (!sErr) {
+              const { data: pData } = serverSupabase.storage.from("about_members").getPublicUrl(fName);
+              if (pData?.publicUrl) {
+                img = pData.publicUrl;
+              }
+            }
+          } catch (uploadErr) {
+            console.warn("Notice uploading member photo to Supabase storage during settings save:", uploadErr);
+          }
+        } else if (typeof img === "string" && (img.startsWith("/uploads/members/") || img.startsWith("uploads/members/"))) {
+          try {
+            const cleanPath = img.replace(/^\/?uploads\/members\//, "");
+            const localFile = path.join(membersUploadDir, cleanPath);
+            if (fs.existsSync(localFile)) {
+              const fileBuf = fs.readFileSync(localFile);
+              const ext = path.extname(cleanPath).replace(".", "") || "jpg";
+              const mimeType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+              const { error: sErr } = await serverSupabase.storage
+                .from("about_members")
+                .upload(cleanPath, fileBuf, { contentType: mimeType, upsert: true });
+              if (!sErr) {
+                const { data: pData } = serverSupabase.storage.from("about_members").getPublicUrl(cleanPath);
+                if (pData?.publicUrl) {
+                  img = pData.publicUrl;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("Notice syncing local member photo to Supabase storage:", e);
+          }
+        }
+        return {
+          ...m,
+          image_url: img,
+          imageUrl: img,
+        };
+      })
+    );
+
     const normalizedSettings = {
       parent_company: parentComp,
       social_links: Array.isArray(rawSettings.social_links) ? rawSettings.social_links : [],
@@ -2395,7 +2648,7 @@ app.post("/api/admin/general-settings", async (req: Request, res: Response) => {
         text: typeof rawSettings.footer_copyright?.text === "string" ? rawSettings.footer_copyright.text : "",
         wordUrls: Array.isArray(rawSettings.footer_copyright?.wordUrls) ? rawSettings.footer_copyright.wordUrls : [],
       },
-      about_members: Array.isArray(rawSettings.about_members) ? rawSettings.about_members : [],
+      about_members: processedMembers,
     };
 
     const { data: row } = await serverSupabase
@@ -3605,6 +3858,9 @@ app.post("/api/coupons/validate", async (req: Request, res: Response) => {
 });
 
 async function startServer() {
+  // Guarantee real 29 business categories and 96 product categories are synchronized to database
+  syncRealCategoriesToDatabase().catch((e) => console.warn("Notice: syncRealCategories startup error:", e));
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true, hmr: false },

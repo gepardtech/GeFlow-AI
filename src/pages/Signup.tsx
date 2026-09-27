@@ -40,7 +40,7 @@ const Signup = () => {
       const cleanEmail = email.trim().toLowerCase();
       const goHome = () => {
         if (cleanEmail === "gepardwebs@gmail.com") navigate("/admin");
-        else navigate("/dashboard");
+        else navigate("/setup-business");
       };
 
       // 1) PRIMARY: direct Supabase signUp

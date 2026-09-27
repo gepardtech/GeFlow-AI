@@ -155,18 +155,46 @@ const SetupBusiness = () => {
       payload.category_id = categoryId;
     }
 
-    const { error } = await supabase.from("businesses").insert(payload);
-    setBusy(false);
-
-    if (error) {
-      toast({
-        title: "Could not create business",
-        description: error.message,
-        variant: "destructive",
-      });
-      return;
+    let createdBizId: string | null = null;
+    const { data: insData, error } = await supabase.from("businesses").insert(payload).select("id").maybeSingle();
+    if (insData?.id) {
+      createdBizId = insData.id;
     }
 
+    if (error) {
+      try {
+        const { data: sData } = await supabase.auth.getSession();
+        const token = sData?.session?.access_token;
+        const res = await fetch("/api/user/businesses/create", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const resJson = await res.json();
+          createdBizId = resJson.business?.id;
+        } else {
+          throw new Error(error.message || "Failed to create business");
+        }
+      } catch (err: any) {
+        setBusy(false);
+        toast({
+          title: "Could not create business",
+          description: err?.message || error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    setBusy(false);
+    if (createdBizId) {
+      localStorage.setItem("geflow.activeBusinessId", createdBizId);
+    }
+    localStorage.removeItem("geflow_cached_owned_businesses");
     window.dispatchEvent(new CustomEvent("panel:refresh"));
     window.dispatchEvent(new CustomEvent("geflow:business-updated"));
     setBizCount((c) => c + 1);
@@ -380,14 +408,9 @@ const SetupBusiness = () => {
 
           <div className="p-6 border-t border-border flex items-center justify-between gap-3 bg-muted/20">
             {step === 1 && (
-              <>
-                <Button variant="ghost" onClick={() => navigate("/dashboard")}>
-                  Skip to Dashboard
-                </Button>
-                <Button onClick={() => setStep(2)} className="ml-auto">
-                  Get Started <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
-              </>
+              <Button onClick={() => setStep(2)} className="ml-auto">
+                Get Started <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
             )}
             {step === 2 && (
               <>

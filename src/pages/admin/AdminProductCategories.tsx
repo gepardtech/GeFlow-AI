@@ -18,7 +18,13 @@ interface CatRow {
   inherit_barcode: boolean; inherit_alerts: boolean; status: string; usage_count: number;
   created_at: string;
 }
-const INDUSTRIES = ["Pharmacy","Medical Store","Hospital Pharmacy","Grocery Store","Supermarket","Electronics Store","Mobile Shop","Restaurant","Retail","Wholesale","Hardware","Other"];
+const INDUSTRIES = [
+  "Pharmacy", "Medical Store", "Hospital Pharmacy", "Grocery", "Supermarket", "Electronics",
+  "Mobile Shop", "IT Store", "Boutique", "Footwear", "Restaurant", "Fast Food", "Cafe",
+  "Bakery", "Hardware", "Electrical", "Plumbing", "Automotive", "Repair Shop", "Beauty",
+  "Salon", "Books & Stationery", "Jewelry", "Furniture", "Home Goods", "Sports",
+  "Pet Care", "Optical", "Wholesale", "Agriculture", "Retail", "Other",
+];
 const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");
 
 interface Form { name: string; parent_id: string | null; industries: string[]; description: string; expiry: boolean; batch: boolean; barcode: boolean; alerts: boolean; }
@@ -63,10 +69,17 @@ const AdminProductCategories = () => {
   }, [load]);
 
   const filtered = useMemo(() => rows.filter((r) => {
-    if (industryFilter !== "all" && !r.industry_assignments.includes(industryFilter)) return false;
+    if (industryFilter !== "all") {
+      const assignments = Array.isArray(r.industry_assignments) ? r.industry_assignments : [];
+      if (!assignments.some((a) => a.toLowerCase().includes(industryFilter.toLowerCase()) || industryFilter.toLowerCase().includes(a.toLowerCase()))) {
+        return false;
+      }
+    }
     if (search) {
       const q = search.toLowerCase();
-      return r.name.toLowerCase().includes(q) || r.slug.toLowerCase().includes(q);
+      const n = (r.name || "").toLowerCase();
+      const s = (r.slug || "").toLowerCase();
+      return n.includes(q) || s.includes(q);
     }
     return true;
   }), [rows, search, industryFilter]);
@@ -114,14 +127,35 @@ const AdminProductCategories = () => {
     };
 
     try {
+      const { data: sData } = await supabase.auth.getSession();
+      const token = sData?.session?.access_token;
       const res = await fetch("/api/admin/product-categories", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || "Failed to save category");
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && (json.success || json.category || json.id)) {
+        toast({ title: editing ? "Category updated" : "Category created" });
+        setEditing(null);
+        setForm(blank());
+        load();
+        return;
+      }
+    } catch {
+      // Proceed to fallback
+    }
+
+    try {
+      if (editing?.id) {
+        const { error: upErr } = await supabase.from("product_categories").update(payload).eq("id", editing.id);
+        if (upErr) throw upErr;
+      } else {
+        const { error: inErr } = await supabase.from("product_categories").insert(payload);
+        if (inErr) throw inErr;
       }
       toast({ title: editing ? "Category updated" : "Category created" });
       setEditing(null);
@@ -137,17 +171,38 @@ const AdminProductCategories = () => {
   const confirmDelete = async () => {
     if (!del) return;
     setBusy(true);
+    const targetId = del.id;
+    setRows((prev) => prev.filter((r) => r.id !== targetId));
+
     try {
-      const res = await fetch(`/api/admin/product-categories/${del.id}`, { method: "DELETE" });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || "Failed to delete category");
+      const { data: sData } = await supabase.auth.getSession();
+      const token = sData?.session?.access_token;
+      const res = await fetch(`/api/admin/product-categories/${targetId}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && (json.success || json.id)) {
+        toast({ title: "Category deleted" });
+        setDel(null);
+        load();
+        return;
       }
+    } catch {
+      // Proceed to fallback
+    }
+
+    try {
+      await supabase.from("product_categories").update({ parent_id: null }).eq("parent_id", targetId);
+      await supabase.from("products").update({ category_id: null }).eq("category_id", targetId);
+      const { error: delErr } = await supabase.from("product_categories").delete().eq("id", targetId);
+      if (delErr) throw delErr;
       toast({ title: "Category deleted" });
       setDel(null);
       load();
     } catch (err: any) {
       toast({ title: "Delete failed", description: err.message, variant: "destructive" });
+      load();
     } finally {
       setBusy(false);
     }
