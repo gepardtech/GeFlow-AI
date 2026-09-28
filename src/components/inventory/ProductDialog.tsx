@@ -737,13 +737,46 @@ const ProductDialog = ({
         images,
       };
 
+      // 1. Primary: Save directly to Supabase collection via server API (bypasses RLS)
+      let savedProductData: any = null;
       let error: any = null;
-      if (isEdit && product) {
-        const res = await supabase.from("products").update(payloadWithColumns).eq("id", product.id);
-        error = res.error;
-      } else {
-        const res = await supabase.from("products").insert(payloadWithColumns);
-        error = res.error;
+      try {
+        const { data: sData } = await supabase.auth.getSession();
+        const token = sData?.session?.access_token;
+        const res = await fetch("/api/user/products/save", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            businessId,
+            ownerUserId,
+            product: {
+              ...(isEdit && product ? { id: product.id } : {}),
+              ...payloadWithColumns,
+            },
+          }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.success && json?.product) {
+            savedProductData = json.product;
+            error = null;
+          }
+        }
+      } catch (apiErr) {
+        console.warn("Notice saving product via user products API, falling back to direct:", apiErr);
+      }
+
+      if (!savedProductData) {
+        if (isEdit && product) {
+          const res = await supabase.from("products").update(payloadWithColumns).eq("id", product.id);
+          error = res.error;
+        } else {
+          const res = await supabase.from("products").insert(payloadWithColumns);
+          error = res.error;
+        }
       }
 
       // Resilient fallback if the new columns (uom, units_per_uom, base_unit) have not yet been migrated in Supabase (Postgres 42703)

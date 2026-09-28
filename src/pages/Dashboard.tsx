@@ -306,7 +306,7 @@ const Dashboard = () => {
     load();
 
     const ch = supabase
-      .channel(`dashboard-${activeId}`)
+      .channel(`dashboard-${activeId}-${Math.random().toString(36).slice(2)}`)
       .on(
         "postgres_changes",
         {

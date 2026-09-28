@@ -369,15 +369,33 @@ export async function saveSyncedProduct(
   userId?: string,
   isStaff = false
 ) {
-  // 1. Post to Sync Engine
   let savedProduct: SyncedProductItem | null = null;
+
+  // 1. Primary: Save directly to Supabase PostgreSQL database collection via server API
+  try {
+    const res = await fetch("/api/user/products/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ businessId, product, ownerUserId: userId }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.success && data?.product) {
+        savedProduct = data.product;
+      }
+    }
+  } catch (err) {
+    console.warn("Notice saving product via user products API:", err);
+  }
+
+  // 2. Also Post to Sync Engine
   try {
     const res = await fetch("/api/sync/product", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ businessId, product, userId }),
     });
-    if (res.ok) {
+    if (res.ok && !savedProduct) {
       const data = await res.json();
       savedProduct = data.product;
     }
@@ -385,7 +403,7 @@ export async function saveSyncedProduct(
     console.warn("Notice saving product to sync server:", err);
   }
 
-  // 2. Always save to Supabase
+  // 3. Fallback direct client write
   try {
     const isUuid = (str?: string | null): boolean =>
       Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));

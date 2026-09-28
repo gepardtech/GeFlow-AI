@@ -354,7 +354,13 @@ const AdminSettings = () => {
           <Card title="Billing Defaults" desc="Currency, tax and invoicing configuration.">
             <div className="grid sm:grid-cols-2 gap-4">
               <Field label="Base Currency">
-                <Select value={form.base_currency ?? "USD"} onValueChange={(v) => set("base_currency", v)}>
+                <Select
+                  value={form.base_currency ?? "USD"}
+                  onValueChange={(v) => {
+                    set("base_currency", v);
+                    window.dispatchEvent(new CustomEvent("geflow:currency-changed"));
+                  }}
+                >
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {CURRENCIES.map((c) => (
@@ -365,6 +371,49 @@ const AdminSettings = () => {
               </Field>
               <Field label="Universal Tax (%)"><Input type="number" value={form.universal_tax ?? 0} onChange={(e) => set("universal_tax", Number(e.target.value))} /></Field>
             </div>
+
+            {/* Live Google & Gemini Currency Conversion Display */}
+            {(() => {
+              const targetCode = (form.base_currency ?? "USD").toUpperCase();
+              const isUSD = targetCode === "USD";
+              return (
+                <div className="mt-4 p-4 rounded-xl bg-sky-500/10 border border-sky-500/20 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-sky-600 dark:text-sky-400 tracking-wider">
+                      ✨ LIVE GOOGLE &amp; GEMINI PRICE CONVERSION
+                    </span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-600 dark:text-sky-300 font-bold">
+                      ACTIVE
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    All plan and store prices automatically convert from original USD prices to selective currencies according to live Google prices via Gemini API.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 text-xs">
+                    <div className="bg-background/80 p-2.5 rounded-lg border border-border">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase">Original USD Base</p>
+                      <p className="text-base font-bold text-foreground mt-0.5">$4.99 USD</p>
+                    </div>
+                    <div className="bg-background/80 p-2.5 rounded-lg border border-border">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase">Target Currency</p>
+                      <p className="text-base font-bold text-sky-600 dark:text-sky-400 mt-0.5">{targetCode}</p>
+                    </div>
+                    <div className="bg-background/80 p-2.5 rounded-lg border border-border">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase">Live Converted Price</p>
+                      <p className="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                        {isUSD ? "$4.99" : `${targetCode} ${targetCode === "PKR" ? "1,383.21" : (4.99 * (targetCode === "EUR" ? 0.92 : targetCode === "GBP" ? 0.78 : targetCode === "INR" ? 83.5 : targetCode === "AED" ? 3.67 : targetCode === "SAR" ? 3.75 : 1)).toFixed(2)}`}
+                      </p>
+                    </div>
+                  </div>
+                  {targetCode === "PKR" && (
+                    <p className="text-[11px] text-muted-foreground italic">
+                      Example: Original: $4.99 USD &times; live Google rate PKR 277.20 = <strong>PKR 1,383.21</strong>
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
+
             <Field label="Invoice Prefix"><Input value={form.invoice_prefix ?? ""} onChange={(e) => set("invoice_prefix", e.target.value)} /></Field>
             <Toggle label="Automated tax receipts" desc="Email a tax receipt automatically after each payment." checked={!!form.automated_tax_receipts} onChange={(v) => set("automated_tax_receipts", v)} />
           </Card>

@@ -53,7 +53,29 @@ const Pricing = () => {
   const [searchParams] = useSearchParams();
   const { price } = useMoney({ scope: "platform" });
   const { priceOf, featuresOf, byKey, badgeOf, isPopular, badgePositionOf, nameOf, taglineOf } = usePricingPlans();
-  const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly");
+  const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly" | "lifetime">("monthly");
+  const [lifetimeLimits, setLifetimeLimits] = useState<{ standard: number; premium: number }>({ standard: 25, premium: 25 });
+  const [lifetimeCounts, setLifetimeCounts] = useState<{ standard: number; premium: number }>({ standard: 0, premium: 0 });
+
+  useEffect(() => {
+    fetch("/api/admin/pricing-plans")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.lifetime_plan_limits) {
+          setLifetimeLimits({
+            standard: d.lifetime_plan_limits.standard ?? 25,
+            premium: d.lifetime_plan_limits.premium ?? 25,
+          });
+        }
+        if (d?.lifetime_offer_counts) {
+          setLifetimeCounts({
+            standard: d.lifetime_offer_counts.standard ?? 0,
+            premium: d.lifetime_offer_counts.premium ?? 0,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const urlCoupon = searchParams.get("coupon") || searchParams.get("code") || searchParams.get("promo");
   const activePromoCode = (urlCoupon || getPendingCoupon() || "").trim().toUpperCase();
@@ -86,7 +108,7 @@ const Pricing = () => {
             Flexible pricing for every business stage — from startup to enterprise.
           </p>
 
-          <div className="inline-flex items-center bg-card border border-border rounded-full p-1 gap-1">
+          <div className="inline-flex items-center bg-card border border-border rounded-full p-1 gap-1 flex-wrap justify-center">
             <button
               onClick={() => setBillingPeriod("monthly")}
               className={`px-6 py-2 rounded-full text-sm font-semibold transition-all ${
@@ -99,6 +121,14 @@ const Pricing = () => {
                 billingPeriod === "yearly" ? "bg-foreground text-background shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
             >Yearly</button>
+            <button
+              onClick={() => setBillingPeriod("lifetime")}
+              className={`px-6 py-2 rounded-full text-sm font-semibold transition-all ${
+                billingPeriod === "lifetime" ? "bg-amber-500 text-white shadow-sm font-bold" : "text-amber-600 dark:text-amber-400 hover:text-foreground"
+              }`}
+            >
+              Lifetime (25 Spots Offer)
+            </button>
           </div>
         </div>
       </section>
@@ -266,17 +296,25 @@ const Pricing = () => {
             {(() => {
               const badge = badgeOf("standard", "lifetime");
               const pop = isPopular("standard");
+              const limit = lifetimeLimits.standard || 25;
+              const claimed = lifetimeCounts.standard || 0;
+              const remaining = Math.max(0, limit - claimed);
               return (
                 <div className={`premium-card p-7 flex flex-col ${pop ? "ring-2 ring-primary shadow-2xl shadow-primary/20" : ""}`}>
-                  {badge ? (
-                    <span className="inline-block text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full self-start mb-4 tracking-wider">
-                      {badge}
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="inline-block text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/15 px-3 py-1 rounded-full tracking-wider">
+                      ONLY {limit} OFFERS AVAILABLE
                     </span>
-                  ) : <div className="h-7 mb-4" />}
+                    <span className="text-[10px] font-bold text-muted-foreground font-mono">{remaining} left</span>
+                  </div>
                   <h3 className="text-xl font-bold mb-1">{nameOf("standard", "Standard")} Lifetime</h3>
                   <div className="flex items-baseline gap-1 mb-6 mt-3">
                     <p className="text-4xl font-bold">{price(priceOf("standard", "lifetime"))}</p>
                     <span className="text-sm text-muted-foreground">one-time</span>
+                  </div>
+                  <div className="mb-4 p-2.5 rounded-xl bg-muted/40 border border-border text-xs flex items-center justify-between">
+                    <span className="font-semibold text-foreground">Standard Registration Limit:</span>
+                    <span className="font-bold text-amber-500">{limit} spots offer</span>
                   </div>
                   <ul className="space-y-3 mb-8 flex-1">
                     {standardLifetime.map((f) => (
@@ -296,17 +334,25 @@ const Pricing = () => {
             {(() => {
               const badge = badgeOf("premium", "lifetime");
               const pop = isPopular("premium");
+              const limit = lifetimeLimits.premium || 25;
+              const claimed = lifetimeCounts.premium || 0;
+              const remaining = Math.max(0, limit - claimed);
               return (
                 <div className={`premium-card p-7 flex flex-col ${pop ? "ring-2 ring-secondary shadow-2xl shadow-secondary/20" : ""}`}>
-                  {badge ? (
-                    <span className="inline-block text-xs font-bold text-secondary bg-secondary/10 px-3 py-1 rounded-full self-start mb-4 tracking-wider">
-                      {badge}
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="inline-block text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/15 px-3 py-1 rounded-full tracking-wider">
+                      ONLY {limit} OFFERS AVAILABLE
                     </span>
-                  ) : <div className="h-7 mb-4" />}
+                    <span className="text-[10px] font-bold text-muted-foreground font-mono">{remaining} left</span>
+                  </div>
                   <h3 className="text-xl font-bold mb-1">{nameOf("premium", "Premium")} Lifetime</h3>
                   <div className="flex items-baseline gap-1 mb-6 mt-3">
                     <p className="text-4xl font-bold">{price(priceOf("premium", "lifetime"))}</p>
                     <span className="text-sm text-muted-foreground">one-time</span>
+                  </div>
+                  <div className="mb-4 p-2.5 rounded-xl bg-muted/40 border border-border text-xs flex items-center justify-between">
+                    <span className="font-semibold text-foreground">Premium Registration Limit:</span>
+                    <span className="font-bold text-amber-500">{limit} spots offer</span>
                   </div>
                   <ul className="space-y-3 mb-8 flex-1">
                     {premiumLifetime.map((f) => (

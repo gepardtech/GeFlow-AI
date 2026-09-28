@@ -18,13 +18,27 @@ const RATES_TTL = 30 * 60 * 1000; // 30 minutes
  * converts live so switching a currency updates every price instantly.
  * ------------------------------------------------------------------ */
 type Rates = Record<string, number>;
+const DEFAULT_RATES: Rates = {
+  USD: 1,
+  PKR: 277.20,
+  EUR: 0.92,
+  GBP: 0.78,
+  INR: 83.50,
+  AED: 3.67,
+  SAR: 3.75,
+  CAD: 1.36,
+  AUD: 1.52,
+  JPY: 155.0,
+  TRY: 34.0,
+};
+
 let rates: Rates = (() => {
   try {
     const raw = localStorage.getItem(RATES_KEY);
     const parsed = raw ? JSON.parse(raw) : null;
     if (parsed?.rates && Date.now() - parsed.at < RATES_TTL) return parsed.rates as Rates;
   } catch { /* ignore */ }
-  return { USD: 1 };
+  return { ...DEFAULT_RATES };
 })();
 let ratesStarted = false;
 const rateSubs = new Set<() => void>();
@@ -32,13 +46,53 @@ const emitRates = () => rateSubs.forEach((fn) => fn());
 
 const loadRates = async () => {
   try {
+    const res = await fetch("/api/currency/rates");
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.rates && Object.keys(data.rates).length > 1) {
+        rates = { ...DEFAULT_RATES, ...data.rates } as Rates;
+        localStorage.setItem(RATES_KEY, JSON.stringify({ at: Date.now(), rates }));
+        emitRates();
+        return;
+      }
+    }
+  } catch {
+    /* fallback to edge function */
+  }
+
+  try {
     const { data, error } = await supabase.functions.invoke("currency-rates");
     if (!error && data?.rates && Object.keys(data.rates).length > 1) {
-      rates = data.rates as Rates;
+      rates = { ...DEFAULT_RATES, ...data.rates } as Rates;
       localStorage.setItem(RATES_KEY, JSON.stringify({ at: Date.now(), rates }));
       emitRates();
     }
   } catch { /* offline — keep cached rates */ }
+};
+
+export const convertCurrencyLive = async (amount: number, from: string, to: string) => {
+  try {
+    const res = await fetch(`/api/currency/convert?amount=${encodeURIComponent(amount)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.convertedPrice !== undefined) {
+        return json;
+      }
+    }
+  } catch (e) {
+    console.warn("Live currency convert fetch error:", e);
+  }
+  const f = fxRate(from);
+  const t = fxRate(to);
+  const rate = f ? t / f : 1;
+  return {
+    success: true,
+    originalPrice: amount,
+    from,
+    to,
+    rate,
+    convertedPrice: +(amount * rate).toFixed(2),
+  };
 };
 
 const startRates = () => {

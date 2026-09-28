@@ -120,7 +120,7 @@ export const usePlanLimits = (): PlanLimitsState => {
     setLoading(true);
     load();
 
-    const channelName = `plan_limits_${planId ?? "none"}`;
+    const channelName = `plan_limits_${planId ?? "none"}_${Math.random().toString(36).slice(2)}`;
     const ch = supabase
       .channel(channelName)
       .on(

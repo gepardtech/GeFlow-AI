@@ -155,7 +155,7 @@ const UserInventory = () => {
 
   useEffect(() => {
     if (!activeId) return;
-    const ch = supabase.channel(`inventory-${activeId}`)
+    const ch = supabase.channel(`inventory-${activeId}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "products", filter: `business_id=eq.${activeId}` }, () => {
         load(true);
       })

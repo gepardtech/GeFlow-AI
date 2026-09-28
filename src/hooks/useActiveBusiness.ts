@@ -330,59 +330,7 @@ async function fetchBusinessData(force = false): Promise<void> {
         console.warn("Notice loading api staff businesses:", staffErr);
       }
 
-      // If user has no owned businesses yet, check if admin or unowned business exists, or auto-provision
-      if (ownedRows.length === 0) {
-        const isAdmin = user.email?.toLowerCase() === "gepardwebs@gmail.com";
-        const { data: allBiz } = await supabase
-          .from("businesses")
-          .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id")
-          .order("created_at", { ascending: true });
-
-        if (allBiz && allBiz.length > 0) {
-          if (isAdmin) {
-            ownedRows = allBiz as BusinessRow[];
-          } else {
-            const unowned = allBiz.find((b: any) => !b.owner_user_id);
-            if (unowned) {
-              await supabase.from("businesses").update({ owner_user_id: user.id }).eq("id", unowned.id);
-              unowned.owner_user_id = user.id;
-              ownedRows = [unowned as BusinessRow];
-            }
-          }
-        }
-      }
-
-      // If user still has 0 businesses (both owned and staff), provision their default store in Supabase
-      if (ownedRows.length === 0 && staffRows.length === 0) {
-        const defaultName =
-          user.user_metadata?.business_name ||
-          (user.email ? `${user.email.split("@")[0]}'s Store` : "Gepard Store");
-        const newBizId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `biz_${Date.now()}`;
-        const newBizPayload = {
-          id: newBizId,
-          owner_user_id: user.id,
-          business_name: defaultName,
-          business_address: "Main Location",
-          currency: "USD",
-          base_currency: "USD",
-          status: "active",
-          default_tax: 0,
-          stock_alert_limit: 5,
-        };
-
-        const { data: createdBiz, error: createErr } = await supabase
-          .from("businesses")
-          .insert(newBizPayload)
-          .select()
-          .maybeSingle();
-
-        if (!createErr && createdBiz) {
-          ownedRows = [createdBiz as BusinessRow];
-        } else if (!createErr) {
-          ownedRows = [newBizPayload as BusinessRow];
-        }
-      }
-
+      // If user has no owned businesses, keep ownedRows empty so user is guided to business setup
       store.owned = ownedRows;
       store.staff = staffRows;
       try {
@@ -412,14 +360,21 @@ async function fetchBusinessData(force = false): Promise<void> {
       // Select active business ID
       const savedId = localStorage.getItem(LS_KEY);
       const exists = activePool.find((r) => r.id === savedId);
-      const chosen = exists ? exists.id : (activePool[0]?.id || store.activeId || null);
+      const chosen = exists ? exists.id : (activePool[0]?.id || null);
 
       if (chosen) {
         store.activeId = chosen;
         try {
           localStorage.setItem(LS_KEY, chosen);
         } catch {
-          /* ignore */
+          // Ignore storage errors
+        }
+      } else {
+        store.activeId = null;
+        try {
+          localStorage.removeItem(LS_KEY);
+        } catch {
+          // Ignore storage errors
         }
       }
 

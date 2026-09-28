@@ -34,6 +34,9 @@ const AdminBillingPricing = () => {
   const [form, setForm] = useState(blank());
   const [del, setDel] = useState<PlanRow | null>(null);
   const [busy, setBusy] = useState(false);
+  const [lifetimeLimits, setLifetimeLimits] = useState<{ standard: number; premium: number }>({ standard: 25, premium: 25 });
+  const [lifetimeCounts, setLifetimeCounts] = useState<{ standard: number; premium: number }>({ standard: 0, premium: 0 });
+  const [savingLimits, setSavingLimits] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -41,6 +44,18 @@ const AdminBillingPricing = () => {
       const json = await res.json();
       if (json.success && Array.isArray(json.plans)) {
         setRows(json.plans as PlanRow[]);
+        if (json.lifetime_plan_limits) {
+          setLifetimeLimits({
+            standard: json.lifetime_plan_limits.standard ?? 25,
+            premium: json.lifetime_plan_limits.premium ?? 25,
+          });
+        }
+        if (json.lifetime_offer_counts) {
+          setLifetimeCounts({
+            standard: json.lifetime_offer_counts.standard ?? 0,
+            premium: json.lifetime_offer_counts.premium ?? 0,
+          });
+        }
       } else {
         const { data } = await supabase.from("pricing_plans").select("*").order("sort_order");
         setRows((data as PlanRow[]) ?? []);
@@ -52,6 +67,31 @@ const AdminBillingPricing = () => {
       setLoading(false);
     }
   }, []);
+
+  const saveLifetimeLimits = async () => {
+    setSavingLimits(true);
+    try {
+      const res = await fetch("/api/admin/pricing-plans/lifetime-limits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limits: lifetimeLimits }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        toast({
+          title: "Lifetime limits updated",
+          description: `Standard: ${lifetimeLimits.standard} limit, Premium: ${lifetimeLimits.premium} limit saved.`,
+        });
+        load();
+      } else {
+        throw new Error(json.error || "Failed to update limits");
+      }
+    } catch (err: any) {
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
+    } finally {
+      setSavingLimits(false);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -156,10 +196,63 @@ const AdminBillingPricing = () => {
         </div>
       )}
 
+      {/* Lifetime Registration Offer Configuration Banner */}
+      <div className="bg-card border border-amber-500/30 rounded-2xl p-5 mb-6 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-base font-bold text-foreground">🎁 Exclusive Lifetime Plan Registration Offers</span>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold">
+                LIMITED OFFER
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Configure maximum lifetime plan registrations allowed for users (e.g. 25-25 registration offers). Once filled, users cannot register for lifetime tier.
+            </p>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 bg-muted/40 px-3 py-1.5 rounded-xl border border-border">
+              <span className="text-xs font-bold text-muted-foreground">Standard:</span>
+              <input
+                type="number"
+                min="0"
+                value={lifetimeLimits.standard}
+                onChange={(e) => setLifetimeLimits((l) => ({ ...l, standard: Number(e.target.value) }))}
+                className="w-16 h-8 text-center text-sm font-bold bg-background rounded-lg border border-border"
+              />
+              <span className="text-[11px] text-muted-foreground">limit</span>
+            </div>
+            <div className="flex items-center gap-2 bg-muted/40 px-3 py-1.5 rounded-xl border border-border">
+              <span className="text-xs font-bold text-muted-foreground">Premium:</span>
+              <input
+                type="number"
+                min="0"
+                value={lifetimeLimits.premium}
+                onChange={(e) => setLifetimeLimits((l) => ({ ...l, premium: Number(e.target.value) }))}
+                className="w-16 h-8 text-center text-sm font-bold bg-background rounded-lg border border-border"
+              />
+              <span className="text-[11px] text-muted-foreground">limit</span>
+            </div>
+            <Button
+              onClick={saveLifetimeLimits}
+              disabled={savingLimits}
+              className="h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs"
+            >
+              {savingLimits ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Limits"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
       <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-5">
         {loading ? (
           <div className="col-span-full p-12 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></div>
-        ) : rows.map((r) => (
+        ) : rows.map((r) => {
+          const planKey = r.plan_key.toLowerCase();
+          const hasLifetimeLimit = planKey === "standard" || planKey === "premium";
+          const limit = planKey === "standard" ? lifetimeLimits.standard : planKey === "premium" ? lifetimeLimits.premium : null;
+          const claimed = planKey === "standard" ? lifetimeCounts.standard : planKey === "premium" ? lifetimeCounts.premium : 0;
+          return (
           <div key={r.id} className={`bg-card border ${r.is_popular ? "border-sky-400 shadow-lg shadow-sky-400/10" : "border-border"} rounded-2xl p-6 relative`}>
             {r.is_popular && <span className="absolute top-4 right-4 inline-flex items-center gap-1 text-[10px] font-bold tracking-widest text-sky-500 bg-sky-400/15 px-2 py-1 rounded-full"><Star className="h-3 w-3" /> POPULAR</span>}
             <p className="text-[10px] font-mono tracking-widest text-muted-foreground">{r.plan_key.toUpperCase()}</p>
@@ -170,6 +263,17 @@ const AdminBillingPricing = () => {
               <div className="bg-muted/40 rounded-lg p-2 text-center"><p className="text-[9px] tracking-widest text-muted-foreground font-bold">YEARLY</p><p className="font-bold mt-1">${r.yearly_price}</p></div>
               <div className="bg-muted/40 rounded-lg p-2 text-center"><p className="text-[9px] tracking-widest text-muted-foreground font-bold">LIFETIME</p><p className="font-bold mt-1">${r.lifetime_price}</p></div>
             </div>
+
+            {hasLifetimeLimit && limit !== null && (
+              <div className="mb-4 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-amber-600 dark:text-amber-400">Lifetime Offer Limit:</span>{" "}
+                  <span className="font-semibold text-foreground">{limit} spots</span>
+                </div>
+                <span className="text-[10px] font-mono text-muted-foreground">Claimed: {claimed} / {limit}</span>
+              </div>
+            )}
+
             <ul className="space-y-1.5 mb-4">
               {(r.features ?? []).slice(0, 5).map((f) => <li key={f} className="text-xs text-muted-foreground">• {f}</li>)}
             </ul>
@@ -181,7 +285,7 @@ const AdminBillingPricing = () => {
               </div>
             </div>
           </div>
-        ))}
+        );})}
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

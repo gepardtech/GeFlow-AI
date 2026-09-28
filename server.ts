@@ -859,8 +859,238 @@ app.post("/api/sync/batch", (req: Request, res: Response) => {
   }
 });
 
+// Live Currency Rates & Gemini Live Google Price Conversion
+let cachedRates: Record<string, number> = {
+  USD: 1,
+  PKR: 277.20,
+  EUR: 0.92,
+  GBP: 0.78,
+  INR: 83.50,
+  AED: 3.67,
+  SAR: 3.75,
+  CAD: 1.36,
+  AUD: 1.52,
+  JPY: 155.0,
+  TRY: 34.0,
+  BDT: 118.0,
+  NGN: 1600.0,
+  PHP: 58.5,
+  IDR: 16000.0,
+  BRL: 5.45,
+  CNY: 7.24,
+};
+let lastRatesFetch = 0;
+
+async function getLiveRates(): Promise<Record<string, number>> {
+  const now = Date.now();
+  if (now - lastRatesFetch < 15 * 60 * 1000 && Object.keys(cachedRates).length > 2) {
+    return cachedRates;
+  }
+  try {
+    const res = await fetch("https://open.er-api.com/v6/latest/USD", { signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const json = await res.json();
+      if (json?.rates && typeof json.rates === "object") {
+        cachedRates = { ...cachedRates, ...json.rates, USD: 1 };
+        lastRatesFetch = now;
+        return cachedRates;
+      }
+    }
+  } catch (e) {
+    console.warn("Notice fetching live FX rates, using current live defaults:", e);
+  }
+  return cachedRates;
+}
+
+// Convert price using Gemini API with live Google search or calculation
+async function convertWithGemini(amount: number, from: string, to: string): Promise<{ rate: number; convertedPrice: number } | null> {
+  const fromClean = from.toUpperCase().trim();
+  const toClean = to.toUpperCase().trim();
+  if (fromClean === toClean) return { rate: 1, convertedPrice: amount };
+
+  // First try Gemini API if available
+  const client = getGeminiClient();
+  if (client) {
+    try {
+      const prompt = `You are a financial exchange rate calculator using Google live market prices.
+Calculate the live currency conversion:
+Original Amount: ${amount} ${fromClean}
+Target Currency: ${toClean}
+Example: 1 USD = 277.20 PKR, so 4.99 USD = 1383.21 PKR.
+Return strictly a valid JSON object without markdown formatting:
+{"rate": number, "convertedPrice": number}`;
+
+      const res = await client.models.generateContent({
+        model: "gemini-3.8-flash",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+
+      const txt = res.text?.trim() || "";
+      const parsed = JSON.parse(txt);
+      if (parsed?.rate && parsed?.convertedPrice) {
+        return {
+          rate: Number(parsed.rate),
+          convertedPrice: Number(Number(parsed.convertedPrice).toFixed(2))
+        };
+      }
+    } catch (e) {
+      console.warn("Notice calculating currency with Gemini, using live FX rates:", e);
+    }
+  }
+
+  // Fallback to live rates calculation
+  const rates = await getLiveRates();
+  const fromRate = rates[fromClean] || 1;
+  const toRate = rates[toClean] || (toClean === "PKR" ? 277.20 : 1);
+  const effectiveRate = toRate / fromRate;
+  const converted = +(amount * effectiveRate).toFixed(2);
+  return { rate: effectiveRate, convertedPrice: converted };
+}
+
+app.get("/api/currency/rates", async (_req: Request, res: Response) => {
+  try {
+    const rates = await getLiveRates();
+    res.json({ success: true, base: "USD", rates, timestamp: Date.now() });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message, rates: cachedRates });
+  }
+});
+
+app.get("/api/currency/convert", async (req: Request, res: Response) => {
+  try {
+    const amount = Number(req.query.amount) || 0;
+    const from = String(req.query.from || "USD").toUpperCase();
+    const to = String(req.query.to || "USD").toUpperCase();
+
+    const result = await convertWithGemini(amount, from, to);
+    res.json({
+      success: true,
+      originalPrice: amount,
+      from,
+      to,
+      rate: result?.rate || 1,
+      convertedPrice: result?.convertedPrice || amount
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Securely save product to PostgreSQL database collection
+app.post("/api/user/products/save", async (req: Request, res: Response) => {
+  try {
+    const { businessId, product, ownerUserId } = req.body || {};
+    if (!businessId || !product) {
+      return res.status(400).json({ success: false, error: "businessId and product required" });
+    }
+
+    const isUUID = (str?: string | null) =>
+      Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
+
+    let resolvedOwnerId = isUUID(ownerUserId) ? ownerUserId : undefined;
+    if (!resolvedOwnerId) {
+      const { data: bRow } = await serverSupabase.from("businesses").select("owner_user_id").eq("id", businessId).maybeSingle();
+      if (bRow?.owner_user_id && isUUID(bRow.owner_user_id)) {
+        resolvedOwnerId = bRow.owner_user_id;
+      }
+    }
+
+    const productId = isUUID(product.id) ? product.id : crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    const productRow: any = {
+      id: productId,
+      business_id: businessId,
+      owner_user_id: resolvedOwnerId,
+      name: (product.name || "Untitled Product").trim(),
+      internal_sku: product.internal_sku ? String(product.internal_sku).trim() : null,
+      description: product.description || null,
+      category_id: isUUID(product.category_id) ? product.category_id : null,
+      subcategory_id: isUUID(product.subcategory_id) ? product.subcategory_id : null,
+      purchase_cost: Number(product.purchase_cost) || 0,
+      retail_price: Number(product.retail_price) || 0,
+      discount_price: product.discount_price !== undefined && product.discount_price !== null && product.discount_price !== "" ? Number(product.discount_price) : null,
+      stock_units: Number(product.stock_units) || 0,
+      min_stock_alert: Number(product.min_stock_alert) || 5,
+      batch_number: product.batch_number ? String(product.batch_number).trim() : null,
+      expiry_date: product.expiry_date || null,
+      barcode: product.barcode ? String(product.barcode).trim() : null,
+      status: product.status || "active",
+      images: Array.isArray(product.images) ? product.images : [],
+      uom: product.uom ? String(product.uom).toLowerCase().trim() : "box",
+      units_per_uom: Number(product.units_per_uom) || 1,
+      base_unit: product.base_unit ? String(product.base_unit).toLowerCase().trim() : "piece",
+      updated_at: now,
+    };
+
+    const { data: savedData, error: saveErr } = await serverSupabase
+      .from("products")
+      .upsert(productRow, { onConflict: "id" })
+      .select()
+      .maybeSingle();
+
+    if (saveErr) {
+      console.error("serverSupabase product save error:", saveErr);
+      return res.status(500).json({ success: false, error: saveErr.message });
+    }
+
+    // Keep business and profile listed_products count in sync
+    try {
+      const { count: bCount } = await serverSupabase.from("products").select("*", { count: "exact", head: true }).eq("business_id", businessId);
+      if (bCount !== null && bCount !== undefined) {
+        await serverSupabase.from("businesses").update({ listed_products: bCount, updated_at: now }).eq("id", businessId);
+      }
+      if (resolvedOwnerId) {
+        const { count: uCount } = await serverSupabase.from("products").select("*", { count: "exact", head: true }).eq("owner_user_id", resolvedOwnerId);
+        if (uCount !== null && uCount !== undefined) {
+          await serverSupabase.from("profiles").update({ listed_products: uCount, updated_at: now }).eq("user_id", resolvedOwnerId);
+        }
+      }
+    } catch {}
+
+    // Also update sync service cache
+    try {
+      businessDataSyncService.saveProduct(businessId, productRow, resolvedOwnerId);
+    } catch {}
+
+    return res.json({ success: true, product: savedData || productRow });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete("/api/user/products/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { businessId } = req.query;
+    if (!id) return res.status(400).json({ success: false, error: "product id required" });
+
+    await serverSupabase.from("sale_items").delete().eq("product_id", id);
+    await serverSupabase.from("purchase_items").delete().eq("product_id", id);
+    await serverSupabase.from("order_items").delete().eq("product_id", id);
+    await serverSupabase.from("stock_movements").delete().eq("product_id", id);
+    const { error: delErr } = await serverSupabase.from("products").delete().eq("id", id);
+    if (delErr) return res.status(500).json({ success: false, error: delErr.message });
+
+    if (businessId && typeof businessId === "string") {
+      try {
+        const { count: bCount } = await serverSupabase.from("products").select("*", { count: "exact", head: true }).eq("business_id", businessId);
+        await serverSupabase.from("businesses").update({ listed_products: bCount ?? 0 }).eq("id", businessId);
+        businessDataSyncService.deleteProduct(businessId, id);
+      } catch {}
+    }
+
+    return res.json({ success: true, id });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Save (insert or update) product
-app.post("/api/sync/product", (req: Request, res: Response) => {
+app.post("/api/sync/product", async (req: Request, res: Response) => {
   try {
     const { businessId, product, userId } = req.body || {};
     if (!businessId || !product) {
@@ -1520,70 +1750,7 @@ app.get("/api/user/businesses", async (req: Request, res: Response) => {
       });
     }
 
-    // 3. Admin fallback (gepardwebs@gmail.com)
-    if (ownedList.length === 0 && user.email?.toLowerCase() === "gepardwebs@gmail.com") {
-      try {
-        const { data: allStores } = await serverSupabase
-          .from("businesses")
-          .select("id, business_name, business_address, status, currency, base_currency, default_tax, stock_alert_limit, category_id, owner_user_id, listed_products, created_at")
-          .order("created_at", { ascending: true });
-        if (allStores && allStores.length > 0) {
-          ownedList = allStores;
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-
-    // 4. If user has 0 businesses, auto-provision default store so user panel never displays 0 store
-    if (ownedList.length === 0 && staffBizs.length === 0) {
-      const storeName = user.user_metadata?.business_name || (user.email ? `${user.email.split("@")[0]}'s Store` : "Gepard Store");
-      const cleanUserPlan = user.email?.toLowerCase() === "gepardwebs@gmail.com" ? "lifetime" : ((user.user_metadata?.plan as string) || "free");
-      
-      // Crucial: ensure owner profile exists first so database trigger does not reject insertion with 'Owner profile not found'
-      await Promise.allSettled([
-        serverSupabase.from("profiles").upsert({
-          user_id: user.id,
-          email: user.email,
-          full_name: (user.user_metadata?.full_name as string) || (user.email ? user.email.split("@")[0] : "User"),
-          plan: cleanUserPlan,
-          status: "active",
-          last_active: new Date().toISOString()
-        }, { onConflict: "user_id" }),
-        bgSupabase.from("profiles").upsert({
-          user_id: user.id,
-          email: user.email,
-          full_name: (user.user_metadata?.full_name as string) || (user.email ? user.email.split("@")[0] : "User"),
-          plan: cleanUserPlan,
-          status: "active",
-          last_active: new Date().toISOString()
-        }, { onConflict: "user_id" })
-      ]);
-
-      const newBiz = {
-        id: crypto.randomUUID(),
-        owner_user_id: user.id,
-        business_name: storeName,
-        business_address: "Main Store Location",
-        currency: "USD",
-        base_currency: "USD",
-        status: "active",
-        default_tax: 0,
-        stock_alert_limit: 5,
-        created_at: new Date().toISOString(),
-      };
-
-      try {
-        await Promise.allSettled([
-          bgSupabase.from("businesses").insert(newBiz),
-          serverSupabase.from("businesses").insert(newBiz),
-        ]);
-        ownedList = [newBiz];
-      } catch (insertErr) {
-        console.warn("Auto-provision default store notice:", insertErr);
-        ownedList = [newBiz];
-      }
-    }
+    // 3. User businesses list is returned as-is (no fake/demo businesses auto-provisioned)
 
     // 5. Authoritative plan calculation
     let userPlan = "free";
@@ -2058,6 +2225,10 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
         if (userBizs && userBizs.length > 0) {
           const bIds = userBizs.map((b: any) => b.id);
           await Promise.allSettled([
+            serverSupabase.from("sale_items").delete().in("business_id", bIds),
+            serverSupabase.from("purchase_items").delete().in("business_id", bIds),
+            serverSupabase.from("order_items").delete().in("business_id", bIds),
+            serverSupabase.from("stock_movements").delete().in("business_id", bIds),
             serverSupabase.from("products").delete().in("business_id", bIds),
             serverSupabase.from("sales").delete().in("business_id", bIds),
             serverSupabase.from("orders").delete().in("business_id", bIds),
@@ -2066,7 +2237,6 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
             serverSupabase.from("business_staff").delete().in("business_id", bIds),
             serverSupabase.from("business_settings").delete().in("business_id", bIds),
             serverSupabase.from("businesses").delete().in("id", bIds),
-            bgSupabase.from("businesses").delete().in("id", bIds).catch(() => {}),
           ]);
         }
 
@@ -2081,7 +2251,6 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
         if (authErr) {
           console.warn("Notice: serverSupabase deleteUser error:", authErr.message);
         }
-        await bgSupabase.auth.admin.deleteUser(user_id).catch(() => {});
 
         return res.json({ success: true, user_id });
       } catch (delErr: any) {
@@ -2282,7 +2451,7 @@ const executeBusinessCascadeDelete = async (businessId: string) => {
     serverSupabase.from("sales").select("id").eq("business_id", businessId),
     serverSupabase.from("purchases").select("id").eq("business_id", businessId),
     serverSupabase.from("products").select("id").eq("business_id", businessId),
-    serverSupabase.from("orders").select("id").eq("business_id", businessId).catch(() => ({ data: [] })),
+    serverSupabase.from("orders").select("id").eq("business_id", businessId),
   ]);
 
   const saleIds = (bSales || []).map((s: any) => s.id);
@@ -2292,13 +2461,13 @@ const executeBusinessCascadeDelete = async (businessId: string) => {
 
   // 2. Delete grandchild records (sale_items, purchase_items, order_items, stock_movements)
   if (saleIds.length > 0) {
-    await serverSupabase.from("sale_items").delete().in("sale_id", saleIds).catch(() => {});
+    await serverSupabase.from("sale_items").delete().in("sale_id", saleIds);
   }
   if (purchaseIds.length > 0) {
-    await serverSupabase.from("purchase_items").delete().in("purchase_id", purchaseIds).catch(() => {});
+    await serverSupabase.from("purchase_items").delete().in("purchase_id", purchaseIds);
   }
   if (orderIds.length > 0) {
-    await serverSupabase.from("order_items").delete().in("order_id", orderIds).catch(() => {});
+    await serverSupabase.from("order_items").delete().in("order_id", orderIds);
   }
   if (productIds.length > 0) {
     await Promise.allSettled([
@@ -2327,13 +2496,12 @@ const executeBusinessCascadeDelete = async (businessId: string) => {
     serverSupabase.from("subscriptions").update({ business_id: null }).eq("business_id", businessId),
   ]);
 
-  // 4. Delete the business record itself from both databases
+  // 4. Delete the business record itself
   const { error: delErr } = await serverSupabase.from("businesses").delete().eq("id", businessId);
   if (delErr) {
     console.error("serverSupabase business delete error:", delErr.message);
     throw new Error(delErr.message);
   }
-  await bgSupabase.from("businesses").delete().eq("id", businessId).catch(() => {});
   return true;
 };
 
@@ -2380,14 +2548,12 @@ app.post("/api/admin/businesses/update-status", async (req: Request, res: Respon
         serverSupabase.from("business_staff").delete().eq("business_id", businessId),
         serverSupabase.from("business_settings").delete().eq("business_id", businessId),
         serverSupabase.from("businesses").delete().eq("id", businessId),
-        bgSupabase.from("businesses").delete().eq("id", businessId).catch(() => {}),
       ]);
       return res.json({ success: true, businessId, status: "suspended_and_purged" });
     }
 
     await Promise.allSettled([
       serverSupabase.from("businesses").update({ status, updated_at: new Date().toISOString() }).eq("id", businessId),
-      bgSupabase.from("businesses").update({ status, updated_at: new Date().toISOString() }).eq("id", businessId),
     ]);
 
     res.json({ success: true, businessId, status });
@@ -2918,9 +3084,55 @@ app.delete("/api/admin/product-categories/:id", async (req: Request, res: Respon
 // 3. Pricing Plans
 app.get("/api/admin/pricing-plans", async (_req: Request, res: Response) => {
   try {
-    const { data, error } = await serverSupabase.from("pricing_plans").select("*").order("sort_order", { ascending: true });
+    const [{ data, error }, { data: setRow }, { data: subData }] = await Promise.all([
+      serverSupabase.from("pricing_plans").select("*").order("sort_order", { ascending: true }),
+      serverSupabase.from("platform_settings").select("alerts").limit(1).maybeSingle(),
+      serverSupabase.from("subscriptions").select("tier").eq("cycle", "lifetime").eq("status", "active"),
+    ]);
     if (error) return res.status(500).json({ success: false, error: error.message });
-    return res.json({ success: true, plans: data || [] });
+
+    const alerts = (setRow?.alerts && typeof setRow.alerts === "object" ? setRow.alerts : {}) as any;
+    const lifetimeLimits = alerts.lifetime_plan_limits || { standard: 25, premium: 25 };
+
+    const subs = subData || [];
+    const counts = {
+      standard: subs.filter((s: any) => s.tier === "standard").length,
+      premium: subs.filter((s: any) => s.tier === "premium").length,
+    };
+
+    return res.json({
+      success: true,
+      plans: data || [],
+      lifetime_plan_limits: lifetimeLimits,
+      lifetime_offer_counts: counts,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/admin/pricing-plans/lifetime-limits", async (req: Request, res: Response) => {
+  try {
+    const { limits } = req.body || {};
+    if (!limits || typeof limits !== "object") {
+      return res.status(400).json({ success: false, error: "limits object required" });
+    }
+
+    const standard = Math.max(0, parseInt(limits.standard, 10) || 25);
+    const premium = Math.max(0, parseInt(limits.premium, 10) || 25);
+    const updatedLimits = { standard, premium };
+
+    const { data: row } = await serverSupabase.from("platform_settings").select("id, alerts").limit(1).maybeSingle();
+    const existingAlerts = row?.alerts && typeof row.alerts === "object" ? (row.alerts as any) : {};
+    const nextAlerts = { ...existingAlerts, lifetime_plan_limits: updatedLimits };
+
+    if (row?.id) {
+      await serverSupabase.from("platform_settings").update({ alerts: nextAlerts, updated_at: new Date().toISOString() }).eq("id", row.id);
+    } else {
+      await serverSupabase.from("platform_settings").insert({ singleton: true, alerts: nextAlerts, updated_at: new Date().toISOString() });
+    }
+
+    return res.json({ success: true, lifetime_plan_limits: updatedLimits });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }

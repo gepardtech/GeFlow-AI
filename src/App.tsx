@@ -125,7 +125,10 @@ const App = () => (
           <Route path="/admin/settings" element={<AdminGuard><AdminSettings /></AdminGuard>} />
           <Route path="/setup/business" element={<AuthGuard><SetupBusiness /></AuthGuard>} />
           <Route path="/setup-business" element={<AuthGuard><SetupBusiness /></AuthGuard>} />
+          <Route path="/setup" element={<AuthGuard><SetupBusiness /></AuthGuard>} />
           <Route path="/business-setup" element={<AuthGuard><SetupBusiness /></AuthGuard>} />
+          <Route path="/business/setup" element={<AuthGuard><SetupBusiness /></AuthGuard>} />
+          <Route path="/onboarding" element={<AuthGuard><SetupBusiness /></AuthGuard>} />
           <Route path="/dashboard" element={<AuthGuard><Dashboard /></AuthGuard>} />
           <Route path="/dashboard/inventory" element={<AuthGuard><UserInventory /></AuthGuard>} />
           <Route path="/dashboard/low-stock" element={<AuthGuard><UserLowStock /></AuthGuard>} />

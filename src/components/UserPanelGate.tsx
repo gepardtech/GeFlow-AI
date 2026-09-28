@@ -103,14 +103,19 @@ const UserPanelGate = ({ children, pageTitle }: Props) => {
     return <MaintenanceScreen />;
   }
 
-  // If user has no registered business, redirect to business registration setup steps
+  // If user (including admin) has no registered business, redirect to business registration setup steps
+  const isSetupRoute =
+    location.pathname.startsWith("/setup") ||
+    location.pathname.startsWith("/business-setup") ||
+    location.pathname.startsWith("/business/setup") ||
+    location.pathname.startsWith("/onboarding");
+
   if (
-    !isAdmin &&
     hasLoaded &&
     !bizLoading &&
     businesses.length === 0 &&
     staffBusinesses.length === 0 &&
-    !location.pathname.startsWith("/setup-business")
+    !isSetupRoute
   ) {
     return <Navigate to="/setup-business" replace />;
   }
