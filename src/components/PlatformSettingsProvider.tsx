@@ -40,7 +40,15 @@ const applyFavicon = (url: string | null) => {
 /** Apply branding + language side-effects to the document. */
 export const applyPlatformSettings = (s: PlatformSettings | null) => {
   if (!s) return;
-  if (s.app_name) document.title = s.app_name;
+  const appName = (s.app_name || "GeFlow").trim();
+  const tagline = (s.tagline || "").trim();
+  document.title = tagline ? `${appName} — ${tagline}` : appName;
+
+  const descMeta = document.querySelector("meta[name='description']");
+  if (descMeta && tagline) {
+    descMeta.setAttribute("content", `${appName} — ${tagline}`);
+  }
+
   applyFavicon(s.favicon_url ?? null);
   const root = document.documentElement;
   const primary = s.primary_accent ? hexToHslTriplet(s.primary_accent) : null;
@@ -62,24 +70,48 @@ const PlatformSettingsContext = createContext<Ctx>({ settings: null, loading: tr
 
 export const usePlatformSettings = () => useContext(PlatformSettingsContext);
 
+const CACHE_KEY = "geflow_cached_platform_settings";
+
+const getCachedSettings = (): PlatformSettings | null => {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const PlatformSettingsProvider = ({ children }: { children: ReactNode }) => {
-  const [settings, setSettings] = useState<PlatformSettings | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState<PlatformSettings | null>(() => {
+    const cached = getCachedSettings();
+    if (cached) {
+      applyPlatformSettings(cached);
+    }
+    return cached;
+  });
+  const [loading, setLoading] = useState(!settings);
 
   useEffect(() => {
     let active = true;
 
     const load = async () => {
       try {
-        const [pubRes, genRes] = await Promise.allSettled([
-          supabase.from("public_settings").select("*").limit(1).maybeSingle(),
+        const [admRes, platRes, pubRes, genRes] = await Promise.allSettled([
+          fetch("/api/admin/settings").then((r) => r.json()).catch(() => null),
+          supabase.from("platform_settings").select("*").limit(1).maybeSingle().catch(() => null),
+          supabase.from("public_settings").select("*").limit(1).maybeSingle().catch(() => null),
           fetch("/api/settings/general").then((r) => r.json()).catch(() => null),
         ]);
 
-        let combined: PlatformSettings = {};
-        if (pubRes.status === "fulfilled" && pubRes.value.data) {
-          combined = { ...pubRes.value.data };
+        let combined: PlatformSettings = getCachedSettings() || {};
+        if (admRes.status === "fulfilled" && admRes.value?.success && admRes.value.settings) {
+          combined = { ...combined, ...admRes.value.settings };
+        } else if (platRes.status === "fulfilled" && (platRes.value as any)?.data) {
+          combined = { ...combined, ...((platRes.value as any).data) };
+        } else if (pubRes.status === "fulfilled" && (pubRes.value as any)?.data) {
+          combined = { ...combined, ...((pubRes.value as any).data) };
         }
+
         if (genRes.status === "fulfilled" && genRes.value?.settings) {
           const gen = genRes.value.settings;
           combined.parent_company = gen.parent_company || combined.parent_company || "Gepard Techs";
@@ -89,6 +121,9 @@ export const PlatformSettingsProvider = ({ children }: { children: ReactNode }) 
         }
 
         if (active && Object.keys(combined).length > 0) {
+          try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify(combined));
+          } catch {}
           setSettings(combined);
           applyPlatformSettings(combined);
         }
@@ -105,6 +140,9 @@ export const PlatformSettingsProvider = ({ children }: { children: ReactNode }) 
       if (e.detail && typeof e.detail === "object") {
         setSettings((prev) => {
           const next = { ...(prev || {}), ...e.detail };
+          try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+          } catch {}
           applyPlatformSettings(next);
           return next;
         });
@@ -112,7 +150,23 @@ export const PlatformSettingsProvider = ({ children }: { children: ReactNode }) 
     };
     window.addEventListener("geflow:settings-updated", onSettingsUpdated);
 
-    const ch = supabase
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === CACHE_KEY && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          setSettings(parsed);
+          applyPlatformSettings(parsed);
+        } catch {}
+      }
+    };
+    window.addEventListener("storage", onStorage);
+
+    const ch1 = supabase
+      .channel(`platform_settings_global_${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "platform_settings" }, () => load())
+      .subscribe();
+
+    const ch2 = supabase
       .channel(`public_settings_global_${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "public_settings" }, () => load())
       .subscribe();
@@ -120,7 +174,9 @@ export const PlatformSettingsProvider = ({ children }: { children: ReactNode }) 
     return () => {
       active = false;
       window.removeEventListener("geflow:settings-updated", onSettingsUpdated);
-      supabase.removeChannel(ch);
+      window.removeEventListener("storage", onStorage);
+      supabase.removeChannel(ch1);
+      supabase.removeChannel(ch2);
     };
   }, []);
 

@@ -335,6 +335,7 @@ export const AdminFeatures = () => {
       description: `${ids.length} feature module${ids.length > 1 ? "s" : ""} updated and active across all store panels.`,
     });
     setPendingChanges({});
+    window.dispatchEvent(new CustomEvent("geflow:features-updated"));
     load();
   };
 

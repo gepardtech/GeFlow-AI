@@ -79,7 +79,17 @@ const Login = () => {
             } else {
               authError = null;
             }
-          } else if (apiJson?.error && !authError) {
+          } else if (apiJson?.notRegistered) {
+            toast({
+              title: "Account Not Registered",
+              description: "No account was found with this email. Redirecting to registration...",
+              variant: "destructive",
+            });
+            setTimeout(() => {
+              window.location.replace(`/signup?email=${encodeURIComponent(cleanEmail)}`);
+            }, 1200);
+            return;
+          } else if (apiJson?.error) {
             authError = apiJson.error;
           }
         } catch {
@@ -88,6 +98,23 @@ const Login = () => {
       }
 
       if (!session) {
+        // Check if user is not registered at all
+        if (
+          authError?.toLowerCase().includes("invalid login credentials") ||
+          authError?.toLowerCase().includes("user not found") ||
+          authError?.toLowerCase().includes("not registered")
+        ) {
+          toast({
+            title: "Account Not Found",
+            description: "No account is registered with this email. Redirecting to registration...",
+            variant: "destructive",
+          });
+          setTimeout(() => {
+            window.location.replace(`/signup?email=${encodeURIComponent(cleanEmail)}`);
+          }, 1200);
+          return;
+        }
+
         toast({
           title: "Login failed",
           description:
@@ -116,10 +143,11 @@ const Login = () => {
       if (cleanEmail === "gepardwebs@gmail.com") {
         redirectUrl = "/admin";
       } else {
-        // Check if login user already has a registered business (as owner or staff)
-        let hasBusiness = false;
+        // Check if login user has owned businesses vs employee account
+        let hasOwnedBusiness = false;
+        let hasStaffBusiness = false;
         try {
-          const [{ data: userBiz }, { data: staffBiz }] = await Promise.all([
+          const [{ data: userBiz }, { data: staffBiz }, { data: memberBiz }] = await Promise.all([
             supabase
               .from("businesses")
               .select("id")
@@ -129,20 +157,39 @@ const Login = () => {
               .from("business_staff")
               .select("id")
               .eq("user_id", session.user.id)
+              .eq("status", "active")
+              .limit(1),
+            supabase
+              .from("support_team_members")
+              .select("id")
+              .eq("user_id", session.user.id)
               .limit(1),
           ]);
 
-          if ((userBiz && userBiz.length > 0) || (staffBiz && staffBiz.length > 0)) {
-            hasBusiness = true;
+          if (userBiz && userBiz.length > 0) hasOwnedBusiness = true;
+          if ((staffBiz && staffBiz.length > 0) || (memberBiz && memberBiz.length > 0)) {
+            hasStaffBusiness = true;
           }
         } catch {
           // fallback
         }
 
-        if (hasBusiness) {
+        if (hasOwnedBusiness) {
+          try {
+            localStorage.setItem("geflow.workspaceMode", "business");
+          } catch {}
           redirectUrl = redirectUrl && redirectUrl !== "/setup-business" ? redirectUrl : "/dashboard";
+        } else if (hasStaffBusiness) {
+          // User has only employee account: redirect directly to employee account dashboard
+          try {
+            localStorage.setItem("geflow.workspaceMode", "employee");
+          } catch {}
+          redirectUrl = "/dashboard";
         } else {
-          // User does not have a registered business -> redirect to business registration setup
+          // User has no registered business -> redirect to business registration setup
+          try {
+            localStorage.setItem("geflow.workspaceMode", "business");
+          } catch {}
           redirectUrl = "/setup-business";
         }
       }

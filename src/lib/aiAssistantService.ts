@@ -27,6 +27,61 @@ export interface AIChatMessage {
 
 export type AIMode = "analyst" | "operator" | "knowledge" | "advisor";
 
+/**
+ * Ensures AI responses are structured in professional, scannable bullet points
+ * rather than single paragraphs or walls of text.
+ */
+export function formatToProfessionalBullets(rawText: string): string {
+  if (!rawText || !rawText.trim()) return "";
+  const trimmed = rawText.trim();
+
+  // If already contains bullet characters or numbered lists, clean and return
+  const hasBullets = /^[•\-\*]\s|^\d+\.\s/m.test(trimmed);
+  if (hasBullets) {
+    return trimmed;
+  }
+
+  // Split into paragraphs / sentences
+  const paragraphs = trimmed.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  if (paragraphs.length === 1 && paragraphs[0].length > 100) {
+    // Single long paragraph: break into professional executive bullets
+    const sentences = paragraphs[0]
+      .split(/(?<=[.?!])\s+(?=[A-Z0-9#•\-])/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (sentences.length <= 1) {
+      return `• **Key Insight**: ${paragraphs[0]}`;
+    }
+
+    const title = sentences[0];
+    const bulletItems = sentences.slice(1).map((s) => {
+      const colonMatch = s.match(/^([^:]{3,30}):\s*(.*)$/);
+      if (colonMatch) {
+        return `• **${colonMatch[1].trim()}**: ${colonMatch[2].trim()}`;
+      }
+      return `• ${s}`;
+    });
+
+    return [
+      `### ⚡ Executive Analysis`,
+      `**${title}**\n`,
+      ...bulletItems,
+    ].join("\n");
+  }
+
+  if (paragraphs.length > 1) {
+    return paragraphs.map((p, idx) => {
+      if (idx === 0 && !p.startsWith("•") && p.length < 120) {
+        return `**${p}**\n`;
+      }
+      return `• ${p}`;
+    }).join("\n");
+  }
+
+  return `• **Insight**: ${trimmed}`;
+}
+
 export function isModeAllowedForPlan(mode: AIMode, planId: PlanId = "free"): boolean {
   if (planId === "premium" || planId === "lifetime") return true;
   if (planId === "standard") return mode === "analyst" || mode === "operator";

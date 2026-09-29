@@ -170,6 +170,13 @@ const UserBusinesses = () => {
       );
 
       setBusinesses(enrichedList);
+
+      // If user has no owned business, redirect directly to business setup steps
+      const owned = enrichedList.filter((b) => !b.is_staff);
+      if (owned.length === 0) {
+        navigate("/setup-business", { replace: true });
+        return;
+      }
     } catch (err: any) {
       console.warn("Error loading businesses:", err);
     } finally {

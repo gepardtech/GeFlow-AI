@@ -36,18 +36,24 @@ const Navbar = () => {
       <AnnouncementBar audience="public" />
       <div className="container mx-auto flex items-center justify-between h-16 px-4">
         {/* Left: Logo */}
-        <Link to="/" className="flex items-center gap-2 flex-shrink-0">
+        <Link to="/" className="flex items-center gap-2.5 flex-shrink-0 group">
           {settings?.logo_url ? (
             <img src={settings.logo_url} alt={settings?.app_name ?? "GeFlow"} className="h-8 max-w-[150px] object-contain" />
           ) : (
-            <>
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" className="text-primary">
-                <path d="M14 2L4 8v12l10 6 10-6V8L14 2z" stroke="currentColor" strokeWidth="2" fill="none"/>
-                <path d="M14 8l-5 3v6l5 3 5-3v-6l-5-3z" fill="currentColor" opacity="0.3"/>
-              </svg>
-              <span className="font-bold text-lg text-foreground">{settings?.app_name ?? "GeFlow"}</span>
-            </>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-sky-400 flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-xs">
+              {(settings?.app_name || "G").charAt(0).toUpperCase()}
+            </div>
           )}
+          <div className="flex flex-col min-w-0">
+            <span className="font-bold text-base text-foreground leading-none group-hover:text-primary transition-colors">
+              {settings?.app_name ?? "GeFlow"}
+            </span>
+            {settings?.tagline && (
+              <span className="text-[10px] text-muted-foreground font-medium truncate leading-tight mt-0.5 max-w-[200px] sm:max-w-xs">
+                {settings.tagline}
+              </span>
+            )}
+          </div>
         </Link>
 
         {/* Center: Nav links */}

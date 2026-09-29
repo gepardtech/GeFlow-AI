@@ -393,15 +393,24 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
   );
 
   const BrandLogo = () => (
-    <Link to={isAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2">
+    <Link to={isAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2.5 min-w-0">
       {settings?.logo_url ? (
         <img src={settings.logo_url} alt={settings?.app_name ?? "Logo"} className="h-8 max-w-[140px] object-contain" />
       ) : (
-        <>
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500 to-sky-400 flex items-center justify-center text-white font-bold text-sm">G</div>
-          <span className="font-bold text-lg bg-gradient-to-r from-violet-500 to-sky-400 bg-clip-text text-transparent">{settings?.app_name ?? "GeFlow"}</span>
-        </>
+        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500 to-sky-400 flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-xs">
+          {(settings?.app_name || "G").charAt(0).toUpperCase()}
+        </div>
       )}
+      <div className="flex flex-col min-w-0">
+        <span className="font-bold text-base bg-gradient-to-r from-violet-500 to-sky-400 bg-clip-text text-transparent truncate leading-none">
+          {settings?.app_name ?? "GeFlow"}
+        </span>
+        {settings?.tagline && (
+          <span className="text-[10px] text-muted-foreground font-medium truncate leading-tight mt-0.5 max-w-[130px]">
+            {settings.tagline}
+          </span>
+        )}
+      </div>
     </Link>
   );
 

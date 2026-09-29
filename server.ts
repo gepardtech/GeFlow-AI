@@ -95,7 +95,7 @@ app.use("/api/supabase-proxy", async (req: Request, res: Response) => {
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2a3ZsanhodWZzcmd5ZnNxcmtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1OTAzNDMsImV4cCI6MjA5NjE2NjM0M30.sef1DVX7ysCEXrNlptxJbht-RvsHxxVze6Op5o95NbE";
 
     // Platform/system tables that MUST ALWAYS have elevated service rights so RLS never blanks rows or blocks admin CRUD
-    const isPlatformTable = /^\/rest\/v1\/(plan_limits|feature_modules|public_feature_modules|business_categories|product_categories|business_category_internal|platform_settings|pricing_plans|announcements|coupons|public_settings|newsletter_subscribers)/i.test(rawUrl);
+    const isPlatformTable = /^\/rest\/v1\/(invoices|pricing_plans|feature_modules|public_feature_modules|plan_limits|platform_settings|business_categories|product_categories|business_category_internal|announcements|coupons|public_settings|newsletter_subscribers|refund_requests)/i.test(rawUrl);
 
     const authHdr = headers["authorization"] || "";
     let isElevatedUser = false;
@@ -1569,43 +1569,15 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
             password,
           });
         } else {
-          // User not found in auth.users: auto-register with provided credentials
-          const isAdmin = cleanEmail === "gepardwebs@gmail.com";
-          const { data: newUser } = await serverSupabase.auth.admin.createUser({
-            email: cleanEmail,
-            password,
-            email_confirm: true,
-            user_metadata: {
-              full_name: cleanEmail.split("@")[0],
-              plan: isAdmin ? "lifetime" : "free",
-            },
+          // User not found in auth.users: Return not registered so user is prompted to sign up
+          return res.status(404).json({
+            success: false,
+            notRegistered: true,
+            error: "This email is not registered. Please sign up to create your account.",
           });
-          if (newUser?.user) {
-            const uid = newUser.user.id;
-            await serverSupabase.from("profiles").upsert(
-              {
-                user_id: uid,
-                id: uid,
-                email: cleanEmail,
-                full_name: cleanEmail.split("@")[0],
-                plan: isAdmin ? "lifetime" : "free",
-                status: "active",
-              },
-              { onConflict: "user_id" }
-            );
-            if (isAdmin) {
-              await serverSupabase
-                .from("user_roles")
-                .upsert({ user_id: uid, role: "admin" }, { onConflict: "user_id" });
-            }
-            srvRes = await serverSupabase.auth.signInWithPassword({
-              email: cleanEmail,
-              password,
-            });
-          }
         }
       } catch (adminErr) {
-        console.warn("Notice syncing credentials via admin API:", adminErr);
+        console.warn("Notice checking credentials via admin API:", adminErr);
       }
     }
 
@@ -2210,18 +2182,49 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
     if (action === "delete") {
       if (!user_id) return res.status(400).json({ success: false, error: "user_id required" });
       try {
-        // Cascade delete child / foreign key records referencing this user
+        // Resolve profile to find the actual Auth UUID and email
+        const { data: prof } = await serverSupabase
+          .from("profiles")
+          .select("id, user_id, email")
+          .or(`user_id.eq.${user_id},id.eq.${user_id}`)
+          .maybeSingle();
+
+        const targetAuthId = prof?.user_id || user_id;
+        const targetEmail = prof?.email?.toLowerCase();
+
+        // Find matching Auth User in Gotrue
+        let authUuidToDelete = targetAuthId;
+        try {
+          const { data: authList } = await serverSupabase.auth.admin.listUsers({ perPage: 1000 });
+          const matched = authList?.users?.find(
+            (u) => u.id === targetAuthId || (targetEmail && u.email?.toLowerCase() === targetEmail)
+          );
+          if (matched?.id) {
+            authUuidToDelete = matched.id;
+          }
+        } catch (_e) {
+          // ignore
+        }
+
+        // Cascade delete all child / foreign key records referencing this user
         await Promise.allSettled([
-          serverSupabase.from("user_roles").delete().eq("user_id", user_id),
-          bgSupabase.from("user_roles").delete().eq("user_id", user_id),
-          serverSupabase.from("support_team_members").delete().eq("user_id", user_id),
-          serverSupabase.from("business_staff").delete().eq("user_id", user_id),
-          serverSupabase.from("subscriptions").delete().eq("owner_user_id", user_id),
-          serverSupabase.from("notifications").delete().eq("user_id", user_id),
+          serverSupabase.from("user_roles").delete().or(`user_id.eq.${targetAuthId},user_id.eq.${user_id}`),
+          bgSupabase.from("user_roles").delete().or(`user_id.eq.${targetAuthId},user_id.eq.${user_id}`),
+          serverSupabase.from("support_team_members").delete().or(`user_id.eq.${targetAuthId},user_id.eq.${user_id}`),
+          serverSupabase.from("business_staff").delete().or(`user_id.eq.${targetAuthId},user_id.eq.${user_id}`),
+          serverSupabase.from("subscriptions").delete().or(`owner_user_id.eq.${targetAuthId},owner_user_id.eq.${user_id}`),
+          serverSupabase.from("notifications").delete().or(`user_id.eq.${targetAuthId},user_id.eq.${user_id}`),
+          serverSupabase.from("invoices").delete().or(`owner_user_id.eq.${targetAuthId},owner_user_id.eq.${user_id}`),
+          serverSupabase.from("refund_requests").delete().or(`owner_user_id.eq.${targetAuthId},owner_user_id.eq.${user_id}`),
+          serverSupabase.from("payment_transactions").delete().or(`user_id.eq.${targetAuthId},user_id.eq.${user_id}`),
+          serverSupabase.from("support_tickets").delete().or(`user_id.eq.${targetAuthId},user_id.eq.${user_id}`),
         ]);
 
         // If user owns businesses, delete all associated setup, inventory, sales, and held orders
-        const { data: userBizs } = await serverSupabase.from("businesses").select("id").eq("owner_user_id", user_id);
+        const { data: userBizs } = await serverSupabase
+          .from("businesses")
+          .select("id")
+          .or(`owner_user_id.eq.${targetAuthId},owner_user_id.eq.${user_id}`);
         if (userBizs && userBizs.length > 0) {
           const bIds = userBizs.map((b: any) => b.id);
           await Promise.allSettled([
@@ -2240,19 +2243,27 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
           ]);
         }
 
-        // Delete profile
+        // Delete profile from both databases
         await Promise.allSettled([
-          serverSupabase.from("profiles").delete().eq("user_id", user_id),
-          bgSupabase.from("profiles").delete().eq("user_id", user_id),
+          serverSupabase.from("profiles").delete().or(`user_id.eq.${targetAuthId},id.eq.${targetAuthId},user_id.eq.${user_id},id.eq.${user_id}`),
+          bgSupabase.from("profiles").delete().or(`user_id.eq.${targetAuthId},id.eq.${targetAuthId},user_id.eq.${user_id},id.eq.${user_id}`),
         ]);
 
-        // Delete user from Supabase Auth
-        const { error: authErr } = await serverSupabase.auth.admin.deleteUser(user_id);
-        if (authErr) {
-          console.warn("Notice: serverSupabase deleteUser error:", authErr.message);
+        // Delete user account permanently from Supabase Auth
+        if (authUuidToDelete) {
+          const [srvDel, bgDel] = await Promise.allSettled([
+            serverSupabase.auth.admin.deleteUser(authUuidToDelete),
+            bgSupabase.auth.admin.deleteUser(authUuidToDelete),
+          ]);
+          if (srvDel.status === "rejected" || (srvDel.status === "fulfilled" && srvDel.value.error)) {
+            console.warn("serverSupabase deleteUser result:", srvDel);
+          }
+          if (bgDel.status === "rejected" || (bgDel.status === "fulfilled" && bgDel.value.error)) {
+            console.warn("bgSupabase deleteUser result:", bgDel);
+          }
         }
 
-        return res.json({ success: true, user_id });
+        return res.json({ success: true, user_id, auth_user_id: authUuidToDelete });
       } catch (delErr: any) {
         return res.status(500).json({ success: false, error: delErr.message });
       }
@@ -2586,18 +2597,27 @@ app.post("/api/admin/businesses/reset", async (req: Request, res: Response) => {
 // Admin settings query (always returns latest database state with parent_company)
 app.get("/api/admin/settings", async (_req: Request, res: Response) => {
   try {
-    const { data, error } = await serverSupabase
+    let { data, error } = await serverSupabase
       .from("platform_settings")
       .select("*")
       .eq("singleton", true)
       .maybeSingle();
 
-    if (error) {
+    if (!data) {
+      const fallback = await serverSupabase
+        .from("platform_settings")
+        .select("*")
+        .limit(1)
+        .maybeSingle();
+      data = fallback.data;
+    }
+
+    if (error && !data) {
       return res.status(500).json({ success: false, error: error.message });
     }
 
     const row = data || {};
-    const alerts = row.alerts || {};
+    const alerts = (row.alerts as any) || {};
     const parentComp = alerts.parent_company || alerts.general_settings?.parent_company || "Gepard Techs";
 
     return res.json({
@@ -2649,12 +2669,23 @@ app.post("/api/admin/settings", async (req: Request, res: Response) => {
     }
 
     // 1. Update platform_settings with service role
-    const { data: updatedRow, error: updateErr } = await serverSupabase
+    let { data: updatedRow, error: updateErr } = await serverSupabase
       .from("platform_settings")
       .update(cleanPayload)
       .eq("singleton", true)
       .select("*")
       .maybeSingle();
+
+    if (!updatedRow && !updateErr) {
+      const fallback = await serverSupabase
+        .from("platform_settings")
+        .update(cleanPayload)
+        .neq("id", "00000000-0000-0000-0000-000000000000")
+        .select("*")
+        .maybeSingle();
+      updatedRow = fallback.data;
+      updateErr = fallback.error;
+    }
 
     if (updateErr) {
       console.warn("Error updating platform_settings via service role:", updateErr);
@@ -2663,6 +2694,9 @@ app.post("/api/admin/settings", async (req: Request, res: Response) => {
         singleton: true,
       }, { onConflict: "singleton" });
     }
+
+    // Mirror to secondary database
+    await bgSupabase.from("platform_settings").update(cleanPayload).eq("singleton", true).catch(() => {});
 
     // 2. Also mirror to public_settings
     const ALLOWED_PUBLIC_COLS = new Set([
@@ -3163,10 +3197,12 @@ app.post("/api/admin/pricing-plans", async (req: Request, res: Response) => {
     if (id) {
       const { data, error } = await serverSupabase.from("pricing_plans").update(payload).eq("id", id).select().maybeSingle();
       if (error) return res.status(500).json({ success: false, error: error.message });
+      await bgSupabase.from("pricing_plans").update(payload).eq("id", id).catch(() => {});
       savedPlan = data;
     } else {
       const { data, error } = await serverSupabase.from("pricing_plans").insert(payload).select().maybeSingle();
       if (error) return res.status(500).json({ success: false, error: error.message });
+      await bgSupabase.from("pricing_plans").insert(payload).catch(() => {});
       savedPlan = data;
     }
     return res.json({ success: true, plan: savedPlan });
@@ -3550,10 +3586,266 @@ app.post("/api/admin/plan-limits", async (req: Request, res: Response) => {
   }
 });
 
+const CORE_RETAIL_FEATURES = [
+  // POS & Billing Terminal
+  {
+    module_code: "F-POS-01",
+    name: "Quick Counter Sales & POS Terminal",
+    function_group: "pos",
+    description: "High-speed cashier checkout interface with instant barcode search, quantity modifiers, and receipt generation.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: true,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 12,
+  },
+  {
+    module_code: "F-POS-02",
+    name: "Multi-Mode Tender & Split Payments",
+    function_group: "pos",
+    description: "Support for Cash, Credit/Debit Cards, QR Code, Split Tender, and Store Credit accounts.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: true,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 14,
+  },
+  {
+    module_code: "F-POS-03",
+    name: "Order Hold & Instant Cart Recall",
+    function_group: "pos",
+    description: "Save active transactions when shoppers browse further and resume without lost basket data.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: true,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 10,
+  },
+  {
+    module_code: "F-POS-04",
+    name: "Thermal Receipt Printing (80mm & 58mm)",
+    function_group: "pos",
+    description: "ESC/POS silent kiosk printing with custom headers, QR audit code, and auto drawer kick.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: true,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 8,
+  },
+  {
+    module_code: "F-POS-05",
+    name: "Cashier Shift Open/Close & X/Z Cash Register",
+    function_group: "pos",
+    description: "Track opening float, mid-shift drops, and end-of-shift reconciliation to prevent cashier discrepancies.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: false,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 15,
+  },
+  {
+    module_code: "F-POS-06",
+    name: "Customer Order Returns & Restock Ledger",
+    function_group: "pos",
+    description: "Seamless product return handling with automatic restock into warehouse inventory and credit notes.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: false,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 16,
+  },
+
+  // Inventory & Stock Control
+  {
+    module_code: "F-INV-01",
+    name: "Centralized Product Master Catalog",
+    function_group: "inventory",
+    description: "Multi-category catalog management with cost price, retail price, barcodes, and SKU tracking.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: true,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 10,
+  },
+  {
+    module_code: "F-INV-02",
+    name: "Real-Time Low Stock Threshold Alerts",
+    function_group: "inventory",
+    description: "Automatic visual badges and warning notifications when product units fall below threshold limits.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: true,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 11,
+  },
+  {
+    module_code: "F-INV-03",
+    name: "Shelf-Life & Batch Expiry Date Watchlist",
+    function_group: "inventory",
+    description: "Predictive monitoring of goods expiring in 30 or 60 days to prevent retail shrink and expired sales.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: false,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 18,
+  },
+  {
+    module_code: "F-INV-05",
+    name: "Multi-UOM Ratios (Piece, Pack, Carton)",
+    function_group: "inventory",
+    description: "Unit of measurement registry supporting piece, pack, box, and wholesale carton breakdown ratios.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: false,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 14,
+  },
+
+  // Suppliers & Procurement
+  {
+    module_code: "F-PUR-01",
+    name: "Supplier Directory & Credit Ledger",
+    function_group: "purchases",
+    description: "Manage vendor contacts, outstanding payables, and historical delivery records in one place.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: false,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 22,
+  },
+  {
+    module_code: "F-PUR-02",
+    name: "Purchase Order Architect with Quick-Add",
+    function_group: "purchases",
+    description: "Build purchase orders, auto-calculate landed cost, and add unlisted items directly during intake.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: false,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 20,
+  },
+
+  // Finance, Profit & Expenses
+  {
+    module_code: "F-FIN-03",
+    name: "Live Gross & Net Profit Margin Intelligence",
+    function_group: "finance",
+    description: "Real-time cost vs selling margin calculations updated with every POS counter transaction.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: true,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 15,
+  },
+
+  // Reports & Analytics
+  {
+    module_code: "F-REP-01",
+    name: "Daily, Weekly & Monthly Sales Ledger Reports",
+    function_group: "reports",
+    description: "Detailed revenue audit logs with payment breakdowns, profit analytics, and downloadable CSV/PDF exports.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: true,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 19,
+  },
+
+  // Team & Staff Access Control
+  {
+    module_code: "F-TEA-01",
+    name: "Granular RBAC Staff Permissions (Manager / Cashier / Inventory)",
+    function_group: "team",
+    description: "Restricted cashier views (POS only), inventory clerk intake, and full store manager workflows.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: false,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 12,
+  },
+
+  // AI & Smart Retail Copilot
+  {
+    module_code: "F-AI-01",
+    name: "Maryam AI Retail Copilot & Assistant",
+    function_group: "ai",
+    description: "Intelligent retail assistant with real-time profit analysis, low stock audits, and operational advice in 4 languages.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: true,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 30,
+  },
+
+  // Customer & Khata Management
+  {
+    module_code: "F-CRM-01",
+    name: "Customer Khata (Credit Ledger) & Store Balance",
+    function_group: "crm",
+    description: "Track customer credit balances (Udaar), partial bill payments, and historical transaction statements.",
+    lifecycle_phase: "live",
+    global_active: true,
+    plan_free: true,
+    plan_standard: true,
+    plan_premium: true,
+    health: "optimal",
+    latency_ms: 16,
+  },
+];
+
 app.get("/api/admin/feature-modules", async (_req: Request, res: Response) => {
   try {
-    const { data, error } = await serverSupabase.from("feature_modules").select("*").order("created_at", { ascending: true });
+    let { data, error } = await serverSupabase.from("feature_modules").select("*").order("created_at", { ascending: true });
     if (error) return res.status(500).json({ success: false, error: error.message });
+
+    const existingCodes = new Set((data || []).map((m: any) => m.module_code));
+    const missingCore = CORE_RETAIL_FEATURES.filter((f) => !existingCodes.has(f.module_code));
+
+    if (missingCore.length > 0) {
+      const inserts = missingCore.map((c) => ({
+        ...c,
+        created_by_user_id: "a375b057-debe-4239-9549-9f83b5557df2",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }));
+
+      await serverSupabase.from("feature_modules").insert(inserts).catch(() => {});
+      const refreshed = await serverSupabase.from("feature_modules").select("*").order("created_at", { ascending: true });
+      data = refreshed.data || data;
+    }
+
     return res.json({ success: true, modules: data || [] });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
@@ -3577,9 +3869,17 @@ app.post("/api/admin/feature-modules", async (req: Request, res: Response) => {
         if (item.description !== undefined) patch.description = item.description;
 
         if (item.id) {
-          await serverSupabase.from("feature_modules").update(patch).eq("id", item.id);
+          await Promise.allSettled([
+            serverSupabase.from("feature_modules").update(patch).eq("id", item.id),
+            serverSupabase.from("public_feature_modules").update(patch).eq("id", item.id),
+            bgSupabase.from("feature_modules").update(patch).eq("id", item.id),
+          ]);
         } else if (item.module_code) {
-          await serverSupabase.from("feature_modules").update(patch).eq("module_code", item.module_code);
+          await Promise.allSettled([
+            serverSupabase.from("feature_modules").update(patch).eq("module_code", item.module_code),
+            serverSupabase.from("public_feature_modules").update(patch).eq("module_code", item.module_code),
+            bgSupabase.from("feature_modules").update(patch).eq("module_code", item.module_code),
+          ]);
         }
       }
       return res.json({ success: true, count: updates.length });
@@ -3590,9 +3890,17 @@ app.post("/api/admin/feature-modules", async (req: Request, res: Response) => {
       updated_at: new Date().toISOString(),
     };
     if (id) {
-      await serverSupabase.from("feature_modules").update(dbPayload).eq("id", id);
+      await Promise.allSettled([
+        serverSupabase.from("feature_modules").update(dbPayload).eq("id", id),
+        serverSupabase.from("public_feature_modules").update(dbPayload).eq("id", id),
+        bgSupabase.from("feature_modules").update(dbPayload).eq("id", id),
+      ]);
     } else if (module_code) {
-      await serverSupabase.from("feature_modules").update(dbPayload).eq("module_code", module_code);
+      await Promise.allSettled([
+        serverSupabase.from("feature_modules").update(dbPayload).eq("module_code", module_code),
+        serverSupabase.from("public_feature_modules").update(dbPayload).eq("module_code", module_code),
+        bgSupabase.from("feature_modules").update(dbPayload).eq("module_code", module_code),
+      ]);
     }
     return res.json({ success: true });
   } catch (err: any) {
@@ -3716,7 +4024,15 @@ Total Catalog: ${businessContext.totalProducts ?? 0}
 Low Stock Items: ${businessContext.lowStockCount ?? 0}
 Today Revenue: $${businessContext.todayRevenue ?? 0}
 Transactions: ${businessContext.todaySalesCount ?? 0}` : "No specific business loaded yet."}
-Respond helpfully with concrete, actionable advice and bullet points where appropriate.`;
+
+CRITICAL FORMATTING REQUIREMENT:
+- NEVER respond in a single continuous paragraph or wall of text.
+- ALWAYS respond using clean, professional markdown with clear bold headers and organized bullet points (•).
+- Structure your output into clear logical sections:
+  1. Brief 1-line executive takeaway or summary.
+  2. Main analysis or key operational insights in crisp bullet points: "• **Metric/Topic**: Clear details and guidance."
+  3. Actionable next steps or recommendations in bullet points: "• **Action**: What the user should do next."
+- Keep tone professional, authoritative, and helpful.`;
 
         const response = await client.models.generateContent({
           model: "gemini-3.8-flash",

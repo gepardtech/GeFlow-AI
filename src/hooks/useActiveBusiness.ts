@@ -344,11 +344,19 @@ async function fetchBusinessData(force = false): Promise<void> {
       let currentMode = (localStorage.getItem(LS_MODE_KEY) as "business" | "employee") || store.mode;
       store.mode = currentMode;
 
-      // Auto switch mode if user has no stores in current mode but has stores in the other
+      // Auto switch mode only on initial state if user has no stores in current mode and hasn't explicitly chosen business mode
+      const explicitMode = typeof window !== "undefined" ? localStorage.getItem(LS_MODE_KEY) : null;
+      const isSetupRoute = typeof window !== "undefined" && window.location.pathname.startsWith("/setup-business");
+
       if (currentMode === "business" && ownedRows.length === 0 && staffRows.length > 0) {
-        currentMode = "employee";
-        store.mode = "employee";
-        localStorage.setItem(LS_MODE_KEY, "employee");
+        if (explicitMode === "business" || isSetupRoute) {
+          currentMode = "business";
+          store.mode = "business";
+        } else {
+          currentMode = "employee";
+          store.mode = "employee";
+          localStorage.setItem(LS_MODE_KEY, "employee");
+        }
       } else if (currentMode === "employee" && staffRows.length === 0 && ownedRows.length > 0) {
         currentMode = "business";
         store.mode = "business";

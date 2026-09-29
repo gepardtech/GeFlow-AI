@@ -169,16 +169,41 @@ export const UserSubscription = () => {
       }
 
       // 2. Fetch user's invoices
-      const { data: invData } = await supabase
-        .from("invoices")
-        .select("*")
-        .or(`owner_user_id.eq.${user.id},billing_email.eq.${user.email}`)
-        .order("issue_date", { ascending: false });
+      let userInvoices: any[] = [];
+      try {
+        const { data: invData } = await supabase
+          .from("invoices")
+          .select("*")
+          .or(`owner_user_id.eq.${user.id},billing_email.eq.${user.email}`)
+          .order("created_at", { ascending: false });
 
-      if (invData && invData.length > 0) {
-        setInvoices(invData as InvoiceRecord[]);
+        if (invData && invData.length > 0) {
+          userInvoices = invData;
+        }
+      } catch {
+        /* fallback below */
+      }
+
+      if (userInvoices.length === 0 && user.email) {
+        try {
+          const res = await fetch(`/api/admin/invoices?search=${encodeURIComponent(user.email)}`);
+          const json = await res.json();
+          if (json.success && Array.isArray(json.invoices) && json.invoices.length > 0) {
+            userInvoices = json.invoices.filter(
+              (i: any) =>
+                i.billing_email?.toLowerCase() === user.email?.toLowerCase() ||
+                i.owner_user_id === user.id
+            );
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+
+      if (userInvoices.length > 0) {
+        setInvoices(userInvoices as InvoiceRecord[]);
       } else {
-        // Generate realistic initial invoice for current plan if empty
+        // Fallback placeholder receipts only if 0 records exist
         const initialInv: InvoiceRecord[] = [
           {
             id: "inv-90231",

@@ -187,6 +187,9 @@ const AdminSettings = () => {
 
     setSaving(false);
     applyPlatformSettings(payload);
+    try {
+      localStorage.setItem("geflow_cached_platform_settings", JSON.stringify(payload));
+    } catch {}
 
     if (savedSuccessfully) {
       toast({ title: "Settings saved", description: "Changes are permanently saved and live across the platform." });
@@ -196,6 +199,7 @@ const AdminSettings = () => {
         title: "Settings applied",
         description: "Applied to active platform session.",
       });
+      window.dispatchEvent(new CustomEvent("geflow:settings-updated", { detail: payload }));
     }
   };
 

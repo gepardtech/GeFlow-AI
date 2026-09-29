@@ -96,7 +96,12 @@ export const TopBusinessEmployeeDropdown: React.FC<Props> = ({
           <div className="p-1 bg-muted/60 rounded-xl flex gap-1 mb-2">
             <button
               type="button"
-              onClick={() => setWorkspaceMode("business")}
+              onClick={() => {
+                setWorkspaceMode("business");
+                if (ownedBusinesses.length === 0) {
+                  navigate("/setup-business");
+                }
+              }}
               className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                 isOwnerMode
                   ? "bg-background text-foreground shadow-xs font-bold border border-border/50"
@@ -212,7 +217,12 @@ export const TopBusinessEmployeeDropdown: React.FC<Props> = ({
             <button
               type="button"
               id="dropdown-mode-business"
-              onClick={() => setWorkspaceMode("business")}
+              onClick={() => {
+                setWorkspaceMode("business");
+                if (ownedBusinesses.length === 0) {
+                  navigate("/setup-business");
+                }
+              }}
               className={`flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs transition-all cursor-pointer ${
                 isOwnerMode
                   ? "bg-background text-foreground shadow-xs border border-border/80 font-bold"
@@ -335,18 +345,18 @@ export const TopBusinessEmployeeDropdown: React.FC<Props> = ({
         </div>
 
         {/* Quick Footer Action */}
-        {isOwnerMode && (
-          <>
-            <DropdownMenuSeparator />
-            <button
-              type="button"
-              onClick={() => navigate("/dashboard/businesses")}
-              className="w-full flex items-center gap-2 p-2 rounded-xl text-xs font-bold text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 transition-colors cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" /> Register New Store
-            </button>
-          </>
-        )}
+        <DropdownMenuSeparator />
+        <button
+          type="button"
+          onClick={() => {
+            setWorkspaceMode("business");
+            navigate("/setup-business");
+          }}
+          className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl text-xs font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 hover:bg-sky-500/20 transition-colors cursor-pointer"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          {ownedBusinesses.length === 0 ? "Register Your Own Business" : "Register New Business"}
+        </button>
       </DropdownMenuContent>
     </DropdownMenu>
   );
