@@ -190,7 +190,8 @@ export const AdminFeatures = () => {
   const [pendingChanges, setPendingChanges] = useState<Record<string, Partial<FeatureModuleDefinition>>>({});
 
   // Sync with DB / Catalog
-  const load = useCallback(async () => {
+  const load = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const res = await fetch("/api/admin/feature-modules");
       const json = await res.json();
@@ -219,6 +220,20 @@ export const AdminFeatures = () => {
 
   useEffect(() => {
     load();
+    const ch = supabase
+      .channel("admin-features-rt")
+      .on("postgres_changes", { event: "*", schema: "public", table: "feature_modules" }, () => load(true))
+      .subscribe();
+
+    const onRefresh = () => load(true);
+    window.addEventListener("panel:refresh", onRefresh);
+    window.addEventListener("geflow:data-refresh", onRefresh);
+
+    return () => {
+      supabase.removeChannel(ch);
+      window.removeEventListener("panel:refresh", onRefresh);
+      window.removeEventListener("geflow:data-refresh", onRefresh);
+    };
   }, [load]);
 
   // Filtered rows

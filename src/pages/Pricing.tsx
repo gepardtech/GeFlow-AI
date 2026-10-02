@@ -108,27 +108,19 @@ const Pricing = () => {
             Flexible pricing for every business stage — from startup to enterprise.
           </p>
 
-          <div className="inline-flex items-center bg-card border border-border rounded-full p-1 gap-1 flex-wrap justify-center">
+          <div className="inline-flex items-center bg-card border border-border rounded-full p-1 gap-1 justify-center shadow-xs">
             <button
               onClick={() => setBillingPeriod("monthly")}
-              className={`px-6 py-2 rounded-full text-sm font-semibold transition-all ${
+              className={`px-6 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${
                 billingPeriod === "monthly" ? "bg-foreground text-background shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
             >Monthly</button>
             <button
               onClick={() => setBillingPeriod("yearly")}
-              className={`px-6 py-2 rounded-full text-sm font-semibold transition-all ${
+              className={`px-6 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer ${
                 billingPeriod === "yearly" ? "bg-foreground text-background shadow-sm" : "text-muted-foreground hover:text-foreground"
               }`}
-            >Yearly</button>
-            <button
-              onClick={() => setBillingPeriod("lifetime")}
-              className={`px-6 py-2 rounded-full text-sm font-semibold transition-all ${
-                billingPeriod === "lifetime" ? "bg-amber-500 text-white shadow-sm font-bold" : "text-amber-600 dark:text-amber-400 hover:text-foreground"
-              }`}
-            >
-              Lifetime (25 Spots Offer)
-            </button>
+            >Yearly (Save up to 40%)</button>
           </div>
         </div>
       </section>
@@ -142,15 +134,16 @@ const Pricing = () => {
               const badge = badgeOf("free", billingPeriod);
               const pos = badgePositionOf("free");
               const pop = isPopular("free");
+              const displayBadge = badge || (pop ? "POPULAR" : null);
               return (
                 <div className={`premium-card p-7 flex flex-col ${pop ? "ring-2 ring-primary shadow-2xl shadow-primary/20" : ""}`}>
-                  {badge && pos === "top" ? (
-                    <span className="inline-block text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full self-start mb-4 tracking-wider">
-                      {badge}
+                  {displayBadge && pos === "top" ? (
+                    <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full self-start mb-4 tracking-wider ${pop ? "bg-primary text-primary-foreground" : "text-primary bg-primary/10"}`}>
+                      {displayBadge}
                     </span>
                   ) : <div className="h-7 mb-4" />}
                   <h3 className="text-xl font-bold mb-1">{nameOf("free", "Free")}</h3>
-                  <p className="text-sm text-muted-foreground mb-5">{taglineOf("free", "Professional solution.")}</p>
+                  <p className="text-sm text-muted-foreground mb-5">{taglineOf("free", "Always free for small stores.")}</p>
                   <div className="flex items-baseline gap-1 mb-6">
                     <p className="text-4xl font-bold">{price(priceOf("free", billingPeriod))}</p>
                     <span className="text-sm text-muted-foreground">/{billingPeriod === "monthly" ? "mo" : "yr"}</span>
@@ -162,9 +155,9 @@ const Pricing = () => {
                       </li>
                     ))}
                   </ul>
-                  {badge && pos === "bottom" && (
+                  {displayBadge && pos === "bottom" && (
                     <span className="inline-block text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full text-center mb-3 tracking-wider">
-                      {badge}
+                      {displayBadge}
                     </span>
                   )}
                   <Button className="cta-btn w-full rounded-full" asChild>
@@ -180,15 +173,16 @@ const Pricing = () => {
               const badge = badgeOf("standard", billingPeriod);
               const pos = badgePositionOf("standard");
               const pop = isPopular("standard");
+              const displayBadge = badge || (pop ? "MOST POPULAR" : null);
               return (
-                <div className={`premium-card p-7 flex flex-col ${pop ? "ring-2 ring-primary shadow-2xl shadow-primary/20" : ""}`}>
-                  {badge && pos === "top" ? (
-                    <span className="inline-block text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full self-start mb-4 tracking-wider">
-                      {badge}
+                <div className={`premium-card p-7 flex flex-col relative ${pop ? "ring-2 ring-sky-500 shadow-2xl shadow-sky-500/20" : ""}`}>
+                  {displayBadge && pos === "top" ? (
+                    <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full self-start mb-4 tracking-wider ${pop ? "bg-sky-500 text-white" : "text-primary bg-primary/10"}`}>
+                      {displayBadge}
                     </span>
                   ) : <div className="h-7 mb-4" />}
                   <h3 className="text-xl font-bold mb-1">{nameOf("standard", "Standard")}</h3>
-                  <p className="text-sm text-muted-foreground mb-5">{taglineOf("standard", "Professional solution.")}</p>
+                  <p className="text-sm text-muted-foreground mb-5">{taglineOf("standard", "Ideal for growing retailers.")}</p>
                   <div className="flex items-baseline gap-1 mb-6">
                     <p className="text-4xl font-bold">{price(priceOf("standard", billingPeriod))}</p>
                     <span className="text-sm text-muted-foreground">/{billingPeriod === "monthly" ? "mo" : "yr"}</span>
@@ -200,9 +194,9 @@ const Pricing = () => {
                       </li>
                     ))}
                   </ul>
-                  {badge && pos === "bottom" && (
+                  {displayBadge && pos === "bottom" && (
                     <span className="inline-block text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full text-center mb-3 tracking-wider">
-                      {badge}
+                      {displayBadge}
                     </span>
                   )}
                   <Button className="cta-btn w-full rounded-full" asChild>
@@ -217,15 +211,16 @@ const Pricing = () => {
               const badge = badgeOf("premium", billingPeriod);
               const pos = badgePositionOf("premium");
               const pop = isPopular("premium");
+              const displayBadge = badge || (pop ? "RECOMMENDED" : null);
               return (
-                <div className={`premium-card p-7 flex flex-col ${pop ? "ring-2 ring-secondary shadow-2xl shadow-secondary/20" : ""}`}>
-                  {badge && pos === "top" ? (
-                    <span className="inline-block text-xs font-bold text-secondary bg-secondary/10 px-3 py-1 rounded-full self-start mb-4 tracking-wider">
-                      {badge}
+                <div className={`premium-card p-7 flex flex-col relative ${pop ? "ring-2 ring-primary shadow-2xl shadow-primary/20" : ""}`}>
+                  {displayBadge && pos === "top" ? (
+                    <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full self-start mb-4 tracking-wider ${pop ? "bg-primary text-primary-foreground" : "text-secondary bg-secondary/10"}`}>
+                      {displayBadge}
                     </span>
                   ) : <div className="h-7 mb-4" />}
                   <h3 className="text-xl font-bold mb-1">{nameOf("premium", "Premium")}</h3>
-                  <p className="text-sm text-muted-foreground mb-5">{taglineOf("premium", "Professional solution.")}</p>
+                  <p className="text-sm text-muted-foreground mb-5">{taglineOf("premium", "For advanced operations & multi-branch.")}</p>
                   <div className="flex items-baseline gap-1 mb-6">
                     <p className="text-4xl font-bold">{price(priceOf("premium", billingPeriod))}</p>
                     <span className="text-sm text-muted-foreground">/{billingPeriod === "monthly" ? "mo" : "yr"}</span>
@@ -237,9 +232,9 @@ const Pricing = () => {
                       </li>
                     ))}
                   </ul>
-                  {badge && pos === "bottom" && (
+                  {displayBadge && pos === "bottom" && (
                     <span className="inline-block text-xs font-bold text-secondary bg-secondary/10 px-3 py-1 rounded-full text-center mb-3 tracking-wider">
-                      {badge}
+                      {displayBadge}
                     </span>
                   )}
                   <Button className="cta-btn w-full rounded-full" asChild>
@@ -260,42 +255,11 @@ const Pricing = () => {
             <p className="text-muted-foreground">Pay once, own the system forever.</p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            {/* Free Lifetime */}
-            {(() => {
-              const badge = badgeOf("free", "lifetime");
-              const pop = isPopular("free");
-              return (
-                <div className={`premium-card p-7 flex flex-col ${pop ? "ring-2 ring-primary shadow-2xl shadow-primary/20" : ""}`}>
-                  {badge ? (
-                    <span className="inline-block text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full self-start mb-4 tracking-wider">
-                      {badge}
-                    </span>
-                  ) : <div className="h-7 mb-4" />}
-                  <h3 className="text-xl font-bold mb-1">{nameOf("free", "Free")} Lifetime</h3>
-                  <div className="flex items-baseline gap-1 mb-6 mt-3">
-                    <p className="text-4xl font-bold">{price(priceOf("free", "lifetime"))}</p>
-                    <span className="text-sm text-muted-foreground">one-time</span>
-                  </div>
-                  <ul className="space-y-3 mb-8 flex-1">
-                    {freeLifetime.map((f) => (
-                      <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Check className="h-4 w-4 text-primary flex-shrink-0" /> {f}
-                      </li>
-                    ))}
-                  </ul>
-                  <Button className="cta-btn w-full rounded-full" asChild>
-                    <Link to="/signup">GET STARTED</Link>
-                  </Button>
-                  <p className="text-center text-[10px] font-bold tracking-wider text-muted-foreground mt-3">NO CARD NEEDED</p>
-                </div>
-              );
-            })()}
-
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             {/* Standard Lifetime */}
             {(() => {
               const badge = badgeOf("standard", "lifetime");
-              const pop = isPopular("standard");
+              const pop = isPopular("standard", "lifetime");
               const limit = lifetimeLimits.standard || 25;
               const claimed = lifetimeCounts.standard || 0;
               const remaining = Math.max(0, limit - claimed);
@@ -303,7 +267,7 @@ const Pricing = () => {
                 <div className={`premium-card p-7 flex flex-col ${pop ? "ring-2 ring-primary shadow-2xl shadow-primary/20" : ""}`}>
                   <div className="flex items-center justify-between mb-4">
                     <span className="inline-block text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/15 px-3 py-1 rounded-full tracking-wider">
-                      ONLY {limit} OFFERS AVAILABLE
+                      {badge || `ONLY ${limit} OFFERS AVAILABLE`}
                     </span>
                     <span className="text-[10px] font-bold text-muted-foreground font-mono">{remaining} left</span>
                   </div>
@@ -317,7 +281,7 @@ const Pricing = () => {
                     <span className="font-bold text-amber-500">{limit} spots offer</span>
                   </div>
                   <ul className="space-y-3 mb-8 flex-1">
-                    {standardLifetime.map((f) => (
+                    {featuresOf("standard", standardLifetime, "lifetime").map((f) => (
                       <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Check className="h-4 w-4 text-primary flex-shrink-0" /> {f}
                       </li>
@@ -333,7 +297,7 @@ const Pricing = () => {
             {/* Premium Lifetime */}
             {(() => {
               const badge = badgeOf("premium", "lifetime");
-              const pop = isPopular("premium");
+              const pop = isPopular("premium", "lifetime");
               const limit = lifetimeLimits.premium || 25;
               const claimed = lifetimeCounts.premium || 0;
               const remaining = Math.max(0, limit - claimed);
@@ -341,7 +305,7 @@ const Pricing = () => {
                 <div className={`premium-card p-7 flex flex-col ${pop ? "ring-2 ring-secondary shadow-2xl shadow-secondary/20" : ""}`}>
                   <div className="flex items-center justify-between mb-4">
                     <span className="inline-block text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/15 px-3 py-1 rounded-full tracking-wider">
-                      ONLY {limit} OFFERS AVAILABLE
+                      {badge || `ONLY ${limit} OFFERS AVAILABLE`}
                     </span>
                     <span className="text-[10px] font-bold text-muted-foreground font-mono">{remaining} left</span>
                   </div>
@@ -355,7 +319,7 @@ const Pricing = () => {
                     <span className="font-bold text-amber-500">{limit} spots offer</span>
                   </div>
                   <ul className="space-y-3 mb-8 flex-1">
-                    {premiumLifetime.map((f) => (
+                    {featuresOf("premium", premiumLifetime, "lifetime").map((f) => (
                       <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Check className="h-4 w-4 text-primary flex-shrink-0" /> {f}
                       </li>

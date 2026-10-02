@@ -27,6 +27,7 @@ export type BillingCycle = "monthly" | "yearly" | "lifetime";
  */
 export const usePricingPlans = () => {
   const [plans, setPlans] = useState<PricingPlanRow[]>([]);
+  const [lifetimeCustomizations, setLifetimeCustomizations] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -36,6 +37,9 @@ export const usePricingPlans = () => {
       if (json.success && Array.isArray(json.plans)) {
         const rows = json.plans as PricingPlanRow[];
         setPlans(rows.filter((p) => p.is_active !== false));
+        if (json.lifetime_customizations) {
+          setLifetimeCustomizations(json.lifetime_customizations);
+        }
       } else {
         const { data, error } = await supabase
           .from("pricing_plans")
@@ -71,10 +75,23 @@ export const usePricingPlans = () => {
           load();
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "platform_settings" },
+        () => {
+          load();
+        }
+      )
       .subscribe();
+
+    const onPricingUpdate = () => load();
+    window.addEventListener("geflow:pricing-updated", onPricingUpdate);
+    window.addEventListener("panel:refresh", onPricingUpdate);
 
     return () => {
       supabase.removeChannel(ch);
+      window.removeEventListener("geflow:pricing-updated", onPricingUpdate);
+      window.removeEventListener("panel:refresh", onPricingUpdate);
     };
   }, [load]);
 
@@ -94,6 +111,11 @@ export const usePricingPlans = () => {
   };
 
   const priceOf = (key: string, cycle: BillingCycle, fallback = 0): number => {
+    const k = key.toLowerCase();
+    if (cycle === "lifetime") {
+      const customPrice = lifetimeCustomizations[k]?.lifetime_price;
+      if (customPrice !== undefined && Number(customPrice) >= 0) return Number(customPrice);
+    }
     const p = byKey(key);
     if (!p) return fallback;
     if (cycle === "yearly") return Number(p.yearly_price ?? fallback);
@@ -101,12 +123,28 @@ export const usePricingPlans = () => {
     return Number(p.monthly_price ?? fallback);
   };
 
-  const featuresOf = (key: string, fallback: string[] = []): string[] => {
+  const featuresOf = (key: string, fallback: string[] = [], cycle?: BillingCycle): string[] => {
+    const k = key.toLowerCase();
+    if (cycle === "lifetime") {
+      const customFeat = lifetimeCustomizations[k]?.features;
+      if (Array.isArray(customFeat) && customFeat.length > 0) return customFeat;
+    }
     const f = byKey(key)?.features;
     return f && f.length ? f : fallback;
   };
 
   const badgeOf = (key: string, cycle: BillingCycle): string | null => {
+    const k = key.toLowerCase();
+    if (cycle === "lifetime") {
+      const custom = lifetimeCustomizations[k];
+      if (custom?.badge_text && custom.badge_text.trim()) {
+        return custom.badge_text.trim();
+      }
+      if (custom?.is_popular) {
+        return "MOST POPULAR";
+      }
+    }
+
     const p = byKey(key);
     if (!p) return null;
 
@@ -114,17 +152,21 @@ export const usePricingPlans = () => {
       if (!p.badge_cycle || p.badge_cycle === "all" || p.badge_cycle === cycle) {
         return p.badge_text.trim();
       }
-      return null;
     }
 
-    if (p.is_popular && (cycle === "monthly" || cycle === "lifetime")) {
+    if (p.is_popular) {
       return "MOST POPULAR";
     }
 
     return null;
   };
 
-  const isPopular = (key: string): boolean => {
+  const isPopular = (key: string, cycle?: BillingCycle): boolean => {
+    const k = key.toLowerCase();
+    if (cycle === "lifetime") {
+      const custom = lifetimeCustomizations[k];
+      if (custom?.is_popular !== undefined) return Boolean(custom.is_popular);
+    }
     return Boolean(byKey(key)?.is_popular);
   };
 
@@ -135,6 +177,7 @@ export const usePricingPlans = () => {
 
   return {
     plans,
+    lifetimeCustomizations,
     loading,
     byKey,
     nameOf,

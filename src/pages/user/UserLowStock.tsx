@@ -48,36 +48,47 @@ const UserLowStock = () => {
   const maxItems = limitRaw === null ? 999999 : limitRaw;
   const catName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? "General";
 
-  const load = useCallback(async () => {
-    if (!active) { setLoading(false); return; }
-    setLoading(true);
+  const activeId = active?.id;
+  const isStaff = Boolean(active?.is_staff);
+  const staffRole = active?.staff_role;
+  const ownerUserId = active?.owner_user_id;
+  const stockAlertLimit = active?.stock_alert_limit ?? 10;
+
+  const load = useCallback(async (isSilent = false) => {
+    if (!activeId) { setLoading(false); return; }
+    if (!isSilent) setLoading(true);
     let data: any[] | null = null;
 
-    const res = await supabase
-      .from("products")
-      .select("id, name, internal_sku, barcode, category_id, purchase_cost, retail_price, stock_units, min_stock_alert, batch_number, expiry_date, uom, units_per_uom, base_unit, description")
-      .eq("business_id", active.id)
-      .order("stock_units", { ascending: true });
-    data = res.data;
+    try {
+      const res = await supabase
+        .from("products")
+        .select("id, name, internal_sku, barcode, category_id, purchase_cost, retail_price, stock_units, min_stock_alert, batch_number, expiry_date, uom, units_per_uom, base_unit, description")
+        .eq("business_id", activeId)
+        .order("stock_units", { ascending: true });
+      data = res.data;
 
-    if (!data || data.length === 0 || active.is_staff) {
-      const synced = await fetchSyncedProducts(active.id, {
-        role: active.staff_role || "manager",
-        isStaff: Boolean(active.is_staff),
-        ownerUserId: active.owner_user_id,
-      });
-      if (synced && synced.length > 0) {
-        data = synced as any;
+      if (!data || data.length === 0 || isStaff) {
+        const synced = await fetchSyncedProducts(activeId, {
+          role: staffRole || "manager",
+          isStaff,
+          ownerUserId,
+        });
+        if (synced && synced.length > 0) {
+          data = synced as any;
+        }
       }
+      
+      const defaultThreshold = stockAlertLimit;
+      const low = (data ?? [])
+        .filter((p: any) => !isDemoProduct(p))
+        .filter((p: any) => isProductLowStock(p, defaultThreshold));
+      setRows(low as LowProduct[]);
+    } catch (err) {
+      console.warn("Failed to load low stock:", err);
+    } finally {
+      setLoading(false);
     }
-    
-    const defaultThreshold = active.stock_alert_limit ?? 10;
-    const low = (data ?? [])
-      .filter((p: any) => !isDemoProduct(p))
-      .filter((p: any) => isProductLowStock(p, defaultThreshold));
-    setRows(low as LowProduct[]);
-    setLoading(false);
-  }, [active]);
+  }, [activeId, isStaff, staffRole, ownerUserId, stockAlertLimit]);
 
   useEffect(() => {
     (async () => {
@@ -86,24 +97,26 @@ const UserLowStock = () => {
     })();
   }, []);
 
-  useEffect(() => { if (!bizLoading) load(); }, [bizLoading, load]);
+  useEffect(() => { if (!bizLoading && activeId) load(false); }, [bizLoading, activeId, load]);
 
   useEffect(() => {
-    if (!active) return;
-    const ch = supabase.channel(`lowstock-${active.id}-${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "products", filter: `business_id=eq.${active.id}` }, () => load())
+    if (!activeId) return;
+    const ch = supabase.channel(`lowstock-${activeId}-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "products", filter: `business_id=eq.${activeId}` }, () => load(true))
       .subscribe();
 
-    const onUpdate = () => load();
+    const onUpdate = () => load(true);
     window.addEventListener("geflow:products-updated", onUpdate);
     window.addEventListener("geflow:stock-updated", onUpdate);
+    window.addEventListener("panel:refresh", onUpdate);
 
     return () => {
       supabase.removeChannel(ch);
       window.removeEventListener("geflow:products-updated", onUpdate);
       window.removeEventListener("geflow:stock-updated", onUpdate);
+      window.removeEventListener("panel:refresh", onUpdate);
     };
-  }, [active, load]);
+  }, [activeId, load]);
 
   const filtered = rows.filter((r) =>
     r.name.toLowerCase().includes(search.toLowerCase()) ||

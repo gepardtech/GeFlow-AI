@@ -183,16 +183,17 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
       }
     }
 
-    // 2. Session check or token refresh when offline → unauthenticated Response rather than throwing
+    // 2. Token refresh or user verification on network error → report network failure (503), NEVER fake 401 unauthenticated
+    // Returning 401 triggers Gotrue to purge the local refresh token and permanently sign out the user.
     if (
       urlString.includes("/auth/v1/user") ||
       urlString.includes("grant_type=refresh_token") ||
       urlString.includes("/auth/v1/token")
     ) {
       return new Response(
-        JSON.stringify({ error: "unauthenticated", message: "User session expired or network unavailable" }),
+        JSON.stringify({ error: "network_error", message: "Network unavailable. Retrying background refresh..." }),
         {
-          status: 401,
+          status: 503,
           headers: { "Content-Type": "application/json" },
         }
       );

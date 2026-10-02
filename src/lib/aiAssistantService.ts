@@ -35,23 +35,28 @@ export function formatToProfessionalBullets(rawText: string): string {
   if (!rawText || !rawText.trim()) return "";
   const trimmed = rawText.trim();
 
-  // If already contains bullet characters or numbered lists, clean and return
-  const hasBullets = /^[•\-\*]\s|^\d+\.\s/m.test(trimmed);
-  if (hasBullets) {
-    return trimmed;
+  // If already contains bullet characters or numbered lists with newlines
+  const hasStructuredBullets = /(?:^|\n)\s*[-*•]\s+|(?:^|\n)\s*\d+\.\s+/m.test(trimmed);
+  if (hasStructuredBullets) {
+    // Ensure proper newlines before bullets so markdown renders a true list
+    return trimmed
+      .replace(/([^\n])\n([-*•]\s+)/g, "$1\n\n$2")
+      .replace(/([^\n])\n(\d+\.\s+)/g, "$1\n\n$2");
   }
 
-  // Split into paragraphs / sentences
+  // Split into paragraphs
   const paragraphs = trimmed.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-  if (paragraphs.length === 1 && paragraphs[0].length > 100) {
-    // Single long paragraph: break into professional executive bullets
-    const sentences = paragraphs[0]
+
+  // If single paragraph, split into sentences
+  if (paragraphs.length === 1) {
+    const singlePara = paragraphs[0];
+    const sentences = singlePara
       .split(/(?<=[.?!])\s+(?=[A-Z0-9#•\-])/)
       .map((s) => s.trim())
-      .filter(Boolean);
+      .filter((s) => s.length > 0);
 
     if (sentences.length <= 1) {
-      return `• **Key Insight**: ${paragraphs[0]}`;
+      return `### ⚡ Executive Summary\n\n• **Core Insight**: ${singlePara}`;
     }
 
     const title = sentences[0];
@@ -60,26 +65,34 @@ export function formatToProfessionalBullets(rawText: string): string {
       if (colonMatch) {
         return `• **${colonMatch[1].trim()}**: ${colonMatch[2].trim()}`;
       }
-      return `• ${s}`;
+      return `• **Detail**: ${s}`;
     });
 
     return [
-      `### ⚡ Executive Analysis`,
+      `### ⚡ Executive Analysis\n`,
       `**${title}**\n`,
       ...bulletItems,
     ].join("\n");
   }
 
-  if (paragraphs.length > 1) {
-    return paragraphs.map((p, idx) => {
-      if (idx === 0 && !p.startsWith("•") && p.length < 120) {
-        return `**${p}**\n`;
-      }
-      return `• ${p}`;
-    }).join("\n");
-  }
+  // Multi-paragraph text: convert paragraphs into distinct bullet points
+  const header = paragraphs[0].length < 90 && !paragraphs[0].includes(":")
+    ? `### ⚡ ${paragraphs[0]}\n\n`
+    : "";
+  
+  const startIdx = header ? 1 : 0;
+  const bulletItems = paragraphs.slice(startIdx).map((p) => {
+    if (p.startsWith("•") || p.startsWith("-") || p.startsWith("*")) {
+      return p;
+    }
+    const colonMatch = p.match(/^([^:]{3,30}):\s*(.*)$/);
+    if (colonMatch) {
+      return `• **${colonMatch[1].trim()}**: ${colonMatch[2].trim()}`;
+    }
+    return `• ${p}`;
+  });
 
-  return `• **Insight**: ${trimmed}`;
+  return `${header}${bulletItems.join("\n\n")}`;
 }
 
 export function isModeAllowedForPlan(mode: AIMode, planId: PlanId = "free"): boolean {

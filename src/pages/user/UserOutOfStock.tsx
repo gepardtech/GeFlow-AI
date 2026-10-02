@@ -43,34 +43,44 @@ const UserOutOfStock = () => {
   const maxItems = limitRaw === null ? 999999 : limitRaw;
   const catName = (id: string | null) => categories.find((c) => c.id === id)?.name ?? "General";
 
-  const load = useCallback(async () => {
-    if (!active) { setLoading(false); return; }
-    setLoading(true);
+  const activeId = active?.id;
+  const isStaff = Boolean(active?.is_staff);
+  const staffRole = active?.staff_role;
+  const ownerUserId = active?.owner_user_id;
+
+  const load = useCallback(async (isSilent = false) => {
+    if (!activeId) { setLoading(false); return; }
+    if (!isSilent) setLoading(true);
     let data: any[] | null = null;
 
-    const res = await supabase
-      .from("products")
-      .select("id, name, internal_sku, barcode, category_id, subcategory_id, description, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, status, images")
-      .eq("business_id", active.id)
-      .lte("stock_units", 0)
-      .order("name");
-    data = res.data;
+    try {
+      const res = await supabase
+        .from("products")
+        .select("id, name, internal_sku, barcode, category_id, subcategory_id, description, purchase_cost, retail_price, discount_price, stock_units, min_stock_alert, batch_number, expiry_date, status, images")
+        .eq("business_id", activeId)
+        .lte("stock_units", 0)
+        .order("name");
+      data = res.data;
 
-    if (!data || data.length === 0 || active.is_staff) {
-      const synced = await fetchSyncedProducts(active.id, {
-        role: active.staff_role || "manager",
-        isStaff: Boolean(active.is_staff),
-        ownerUserId: active.owner_user_id,
-      });
-      if (synced && synced.length > 0) {
-        data = (synced as any[]).filter((p) => Number(p.stock_units) <= 0);
+      if (!data || data.length === 0 || isStaff) {
+        const synced = await fetchSyncedProducts(activeId, {
+          role: staffRole || "manager",
+          isStaff,
+          ownerUserId,
+        });
+        if (synced && synced.length > 0) {
+          data = (synced as any[]).filter((p) => Number(p.stock_units) <= 0);
+        }
       }
-    }
 
-    const cleanRows = ((data as OOSProduct[]) ?? []).filter((p) => !isDemoProduct(p));
-    setRows(cleanRows);
-    setLoading(false);
-  }, [active]);
+      const cleanRows = ((data as OOSProduct[]) ?? []).filter((p) => !isDemoProduct(p));
+      setRows(cleanRows);
+    } catch (err) {
+      console.warn("Failed to load out of stock products:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeId, isStaff, staffRole, ownerUserId]);
 
   useEffect(() => {
     (async () => {
@@ -79,24 +89,26 @@ const UserOutOfStock = () => {
     })();
   }, []);
 
-  useEffect(() => { if (!bizLoading) load(); }, [bizLoading, load]);
+  useEffect(() => { if (!bizLoading && activeId) load(false); }, [bizLoading, activeId, load]);
 
   useEffect(() => {
-    if (!active) return;
-    const ch = supabase.channel(`oos-${active.id}-${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "products", filter: `business_id=eq.${active.id}` }, () => load())
+    if (!activeId) return;
+    const ch = supabase.channel(`oos-${activeId}-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "products", filter: `business_id=eq.${activeId}` }, () => load(true))
       .subscribe();
 
-    const onUpdate = () => load();
+    const onUpdate = () => load(true);
     window.addEventListener("geflow:products-updated", onUpdate);
     window.addEventListener("geflow:stock-updated", onUpdate);
+    window.addEventListener("panel:refresh", onUpdate);
 
     return () => {
       supabase.removeChannel(ch);
       window.removeEventListener("geflow:products-updated", onUpdate);
       window.removeEventListener("geflow:stock-updated", onUpdate);
+      window.removeEventListener("panel:refresh", onUpdate);
     };
-  }, [active, load]);
+  }, [activeId, load]);
 
   const filtered = rows.filter((r) =>
     r.name.toLowerCase().includes(search.toLowerCase()) ||

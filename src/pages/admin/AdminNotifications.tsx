@@ -5,10 +5,10 @@ import { fetchAllContactSubmissions, markLocalContactSubmissionRead } from "@/li
 import PanelLayout from "@/components/PanelLayout";
 import { ADMIN_NAV, ADMIN_IDENTITY } from "@/lib/panelNav";
 import {
-  Bell, Loader2, Mail, MailOpen, LifeBuoy, Megaphone, CheckCheck, Search, Filter,
+  Bell, Loader2, Mail, MailOpen, LifeBuoy, Megaphone, CheckCheck, Search, Filter, UserPlus, Store, Sparkles,
 } from "lucide-react";
 
-type Kind = "message" | "ticket" | "announcement";
+type Kind = "message" | "ticket" | "announcement" | "user" | "business" | "ai";
 interface Item {
   id: string; kind: Kind; title: string; description: string; createdAt: string; unread: boolean; to: string;
 }
@@ -17,6 +17,9 @@ const kindMeta: Record<Kind, { icon: typeof Bell; label: string; cls: string }> 
   message: { icon: Mail, label: "Contact", cls: "bg-sky-500/15 text-sky-500 border-sky-500/30" },
   ticket: { icon: LifeBuoy, label: "Support", cls: "bg-amber-500/15 text-amber-600 border-amber-500/30" },
   announcement: { icon: Megaphone, label: "Announcement", cls: "bg-violet-500/15 text-violet-500 border-violet-500/30" },
+  user: { icon: UserPlus, label: "User Account", cls: "bg-emerald-500/15 text-emerald-600 border-emerald-500/30" },
+  business: { icon: Store, label: "Store", cls: "bg-blue-500/15 text-blue-600 border-blue-500/30" },
+  ai: { icon: Sparkles, label: "AI Usage", cls: "bg-purple-500/15 text-purple-600 border-purple-500/30" },
 };
 
 const AdminNotifications = () => {
@@ -27,13 +30,42 @@ const AdminNotifications = () => {
   const [onlyUnread, setOnlyUnread] = useState(false);
 
   const load = useCallback(async () => {
-    const [msgs, tickets, anns] = await Promise.all([
+    const [msgs, tickets, anns, apiNotifs] = await Promise.all([
       fetchAllContactSubmissions(),
       supabase.from("support_tickets").select("id, ticket_number, subject, status, priority, created_at").order("created_at", { ascending: false }).limit(50),
       supabase.from("announcements").select("id, title, body, audience, created_at").order("created_at", { ascending: false }).limit(30),
+      fetch("/api/admin/notifications").then((r) => r.json()).catch(() => null),
     ]);
 
-    const rows: Item[] = [
+    const liveApiItems: Item[] = (apiNotifs?.success && Array.isArray(apiNotifs.notifications) ? apiNotifs.notifications : []).map((n: any) => {
+      let kind: Kind = "message";
+      let to = "/admin";
+      if (n.type === "user_signup" || n.type === "user_login") {
+        kind = "user";
+        to = "/admin/users";
+      } else if (n.type === "business_registered") {
+        kind = "business";
+        to = "/admin/businesses";
+      } else if (n.type === "ai_usage") {
+        kind = "ai";
+        to = "/admin/logs";
+      } else if (n.type === "support_message") {
+        kind = "message";
+        to = "/admin/support";
+      }
+
+      return {
+        id: n.id,
+        kind,
+        title: n.title,
+        description: n.description,
+        createdAt: n.createdAt,
+        unread: Boolean(n.unread),
+        to,
+      };
+    });
+
+    const dbItems: Item[] = [
       ...(msgs ?? []).map((d: any) => ({
         id: `msg-${d.id}`, kind: "message" as Kind,
         title: `New message from ${d.name}`,
@@ -50,15 +82,29 @@ const AdminNotifications = () => {
         id: `ann-${a.id}`, kind: "announcement" as Kind,
         title: a.title, description: a.body, createdAt: a.created_at, unread: false, to: "/admin/settings",
       })),
-    ].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+    ];
 
-    setItems(rows);
+    // Merge and deduplicate by id
+    const seen = new Set<string>();
+    const merged: Item[] = [];
+    [...liveApiItems, ...dbItems].forEach((item) => {
+      if (!seen.has(item.id)) {
+        seen.add(item.id);
+        merged.push(item);
+      }
+    });
+
+    merged.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+
+    setItems(merged);
     setLoading(false);
   }, []);
 
   useEffect(() => {
     load();
     const onSubChange = () => load();
+    window.addEventListener("panel:refresh", onSubChange);
+    window.addEventListener("geflow:data-refresh", onSubChange);
     window.addEventListener("geflow:contact-submission-added", onSubChange);
     window.addEventListener("geflow:contact-submission-updated", onSubChange);
     window.addEventListener("geflow:contact-submission-deleted", onSubChange);
@@ -68,6 +114,8 @@ const AdminNotifications = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, load)
       .subscribe();
     return () => {
+      window.removeEventListener("panel:refresh", onSubChange);
+      window.removeEventListener("geflow:data-refresh", onSubChange);
       window.removeEventListener("geflow:contact-submission-added", onSubChange);
       window.removeEventListener("geflow:contact-submission-updated", onSubChange);
       window.removeEventListener("geflow:contact-submission-deleted", onSubChange);

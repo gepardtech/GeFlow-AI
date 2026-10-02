@@ -82,6 +82,61 @@ const AdminBillingInvoices = () => {
 
   const [form, setForm] = useState(blank());
   const [busy, setBusy] = useState(false);
+  const [pricingPlans, setPricingPlans] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch("/api/admin/pricing-plans")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && Array.isArray(d.plans)) {
+          setPricingPlans(d.plans);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const planOptions = useMemo(() => {
+    const list: { key: string; label: string; basePrice: number; cycle: string; planKey: string }[] = [];
+    
+    // Free
+    list.push({ key: "free", label: "Free Plan", basePrice: 0, cycle: "forever", planKey: "free" });
+
+    // Standard
+    const std = pricingPlans.find((p) => p.plan_key === "standard");
+    const stdMonthly = Number(std?.monthly_price ?? 9.99);
+    const stdYearly = Number(std?.yearly_price ?? 49.99);
+    const stdLifetime = Number(std?.lifetime_price ?? 199.99);
+    list.push({ key: "standard_monthly", label: "Standard Monthly", basePrice: stdMonthly, cycle: "monthly", planKey: "standard" });
+    list.push({ key: "standard_yearly", label: "Standard Yearly", basePrice: stdYearly, cycle: "yearly", planKey: "standard" });
+    list.push({ key: "standard_lifetime", label: "Standard Lifetime", basePrice: stdLifetime, cycle: "lifetime", planKey: "standard" });
+
+    // Premium
+    const prem = pricingPlans.find((p) => p.plan_key === "premium");
+    const premMonthly = Number(prem?.monthly_price ?? 19.99);
+    const premYearly = Number(prem?.yearly_price ?? 99.99);
+    const premLifetime = Number(prem?.lifetime_price ?? 349.99);
+    list.push({ key: "premium_monthly", label: "Premium Monthly", basePrice: premMonthly, cycle: "monthly", planKey: "premium" });
+    list.push({ key: "premium_yearly", label: "Premium Yearly", basePrice: premYearly, cycle: "yearly", planKey: "premium" });
+    list.push({ key: "premium_lifetime", label: "Premium Lifetime", basePrice: premLifetime, cycle: "lifetime", planKey: "premium" });
+
+    return list;
+  }, [pricingPlans]);
+
+  const handlePlanSelect = (selectedKey: string) => {
+    const found = planOptions.find((o) => o.key === selectedKey || o.label.toLowerCase() === selectedKey.toLowerCase());
+    if (found) {
+      const taxRate = Number(settings?.tax_percentage ?? settings?.default_tax ?? 0);
+      const tax = found.basePrice * (taxRate / 100);
+      const total = Number((found.basePrice + tax).toFixed(2));
+      setForm((f) => ({
+        ...f,
+        plan: found.label,
+        amount: total,
+      }));
+    } else {
+      setForm((f) => ({ ...f, plan: selectedKey }));
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -109,7 +164,14 @@ const AdminBillingInvoices = () => {
   useEffect(() => {
     load();
     const ch = supabase.channel(`admin_inv_rt_${Math.random().toString(36).slice(2)}`).on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, load).subscribe();
-    return () => { supabase.removeChannel(ch); };
+    const onRefresh = () => load();
+    window.addEventListener("panel:refresh", onRefresh);
+    window.addEventListener("geflow:data-refresh", onRefresh);
+    return () => {
+      supabase.removeChannel(ch);
+      window.removeEventListener("panel:refresh", onRefresh);
+      window.removeEventListener("geflow:data-refresh", onRefresh);
+    };
   }, [load]);
 
   const filtered = useMemo(() => {
@@ -274,10 +336,14 @@ const AdminBillingInvoices = () => {
               <Field label="BILLING EMAIL"><input value={form.billing_email} onChange={(e) => setForm((f) => ({ ...f, billing_email: e.target.value }))} className="h-10 w-full px-3 bg-muted/40 rounded-lg text-sm" /></Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="SUBSCRIPTION PLAN">
-                  <Select value={form.plan} onValueChange={(v) => setForm((f) => ({ ...f, plan: v }))}>
-                    <SelectTrigger className="h-10 bg-muted/40 border-0"><SelectValue /></SelectTrigger>
+                  <Select value={form.plan} onValueChange={handlePlanSelect}>
+                    <SelectTrigger className="h-10 bg-muted/40 border-0"><SelectValue placeholder="Select plan..." /></SelectTrigger>
                     <SelectContent>
-                      {["free","standard","premium","lifetime"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                      {planOptions.map((opt) => (
+                        <SelectItem key={opt.key} value={opt.key}>
+                          {opt.label} (${opt.basePrice.toFixed(2)})
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </Field>

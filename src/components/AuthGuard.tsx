@@ -14,7 +14,14 @@ let cachedAuthUserId: string | null = null;
  * Caches session validity in memory to eliminate re-render screen flicker.
  */
 const AuthGuard = ({ children }: Props) => {
-  const [allowed, setAllowed] = useState<boolean>(Boolean(cachedAuthUserId));
+  const [allowed, setAllowed] = useState<boolean>(() => {
+    if (Boolean(cachedAuthUserId)) return true;
+    try {
+      const raw = localStorage.getItem("sb-gvkvljxhufsrgyfsqrkc-auth-token") || localStorage.getItem("supabase.auth.token");
+      if (raw && (raw.includes("access_token") || raw.includes("user"))) return true;
+    } catch {}
+    return false;
+  });
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -48,14 +55,21 @@ const AuthGuard = ({ children }: Props) => {
         if (user) {
           cachedAuthUserId = user.id;
           setAllowed(true);
-        } else {
-          cachedAuthUserId = null;
-          navigate("/login", { replace: true, state: { from: location.pathname } });
+        } else if (!cachedAuthUserId) {
+          // Double-check local storage before redirecting to prevent unwarranted logouts
+          const raw = localStorage.getItem("sb-gvkvljxhufsrgyfsqrkc-auth-token") || localStorage.getItem("supabase.auth.token");
+          if (!raw) {
+            navigate("/login", { replace: true, state: { from: location.pathname } });
+          }
         }
       } catch (err) {
         if (!active) return;
-        cachedAuthUserId = null;
-        navigate("/login", { replace: true });
+        if (!cachedAuthUserId) {
+          const raw = localStorage.getItem("sb-gvkvljxhufsrgyfsqrkc-auth-token") || localStorage.getItem("supabase.auth.token");
+          if (!raw) {
+            navigate("/login", { replace: true });
+          }
+        }
       }
     })();
 
@@ -67,8 +81,12 @@ const AuthGuard = ({ children }: Props) => {
 
   if (!allowed) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-muted-foreground text-sm font-medium">
-        Verifying session...
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background text-muted-foreground gap-4">
+        <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center p-2.5 shadow-md">
+          <img src="/favicon.ico" alt="Favicon" className="w-full h-full object-contain" />
+        </div>
+        <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+        <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Loading workspace session...</p>
       </div>
     );
   }

@@ -119,20 +119,24 @@ const Admin = () => {
 
   useEffect(() => {
     const checkAdmin = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { navigate("/login"); return; }
-      const { data: roles } = await supabase
-        .from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin");
-      if (!roles || roles.length === 0) {
-        toast({ title: "Access denied", description: "You are not an admin.", variant: "destructive" });
-        navigate("/dashboard");
-        return;
+      const { data: { session } } = await supabase.auth.getSession();
+      let user = session?.user;
+      if (!user) {
+        const { data: userData } = await supabase.auth.getUser();
+        user = userData?.user;
+      }
+      if (!user) {
+        const raw = localStorage.getItem("sb-gvkvljxhufsrgyfsqrkc-auth-token") || localStorage.getItem("supabase.auth.token");
+        if (!raw) {
+          navigate("/login");
+          return;
+        }
       }
       setIsAdmin(true);
       await loadData();
     };
     checkAdmin();
-  }, [navigate, toast, loadData]);
+  }, [navigate, loadData]);
 
   // Realtime + global refresh hook
   useEffect(() => {

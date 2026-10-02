@@ -95,15 +95,21 @@ const SetupBusiness = () => {
 
   useEffect(() => {
     (async () => {
-      const {
-        data: { user: u },
-      } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      let u = session?.user;
       if (!u) {
-        navigate("/login");
-        return;
+        const res = await supabase.auth.getUser();
+        u = res.data?.user;
+      }
+      if (!u) {
+        const raw = localStorage.getItem("sb-gvkvljxhufsrgyfsqrkc-auth-token") || localStorage.getItem("supabase.auth.token");
+        if (!raw) {
+          navigate("/login");
+          return;
+        }
       }
 
-      setEmail(u.email ?? null);
+      setEmail(u?.email ?? null);
 
       const [{ data: cats }, { count }] = await Promise.all([
         supabase

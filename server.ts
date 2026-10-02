@@ -788,6 +788,33 @@ app.post("/api/team/update-status", (req: Request, res: Response) => {
   }
 });
 
+// Activity Event Hub for System Notifications
+export interface ActivityEvent {
+  id: string;
+  type: "user_signup" | "user_login" | "ai_usage" | "business_registered" | "invoice_created" | "support_message" | "system";
+  title: string;
+  description: string;
+  createdAt: string;
+  unread: boolean;
+  userId?: string;
+  businessId?: string;
+}
+
+const systemActivityEvents: ActivityEvent[] = [];
+
+export function recordSystemActivity(event: Omit<ActivityEvent, "id" | "createdAt" | "unread">) {
+  const fullEvent: ActivityEvent = {
+    id: `act_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    createdAt: new Date().toISOString(),
+    unread: true,
+    ...event,
+  };
+  systemActivityEvents.unshift(fullEvent);
+  if (systemActivityEvents.length > 200) {
+    systemActivityEvents.length = 200;
+  }
+}
+
 // User Notifications (Invitations & In-app Alerts)
 app.get("/api/team/notifications", (req: Request, res: Response) => {
   try {
@@ -795,6 +822,148 @@ app.get("/api/team/notifications", (req: Request, res: Response) => {
     const userId = req.query.userId as string | undefined;
     const notifications = teamService.getNotifications(email, userId);
     res.json({ success: true, notifications });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Admin Notifications Hub (Signups, Logins, AI usage, Businesses, Support)
+app.get("/api/admin/notifications", async (_req: Request, res: Response) => {
+  try {
+    const notifs: any[] = [];
+
+    // 1. Live recorded activity events (signups, logins, ai usages, business creations, invoices)
+    systemActivityEvents.forEach((ev) => {
+      notifs.push({
+        id: ev.id,
+        title: ev.title,
+        description: ev.description,
+        createdAt: ev.createdAt,
+        unread: ev.unread,
+        type: ev.type,
+      });
+    });
+
+    // 2. Real contact submissions
+    const { data: contacts } = await serverSupabase
+      .from("contact_submissions")
+      .select("id, name, email, subject, message, created_at, is_read")
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    (contacts || []).forEach((c) => {
+      if (!notifs.some((n) => n.id === c.id)) {
+        notifs.push({
+          id: c.id,
+          title: `Support: ${c.name}`,
+          description: c.message?.slice(0, 100) || c.subject || "New contact message",
+          createdAt: c.created_at,
+          unread: !c.is_read,
+          type: "support_message",
+        });
+      }
+    });
+
+    // 3. Real user signups from profiles
+    const { data: recentProfiles } = await serverSupabase
+      .from("profiles")
+      .select("user_id, full_name, email, plan, created_at")
+      .order("created_at", { ascending: false })
+      .limit(8);
+
+    (recentProfiles || []).forEach((p) => {
+      const pid = `signup-${p.user_id}`;
+      if (!notifs.some((n) => n.id === pid)) {
+        notifs.push({
+          id: pid,
+          title: `New User: ${p.full_name || p.email?.split("@")[0] || "User"}`,
+          description: `Registered with ${p.email} (${p.plan || "free"} plan)`,
+          createdAt: p.created_at,
+          unread: true,
+          type: "user_signup",
+        });
+      }
+    });
+
+    // 4. Real registered businesses
+    const { data: recentBusinesses } = await serverSupabase
+      .from("businesses")
+      .select("id, business_name, business_address, currency, created_at")
+      .order("created_at", { ascending: false })
+      .limit(8);
+
+    (recentBusinesses || []).forEach((b) => {
+      const bid = `biz-${b.id}`;
+      if (!notifs.some((n) => n.id === bid)) {
+        notifs.push({
+          id: bid,
+          title: `Store Registered: ${b.business_name}`,
+          description: `New store configured in ${b.currency || "USD"}.`,
+          createdAt: b.created_at,
+          unread: true,
+          type: "business_registered",
+        });
+      }
+    });
+
+    // Sort by createdAt desc
+    notifs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.json({ success: true, notifications: notifs.slice(0, 30) });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// User Notifications (user-specific activity, invites, announcements)
+app.get("/api/user/notifications", async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.userId as string | undefined;
+    const email = req.query.email as string | undefined;
+    const notifs: any[] = [];
+
+    // Invitations
+    if (email || userId) {
+      const invites = teamService.getNotifications(email, userId);
+      (invites || []).forEach((inv: any) => notifs.push(inv));
+    }
+
+    // User's own activity (logins, store registrations, AI usage)
+    if (userId) {
+      systemActivityEvents
+        .filter((ev) => ev.userId === userId)
+        .forEach((ev) => {
+          notifs.push({
+            id: ev.id,
+            title: ev.title,
+            description: ev.description,
+            createdAt: ev.createdAt,
+            unread: ev.unread,
+            type: ev.type,
+          });
+        });
+    }
+
+    // Announcements
+    const { data: anns } = await serverSupabase
+      .from("announcements")
+      .select("id, title, body, created_at")
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    (anns || []).forEach((a) => {
+      notifs.push({
+        id: `ann-${a.id}`,
+        title: a.title,
+        description: a.body?.slice(0, 90) || "",
+        createdAt: a.created_at,
+        unread: false,
+        type: "announcement",
+      });
+    });
+
+    notifs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.json({ success: true, notifications: notifs.slice(0, 25) });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1517,12 +1686,25 @@ app.post("/api/auth/register", async (req: Request, res: Response) => {
     });
 
     if (loginErr || !loginData.session) {
+      recordSystemActivity({
+        type: "user_signup",
+        title: `New User: ${cleanName}`,
+        description: `${cleanEmail} registered an account (${targetPlan} plan)`,
+        userId: targetUserId,
+      });
       return res.json({
         success: true,
         message: "Account registered successfully. Please log in.",
         userId: targetUserId,
       });
     }
+
+    recordSystemActivity({
+      type: "user_signup",
+      title: `New User: ${cleanName}`,
+      description: `${cleanEmail} registered an account (${targetPlan} plan)`,
+      userId: targetUserId,
+    });
 
     return res.json({
       success: true,
@@ -1582,6 +1764,12 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
     }
 
     if (!srvRes.error && srvRes.data?.session) {
+      recordSystemActivity({
+        type: "user_login",
+        title: `User Login: ${srvRes.data.user.email?.split("@")[0] || "User"}`,
+        description: `${cleanEmail} signed into workspace`,
+        userId: srvRes.data.user.id,
+      });
       return res.json({
         success: true,
         session: srvRes.data.session,
@@ -1596,6 +1784,12 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
     });
 
     if (!bgRes.error && bgRes.data?.session) {
+      recordSystemActivity({
+        type: "user_login",
+        title: `User Login: ${bgRes.data.user.email?.split("@")[0] || "User"}`,
+        description: `${cleanEmail} signed into workspace`,
+        userId: bgRes.data.user.id,
+      });
       return res.json({
         success: true,
         session: bgRes.data.session,
@@ -1967,7 +2161,17 @@ app.post("/api/user/businesses/create", async (req: Request, res: Response) => {
     if (srvInsert.error) {
       console.warn("serverSupabase business insert error:", srvInsert.error.message);
     }
-    await bgSupabase.from("businesses").insert(bizRow).catch(() => {});
+    try {
+      await bgSupabase.from("businesses").insert(bizRow);
+    } catch {}
+
+    recordSystemActivity({
+      type: "business_registered",
+      title: `Store Created: ${bizRow.business_name}`,
+      description: `${user.email} registered new store "${bizRow.business_name}" (${bizRow.currency})`,
+      userId: user.id,
+      businessId: bizRow.id,
+    });
 
     const returnedBiz = srvInsert.data || bizRow;
     res.json({ success: true, business: returnedBiz });
@@ -2035,7 +2239,11 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
 
       const tasks: Promise<any>[] = [
         serverSupabase.from("profiles").update(profileUpdates).or(`user_id.eq.${user_id},id.eq.${user_id}`),
-        bgSupabase.from("profiles").update(profileUpdates).or(`user_id.eq.${user_id},id.eq.${user_id}`).then(() => {}).catch(() => {}),
+        (async () => {
+          try {
+            await bgSupabase.from("profiles").update(profileUpdates).or(`user_id.eq.${user_id},id.eq.${user_id}`);
+          } catch {}
+        })(),
       ];
 
       if (Object.keys(metadataUpdates).length > 0 && authUserId) {
@@ -2047,10 +2255,10 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
         metadataUpdates.role = cleanRole;
         tasks.push(
           (async () => {
-            await serverSupabase.from("user_roles").delete().or(`user_id.eq.${authUserId},user_id.eq.${user_id}`).then(() => {}).catch(() => {});
-            await serverSupabase.from("user_roles").insert({ user_id: authUserId, role: cleanRole }).then(() => {}).catch(() => {});
-            await bgSupabase.from("user_roles").delete().or(`user_id.eq.${authUserId},user_id.eq.${user_id}`).then(() => {}).catch(() => {});
-            await bgSupabase.from("user_roles").insert({ user_id: authUserId, role: cleanRole }).then(() => {}).catch(() => {});
+            try { await serverSupabase.from("user_roles").delete().or(`user_id.eq.${authUserId},user_id.eq.${user_id}`); } catch {}
+            try { await serverSupabase.from("user_roles").insert({ user_id: authUserId, role: cleanRole }); } catch {}
+            try { await bgSupabase.from("user_roles").delete().or(`user_id.eq.${authUserId},user_id.eq.${user_id}`); } catch {}
+            try { await bgSupabase.from("user_roles").insert({ user_id: authUserId, role: cleanRole }); } catch {}
           })()
         );
       }
@@ -2093,7 +2301,11 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
 
       await Promise.allSettled([
         serverSupabase.from("profiles").update({ plan: cleanPlan, updated_at: new Date().toISOString() }).or(`user_id.eq.${user_id},id.eq.${user_id}`),
-        bgSupabase.from("profiles").update({ plan: cleanPlan, updated_at: new Date().toISOString() }).or(`user_id.eq.${user_id},id.eq.${user_id}`).then(() => {}).catch(() => {}),
+        (async () => {
+          try {
+            await bgSupabase.from("profiles").update({ plan: cleanPlan, updated_at: new Date().toISOString() }).or(`user_id.eq.${user_id},id.eq.${user_id}`);
+          } catch {}
+        })(),
         (async () => {
           await serverSupabase.from("subscriptions").update({ status: "superseded" }).eq("owner_user_id", authUserId).eq("status", "active").then(() => {}).catch(() => {});
           await serverSupabase.from("subscriptions").insert({
@@ -2120,8 +2332,8 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
         (async () => {
           await serverSupabase.from("user_roles").delete().eq("user_id", user_id);
           await serverSupabase.from("user_roles").insert({ user_id, role: cleanRole });
-          await bgSupabase.from("user_roles").delete().eq("user_id", user_id).catch(() => {});
-          await bgSupabase.from("user_roles").insert({ user_id, role: cleanRole }).catch(() => {});
+          try { await bgSupabase.from("user_roles").delete().eq("user_id", user_id); } catch {}
+          try { await bgSupabase.from("user_roles").insert({ user_id, role: cleanRole }); } catch {}
         })(),
         serverSupabase.auth.admin.updateUserById(user_id, {
           user_metadata: { role: cleanRole }
@@ -2696,7 +2908,9 @@ app.post("/api/admin/settings", async (req: Request, res: Response) => {
     }
 
     // Mirror to secondary database
-    await bgSupabase.from("platform_settings").update(cleanPayload).eq("singleton", true).catch(() => {});
+    try {
+      await bgSupabase.from("platform_settings").update(cleanPayload).eq("singleton", true);
+    } catch {}
 
     // 2. Also mirror to public_settings
     const ALLOWED_PUBLIC_COLS = new Set([
@@ -3127,6 +3341,7 @@ app.get("/api/admin/pricing-plans", async (_req: Request, res: Response) => {
 
     const alerts = (setRow?.alerts && typeof setRow.alerts === "object" ? setRow.alerts : {}) as any;
     const lifetimeLimits = alerts.lifetime_plan_limits || { standard: 25, premium: 25 };
+    const lifetimeCustomizations = alerts.lifetime_customizations || {};
 
     const subs = subData || [];
     const counts = {
@@ -3139,7 +3354,56 @@ app.get("/api/admin/pricing-plans", async (_req: Request, res: Response) => {
       plans: data || [],
       lifetime_plan_limits: lifetimeLimits,
       lifetime_offer_counts: counts,
+      lifetime_customizations: lifetimeCustomizations,
     });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/admin/pricing-plans/lifetime-customizations", async (req: Request, res: Response) => {
+  try {
+    const { plan_key, badge_text, badge_position, is_popular, lifetime_price, features } = req.body || {};
+    if (!plan_key) return res.status(400).json({ success: false, error: "plan_key is required" });
+    const cleanKey = plan_key.toLowerCase().trim();
+
+    // 1. If lifetime_price is provided, update pricing_plans table
+    if (lifetime_price !== undefined) {
+      await serverSupabase.from("pricing_plans").update({
+        lifetime_price: Number(lifetime_price) || 0,
+        updated_at: new Date().toISOString()
+      }).eq("plan_key", cleanKey);
+      try {
+        await bgSupabase.from("pricing_plans").update({
+          lifetime_price: Number(lifetime_price) || 0,
+          updated_at: new Date().toISOString()
+        }).eq("plan_key", cleanKey);
+      } catch {}
+    }
+
+    // 2. Save lifetime-specific badge, popular status, and features into platform_settings alerts
+    const { data: row } = await serverSupabase.from("platform_settings").select("id, alerts").limit(1).maybeSingle();
+    const alerts = row?.alerts && typeof row.alerts === "object" ? (row.alerts as any) : {};
+    const customs = alerts.lifetime_customizations || {};
+    customs[cleanKey] = {
+      badge_text: badge_text !== undefined ? (badge_text?.trim() || null) : (customs[cleanKey]?.badge_text || null),
+      badge_position: badge_position || customs[cleanKey]?.badge_position || "top",
+      is_popular: is_popular !== undefined ? Boolean(is_popular) : Boolean(customs[cleanKey]?.is_popular),
+      lifetime_price: lifetime_price !== undefined ? Number(lifetime_price) : customs[cleanKey]?.lifetime_price,
+      features: Array.isArray(features) ? features : (typeof features === "string" ? features.split("\n").map((s: string) => s.trim()).filter(Boolean) : customs[cleanKey]?.features),
+    };
+    alerts.lifetime_customizations = customs;
+
+    if (row?.id) {
+      await serverSupabase.from("platform_settings").update({ alerts, updated_at: new Date().toISOString() }).eq("id", row.id);
+    } else {
+      await serverSupabase.from("platform_settings").update({ alerts, updated_at: new Date().toISOString() }).eq("singleton", true);
+    }
+    try {
+      await bgSupabase.from("platform_settings").update({ alerts, updated_at: new Date().toISOString() }).eq("singleton", true);
+    } catch {}
+
+    return res.json({ success: true, lifetime_customizations: customs });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -3197,12 +3461,16 @@ app.post("/api/admin/pricing-plans", async (req: Request, res: Response) => {
     if (id) {
       const { data, error } = await serverSupabase.from("pricing_plans").update(payload).eq("id", id).select().maybeSingle();
       if (error) return res.status(500).json({ success: false, error: error.message });
-      await bgSupabase.from("pricing_plans").update(payload).eq("id", id).catch(() => {});
+      try {
+        await bgSupabase.from("pricing_plans").update(payload).eq("id", id);
+      } catch {}
       savedPlan = data;
     } else {
       const { data, error } = await serverSupabase.from("pricing_plans").insert(payload).select().maybeSingle();
       if (error) return res.status(500).json({ success: false, error: error.message });
-      await bgSupabase.from("pricing_plans").insert(payload).catch(() => {});
+      try {
+        await bgSupabase.from("pricing_plans").insert(payload);
+      } catch {}
       savedPlan = data;
     }
     return res.json({ success: true, plan: savedPlan });
@@ -3841,7 +4109,9 @@ app.get("/api/admin/feature-modules", async (_req: Request, res: Response) => {
         updated_at: new Date().toISOString(),
       }));
 
-      await serverSupabase.from("feature_modules").insert(inserts).catch(() => {});
+      try {
+        await serverSupabase.from("feature_modules").insert(inserts);
+      } catch {}
       const refreshed = await serverSupabase.from("feature_modules").select("*").order("created_at", { ascending: true });
       data = refreshed.data || data;
     }
@@ -4010,6 +4280,13 @@ app.post("/api/ai/assistant", async (req: Request, res: Response) => {
 
     const lastUserMessage = messages[messages.length - 1]?.content || "";
     const lowerQuery = lastUserMessage.toLowerCase();
+
+    recordSystemActivity({
+      type: "ai_usage",
+      title: "Maryam AI Query",
+      description: `Analysis performed in ${mode || "store"} workspace`,
+      businessId,
+    });
 
     const client = getGeminiClient();
     if (client) {

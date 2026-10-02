@@ -103,17 +103,25 @@ async function fetchBusinessData(force = false): Promise<void> {
   fetchPromise = (async () => {
     try {
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
+      let user = session?.user;
 
       if (!user) {
-        store.owned = [];
-        store.staff = [];
-        store.activeId = null;
-        store.loading = false;
-        store.hasLoaded = true;
-        store.currentUserId = null;
-        notifyListeners();
+        const { data: userData } = await supabase.auth.getUser();
+        user = userData?.user;
+      }
+
+      if (!user) {
+        // Only clear store if we were never logged in
+        if (!store.currentUserId) {
+          store.owned = [];
+          store.staff = [];
+          store.activeId = null;
+          store.loading = false;
+          store.hasLoaded = true;
+          notifyListeners();
+        }
         return;
       }
 

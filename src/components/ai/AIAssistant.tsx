@@ -34,6 +34,7 @@ import {
   BusinessAnalyticsContext,
   isModeAllowedForPlan,
   getRequiredPlanForMode,
+  formatToProfessionalBullets,
 } from "@/lib/aiAssistantService";
 
 interface ModeMeta {
@@ -275,9 +276,11 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
           replyText = generateLocalBusinessAnalysis(content, mode, currentCtx, planId);
         }
 
+        const formattedReply = formatToProfessionalBullets(replyText);
+
         const assistantMsg: AIChatMessage = {
           role: "assistant",
-          content: replyText,
+          content: formattedReply,
           timestamp: new Date().toISOString(),
           meta: {
             language: detectQueryLanguage(content),

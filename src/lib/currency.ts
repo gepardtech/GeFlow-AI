@@ -139,8 +139,15 @@ const emit = () => subs.forEach((fn) => fn());
 
 const loadBusinessMoney = async () => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { cache = { currency: null, baseCurrency: null, taxRate: null }; emit(); return; }
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user) {
+      if (cache.currency !== null || cache.baseCurrency !== null || cache.taxRate !== null) {
+        cache = { currency: null, baseCurrency: null, taxRate: null };
+        emit();
+      }
+      return;
+    }
     
     const userMeta = user.user_metadata || {};
     const userCurrency = userMeta.user_currency || null;
@@ -154,6 +161,8 @@ const loadBusinessMoney = async () => {
     const rows = data ?? [];
     const saved = localStorage.getItem(LS_KEY);
     const row = rows.find((r: any) => r.id === saved) ?? rows[0];
+
+    let nextCache: BizMoney;
 
     if (row) {
       let catCurrency: string | null = null;
@@ -176,23 +185,31 @@ const loadBusinessMoney = async () => {
         ? Number((row as any).default_tax)
         : (userTax !== null ? userTax : (catTax !== null ? catTax : 0));
 
-      cache = {
+      nextCache = {
         currency: effectiveCurrency,
         baseCurrency: effectiveBaseCurrency,
         taxRate: effectiveTax,
       };
     } else {
       const fallbackCur = userCurrency || "USD";
-      cache = {
+      nextCache = {
         currency: fallbackCur,
         baseCurrency: fallbackCur,
         taxRate: userTax ?? 0,
       };
     }
+
+    if (
+      cache.currency !== nextCache.currency ||
+      cache.baseCurrency !== nextCache.baseCurrency ||
+      cache.taxRate !== nextCache.taxRate
+    ) {
+      cache = nextCache;
+      emit();
+    }
   } catch (err) {
     console.warn("Failed to load business currency:", err);
   }
-  emit();
 };
 
 const startBusinessMoney = () => {
@@ -202,14 +219,13 @@ const startBusinessMoney = () => {
   window.addEventListener("geflow:business-changed", loadBusinessMoney);
   window.addEventListener("geflow:business-updated", loadBusinessMoney);
   window.addEventListener("geflow:currency-changed", loadBusinessMoney);
+  window.addEventListener("panel:refresh", loadBusinessMoney);
   supabase.auth.onAuthStateChange(() => loadBusinessMoney());
   supabase
     .channel(`business_currency_rt_${Math.random().toString(36).slice(2)}`)
     .on("postgres_changes", { event: "*", schema: "public", table: "businesses" }, () => loadBusinessMoney())
     .on("postgres_changes", { event: "*", schema: "public", table: "business_categories" }, () => loadBusinessMoney())
     .subscribe();
-  // Safety net so a change is never more than a few seconds stale.
-  setInterval(loadBusinessMoney, 15000);
 };
 
 export const refreshBusinessMoney = async () => {
@@ -221,9 +237,8 @@ export const useBusinessMoney = (): BizMoney => {
   const [state, setState] = useState<BizMoney>(cache);
   useEffect(() => {
     startBusinessMoney();
-    const fn = () => setState({ ...cache });
+    const fn = () => setState(cache);
     subs.add(fn);
-    fn();
     return () => { subs.delete(fn); };
   }, []);
   return state;

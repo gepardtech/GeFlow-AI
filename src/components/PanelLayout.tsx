@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect, useCallback } from "react";
+import { ReactNode, useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllContactSubmissions } from "@/lib/contactService";
@@ -6,7 +6,7 @@ import {
   Bell, ChevronLeft, ChevronDown, LogOut, RefreshCw, Search, Sun, Moon,
   Settings, LifeBuoy, LogIn, Lock, Menu, Sparkles, LucideIcon,
   Building2, Briefcase, Check, ChevronsUpDown, Store, UserCheck, Plus,
-  UserPlus, CheckCircle2, X
+  UserPlus, CheckCircle2, X, Megaphone
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useToast } from "@/hooks/use-toast";
@@ -122,6 +122,18 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
 
   const fetchNotifications = useCallback(async () => {
     if (isPathAdmin) {
+      try {
+        const res = await fetch("/api/admin/notifications");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.notifications) && json.notifications.length > 0) {
+            setNotifications(json.notifications);
+            return;
+          }
+        }
+      } catch {
+        /* fallback */
+      }
       const data = await fetchAllContactSubmissions();
       setNotifications(
         (data ?? []).slice(0, 8).map((d: any) => ({
@@ -136,6 +148,19 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
       const { data } = await supabase.auth.getUser();
       const user = data.user;
       if (user) {
+        try {
+          const res = await fetch(`/api/user/notifications?email=${encodeURIComponent(user.email || "")}&userId=${user.id}`);
+          if (res.ok) {
+            const json = await res.json();
+            if (json.success && Array.isArray(json.notifications) && json.notifications.length > 0) {
+              setNotifications(json.notifications);
+              return;
+            }
+          }
+        } catch {
+          /* fallback */
+        }
+
         const notifList: Notification[] = [];
 
         // 1. Fetch pending invitations with real business names
@@ -316,12 +341,15 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
     };
   }, [isPathAdmin, fetchNotifications]);
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    fetchNotifications();
+    await fetchNotifications();
     window.dispatchEvent(new CustomEvent("panel:refresh"));
-    toast({ title: "Refreshed", description: "Latest data loaded." });
-    setTimeout(() => setRefreshing(false), 700);
+    window.dispatchEvent(new CustomEvent("geflow:data-refresh"));
+    window.dispatchEvent(new CustomEvent("geflow:products-updated"));
+    window.dispatchEvent(new CustomEvent("geflow:business-updated"));
+    toast({ title: "Refreshed", description: "Workspace data and notifications refreshed." });
+    setTimeout(() => setRefreshing(false), 600);
   };
 
   const unreadCount = notifications.filter((n) => n.unread).length;
@@ -392,25 +420,116 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
     </ul>
   );
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [allBizCategories, setAllBizCategories] = useState<{ id: string; name: string; industry_type: string }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/admin/business-categories")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && Array.isArray(d.categories)) {
+          setAllBizCategories(d.categories);
+        } else {
+          supabase
+            .from("business_categories")
+            .select("id, name, industry_type")
+            .then(({ data }) => {
+              if (data) setAllBizCategories(data as any);
+            });
+        }
+      })
+      .catch(() => {
+        supabase
+          .from("business_categories")
+          .select("id, name, industry_type")
+          .then(({ data }) => {
+            if (data) setAllBizCategories(data as any);
+          });
+      });
+  }, []);
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    const results: { label: string; sub: string; to: string; badge?: string }[] = [];
+
+    // 1. Navigation items
+    navItems.forEach((item) => {
+      if (item.label.toLowerCase().includes(q)) {
+        results.push({ label: item.label, sub: "Navigation Page", to: item.to, badge: "PAGE" });
+      }
+      if (item.children) {
+        item.children.forEach((c) => {
+          if (c.label.toLowerCase().includes(q)) {
+            results.push({ label: `${item.label} → ${c.label}`, sub: "Subpage", to: c.to, badge: "PAGE" });
+          }
+        });
+      }
+    });
+
+    // 2. Business Categories (Admin or User)
+    allBizCategories.forEach((cat) => {
+      if (cat.name.toLowerCase().includes(q) || cat.industry_type?.toLowerCase().includes(q)) {
+        results.push({
+          label: cat.name,
+          sub: `Category: ${cat.industry_type || "Retail"}`,
+          to: isPathAdmin ? `/admin/business-categories?search=${encodeURIComponent(cat.name)}` : `/dashboard/inventory?category=${encodeURIComponent(cat.id)}`,
+          badge: "CATEGORY",
+        });
+      }
+    });
+
+    // 3. Businesses / Stores
+    businesses.forEach((b) => {
+      if (b.business_name?.toLowerCase().includes(q)) {
+        results.push({
+          label: b.business_name,
+          sub: `Store (${b.currency})`,
+          to: isPathAdmin ? `/admin/businesses?search=${encodeURIComponent(b.business_name)}` : `/dashboard`,
+          badge: "STORE",
+        });
+      }
+    });
+
+    // 4. Quick Shortcuts
+    if ("pos terminal billing checkout counter".includes(q)) {
+      results.push({ label: "POS Terminal", sub: "Point of Sale Checkout", to: "/dashboard/pos", badge: "POS" });
+    }
+    if ("inventory products stock catalog items".includes(q)) {
+      results.push({ label: "Inventory Catalog", sub: "Stock & Products", to: isPathAdmin ? "/admin/products" : "/dashboard/inventory", badge: "STOCK" });
+    }
+    if ("users customers accounts signups".includes(q) && isPathAdmin) {
+      results.push({ label: "Users & Accounts", sub: "Admin User Management", to: "/admin/users", badge: "USERS" });
+    }
+    if ("billing invoices pricing subscriptions".includes(q)) {
+      results.push({ label: "Billing & Invoices", sub: "Plans & Revenue", to: isPathAdmin ? "/admin/billing" : "/dashboard/subscription", badge: "BILLING" });
+    }
+
+    return results.slice(0, 8);
+  }, [searchQuery, navItems, allBizCategories, businesses, isPathAdmin]);
+
   const BrandLogo = () => (
-    <Link to={isAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2.5 min-w-0">
+    <Link to={isAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2.5 min-w-0 group">
       {settings?.logo_url ? (
-        <img src={settings.logo_url} alt={settings?.app_name ?? "Logo"} className="h-8 max-w-[140px] object-contain" />
+        <img src={settings.logo_url} alt={settings?.app_name ?? "Logo"} className="h-9 max-w-[150px] object-contain" />
       ) : (
-        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-500 to-sky-400 flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-xs">
-          {(settings?.app_name || "G").charAt(0).toUpperCase()}
-        </div>
+        <>
+          <div className="h-9 w-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center p-1.5 shrink-0 shadow-xs overflow-hidden">
+            <img src={settings?.favicon_url || "/favicon.ico"} alt="Logo" className="w-full h-full object-contain" onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }} />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="font-bold text-base bg-gradient-to-r from-violet-500 to-sky-400 bg-clip-text text-transparent truncate leading-none">
+              {settings?.app_name ?? "GeFlow"}
+            </span>
+            {settings?.tagline && (
+              <span className="text-[10px] text-muted-foreground font-medium truncate leading-tight mt-0.5 max-w-[130px]">
+                {settings.tagline}
+              </span>
+            )}
+          </div>
+        </>
       )}
-      <div className="flex flex-col min-w-0">
-        <span className="font-bold text-base bg-gradient-to-r from-violet-500 to-sky-400 bg-clip-text text-transparent truncate leading-none">
-          {settings?.app_name ?? "GeFlow"}
-        </span>
-        {settings?.tagline && (
-          <span className="text-[10px] text-muted-foreground font-medium truncate leading-tight mt-0.5 max-w-[130px]">
-            {settings.tagline}
-          </span>
-        )}
-      </div>
     </Link>
   );
 
@@ -440,9 +559,15 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
     <div className="h-screen flex bg-background overflow-hidden">
       {/* Desktop sidebar — fixed height, internal scroll only on nav */}
       <aside className={`${collapsed ? "w-20" : "w-64"} hidden md:flex flex-col border-r border-border bg-background transition-all duration-300`}>
-        <div className="flex items-center justify-between p-4 border-b border-border h-16 flex-shrink-0">
-          {!collapsed && <BrandLogo />}
-          <button onClick={() => setCollapsed(!collapsed)} className="h-8 w-8 rounded-lg hover:bg-muted flex items-center justify-center transition-colors">
+        <div className={`flex items-center ${collapsed ? "justify-center" : "justify-between"} p-3 border-b border-border h-16 flex-shrink-0`}>
+          {!collapsed ? (
+            <BrandLogo />
+          ) : (
+            <Link to={isAdmin ? "/admin" : "/dashboard"} className="h-9 w-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center p-1.5 shadow-xs overflow-hidden" title={settings?.app_name ?? "GeFlow"}>
+              <img src={settings?.favicon_url || "/favicon.ico"} alt="Logo" className="w-full h-full object-contain" />
+            </Link>
+          )}
+          <button onClick={() => setCollapsed(!collapsed)} className={`h-8 w-8 rounded-lg hover:bg-muted flex items-center justify-center transition-colors ${collapsed ? "ml-1" : ""}`}>
             <ChevronLeft className={`h-4 w-4 transition-transform ${collapsed ? "rotate-180" : ""}`} />
           </button>
         </div>
@@ -489,9 +614,80 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
             <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search anything..."
-              className="w-full h-10 pl-10 pr-4 bg-muted/40 border-0 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setSearchOpen(true);
+              }}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 250)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && searchResults.length > 0) {
+                  navigate(searchResults[0].to);
+                  setSearchOpen(false);
+                  setSearchQuery("");
+                } else if (e.key === "Escape") {
+                  setSearchOpen(false);
+                }
+              }}
+              placeholder={isPathAdmin ? "Search categories, businesses, users, settings..." : "Search products, categories, pos, orders..."}
+              className="w-full h-10 pl-10 pr-8 bg-muted/40 border border-border/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => { setSearchQuery(""); setSearchOpen(false); }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs font-bold"
+              >
+                ✕
+              </button>
+            )}
+
+            {/* Live Search Results Dropdown */}
+            {searchOpen && searchQuery.trim().length > 0 && (
+              <div
+                className="absolute left-0 right-0 top-12 bg-popover/95 backdrop-blur-md border border-border shadow-2xl rounded-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2 max-h-80 overflow-y-auto"
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                {searchResults.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-muted-foreground">
+                    No results found for "<span className="font-semibold text-foreground">{searchQuery}</span>".
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold tracking-wider text-muted-foreground px-2.5 py-1">
+                      MATCHING RESULTS ({searchResults.length})
+                    </p>
+                    {searchResults.map((r, idx) => (
+                      <button
+                        key={`${r.to}-${idx}`}
+                        type="button"
+                        onClick={() => {
+                          navigate(r.to);
+                          setSearchOpen(false);
+                          setSearchQuery("");
+                        }}
+                        className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-muted text-left transition-colors group cursor-pointer"
+                      >
+                        <div className="min-w-0 pr-2">
+                          <p className="text-xs font-bold text-foreground group-hover:text-primary transition-colors truncate">
+                            {r.label}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground truncate">
+                            {r.sub}
+                          </p>
+                        </div>
+                        {r.badge && (
+                          <span className="text-[9px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
+                            {r.badge}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-1.5 ml-auto pl-2">
             {!isPathAdmin && (
@@ -523,22 +719,30 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
 
             <Popover open={notifPopoverOpen} onOpenChange={setNotifPopoverOpen}>
               <PopoverTrigger asChild>
-                <button className="h-10 w-10 rounded-xl hover:bg-muted flex items-center justify-center relative transition-all hover:scale-105 cursor-pointer">
+                <button
+                  className="h-10 w-10 rounded-xl hover:bg-muted/80 border border-border/50 hover:border-border flex items-center justify-center relative transition-all duration-200 cursor-pointer text-muted-foreground hover:text-foreground active:scale-95 shadow-2xs"
+                  aria-label="Notifications"
+                >
                   <Bell className="h-4 w-4" />
                   {unreadCount > 0 && (
-                    <span className="absolute top-1.5 right-1.5 h-4 min-w-4 px-1 rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground flex items-center justify-center animate-pulse">
-                      {unreadCount}
+                    <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1.5 rounded-full bg-rose-500 text-[10px] font-extrabold text-white flex items-center justify-center shadow-xs">
+                      {unreadCount > 9 ? "9+" : unreadCount}
                     </span>
                   )}
                 </button>
               </PopoverTrigger>
-              <PopoverContent align="end" className="w-88 sm:w-96 p-0 shadow-2xl rounded-2xl border border-border/70 overflow-hidden">
-                <div className="p-3.5 border-b border-border/80 flex items-center justify-between bg-muted/30">
-                  <div className="flex items-center gap-2">
-                    <Bell className="w-4 h-4 text-primary" />
-                    <p className="font-bold text-sm">Notifications</p>
+              <PopoverContent align="end" className="w-88 sm:w-96 p-0 shadow-2xl rounded-2xl border border-border overflow-hidden bg-card">
+                <div className="p-3.5 border-b border-border flex items-center justify-between bg-muted/40">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-8 w-8 rounded-xl bg-primary/10 text-primary border border-primary/20 flex items-center justify-center">
+                      <Bell className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-sm leading-none text-foreground">Notifications</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Workspace Activity &amp; Alerts</p>
+                    </div>
                   </div>
-                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400">
+                  <span className="text-[10px] font-black tracking-wider px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
                     {unreadCount} NEW
                   </span>
                 </div>
@@ -566,7 +770,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
                                   STORE INVITATION
                                 </span>
                               </div>
-                              <span className="text-[10px] text-muted-foreground">
+                              <span className="text-[10px] text-muted-foreground font-mono">
                                 {new Date(n.createdAt).toLocaleDateString()}
                               </span>
                             </div>
@@ -587,7 +791,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
                                 type="button"
                                 disabled={actionLoadingId === n.inviteId}
                                 onClick={() => handleAcceptInvite(n.inviteId!, n.businessName, n.role)}
-                                className="flex-1 h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+                                className="flex-1 h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-xs active:scale-95 disabled:opacity-50 cursor-pointer"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                 {actionLoadingId === n.inviteId ? "Accepting..." : "Accept Invitation"}
@@ -596,7 +800,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
                                 type="button"
                                 disabled={actionLoadingId === n.inviteId}
                                 onClick={() => handleDeclineInvite(n.inviteId!)}
-                                className="h-8 px-3 rounded-lg border border-border/80 hover:bg-muted text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+                                className="h-8 px-3 rounded-lg border border-border hover:bg-muted text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
                               >
                                 Decline
                               </button>
@@ -611,19 +815,19 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
                           to={n.link || (isAdmin ? "/admin/notifications" : "/dashboard/announcements/notifications")}
                           onClick={() => setNotifPopoverOpen(false)}
                           className={`block p-3.5 hover:bg-muted/40 transition-colors ${
-                            n.unread ? "bg-sky-400/5" : ""
+                            n.unread ? "bg-primary/5" : ""
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-xs font-semibold text-foreground">{n.title}</p>
                             {n.unread && (
-                              <span className="w-2 h-2 rounded-full bg-sky-500 shrink-0 mt-1" />
+                              <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1" />
                             )}
                           </div>
                           <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">
                             {n.description}
                           </p>
-                          <p className="text-[10px] text-muted-foreground/70 mt-1">
+                          <p className="text-[10px] text-muted-foreground/70 mt-1 font-mono">
                             {new Date(n.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                           </p>
                         </Link>
@@ -631,42 +835,32 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
                     })
                   )}
                 </div>
-                <div className="p-3 border-t border-border/80 space-y-2 bg-muted/20">
+                <div className="p-3 border-t border-border space-y-2 bg-muted/20">
                   <Link
                     to={isAdmin ? "/admin/notifications" : "/dashboard/announcements/notifications"}
                     onClick={() => setNotifPopoverOpen(false)}
-                    className="w-full h-8.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold transition-colors flex items-center justify-center shadow-sm"
+                    className="w-full h-10 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-semibold tracking-wide transition-all flex items-center justify-center gap-2 shadow-xs hover:shadow-sm active:scale-[0.98] cursor-pointer"
                   >
-                    View All Notifications & Invites
+                    <Bell className="w-3.5 h-3.5" />
+                    <span>View All Notifications &amp; Invites</span>
                   </Link>
                   {!isAdmin && (
                     <Link
                       to="/dashboard/announcements"
                       onClick={() => setNotifPopoverOpen(false)}
-                      className="w-full h-8 rounded-xl border border-border/80 text-xs font-semibold hover:bg-muted transition-colors flex items-center justify-center"
+                      className="w-full h-9 rounded-xl border border-border bg-background hover:bg-muted text-xs font-medium text-foreground transition-all flex items-center justify-center gap-2 hover:border-foreground/20 cursor-pointer"
                     >
-                      View Announcements
+                      <Megaphone className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span>Company Announcements</span>
                     </Link>
                   )}
                 </div>
               </PopoverContent>
             </Popover>
 
-            {!isPathAdmin && (
-              <button
-                onClick={() => setAiOpen(true)}
-                className="h-10 px-3 rounded-xl border border-primary/20 bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all hover:scale-105 active:scale-95"
-                title="GeFlow AI Retail Assistant"
-                aria-label="GeFlow AI Retail Assistant"
-              >
-                <Sparkles className="h-4 w-4 text-primary animate-pulse" />
-                <span className="hidden sm:inline">AI Copilot</span>
-              </button>
-            )}
-
             <button
               onClick={handleRefresh}
-              className="h-10 w-10 rounded-xl hover:bg-muted flex items-center justify-center transition-all hover:scale-105"
+              className="h-10 w-10 rounded-xl hover:bg-muted border border-transparent hover:border-border/60 flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground"
               aria-label="Refresh"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
@@ -674,7 +868,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
 
             <button
               onClick={handleLogout}
-              className="h-10 w-10 rounded-xl hover:bg-muted flex items-center justify-center transition-all hover:scale-105"
+              className="h-10 w-10 rounded-xl hover:bg-muted border border-transparent hover:border-border/60 flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground"
               aria-label="Logout"
               title="Logout"
             >
@@ -683,7 +877,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground font-bold text-sm ml-1 hover:scale-105 transition-transform">
+                <button className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground font-bold text-sm ml-1 transition-opacity hover:opacity-90">
                   {initial}
                 </button>
               </DropdownMenuTrigger>
@@ -710,16 +904,6 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-3.5 sm:p-5 md:p-8 min-w-0 w-full">{children}</main>
       </div>
       {!isPathAdmin && <AIAssistant open={aiOpen} onOpenChange={setAiOpen} />}
-      {!isPathAdmin && !aiOpen && (
-        <button
-          onClick={() => setAiOpen(true)}
-          className="fixed bottom-6 right-6 z-40 h-13 w-13 rounded-full bg-gradient-to-tr from-sky-500 via-primary to-indigo-600 text-white shadow-xl hover:shadow-2xl hover:scale-105 active:scale-95 flex items-center justify-center transition-all border-2 border-white/20 group"
-          title="Open GeFlow AI Assistant"
-          aria-label="Open GeFlow AI Assistant"
-        >
-          <Sparkles className="h-6 w-6 text-white animate-pulse group-hover:rotate-12 transition-transform" />
-        </button>
-      )}
     </div>
   );
 };

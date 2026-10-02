@@ -284,65 +284,59 @@ const UserPOS = () => {
     return raw.split(",").map((s: string) => parseFloat(s.trim())).filter((n: number) => !isNaN(n) && n > 0);
   }, [posConfig.quickAmounts]);
 
-  const load = useCallback(async () => {
-    if (!active) { setLoading(false); return; }
-    setLoading(true);
+  const activeId = active?.id;
+  const isStaff = Boolean(active?.is_staff);
+  const staffRole = active?.staff_role;
+  const ownerUserId = active?.owner_user_id;
+
+  const load = useCallback(async (isSilent = false) => {
+    if (!activeId) { setLoading(false); return; }
+    if (!isSilent) setLoading(true);
     let data: any[] | null = null;
 
-    // 1. Direct Supabase fetch for all users (real database)
-    const { data: initialData, error } = await supabase
-      .from("products")
-      .select("id, name, description, internal_sku, barcode, category_id, retail_price, discount_price, purchase_cost, stock_units, min_stock_alert, uom, units_per_uom, base_unit")
-      .eq("business_id", active.id)
-      .eq("status", "active")
-      .order("name");
-
-    data = initialData;
-    if (error || !data || data.length === 0) {
-      const fallback = await supabase
+    try {
+      // 1. Direct Supabase fetch for all users (real database)
+      const { data: initialData, error } = await supabase
         .from("products")
-        .select("id, name, description, internal_sku, barcode, category_id, retail_price, discount_price, purchase_cost, stock_units, min_stock_alert")
-        .eq("business_id", active.id)
+        .select("id, name, description, internal_sku, barcode, category_id, retail_price, discount_price, purchase_cost, stock_units, min_stock_alert, uom, units_per_uom, base_unit")
+        .eq("business_id", activeId)
         .eq("status", "active")
         .order("name");
-      if (fallback.data && fallback.data.length > 0) {
-        data = fallback.data as any;
+
+      data = initialData;
+      if (error || !data || data.length === 0) {
+        const fallback = await supabase
+          .from("products")
+          .select("id, name, description, internal_sku, barcode, category_id, retail_price, discount_price, purchase_cost, stock_units, min_stock_alert")
+          .eq("business_id", activeId)
+          .eq("status", "active")
+          .order("name");
+        if (fallback.data && fallback.data.length > 0) {
+          data = fallback.data as any;
+        }
       }
-    }
 
-    // 2. Fetch from Business Sync engine (ensures employee POS receives 100% of business listed inventory)
-    if (!data || data.length === 0 || active.is_staff) {
-      const synced = await fetchSyncedProducts(active.id, {
-        role: active.staff_role || "cashier",
-        isStaff: Boolean(active.is_staff),
-        ownerUserId: active.owner_user_id,
-        statusOnly: "active",
-      });
-      if (synced && synced.length > 0) {
-        data = synced as any;
+      // 2. Fetch from Business Sync engine (ensures employee POS receives 100% of business listed inventory)
+      if (!data || data.length === 0 || isStaff) {
+        const synced = await fetchSyncedProducts(activeId, {
+          role: staffRole || "cashier",
+          isStaff,
+          ownerUserId,
+          statusOnly: "active",
+        });
+        if (synced && synced.length > 0) {
+          data = synced as any;
+        }
       }
+
+      const cleanProducts = ((data as POSProduct[]) ?? []).filter((p) => !isDemoProduct(p));
+      setProducts(cleanProducts);
+    } catch (err) {
+      console.warn("POS failed to fetch products:", err);
+    } finally {
+      setLoading(false);
     }
-
-    const cleanProducts = ((data as POSProduct[]) ?? []).filter((p) => !isDemoProduct(p));
-
-    // If owner, sync to central sync engine so employees always have the latest catalog
-    if (!active.is_staff && data && Array.isArray(data)) {
-      fetch("/api/sync/batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          businessId: active.id,
-          businessName: active.name,
-          ownerUserId: active.owner_user_id,
-          products: cleanProducts,
-          replace: true,
-        }),
-      }).catch(() => {});
-    }
-
-    setProducts(cleanProducts);
-    setLoading(false);
-  }, [active]);
+  }, [activeId, isStaff, staffRole, ownerUserId]);
 
   useEffect(() => {
     (async () => {
@@ -352,29 +346,31 @@ const UserPOS = () => {
     })();
   }, []);
 
-  useEffect(() => { if (!bizLoading) load(); }, [bizLoading, load]);
+  useEffect(() => { if (!bizLoading && activeId) load(false); }, [bizLoading, activeId, load]);
 
   useEffect(() => {
-    if (!active) return;
-    const ch = supabase.channel(`pos-${active.id}-${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "products", filter: `business_id=eq.${active.id}` }, () => load())
+    if (!activeId) return;
+    const ch = supabase.channel(`pos-${activeId}-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "products", filter: `business_id=eq.${activeId}` }, () => load(true))
       .subscribe();
 
     const onUpdate = () => {
-      load();
+      load(true);
       refreshHeldOrders();
     };
     window.addEventListener("geflow:products-updated", onUpdate);
     window.addEventListener("geflow:stock-updated", onUpdate);
     window.addEventListener("geflow:sales-updated", onUpdate);
+    window.addEventListener("panel:refresh", onUpdate);
 
     return () => {
       supabase.removeChannel(ch);
       window.removeEventListener("geflow:products-updated", onUpdate);
       window.removeEventListener("geflow:stock-updated", onUpdate);
       window.removeEventListener("geflow:sales-updated", onUpdate);
+      window.removeEventListener("panel:refresh", onUpdate);
     };
-  }, [active, load, refreshHeldOrders]);
+  }, [activeId, load, refreshHeldOrders]);
 
   const unitPrice = (p: POSProduct) => Number(p.discount_price ?? p.retail_price) || 0;
 

@@ -236,7 +236,9 @@
 .cta-btn {
   position: relative;
   overflow: hidden;
-  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition: box-shadow 0.2s ease, background-color 0.2s ease, opacity 0.2s ease;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 .cta-btn::before {
   content: '';
@@ -248,21 +250,21 @@
   border-radius: 50%;
   background: rgba(255,255,255,0.15);
   transform: translate(-50%, -50%);
-  transition: width 0.6s ease, height 0.6s ease;
+  transition: width 0.4s ease, height 0.4s ease;
+  pointer-events: none;
 }
 .cta-btn:hover::before {
   width: 300px;
   height: 300px;
 }
 .cta-btn:hover {
-  transform: translateY(-2px);
   box-shadow: 0 8px 25px -5px hsl(var(--primary) / 0.4);
 }
 .cta-btn-outline {
-  transition: all 0.3s ease;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  backface-visibility: hidden;
 }
 .cta-btn-outline:hover {
-  transform: translateY(-2px);
   box-shadow: 0 8px 20px -5px rgba(0,0,0,0.1);
   border-color: hsl(var(--primary));
   color: hsl(var(--primary));

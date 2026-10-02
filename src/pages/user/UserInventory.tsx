@@ -117,28 +117,13 @@ const UserInventory = () => {
       // Clean products to strictly guarantee no fake/demo items
       const cleanProducts = ((data as ProductRecord[]) ?? []).filter((p) => !isDemoProduct(p));
 
-      // If user is owner and we have genuine products, keep the sync server updated
-      if (!active?.is_staff && data && Array.isArray(data)) {
-        fetch("/api/sync/batch", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            businessId: activeId,
-            businessName: active?.name,
-            ownerUserId: active?.owner_user_id,
-            products: cleanProducts,
-            replace: true,
-          }),
-        }).catch(() => {});
-      }
-
       setProducts(cleanProducts);
     } catch (err) {
       console.warn("Failed to fetch inventory products:", err);
     } finally {
       setLoading(false);
     }
-  }, [activeId, active?.name, active?.is_staff, active?.staff_role, active?.owner_user_id]);
+  }, [activeId, active?.is_staff, active?.staff_role, active?.owner_user_id]);
 
   useEffect(() => {
     (async () => {
@@ -667,7 +652,7 @@ const UserInventory = () => {
                         if (el) el.indeterminate = someFilteredSelected;
                       }}
                       onChange={toggleSelectAll}
-                      className="rounded border-border text-sky-500 focus:ring-sky-500 cursor-pointer h-4 w-4"
+                      className="rounded border-border text-sky-500 accent-sky-500 focus:ring-sky-500 cursor-pointer h-4 w-4 bg-background"
                     />
                   </th>
                   <th className="text-left px-4 py-4">PRODUCT / SKU</th>
@@ -709,7 +694,7 @@ const UserInventory = () => {
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelectProduct(p.id)}
-                          className="rounded border-border text-sky-500 focus:ring-sky-500 cursor-pointer h-4 w-4"
+                          className="rounded border-border text-sky-500 accent-sky-500 focus:ring-sky-500 cursor-pointer h-4 w-4 bg-background"
                         />
                       </td>
                       <td className="px-4 py-4">
