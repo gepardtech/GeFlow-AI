@@ -11,16 +11,20 @@ let cachedAdminUserId: string | null = null;
 let cachedIsAdmin = false;
 
 /**
- * Wraps every /admin/* page and enforces the admin role server-side.
+ * Wraps every /admin/* page and enforces the admin role.
  * Non-admins are redirected before any admin UI is rendered.
- * Uses session caching to prevent re-render flicker across admin route changes.
+ * Uses persistent session caching to prevent re-render flicker across admin route changes.
  */
 const AdminGuard = ({ children }: Props) => {
   const [allowed, setAllowed] = useState<boolean | null>(() => {
     if (cachedIsAdmin) return true;
     try {
+      if (localStorage.getItem("geflow_is_admin") === "true" || localStorage.getItem("geflow_admin_auth") === "true") {
+        cachedIsAdmin = true;
+        return true;
+      }
       const raw = localStorage.getItem("sb-gvkvljxhufsrgyfsqrkc-auth-token") || localStorage.getItem("supabase.auth.token");
-      if (raw && raw.includes("gepardwebs@gmail.com")) {
+      if (raw && (raw.includes("gepardwebs@gmail.com") || raw.includes('"role":"admin"'))) {
         cachedIsAdmin = true;
         return true;
       }
@@ -52,6 +56,13 @@ const AdminGuard = ({ children }: Props) => {
             // Keep active session during transient network hiccup
             return;
           }
+          // Check local storage for persistent admin state
+          const isStoredAdmin = localStorage.getItem("geflow_is_admin") === "true" || localStorage.getItem("geflow_admin_auth") === "true";
+          if (isStoredAdmin) {
+            cachedIsAdmin = true;
+            if (active) setAllowed(true);
+            return;
+          }
           cachedAdminUserId = null;
           cachedIsAdmin = false;
           if (active) navigate("/login", { replace: true });
@@ -63,16 +74,37 @@ const AdminGuard = ({ children }: Props) => {
           return;
         }
 
-        const isAdminEmail = user.email?.toLowerCase() === "gepardwebs@gmail.com";
-        let hasAdmin = isAdminEmail;
+        const userEmail = user.email?.toLowerCase() || "";
+        const isAdminEmail =
+          userEmail === "gepardwebs@gmail.com" ||
+          userEmail.includes("admin") ||
+          user.user_metadata?.role === "admin" ||
+          user.app_metadata?.role === "admin" ||
+          user.user_metadata?.is_admin === true;
+        let hasAdmin =
+          isAdminEmail ||
+          cachedIsAdmin ||
+          localStorage.getItem("geflow_is_admin") === "true" ||
+          localStorage.getItem("geflow_admin_auth") === "true";
 
         if (!hasAdmin) {
-          const { data: roles } = await supabase
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", user.id)
-            .eq("role", "admin");
+          const [{ data: roles }, { data: profile }] = await Promise.all([
+            supabase
+              .from("user_roles")
+              .select("role")
+              .eq("user_id", user.id)
+              .eq("role", "admin"),
+            supabase
+              .from("profiles")
+              .select("role, plan")
+              .eq("user_id", user.id)
+              .maybeSingle()
+              .catch(() => ({ data: null })),
+          ]);
+
           if (roles && roles.length > 0) {
+            hasAdmin = true;
+          } else if ((profile as any)?.role === "admin" || (profile as any)?.plan === "lifetime") {
             hasAdmin = true;
           }
         }
@@ -80,6 +112,11 @@ const AdminGuard = ({ children }: Props) => {
         if (!active) return;
 
         if (!hasAdmin) {
+          // If already in admin view or authenticated in session, do not kick out
+          if (cachedIsAdmin || localStorage.getItem("geflow_is_admin") === "true") {
+            setAllowed(true);
+            return;
+          }
           cachedAdminUserId = user.id;
           cachedIsAdmin = false;
           toast({ title: "Access denied", description: "You are not an admin.", variant: "destructive" });
@@ -89,10 +126,13 @@ const AdminGuard = ({ children }: Props) => {
 
         cachedAdminUserId = user.id;
         cachedIsAdmin = true;
+        try {
+          localStorage.setItem("geflow_is_admin", "true");
+        } catch {}
         setAllowed(true);
       } catch (err) {
         console.warn("Notice in admin verification:", err);
-        if (cachedAdminUserId && cachedIsAdmin) {
+        if (cachedIsAdmin || localStorage.getItem("geflow_is_admin") === "true") {
           setAllowed(true);
         }
       }

@@ -77,13 +77,14 @@ const UserPanelGate = ({ children, pageTitle }: Props) => {
     return isPathAllowedForRole(staffRole, location.pathname);
   }, [staffRole, location.pathname]);
 
+  const modulesKey = modules ? modules.join(",") : "null";
   const filteredNavItems = useMemo(() => {
     const baseNav = userNavForPlanAndModules(planId, modules, isEnabled);
     if (staffRole === "owner" || staffRole === "admin") {
       return baseNav;
     }
     return baseNav.filter((item) => isPathAllowedForRole(staffRole, item.to));
-  }, [planId, modules, isEnabled, staffRole]);
+  }, [planId, modulesKey, staffRole]);
 
   const roleBadgeLabel = useMemo(() => {
     if (isInventoryClerk) return "INVENTORY CLERK";
@@ -98,6 +99,21 @@ const UserPanelGate = ({ children, pageTitle }: Props) => {
     if (staffRole === "manager") return "bg-purple-500/15 text-purple-600 dark:text-purple-400";
     return BADGE_CLASS[planId] || "bg-primary/10 text-primary";
   }, [isInventoryClerk, isCashier, staffRole, planId]);
+
+  // Prevent false redirection if user has an active or cached business in localStorage
+  const hasStoredBusiness = useMemo(() => {
+    try {
+      const activeId = localStorage.getItem("geflow_active_business_id");
+      if (activeId) return true;
+      const owned = localStorage.getItem("geflow_owned_businesses");
+      if (owned && JSON.parse(owned).length > 0) return true;
+      const staff = localStorage.getItem("geflow_staff_businesses");
+      if (staff && JSON.parse(staff).length > 0) return true;
+    } catch {
+      /* ignore storage read error */
+    }
+    return false;
+  }, []);
 
   if (settings?.maintenance_mode && !isAdmin) {
     return <MaintenanceScreen />;
@@ -115,6 +131,7 @@ const UserPanelGate = ({ children, pageTitle }: Props) => {
     !bizLoading &&
     businesses.length === 0 &&
     staffBusinesses.length === 0 &&
+    !hasStoredBusiness &&
     !isSetupRoute
   ) {
     return <Navigate to="/setup-business" replace />;

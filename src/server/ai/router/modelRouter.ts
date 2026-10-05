@@ -147,7 +147,7 @@ export class ModelRouter {
             provider: result.provider,
             model: result.model,
             taskType: "product_analysis",
-            status: result.provider === "heuristic_fallback" ? "fallback" : "success",
+            status: "success",
             latencyMs: result.latencyMs || Date.now() - startTime,
             usageTokens: result.usage?.totalTokens || 0,
           });

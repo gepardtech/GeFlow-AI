@@ -25,6 +25,13 @@ interface AnalysisInput {
  * Common packaging / stock unit mappings
  */
 const UNIT_KEYWORDS: Array<{ match: RegExp; unit: string; type: ProductUnitType }> = [
+  { match: /\b(pizza|pizzas)\b/i, unit: "pizza", type: "quantity" },
+  { match: /\b(burger|burgers)\b/i, unit: "burger", type: "quantity" },
+  { match: /\b(fries|fry)\b/i, unit: "fries", type: "quantity" },
+  { match: /\b(portion|portions)\b/i, unit: "portion", type: "quantity" },
+  { match: /\b(plate|plates)\b/i, unit: "plate", type: "quantity" },
+  { match: /\b(slice|slices)\b/i, unit: "slice", type: "quantity" },
+  { match: /\b(cup|cups)\b/i, unit: "cup", type: "quantity" },
   { match: /\b(biscuit|biscuits|buscit|biscut|cookie|cookies|cracker|crackers|wafer|wafers|rusk|rusks|snack|snacks|chip|chips|crisp|crisps|candy|candies|chocolate|chocolates|bar|bars|cake|cakes|bread|buns|bun|noodles|pasta|cereal)\b/i, unit: "pack", type: "quantity" },
   { match: /\b(packet|packets|pkt|pkts)\b/i, unit: "pack", type: "quantity" },
   { match: /\b(pack|packs|pk|pks)\b/i, unit: "pack", type: "quantity" },
@@ -76,9 +83,9 @@ export async function analyzeProductInput({
 
   // 2. Extract Pack Size / Scale (e.g. "20 tablets per box", "pack of 20", "20 tablets", "x10", "10pcs", "box of 100")
   let packSize: number | null = null;
-  const perBoxMatch = text.match(/(\d+)\s*(?:tablets?|tabs?|capsules?|caps?|pieces?|pcs?|units?|items?|sachets?|strips?)\s*(?:per|\/|in\s*(?:a|each|1))\s*(?:box|pack|carton|strip|dozen)?/i);
+  const perBoxMatch = text.match(/(\d+)\s*(?:tablets?|tabs?|capsules?|caps?|pieces?|pcs?|slices?|units?|items?|sachets?|strips?)\s*(?:per|\/|in\s*(?:a|each|1))\s*(?:box|pack|carton|strip|dozen|pizza)?/i);
   const packMatch = text.match(/(?:pack\s+of|box\s+of|strip\s+of|carton\s+of|\bx)\s*(\d+)\b/i) ||
-                    text.match(/(\d+)\s*(?:tablets|tabs|capsules|caps|pieces|pcs|count|ct|sachets)\b/i);
+                    text.match(/(\d+)\s*(?:tablets?|tabs?|capsules?|caps?|pieces?|pcs?|slices?|count|ct|sachets?)\b/i);
   if (perBoxMatch && perBoxMatch[1]) {
     const num = parseInt(perBoxMatch[1], 10);
     if (!isNaN(num) && num > 0 && num <= 50000) {

@@ -67,48 +67,82 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
         status: "COMPLETED",
       });
     }
+
+    if (
+      url.includes("/auth/v1/user") ||
+      url.includes("grant_type=refresh_token") ||
+      url.includes("/auth/v1/token")
+    ) {
+      return new Response(
+        JSON.stringify({ error: "network_error", message: "Network unavailable. Retrying background refresh..." }),
+        {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (url.includes("/auth/v1/settings")) {
+      return new Response(
+        JSON.stringify({
+          external: { email: true },
+          disable_signup: false,
+          mailer_autoconfirm: false,
+          phone_autoconfirm: false,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (url.includes("/auth/v1/logout") || url.includes("/auth/v1/signout")) {
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (url.includes("/auth/v1/")) {
+      return new Response(
+        JSON.stringify({
+          error: "network_error",
+          error_description: "Unable to reach authentication server. Please check your connection.",
+          msg: "Unable to reach authentication server. Please check your connection.",
+        }),
+        {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+
     return makeMockResponse([]);
   };
 
-  // Route Supabase requests through the local proxy to guarantee database sync and bypass iframe CORS restrictions.
-  // CRITICAL: Supabase Auth (/auth/v1/) has full native CORS support and must talk directly to Gotrue
-  // to ensure session persistence, refresh tokens, PKCE callbacks, and onAuthStateChange listeners sync cleanly.
-  const isAuthRequest = urlString.includes("/auth/v1/");
+  // If request was aborted by component unmount or navigation, return clean aborted mock response
+  if ((init as any)?.signal?.aborted) {
+    return makeMockResponse([], 200);
+  }
 
-  if (urlString.includes(".supabase.co") && !isAuthRequest) {
-    try {
-      const proxyUrl = urlString.replace(
-        /https:\/\/[^/]+\.supabase\.co/,
-        "/api/supabase-proxy"
-      );
-      const proxyRes = await fetch(proxyUrl, init);
-      const contentType = proxyRes.headers.get("content-type") || "";
-      const isHtml = contentType.toLowerCase().includes("text/html");
-
-      // Reject HTML responses from proxy (e.g. dev server warmup or Vite fallback HTML)
-      if (!isHtml && (proxyRes.ok || (proxyRes.status >= 200 && proxyRes.status < 500))) {
-        return proxyRes;
-      }
-      if (isHtml) {
-        console.warn("Notice: proxy returned HTML document instead of data payload, falling back:", proxyUrl);
-      }
-    } catch (err: any) {
-      if (err?.name === "AbortError" || (init as any)?.signal?.aborted) {
-        throw err;
-      }
-      console.warn("Notice: proxy request error, falling back to direct fetch:", err);
-    }
+  // Route ALL Supabase requests through the local proxy to guarantee database sync, bypass iframe CORS restrictions, and prevent "Failed to fetch" network errors.
+  let targetUrl = urlString;
+  if (urlString.includes(".supabase.co")) {
+    targetUrl = urlString.replace(/https:\/\/[^/]+\.supabase\.co/, "/api/supabase-proxy");
   }
 
   try {
-    const res = await fetch(input, init);
+    const res = await fetch(targetUrl, init);
+    const contentType = res.headers.get("content-type") || "";
+    const isHtml = contentType.toLowerCase().includes("text/html");
+
+    // Dev server warmup or Vite fallback HTML
+    if (isHtml) {
+      return handleFallbackResponse(urlString);
+    }
 
     if (!res.ok && urlString.includes("/functions/v1/")) {
-      console.warn(
-        "Edge function returned non-2xx status, applying fallback:",
-        urlString,
-        res.status
-      );
       return handleFallbackResponse(urlString);
     }
 
@@ -133,11 +167,11 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
 
           const apiRes = await fetch(fallbackEndpoint, {
             headers: authHdr ? { Authorization: authHdr } : undefined,
-          });
+          }).catch(() => null);
 
-          if (apiRes.ok) {
-            const apiJson = await apiRes.json();
-            const dataList = apiJson.businesses || apiJson.owned || [];
+          if (apiRes && apiRes.ok) {
+            const apiJson = await apiRes.json().catch(() => null);
+            const dataList = apiJson?.businesses || apiJson?.owned || [];
             return new Response(JSON.stringify(dataList), {
               status: 200,
               headers: {
@@ -147,13 +181,7 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
             });
           }
 
-          return new Response(JSON.stringify([]), {
-            status: 200,
-            headers: {
-              "Content-Type": "application/json",
-              "content-range": "0-0/0",
-            },
-          });
+          return makeMockResponse([]);
         }
       } catch {
         /* proceed with original response */
@@ -162,80 +190,9 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
 
     return res;
   } catch (err: any) {
-    // If request was aborted by component unmount or user navigation, don't retry
     if (err?.name === "AbortError" || (init as any)?.signal?.aborted) {
-      throw err;
+      return makeMockResponse([], 200);
     }
-
-    // 1. If direct fetch to Supabase was blocked (CORS / iframe sandbox / network), retry via local server proxy
-    if (urlString.includes(".supabase.co")) {
-      try {
-        const proxyUrl = urlString.replace(
-          /https:\/\/[^/]+\.supabase\.co/,
-          "/api/supabase-proxy"
-        );
-        const proxyRes = await fetch(proxyUrl, init);
-        if (proxyRes.ok || proxyRes.status < 500) {
-          return proxyRes;
-        }
-      } catch {
-        /* Fall through to graceful mock or fallback */
-      }
-    }
-
-    // 2. Token refresh or user verification on network error → report network failure (503), NEVER fake 401 unauthenticated
-    // Returning 401 triggers Gotrue to purge the local refresh token and permanently sign out the user.
-    if (
-      urlString.includes("/auth/v1/user") ||
-      urlString.includes("grant_type=refresh_token") ||
-      urlString.includes("/auth/v1/token")
-    ) {
-      return new Response(
-        JSON.stringify({ error: "network_error", message: "Network unavailable. Retrying background refresh..." }),
-        {
-          status: 503,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    if (urlString.includes("/auth/v1/settings")) {
-      return new Response(
-        JSON.stringify({
-          external: { email: true },
-          disable_signup: false,
-          mailer_autoconfirm: false,
-          phone_autoconfirm: false,
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    if (urlString.includes("/auth/v1/logout") || urlString.includes("/auth/v1/signout")) {
-      return new Response(JSON.stringify({}), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    // 3. Auth login/signup when unreachable returns a structured error Response (never throws unhandled TypeError)
-    if (urlString.includes("/auth/v1/")) {
-      return new Response(
-        JSON.stringify({
-          error: "network_error",
-          error_description: "Unable to reach authentication server. Please check your connection.",
-          msg: "Unable to reach authentication server. Please check your connection.",
-        }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
-
     return handleFallbackResponse(urlString);
   }
 };
@@ -260,3 +217,44 @@ export const supabase = createClient<Database>(
     },
   }
 );
+
+// Intercept channel creation to guarantee duplicate postgres_changes callbacks cannot throw fatal uncaught errors
+const originalChannel = supabase.channel.bind(supabase);
+supabase.channel = function (name: string, opts?: any) {
+  try {
+    const existing = supabase.getChannels().find(
+      (c) => c.topic === `realtime:${name}` || c.topic === name || (c as any).subTopic === name
+    );
+    if (existing) {
+      supabase.removeChannel(existing);
+    }
+  } catch (err) {
+    console.debug("Notice cleaning up existing realtime channel:", err);
+  }
+
+  const ch = originalChannel(name, opts);
+  const origOn = ch.on.bind(ch);
+  ch.on = function (...args: any[]) {
+    try {
+      return origOn(...args);
+    } catch (err: any) {
+      if (err?.message?.includes("cannot add `postgres_changes` callbacks") || err?.message?.includes("after `subscribe()`")) {
+        console.warn("Safely prevented duplicate postgres_changes registration on realtime channel:", name);
+        return ch;
+      }
+      throw err;
+    }
+  } as any;
+
+  const origSubscribe = ch.subscribe.bind(ch);
+  ch.subscribe = function (...args: any[]) {
+    try {
+      return origSubscribe(...args);
+    } catch (err: any) {
+      console.warn("Safely handled duplicate subscribe on realtime channel:", name, err?.message);
+      return ch;
+    }
+  } as any;
+
+  return ch;
+};

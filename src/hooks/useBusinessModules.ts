@@ -77,8 +77,9 @@ export const useBusinessModules = (): BusinessModulesState => {
     load();
     const onChange = () => load();
     window.addEventListener("geflow:business-changed", onChange);
+    const channelId = `biz_modules_rt_${Math.random().toString(36).slice(2, 9)}`;
     const ch = supabase
-      .channel(`biz-modules-${Math.random().toString(36).slice(2)}`)
+      .channel(channelId)
       .on("postgres_changes", { event: "*", schema: "public", table: "business_categories" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "businesses" }, () => load())
       .subscribe();

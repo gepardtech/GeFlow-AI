@@ -93,12 +93,12 @@ const emptyForm = {
   description: "",
   category_id: "",
   subcategory_id: "",
-  uom: "box",
-  units_per_uom: "12",
-  base_unit: "tablet",
+  uom: "piece",
+  units_per_uom: "1",
+  base_unit: "piece",
   opening_stock_boxes: "0",
   // Compatibility mirror fields
-  measurement_scale: "12",
+  measurement_scale: "1",
   pack_qty: "0",
   stock_units: "0",
   purchase_cost: "",
@@ -213,11 +213,77 @@ const ProductDialog = ({
   const [showAIAssistant, setShowAIAssistant] = useState(false);
   const aiAssistantRef = useRef<AIProductIntelligenceAssistantRef>(null);
 
+  // Dynamic category-appointed UoMs
+  const [categoryUoms, setCategoryUoms] = useState<
+    Array<{
+      id: string;
+      name: string;
+      symbol: string;
+      parentName: string;
+      isDefault: boolean;
+      subUnit?: string;
+      conversionFactor?: number;
+      decimalAllowed?: boolean;
+    }>
+  >([]);
+
+  const groupedCategoryUoms = useMemo(() => {
+    if (!categoryUoms || categoryUoms.length === 0) return {};
+    const groups: Record<string, typeof categoryUoms> = {};
+    categoryUoms.forEach((u) => {
+      const parent = u.parentName || "Standard Units";
+      if (!groups[parent]) groups[parent] = [];
+      groups[parent].push(u);
+    });
+    return groups;
+  }, [categoryUoms]);
+
   // Field-level AI status & confidence detail state (Phase 10)
   const [fieldAIStatuses, setFieldAIStatuses] = useState<Record<string, FieldAIStatusInfo>>({});
 
   const fileRef = useRef<HTMLInputElement>(null);
   const isEdit = !!product;
+
+  const businessCategoryKey = useMemo(() => {
+    return active?.category_id || active?.business_category_id || industryType || categoryName || "General";
+  }, [active?.category_id, active?.business_category_id, industryType, categoryName]);
+
+  // Load category-appointed UoMs from database
+  useEffect(() => {
+    let activeEffect = true;
+    if (!open) return;
+
+    fetch(`/api/business-category-uoms/${encodeURIComponent(businessCategoryKey)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!activeEffect) return;
+        if (data?.success && Array.isArray(data.uoms) && data.uoms.length > 0) {
+          setCategoryUoms(data.uoms);
+
+          // If new product and no custom uom set, pick smart default
+          if (!isEdit && (!form.name || !form.uom || form.uom === "box")) {
+            const defaultItem = data.uoms.find((u: any) => u.isDefault) || data.uoms[0];
+            if (defaultItem) {
+              const uName = defaultItem.name.toLowerCase();
+              setForm((prev) => ({
+                ...prev,
+                uom: uName,
+                units_per_uom: String(defaultItem.conversionFactor || (uName === "pizza" ? 8 : 1)),
+                measurement_scale: String(defaultItem.conversionFactor || (uName === "pizza" ? 8 : 1)),
+                base_unit: defaultItem.subUnit || (uName === "pizza" ? "slice" : "piece"),
+              }));
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not load category UoMs:", err);
+      });
+
+    return () => {
+      activeEffect = false;
+    };
+  }, [open, businessCategoryKey, isEdit]);
 
   // Default min stock alert based on category settings if available
   const defaultMinAlert = useMemo(() => {
@@ -316,19 +382,30 @@ const ProductDialog = ({
       });
       setImages(product.images ?? []);
     } else {
+      const isRest = (industryType || "").toLowerCase().includes("restaurant") || (categoryName || "").toLowerCase().includes("restaurant");
+      const isPharm = (industryType || "").toLowerCase().includes("pharm") || (categoryName || "").toLowerCase().includes("medical");
+      const initUom = isRest ? "pizza" : isPharm ? "box" : "piece";
+      const initScale = isRest ? "4" : isPharm ? "12" : "1";
+      const initBase = isPharm ? "tablet" : "piece";
+
       setForm({
         ...emptyForm,
         min_stock_alert: defaultMinAlert,
-        units_per_uom: "12",
-        measurement_scale: "12",
+        uom: initUom,
+        units_per_uom: initScale,
+        measurement_scale: initScale,
+        base_unit: initBase,
         opening_stock_boxes: "0",
         pack_qty: "0",
         stock_units: "0",
         ...(prefill ?? {}),
       });
       setImages([]);
+      if (prefill?._triggerAI === "true") {
+        setShowAIAssistant(true);
+      }
     }
-  }, [open, product, prefill, defaultMinAlert, industryType]);
+  }, [open, product, prefill, defaultMinAlert, industryType, categoryName]);
 
   const set = (k: keyof typeof emptyForm, v: string) => {
     setForm((f) => {
@@ -444,15 +521,26 @@ const ProductDialog = ({
           }
         }
       }
-      if (appliedFields.category && s.classification?.primary_category_id) {
-        next.category_id = s.classification.primary_category_id;
+      if (appliedFields.category) {
+        if (s.classification?.primary_category_id) {
+          next.category_id = s.classification.primary_category_id;
+        } else if (parents.length > 0 && !next.category_id) {
+          const matched = parents.find((p) =>
+            s.identification?.product_name?.toLowerCase().includes(p.name.toLowerCase()) ||
+            p.name.toLowerCase().includes(s.identification?.product_type?.toLowerCase() || "")
+          ) || parents[0];
+          if (matched) {
+            next.category_id = matched.id;
+          }
+        }
       }
       if (appliedFields.subcategory && s.classification?.subcategory_id) {
         next.subcategory_id = s.classification.subcategory_id;
       }
       if (appliedFields.uom && s.uom?.stock_unit) {
-        next.uom = s.uom.stock_unit.toLowerCase();
-        next.base_unit = s.uom.base_unit || getDefaultBaseUnit(next.uom, industryType);
+        const uomRaw = s.uom.stock_unit.toLowerCase();
+        next.uom = uomRaw;
+        next.base_unit = s.uom.base_unit || (uomRaw === "pizza" ? "piece" : getDefaultBaseUnit(uomRaw, industryType));
       }
       if (s.uom?.pack_size && s.uom.pack_size > 0) {
         next.units_per_uom = String(s.uom.pack_size);
@@ -712,9 +800,38 @@ const ProductDialog = ({
           : tags.join(" ");
       }
 
+      const targetProductId = isEdit && product ? product.id : crypto.randomUUID();
+
+      // Check for duplicate product in this business before creating new
+      if (!isEdit) {
+        const cleanName = form.name.trim();
+        try {
+          const { data: existing } = await supabase
+            .from("products")
+            .select("id, name, stock_units, retail_price")
+            .eq("business_id", businessId)
+            .ilike("name", cleanName)
+            .limit(1)
+            .maybeSingle();
+
+          if (existing) {
+            toast({
+              title: "Product already exists",
+              description: `"${existing.name}" is already listed in your inventory (Stock: ${existing.stock_units}). Please update stock or edit the existing item instead of creating a duplicate.`,
+              variant: "destructive",
+            });
+            setSaving(false);
+            return;
+          }
+        } catch {
+          /* continue to server check */
+        }
+      }
+
       const finalSku = form.internal_sku.trim() || generateAutoSku(form.name);
 
       const payloadWithColumns: Record<string, any> = {
+        id: targetProductId,
         business_id: businessId,
         owner_user_id: ownerUserId,
         name: form.name.trim(),
@@ -737,8 +854,8 @@ const ProductDialog = ({
         images,
       };
 
-      // 1. Primary: Save directly to Supabase collection via server API (bypasses RLS)
-      let savedProductData: any = null;
+      // 1. Save ONCE directly via server API (handles Supabase write, sync cache, and profile counts)
+      let savedSuccessfully = false;
       let error: any = null;
       try {
         const { data: sData } = await supabase.auth.getSession();
@@ -752,16 +869,25 @@ const ProductDialog = ({
           body: JSON.stringify({
             businessId,
             ownerUserId,
-            product: {
-              ...(isEdit && product ? { id: product.id } : {}),
-              ...payloadWithColumns,
-            },
+            product: payloadWithColumns,
           }),
         });
+
+        if (res.status === 409) {
+          const json = await res.json().catch(() => ({}));
+          toast({
+            title: "Product already exists",
+            description: json.error || `A product with this name is already in your inventory.`,
+            variant: "destructive",
+          });
+          setSaving(false);
+          return;
+        }
+
         if (res.ok) {
           const json = await res.json();
-          if (json?.success && json?.product) {
-            savedProductData = json.product;
+          if (json?.success) {
+            savedSuccessfully = true;
             error = null;
           }
         }
@@ -769,20 +895,24 @@ const ProductDialog = ({
         console.warn("Notice saving product via user products API, falling back to direct:", apiErr);
       }
 
-      if (!savedProductData) {
+      // 2. Fallback to direct client Supabase insert ONLY if server API was unreachable
+      if (!savedSuccessfully) {
         if (isEdit && product) {
-          const res = await supabase.from("products").update(payloadWithColumns).eq("id", product.id);
+          const res = await supabase.from("products").update(payloadWithColumns).eq("id", targetProductId);
           error = res.error;
+          if (!error) savedSuccessfully = true;
         } else {
           const res = await supabase.from("products").insert(payloadWithColumns);
           error = res.error;
+          if (!error) savedSuccessfully = true;
         }
       }
 
       // Resilient fallback if the new columns (uom, units_per_uom, base_unit) have not yet been migrated in Supabase (Postgres 42703)
-      if (error && (error.code === "42703" || String(error.message).toLowerCase().includes("column"))) {
+      if (!savedSuccessfully && error && (error.code === "42703" || String(error.message).toLowerCase().includes("column"))) {
         console.warn("Retrying save without new column properties (tags preserved in description):", error.message);
         const legacyPayload = {
+          id: targetProductId,
           business_id: businessId,
           owner_user_id: ownerUserId,
           name: form.name.trim(),
@@ -793,7 +923,7 @@ const ProductDialog = ({
           purchase_cost: Number(form.purchase_cost) || 0,
           retail_price: Number(form.retail_price) || 0,
           discount_price: form.discount_price ? Number(form.discount_price) : null,
-          stock_units: totalBaseUnits, // ALWAYS in Base Units!
+          stock_units: totalBaseUnits,
           min_stock_alert: parseInt(form.min_stock_alert, 10) || 5,
           batch_number: form.batch_number.trim() || null,
           expiry_date: form.expiry_date || null,
@@ -802,7 +932,7 @@ const ProductDialog = ({
           images,
         };
         if (isEdit && product) {
-          const res = await supabase.from("products").update(legacyPayload).eq("id", product.id);
+          const res = await supabase.from("products").update(legacyPayload).eq("id", targetProductId);
           error = res.error;
         } else {
           const res = await supabase.from("products").insert(legacyPayload);
@@ -810,23 +940,7 @@ const ProductDialog = ({
         }
       }
 
-      // Synchronize to the operational sync server so staff and owner see it instantly
-      const syncedProd = await saveSyncedProduct(
-        businessId,
-        {
-          ...(isEdit && product ? { id: product.id } : {}),
-          ...payloadWithColumns,
-        },
-        ownerUserId,
-        Boolean(active?.is_staff)
-      );
-
-      if (error && syncedProd) {
-        // Successfully saved via operational sync engine even if Supabase direct write was blocked by RLS
-        error = null;
-      }
-
-      if (error) {
+      if (error && !savedSuccessfully) {
         toast({
           title: "Could not save product",
           description: error.message || "Database insert error",
@@ -938,7 +1052,15 @@ const ProductDialog = ({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setShowAIAssistant(!showAIAssistant)}
+                onClick={() => {
+                  const nextShow = !showAIAssistant;
+                  setShowAIAssistant(nextShow);
+                  if (nextShow && form.name.trim()) {
+                    setTimeout(() => {
+                      aiAssistantRef.current?.triggerAnalysis(form.name);
+                    }, 80);
+                  }
+                }}
                 className="h-7 sm:h-8 text-[11px] sm:text-xs font-semibold gap-1 border-sky-500/40 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 shrink-0 px-2 sm:px-3"
               >
                 {showAIAssistant ? (
@@ -1336,13 +1458,24 @@ const ProductDialog = ({
                     Selling Unit (UoM)
                   </FieldLabel>
                   <Select
-                    value={form.uom ? form.uom.toLowerCase() : "box"}
+                    value={form.uom ? form.uom.toLowerCase() : (categoryUoms[0]?.name?.toLowerCase() || "piece")}
                     onValueChange={(val) => {
                       set("uom", val);
                       markTouched("uom");
-                      if (val === "box") {
+                      const matched = categoryUoms.find((u) => u.name.toLowerCase() === val.toLowerCase());
+                      if (matched) {
+                        const factor = matched.conversionFactor || (val === "pizza" ? 4 : 1);
+                        const sub = matched.subUnit || (val === "pizza" ? "piece" : "unit");
+                        set("units_per_uom", String(factor));
+                        set("base_unit", sub);
+                        set("measurement_scale", String(factor));
+                      } else if (val === "pizza") {
+                        set("units_per_uom", "4");
+                        set("base_unit", "piece");
+                        set("measurement_scale", "4");
+                      } else if (val === "box") {
                         set("units_per_uom", "12");
-                        set("base_unit", "tablet");
+                        set("base_unit", industryType?.toLowerCase().includes("pharm") ? "tablet" : "piece");
                         set("measurement_scale", "12");
                       } else if (val === "strip") {
                         set("units_per_uom", "10");
@@ -1368,36 +1501,56 @@ const ProductDialog = ({
                         set("units_per_uom", "1000");
                         set("base_unit", "g");
                         set("measurement_scale", "1000");
-                      } else if (val === "piece") {
+                      } else if (val === "liter") {
+                        set("units_per_uom", "1000");
+                        set("base_unit", "ml");
+                        set("measurement_scale", "1000");
+                      } else {
                         set("units_per_uom", "1");
                         set("base_unit", "piece");
                         set("measurement_scale", "1");
                       }
                     }}
                   >
-                    <SelectTrigger id="uom-scale-type-select" className="h-10 text-xs">
+                    <SelectTrigger id="uom-scale-type-select" className="h-10 text-xs font-semibold">
                       <SelectValue placeholder="Select UOM" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="box">📦 Box (e.g. 12 or 20 tablets per box)</SelectItem>
-                      <SelectItem value="strip">💊 Strip (e.g. 10 pills per strip)</SelectItem>
-                      <SelectItem value="pack">🛍️ Pack (e.g. 10 items per pack)</SelectItem>
-                      <SelectItem value="carton">📦 Carton (e.g. 24 units per carton)</SelectItem>
-                      <SelectItem value="dozen">🥚 Dozen (12 pieces per dozen)</SelectItem>
-                      <SelectItem value="bottle">🧴 Bottle (e.g. 100ml / syrup)</SelectItem>
-                      <SelectItem value="kg">⚖️ Kilogram (1000g per kg)</SelectItem>
-                      <SelectItem value="piece">🧩 Piece / Single Unit (1:1)</SelectItem>
+                    <SelectContent className="max-h-72">
+                      {Object.keys(groupedCategoryUoms).length > 0 ? (
+                        Object.entries(groupedCategoryUoms).map(([parentGroup, uList]) => (
+                          <div key={parentGroup} className="py-1">
+                            <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/40 rounded">
+                              {parentGroup}
+                            </div>
+                            {uList.map((u) => (
+                              <SelectItem key={u.id} value={u.name.toLowerCase()} className="text-xs pl-4 cursor-pointer">
+                                {u.name} {u.symbol ? `(${u.symbol})` : ""}
+                              </SelectItem>
+                            ))}
+                          </div>
+                        ))
+                      ) : (
+                        <>
+                          <SelectItem value="piece">🧩 Piece (pc)</SelectItem>
+                          <SelectItem value="box">📦 Box (bx)</SelectItem>
+                          <SelectItem value="pack">🛍️ Pack (pk)</SelectItem>
+                          <SelectItem value="kg">⚖️ Kilogram (kg)</SelectItem>
+                          <SelectItem value="liter">💧 Liter (L)</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Primary unit sold over the counter.
+                    Primary unit sold over the counter ({industryType || categoryName || "Business Category"}).
                   </p>
                 </div>
 
-                {/* 2. Pieces / Units per Box */}
+                {/* 2. Pieces / Units per UoM */}
                 <div>
                   <FieldLabel htmlFor="units-per-uom-input" required>
-                    Pieces / Units per {form.uom ? form.uom.charAt(0).toUpperCase() + form.uom.slice(1) : "Box"}
+                    {form.uom?.toLowerCase() === "pizza"
+                      ? "Units / Pieces / Size of Pizza (e.g. 4 piece)"
+                      : `Pieces / Units per ${form.uom ? form.uom.charAt(0).toUpperCase() + form.uom.slice(1) : "Unit"}`}
                   </FieldLabel>
                   <Input
                     id="units-per-uom-input"
@@ -1409,18 +1562,20 @@ const ProductDialog = ({
                       set("units_per_uom", val);
                       set("measurement_scale", val);
                     }}
-                    placeholder="12"
+                    placeholder={form.uom?.toLowerCase() === "pizza" ? "4" : "1"}
                     className="h-10 text-xs font-semibold"
                   />
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Smallest {form.base_unit || "pieces"} inside 1 {form.uom || "box"}.
+                    {form.uom?.toLowerCase() === "pizza"
+                      ? "Size of Pizza: number of pieces / slices inside 1 Pizza (e.g. 4 piece)."
+                      : `Smallest ${form.base_unit || "pieces"} inside 1 ${form.uom || "package"}.`}
                   </p>
                 </div>
 
-                {/* 3. Opening Stock in Boxes */}
+                {/* 3. Opening Stock in UoM */}
                 <div>
                   <FieldLabel htmlFor="opening-stock-boxes-input" required>
-                    Opening Stock in {form.uom ? formatUomPlural(form.uom.charAt(0).toUpperCase() + form.uom.slice(1), 2) : "Boxes"}
+                    Opening Stock in {form.uom ? formatUomPlural(form.uom.charAt(0).toUpperCase() + form.uom.slice(1), 2) : "Units"}
                   </FieldLabel>
                   <Input
                     id="opening-stock-boxes-input"

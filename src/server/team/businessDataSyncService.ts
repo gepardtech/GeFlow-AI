@@ -539,18 +539,29 @@ export class BusinessDataSyncService {
    * Delete product
    */
   public deleteProduct(businessId: string, productId: string): boolean {
-    const unit = this.getOrCreateBusinessUnit(businessId);
-    const prevLen = unit.products.length;
-    unit.products = unit.products.filter((p) => p.id !== productId);
-    if (unit.products.length !== prevLen) {
-      this.persist();
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productId);
-      if (isUUID) {
-        serverSupabase.from("products").delete().eq("id", productId).then(() => {}).catch(() => {});
-      }
-      return true;
+    const cleanId = String(productId || "").trim();
+    if (!cleanId) return false;
+    if (businessId) {
+      const unit = this.getOrCreateBusinessUnit(businessId);
+      unit.products = (unit.products || []).filter((p) => String(p.id).trim() !== cleanId);
     }
-    return false;
+    for (const bId of Object.keys(this.units)) {
+      const u = this.units[bId];
+      if (u && Array.isArray(u.products)) {
+        u.products = u.products.filter((p) => String(p.id).trim() !== cleanId);
+      }
+    }
+    this.persist();
+
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
+    if (isUUID) {
+      serverSupabase.from("sale_items").delete().eq("product_id", cleanId).then(() => {}).catch(() => {});
+      serverSupabase.from("purchase_items").delete().eq("product_id", cleanId).then(() => {}).catch(() => {});
+      serverSupabase.from("order_items").delete().eq("product_id", cleanId).then(() => {}).catch(() => {});
+      serverSupabase.from("stock_movements").delete().eq("product_id", cleanId).then(() => {}).catch(() => {});
+      serverSupabase.from("products").delete().eq("id", cleanId).then(() => {}).catch(() => {});
+    }
+    return true;
   }
 
   /**

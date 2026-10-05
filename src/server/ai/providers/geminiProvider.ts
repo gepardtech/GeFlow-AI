@@ -37,7 +37,7 @@ function getGeminiClient(): GoogleGenAI | null {
 
 export class GeminiProvider implements AIProviderInterface {
   public readonly name = "gemini" as const;
-  public readonly defaultModel = "gemini-3.7-flash";
+  public readonly defaultModel = "gemini-3.8-flash";
 
   public isConfigured(): boolean {
     return !!process.env.GEMINI_API_KEY;
@@ -45,7 +45,10 @@ export class GeminiProvider implements AIProviderInterface {
 
   public async analyzeProduct(request: AIAnalysisRequest): Promise<AIProviderResponse> {
     const client = getGeminiClient();
-    const modelName = request.options?.preferredModel || this.defaultModel;
+    let modelName = request.options?.preferredModel || this.defaultModel;
+    if (modelName === "gemini-3.7-flash") {
+      modelName = "gemini-3.8-flash";
+    }
     const startTime = Date.now();
 
     if (!client) {
@@ -160,9 +163,14 @@ RESPONSE SCHEMA (Return strictly JSON):
       };
     } catch (err: any) {
       if (err instanceof AIServiceError) throw err;
+      const isAuth =
+        err?.status === 401 ||
+        err?.message?.includes("401") ||
+        err?.message?.includes("UNAUTHENTICATED") ||
+        err?.message?.includes("ACCESS_TOKEN_TYPE_UNSUPPORTED");
       throw new AIServiceError("AI_PROVIDER_UNAVAILABLE", `Gemini API execution failed: ${err.message}`, {
-        statusCode: 502,
-        retryable: true,
+        statusCode: isAuth ? 401 : 502,
+        retryable: !isAuth,
         requestId: request.requestId,
         details: err,
       });
@@ -171,7 +179,10 @@ RESPONSE SCHEMA (Return strictly JSON):
 
   public async verifyProduct(request: AIVerificationRequest): Promise<AIProviderResponse> {
     const client = getGeminiClient();
-    const modelName = request.options?.preferredModel || this.defaultModel;
+    let modelName = request.options?.preferredModel || this.defaultModel;
+    if (modelName === "gemini-3.7-flash") {
+      modelName = "gemini-3.8-flash";
+    }
     const startTime = Date.now();
 
     if (!client) {
@@ -232,9 +243,14 @@ RETURN JSON:
       };
     } catch (err: any) {
       if (err instanceof AIServiceError) throw err;
+      const isAuth =
+        err?.status === 401 ||
+        err?.message?.includes("401") ||
+        err?.message?.includes("UNAUTHENTICATED") ||
+        err?.message?.includes("ACCESS_TOKEN_TYPE_UNSUPPORTED");
       throw new AIServiceError("AI_PROVIDER_UNAVAILABLE", `Gemini verification error: ${err.message}`, {
-        statusCode: 502,
-        retryable: true,
+        statusCode: isAuth ? 401 : 502,
+        retryable: !isAuth,
         requestId: request.requestId,
       });
     }

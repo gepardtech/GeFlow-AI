@@ -23,7 +23,15 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Dashboard", to: "/admin", icon: Activity },
   { label: "User Directory", to: "/admin/users", icon: Users },
   { label: "Businesses", to: "/admin/businesses", icon: Building2 },
-  { label: "Business Categories", to: "/admin/business-categories", icon: Tag },
+  {
+    label: "Business Categories",
+    to: "/admin/business-categories",
+    icon: Tag,
+    children: [
+      { label: "All Categories", to: "/admin/business-categories" },
+      { label: "UoM", to: "/admin/business-categories/uom" },
+    ],
+  },
   { label: "Product Categories", to: "/admin/product-categories", icon: Package },
   {
     label: "Billing & Subs", to: "/admin/billing", icon: CreditCard,

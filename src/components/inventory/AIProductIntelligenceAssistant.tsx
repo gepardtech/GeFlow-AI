@@ -33,6 +33,7 @@ import {
 } from "@/types/aiProductIntelligence";
 import { requestProductAnalysis, requestProductVerification } from "@/lib/ai/aiServiceClient";
 import { BusinessCatalogContext } from "@/server/ai/types";
+import { useToast } from "@/hooks/use-toast";
 import { AIConfidenceBadge } from "./AIConfidenceBadge";
 
 export interface AIProductIntelligenceAssistantRef {
@@ -67,6 +68,7 @@ export const AIProductIntelligenceAssistant = forwardRef<AIProductIntelligenceAs
     ref
   ) => {
     const [isOpen, setIsOpen] = useState(true);
+    const { toast } = useToast();
     const [inputText, setInputText] = useState(currentProductName || "");
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisStep, setAnalysisStep] = useState<StepKey | null>(null);
@@ -214,6 +216,23 @@ export const AIProductIntelligenceAssistant = forwardRef<AIProductIntelligenceAs
               ? String(finalSuggestion.extracted_business_data.stock_units)
               : "",
           description: finalSuggestion.identification?.description || "",
+        });
+
+        // Auto-fill product form automatically with verified AI intelligence
+        const autoFields = {
+          product_name: true,
+          category: true,
+          subcategory: true,
+          uom: true,
+          packaging: true,
+          strength: true,
+          pricing: !!(finalSuggestion.extracted_business_data?.purchase_cost || finalSuggestion.extracted_business_data?.retail_price),
+        };
+        onApplySuggestion(finalSuggestion, autoFields);
+
+        toast({
+          title: "✨ Form Auto-Filled with AI",
+          description: `Applied specifications for ${finalSuggestion.identification?.product_name || textToAnalyze} (${finalSuggestion.uom?.stock_unit || "piece"}, ${finalSuggestion.uom?.pack_size ? `${finalSuggestion.uom.pack_size} units` : "1 unit"}).`,
         });
 
         // Ensure user can see the suggestions

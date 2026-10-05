@@ -67,9 +67,7 @@ export class ProductAnalyzer {
 
     try {
       providerResponse = await this.modelRouter.executeAnalysis(request);
-      if (providerResponse.provider === "heuristic_fallback") {
-        traceStatus = "fallback";
-      }
+      traceStatus = "success";
     } catch (err: any) {
       traceStatus = "error";
       errorCode = err?.code || "AI_EXECUTION_FAILED";

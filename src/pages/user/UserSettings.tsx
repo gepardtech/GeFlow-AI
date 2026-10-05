@@ -321,7 +321,7 @@ export const UserSettings = () => {
     if (!currentBiz?.id) return;
 
     const channel = supabase
-      .channel(`user-settings-sync-${currentBiz.id}`)
+      .channel(`user-settings-sync-${currentBiz.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`)
       .on(
         "postgres_changes",
         {

@@ -20,6 +20,7 @@ import { businessDataSyncService } from "./src/server/team/businessDataSyncServi
 import { settingsService } from "./src/server/settings/settingsService";
 import { newsletterService } from "./src/server/newsletter/newsletterService";
 import { promotionsService } from "./src/server/promotions/promotionsService";
+import { uomService } from "./src/server/uom/uomService";
 import { serverSupabase, bgSupabase, verifyUserToken } from "./src/server/supabase";
 import { syncRealCategoriesToDatabase } from "./src/server/syncRealCategories";
 import { GoogleGenAI } from "@google/genai";
@@ -1167,6 +1168,41 @@ app.post("/api/user/products/save", async (req: Request, res: Response) => {
       }
     }
 
+    const cleanName = (product.name || "Untitled Product").trim();
+
+    // Check whether this product ID already exists in this business
+    let isExistingRecord = false;
+    if (isUUID(product.id)) {
+      const { data: byId } = await serverSupabase
+        .from("products")
+        .select("id")
+        .eq("business_id", businessId)
+        .eq("id", product.id)
+        .maybeSingle();
+      if (byId?.id) {
+        isExistingRecord = true;
+      }
+    }
+
+    // Prevent duplicate product creation in same business
+    // Reject if a product with the same name already exists in this business (unless editing that exact record)
+    const { data: existing } = await serverSupabase
+      .from("products")
+      .select("id, name, stock_units, retail_price")
+      .eq("business_id", businessId)
+      .ilike("name", cleanName)
+      .limit(1)
+      .maybeSingle();
+
+    if (existing && (!isExistingRecord || existing.id !== product.id)) {
+      return res.status(409).json({
+        success: false,
+        duplicate: true,
+        existingProduct: existing,
+        error: `"${existing.name}" is already listed in your inventory (Current Stock: ${existing.stock_units}). You cannot add the same product twice. Update its stock or edit it instead.`,
+      });
+    }
+
     const productId = isUUID(product.id) ? product.id : crypto.randomUUID();
     const now = new Date().toISOString();
 
@@ -1234,25 +1270,93 @@ app.post("/api/user/products/save", async (req: Request, res: Response) => {
 app.delete("/api/user/products/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { businessId } = req.query;
+    const businessId = (req.query.businessId as string) || (req.body?.businessId as string);
     if (!id) return res.status(400).json({ success: false, error: "product id required" });
 
-    await serverSupabase.from("sale_items").delete().eq("product_id", id);
-    await serverSupabase.from("purchase_items").delete().eq("product_id", id);
-    await serverSupabase.from("order_items").delete().eq("product_id", id);
-    await serverSupabase.from("stock_movements").delete().eq("product_id", id);
-    const { error: delErr } = await serverSupabase.from("products").delete().eq("id", id);
-    if (delErr) return res.status(500).json({ success: false, error: delErr.message });
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
-    if (businessId && typeof businessId === "string") {
+    // 1. Fetch product row to know owner/business if not supplied
+    let targetBizId = businessId;
+    let targetOwnerId: string | undefined;
+    if (isUUID) {
       try {
-        const { count: bCount } = await serverSupabase.from("products").select("*", { count: "exact", head: true }).eq("business_id", businessId);
-        await serverSupabase.from("businesses").update({ listed_products: bCount ?? 0 }).eq("id", businessId);
-        businessDataSyncService.deleteProduct(businessId, id);
+        const { data: prod } = await serverSupabase.from("products").select("business_id, owner_user_id").eq("id", id).maybeSingle();
+        if (prod) {
+          targetBizId = targetBizId || prod.business_id;
+          targetOwnerId = prod.owner_user_id;
+        }
+      } catch {}
+
+      // 2. Delete associated child records to prevent foreign key errors
+      await serverSupabase.from("sale_items").delete().eq("product_id", id).catch(() => {});
+      await serverSupabase.from("purchase_items").delete().eq("product_id", id).catch(() => {});
+      await serverSupabase.from("order_items").delete().eq("product_id", id).catch(() => {});
+      await serverSupabase.from("stock_movements").delete().eq("product_id", id).catch(() => {});
+
+      // 3. Delete physical product from PostgreSQL
+      const { error: delErr } = await serverSupabase.from("products").delete().eq("id", id);
+      if (delErr) {
+        console.error("serverSupabase product delete error:", delErr.message);
+        return res.status(500).json({ success: false, error: delErr.message });
+      }
+    }
+
+    // 4. Update sync engine and database business/profile counters
+    try {
+      businessDataSyncService.deleteProduct(targetBizId || businessId || "", id);
+      if (isUUID && targetBizId) {
+        const { count: bCount } = await serverSupabase.from("products").select("*", { count: "exact", head: true }).eq("business_id", targetBizId);
+        await serverSupabase.from("businesses").update({ listed_products: bCount ?? 0, updated_at: new Date().toISOString() }).eq("id", targetBizId).catch(() => {});
+      }
+    } catch {}
+
+    if (targetOwnerId && isUUID) {
+      try {
+        const { count: uCount } = await serverSupabase.from("products").select("*", { count: "exact", head: true }).eq("owner_user_id", targetOwnerId);
+        await serverSupabase.from("profiles").update({ listed_products: uCount ?? 0, updated_at: new Date().toISOString() }).eq("user_id", targetOwnerId).catch(() => {});
       } catch {}
     }
 
     return res.json({ success: true, id });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/user/products/bulk-delete", async (req: Request, res: Response) => {
+  try {
+    const { ids, businessId } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: "ids array required" });
+    }
+
+    const uuidList = ids.filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
+    if (uuidList.length > 0) {
+      // 1. Delete associated child records
+      await serverSupabase.from("sale_items").delete().in("product_id", uuidList).catch(() => {});
+      await serverSupabase.from("purchase_items").delete().in("product_id", uuidList).catch(() => {});
+      await serverSupabase.from("order_items").delete().in("product_id", uuidList).catch(() => {});
+      await serverSupabase.from("stock_movements").delete().in("product_id", uuidList).catch(() => {});
+
+      // 2. Delete physical products
+      const { error: delErr } = await serverSupabase.from("products").delete().in("id", uuidList);
+      if (delErr) {
+        console.error("serverSupabase bulk delete error:", delErr.message);
+        return res.status(500).json({ success: false, error: delErr.message });
+      }
+    }
+
+    // 3. Remove from operational sync cache and update counters
+    try {
+      ids.forEach((id: string) => businessDataSyncService.deleteProduct(businessId || "", id));
+      if (businessId && typeof businessId === "string") {
+        const { count: bCount } = await serverSupabase.from("products").select("*", { count: "exact", head: true }).eq("business_id", businessId);
+        await serverSupabase.from("businesses").update({ listed_products: bCount ?? 0, updated_at: new Date().toISOString() }).eq("id", businessId).catch(() => {});
+      }
+    } catch {}
+
+    return res.json({ success: true, count: ids.length });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -2880,6 +2984,30 @@ app.post("/api/admin/settings", async (req: Request, res: Response) => {
       }
     }
 
+    // Save base64 image data URLs to static files so they are permanent and fast in all browsers
+    if (typeof cleanPayload.logo_url === "string" && cleanPayload.logo_url.startsWith("data:image")) {
+      try {
+        const base64Data = cleanPayload.logo_url.replace(/^data:image\/\w+;base64,/, "");
+        const filePath = path.join(process.cwd(), "public", "uploads", "brand_logo.png");
+        fs.writeFileSync(filePath, Buffer.from(base64Data, "base64"));
+        fs.writeFileSync(path.join(process.cwd(), "public", "logo.png"), Buffer.from(base64Data, "base64"));
+        cleanPayload.logo_url = "/uploads/brand_logo.png";
+      } catch (err) {
+        console.warn("Notice saving logo_url to file:", err);
+      }
+    }
+    if (typeof cleanPayload.favicon_url === "string" && cleanPayload.favicon_url.startsWith("data:image")) {
+      try {
+        const base64Data = cleanPayload.favicon_url.replace(/^data:image\/\w+;base64,/, "");
+        const filePath = path.join(process.cwd(), "public", "uploads", "brand_favicon.png");
+        fs.writeFileSync(filePath, Buffer.from(base64Data, "base64"));
+        fs.writeFileSync(path.join(process.cwd(), "public", "favicon.png"), Buffer.from(base64Data, "base64"));
+        cleanPayload.favicon_url = "/uploads/brand_favicon.png";
+      } catch (err) {
+        console.warn("Notice saving favicon_url to file:", err);
+      }
+    }
+
     // 1. Update platform_settings with service role
     let { data: updatedRow, error: updateErr } = await serverSupabase
       .from("platform_settings")
@@ -3205,6 +3333,9 @@ app.get("/api/admin/business-categories", async (_req: Request, res: Response) =
       ...c,
       internal_description: noteMap[c.id] || null,
     }));
+    try {
+      uomService.seedMappingsForCategories(categories);
+    } catch {}
     return res.json({ success: true, categories });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
@@ -3324,6 +3455,147 @@ app.delete("/api/admin/product-categories/:id", async (req: Request, res: Respon
     const { error } = await serverSupabase.from("product_categories").delete().eq("id", id);
     if (error) return res.status(500).json({ success: false, error: error.message });
     return res.json({ success: true, id });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================================
+// UOM (UNIT OF MEASURE) SYSTEM & BUSINESS CATEGORY HIERARCHY
+// ============================================================
+
+// GET all UoMs + real-time aggregation stats + filtering
+app.get("/api/admin/uoms", async (req: Request, res: Response) => {
+  try {
+    const { businessCategory, search, status, parentId } = req.query as {
+      businessCategory?: string;
+      search?: string;
+      status?: string;
+      parentId?: string;
+    };
+
+    const uoms = uomService.getUoms({
+      businessCategory,
+      search,
+      status,
+      parentId: parentId === "root" ? null : parentId,
+    });
+    const stats = uomService.getStats();
+
+    return res.json({
+      success: true,
+      uoms,
+      stats,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST create or edit Master / Hierarchical UoM
+app.post("/api/admin/uoms", async (req: Request, res: Response) => {
+  try {
+    const authUser = await getAuthenticatedUser(req);
+    const adminId = authUser?.id || "admin";
+    const uomData = req.body?.uom || req.body || {};
+
+    if (!uomData.name || !uomData.name.trim()) {
+      return res.status(400).json({ success: false, error: "UoM Name is required" });
+    }
+
+    const saved = uomService.saveUom(uomData, adminId);
+    return res.json({
+      success: true,
+      uom: saved,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST bulk operations on UoMs (status, categories, delete)
+app.post("/api/admin/uoms/bulk", async (req: Request, res: Response) => {
+  try {
+    const authUser = await getAuthenticatedUser(req);
+    const adminId = authUser?.id || "admin";
+    const { ids, action, status, targetBusinessCategories, addCategories } = req.body || {};
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, error: "ids array is required" });
+    }
+
+    const result = uomService.bulkUpdateUoms(
+      ids,
+      {
+        action,
+        status,
+        targetBusinessCategories,
+        addCategories,
+      },
+      adminId
+    );
+
+    return res.json({ success: true, ...result });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE / Deactivate UOM
+app.delete("/api/admin/uoms/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ success: false, error: "ID required" });
+
+    const deleted = uomService.deleteUom(id);
+    return res.json({ success: true, deleted, id });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST toggle UOM status (Active / Inactive)
+app.post("/api/admin/uoms/status", async (req: Request, res: Response) => {
+  try {
+    const authUser = await getAuthenticatedUser(req);
+    const adminId = authUser?.id || "admin";
+    const { uomId, id, status } = req.body || {};
+    const targetId = id || uomId;
+    if (!targetId) return res.status(400).json({ success: false, error: "uomId required" });
+
+    const updated = uomService.saveUom({ id: targetId, status: status || "Active" }, adminId);
+    return res.json({ success: true, uom: updated });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET public/user product form UoMs for a business category
+app.get("/api/business-category-uoms/:categoryId", async (req: Request, res: Response) => {
+  try {
+    const { categoryId } = req.params;
+    let categoryName = categoryId;
+
+    // Check if categoryId is a UUID in database, resolve its actual name
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(categoryId)) {
+      const { data: cat } = await serverSupabase
+        .from("business_categories")
+        .select("name, industry_type")
+        .eq("id", categoryId)
+        .maybeSingle();
+
+      if (cat?.name) {
+        categoryName = `${cat.name} ${cat.industry_type || ""}`;
+      }
+    }
+
+    const result = uomService.getUomsForBusinessCategory(categoryName);
+    return res.json({
+      success: true,
+      categoryId,
+      defaultUom: result.defaultUom,
+      uoms: result.uoms,
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -4319,9 +4591,19 @@ CRITICAL FORMATTING REQUIREMENT:
           },
         });
 
-        const reply = response.text || "";
-        if (reply && reply.trim()) {
-          return res.json({ success: true, reply: reply.trim() });
+        const rawReply = (response.text || "").trim();
+        if (rawReply) {
+          // Guarantee that response is formatted in clean bullets, never a single wall of text
+          let formattedReply = rawReply;
+          if (!formattedReply.includes("•") && !formattedReply.includes("\n- ") && !formattedReply.includes("\n* ")) {
+            const sentences = formattedReply.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+            if (sentences.length > 1) {
+              const summary = sentences[0];
+              const bullets = sentences.slice(1).map((s) => `• ${s}`);
+              formattedReply = `### 💡 Operational Intelligence\n\n${summary}\n\n**Key Details & Recommendations:**\n${bullets.join("\n")}`;
+            }
+          }
+          return res.json({ success: true, reply: formattedReply });
         }
       } catch (geminiErr: any) {
         console.warn("Notice calling Gemini API for assistant:", geminiErr.message);

@@ -218,19 +218,24 @@ function setupGlobalPlanSubscriber() {
     }
   });
 
-  supabase
-    .channel("global_user_plan_sync")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "profiles" },
-      () => fetchAuthoritativePlan()
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "subscriptions" },
-      () => fetchAuthoritativePlan()
-    )
-    .subscribe();
+  try {
+    const channelId = `global_user_plan_sync_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    supabase
+      .channel(channelId)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        () => fetchAuthoritativePlan()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "subscriptions" },
+        () => fetchAuthoritativePlan()
+      )
+      .subscribe();
+  } catch (err) {
+    console.warn("Notice subscribing to plan realtime changes:", err);
+  }
 
   window.addEventListener("geflow:plan-changed", () => {
     fetchAuthoritativePlan();

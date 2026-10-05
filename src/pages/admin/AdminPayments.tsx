@@ -264,7 +264,7 @@ const AdminPayments = () => {
 
   if (loading) {
     return (
-      <PanelLayout navItems={ADMIN_NAV} {...ADMIN_IDENTITY}>
+      <PanelLayout navItems={ADMIN_NAV} {...ADMIN_IDENTITY} isAdmin>
         <div className="min-h-[60vh] flex items-center justify-center text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading payment infrastructure...
         </div>
@@ -273,7 +273,7 @@ const AdminPayments = () => {
   }
 
   return (
-    <PanelLayout navItems={ADMIN_NAV} {...ADMIN_IDENTITY}>
+    <PanelLayout navItems={ADMIN_NAV} {...ADMIN_IDENTITY} isAdmin>
       {/* Header */}
       <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4 mb-6">
         <div>

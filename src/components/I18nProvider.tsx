@@ -122,20 +122,27 @@ const I18nProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     const sweep = () => {
-      const nodes: Text[] = [];
-      collect(document.body, nodes);
-      const missing = applyKnown(nodes);
-      if (missing.length) translateMissing(missing);
+      if (cancelled) return;
+      observer.disconnect();
+      try {
+        const nodes: Text[] = [];
+        collect(document.body, nodes);
+        const missing = applyKnown(nodes);
+        if (missing.length) translateMissing(missing);
+      } finally {
+        if (!cancelled) {
+          observer.observe(document.body, { childList: true, subtree: true });
+        }
+      }
     };
 
     const schedule = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(sweep, 250);
+      timer = window.setTimeout(sweep, 400);
     };
 
-    schedule();
     const observer = new MutationObserver(schedule);
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    schedule();
 
     return () => { cancelled = true; observer.disconnect(); window.clearTimeout(timer); };
   }, [lang]);

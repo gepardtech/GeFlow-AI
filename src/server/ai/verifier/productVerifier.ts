@@ -40,7 +40,7 @@ export class ProductVerifier {
   ): Promise<AIVerificationResult> {
     const startTime = Date.now();
     const critiqueNotes: string[] = [];
-    const uncertainFields: string[] = [...(suggestion.uncertain_fields || [])];
+    const uncertainFields: string[] = [...(suggestion?.uncertain_fields || [])];
     const contradictions: Array<{
       field: string;
       originalInput: string;
@@ -50,9 +50,17 @@ export class ProductVerifier {
     }> = [];
     const suggestedCorrections: Record<string, any> = {};
 
+    suggestion.identification = suggestion.identification || ({} as any);
+    suggestion.classification = suggestion.classification || ({} as any);
+    suggestion.inventory = suggestion.inventory || ({} as any);
+    suggestion.uom = suggestion.uom || ({} as any);
+    suggestion.attributes = suggestion.attributes || ({} as any);
+    suggestion.extracted_business_data = suggestion.extracted_business_data || ({} as any);
+    suggestion.field_confidence_details = suggestion.field_confidence_details || ({} as any);
+
     const rawInputClean = (
       originalInput ||
-      suggestion.identification.product_name ||
+      suggestion.identification?.product_name ||
       ""
     ).toLowerCase();
 
@@ -485,7 +493,7 @@ export class ProductVerifier {
       categoryStatus.status !== "verified" ||
       uomStatus.status !== "verified";
 
-    let finalScore = suggestion.overall_confidence;
+    let finalScore = typeof suggestion.overall_confidence === "number" ? suggestion.overall_confidence : 0.8;
     if (distinctCritiques.length > 0) {
       finalScore = Math.max(0.3, finalScore - distinctCritiques.length * 0.08);
     }
@@ -495,7 +503,7 @@ export class ProductVerifier {
     if (contradictions.length > 0) {
       finalScore = Math.min(finalScore, 0.55);
     }
-    if (suggestion.overall_confidence < 0.6) {
+    if (typeof suggestion.overall_confidence === "number" && suggestion.overall_confidence < 0.6) {
       finalScore = Math.min(finalScore, suggestion.overall_confidence);
     }
 

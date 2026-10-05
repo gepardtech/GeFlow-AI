@@ -103,7 +103,7 @@ const UserAnnouncements = () => {
   useEffect(() => {
     load();
     const ch = supabase
-      .channel("user_announcements")
+      .channel(`user_announcements_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "announcements" }, load)
       .subscribe();
     return () => {

@@ -67,7 +67,8 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
   } = useActiveBusiness();
 
   // Automatically treat any /admin route as an admin view
-  const isPathAdmin = isAdmin || location.pathname.startsWith("/admin");
+  const isPathAdmin = Boolean(isAdmin) || location.pathname.startsWith("/admin");
+  const dashboardLink = isPathAdmin ? "/admin" : "/dashboard";
   const isLocked = (to: string) => lockedPaths.some((p) => to === p || to.startsWith(p + "/"));
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -101,7 +102,8 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
   // Close the mobile drawer whenever the route changes.
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
-  // Auto-open groups containing the active route
+  // Auto-open groups containing the active route with memoized keys to prevent re-render flickers
+  const navKey = useMemo(() => navItems.map((n) => `${n.to}:${n.label}`).join("|"), [navItems]);
   useEffect(() => {
     const initialGroups: Record<string, boolean> = {};
     navItems.forEach((item) => {
@@ -109,8 +111,11 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
         if (item.children) initialGroups[item.to] = true;
       }
     });
-    setOpenGroups((prev) => ({ ...initialGroups, ...prev }));
-  }, [location.pathname, navItems]);
+    setOpenGroups((prev) => {
+      const hasDiff = Object.keys(initialGroups).some((k) => !prev[k]);
+      return hasDiff ? { ...initialGroups, ...prev } : prev;
+    });
+  }, [location.pathname, navKey]);
 
   const settingsPath = isPathAdmin ? "/admin/settings" : "/dashboard/workspace";
   const supportPath = isPathAdmin ? "/admin/support" : "/contact";
@@ -327,17 +332,29 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
     window.addEventListener("geflow:contact-submission-deleted", onSubmissionChange);
     window.addEventListener("geflow:ai-report-created", onSubmissionChange);
     window.addEventListener("geflow:ai-restock-created", onSubmissionChange);
-    const channel = supabase
-      .channel("contact_notifications")
-      .on("postgres_changes", { event: "*", schema: "public", table: "contact_submissions" }, () => fetchNotifications())
-      .subscribe();
+    const channelId = `contact_notifications_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    let channel: any = null;
+    try {
+      channel = supabase
+        .channel(channelId)
+        .on("postgres_changes", { event: "*", schema: "public", table: "contact_submissions" }, () => fetchNotifications())
+        .subscribe();
+    } catch (chErr) {
+      console.warn("Notice subscribing to contact notifications:", chErr);
+    }
     return () => {
       window.removeEventListener("geflow:contact-submission-added", onSubmissionChange);
       window.removeEventListener("geflow:contact-submission-updated", onSubmissionChange);
       window.removeEventListener("geflow:contact-submission-deleted", onSubmissionChange);
       window.removeEventListener("geflow:ai-report-created", onSubmissionChange);
       window.removeEventListener("geflow:ai-restock-created", onSubmissionChange);
-      supabase.removeChannel(channel);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          /* ignore */
+        }
+      }
     };
   }, [isPathAdmin, fetchNotifications]);
 
@@ -428,7 +445,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
     fetch("/api/admin/business-categories")
       .then((r) => r.json())
       .then((d) => {
-        if (d.success && Array.isArray(d.categories)) {
+        if (d?.success && Array.isArray(d?.categories)) {
           setAllBizCategories(d.categories);
         } else {
           supabase
@@ -436,7 +453,8 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
             .select("id, name, industry_type")
             .then(({ data }) => {
               if (data) setAllBizCategories(data as any);
-            });
+            })
+            .catch(() => {});
         }
       })
       .catch(() => {
@@ -445,7 +463,8 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
           .select("id, name, industry_type")
           .then(({ data }) => {
             if (data) setAllBizCategories(data as any);
-          });
+          })
+          .catch(() => {});
       });
   }, []);
 
@@ -510,26 +529,33 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
   }, [searchQuery, navItems, allBizCategories, businesses, isPathAdmin]);
 
   const BrandLogo = () => (
-    <Link to={isAdmin ? "/admin" : "/dashboard"} className="flex items-center gap-2.5 min-w-0 group">
-      {settings?.logo_url ? (
-        <img src={settings.logo_url} alt={settings?.app_name ?? "Logo"} className="h-9 max-w-[150px] object-contain" />
-      ) : (
-        <>
-          <div className="h-9 w-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center p-1.5 shrink-0 shadow-xs overflow-hidden">
-            <img src={settings?.favicon_url || "/favicon.ico"} alt="Logo" className="w-full h-full object-contain" onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }} />
-          </div>
-          <div className="flex flex-col min-w-0">
-            <span className="font-bold text-base bg-gradient-to-r from-violet-500 to-sky-400 bg-clip-text text-transparent truncate leading-none">
-              {settings?.app_name ?? "GeFlow"}
+    <Link to={dashboardLink} className="flex items-center gap-2.5 min-w-0 group">
+      <img
+        src={settings?.logo_url || "/logo.png"}
+        alt={settings?.app_name ?? "GeFlow"}
+        className="h-9 max-w-[150px] object-contain"
+        onError={(e) => {
+          const target = e.currentTarget as HTMLElement;
+          target.style.display = "none";
+          const nextEl = target.nextElementSibling as HTMLElement;
+          if (nextEl) nextEl.style.display = "flex";
+        }}
+      />
+      <div className="hidden items-center gap-2">
+        <div className="h-9 w-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center p-1.5 shrink-0 shadow-xs overflow-hidden">
+          <img src={settings?.favicon_url || "/favicon.png"} alt="Logo" className="w-full h-full object-contain" />
+        </div>
+        <div className="flex flex-col min-w-0">
+          <span className="font-bold text-base bg-gradient-to-r from-violet-500 to-sky-400 bg-clip-text text-transparent truncate leading-none">
+            {settings?.app_name ?? "GeFlow"}
+          </span>
+          {settings?.tagline && (
+            <span className="text-[10px] text-muted-foreground font-medium truncate leading-tight mt-0.5 max-w-[130px]">
+              {settings.tagline}
             </span>
-            {settings?.tagline && (
-              <span className="text-[10px] text-muted-foreground font-medium truncate leading-tight mt-0.5 max-w-[130px]">
-                {settings.tagline}
-              </span>
-            )}
-          </div>
-        </>
-      )}
+          )}
+        </div>
+      </div>
     </Link>
   );
 
@@ -563,7 +589,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
           {!collapsed ? (
             <BrandLogo />
           ) : (
-            <Link to={isAdmin ? "/admin" : "/dashboard"} className="h-9 w-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center p-1.5 shadow-xs overflow-hidden" title={settings?.app_name ?? "GeFlow"}>
+            <Link to={dashboardLink} className="h-9 w-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center p-1.5 shadow-xs overflow-hidden" title={settings?.app_name ?? "GeFlow"}>
               <img src={settings?.favicon_url || "/favicon.ico"} alt="Logo" className="w-full h-full object-contain" />
             </Link>
           )}
@@ -600,15 +626,35 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 h-screen">
         <AnnouncementBar audience={isPathAdmin ? "admins" : "users"} />
-        <header className="h-16 border-b border-border bg-background flex items-center gap-3 px-4 md:px-6 flex-shrink-0">
-          {/* Mobile hamburger */}
-          <button
-            onClick={() => setMobileOpen(true)}
-            className="h-10 w-10 rounded-xl hover:bg-muted flex items-center justify-center transition-colors md:hidden flex-shrink-0"
-            aria-label="Open menu"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
+        <header className="h-16 border-b border-border bg-background flex items-center gap-3 px-3 sm:px-4 md:px-6 flex-shrink-0">
+          {/* Mobile hamburger & brand logo */}
+          <div className="flex items-center gap-2 md:hidden min-w-0">
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="h-10 w-10 rounded-xl hover:bg-muted flex items-center justify-center transition-colors flex-shrink-0"
+              aria-label="Open menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <Link to={dashboardLink} className="flex items-center gap-2 min-w-0">
+              <img
+                src={settings?.logo_url || "/logo.png"}
+                alt={settings?.app_name ?? "GeFlow"}
+                className="h-7 max-w-[110px] object-contain"
+                onError={(e) => {
+                  const target = e.currentTarget as HTMLElement;
+                  target.style.display = "none";
+                  const nextEl = target.nextElementSibling as HTMLElement;
+                  if (nextEl) nextEl.style.display = "flex";
+                }}
+              />
+              <div className="hidden items-center gap-1.5">
+                <span className="font-bold text-sm bg-gradient-to-r from-violet-500 to-sky-400 bg-clip-text text-transparent truncate">
+                  {settings?.app_name ?? "GeFlow"}
+                </span>
+              </div>
+            </Link>
+          </div>
 
           <div className="flex-1 max-w-xl relative hidden md:block">
             <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />

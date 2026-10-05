@@ -92,8 +92,8 @@ export class AIConfigurationService {
         id: "m_gemini_flash",
         provider_id: "11111111-1111-4111-a111-111111111111",
         provider_slug: "gemini",
-        model_id: "gemini-3.7-flash",
-        display_name: "Gemini 3.7 Flash",
+        model_id: "gemini-3.8-flash",
+        display_name: "Gemini 3.8 Flash",
         model_type: "multimodal",
         capabilities: [
           "product_analysis",

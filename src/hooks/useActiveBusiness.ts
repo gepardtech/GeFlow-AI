@@ -100,6 +100,7 @@ async function fetchBusinessData(force = false): Promise<void> {
 
   isFetching = true;
   lastFetchTime = Date.now();
+  const prevSnapshot = `${store.activeId}|${store.mode}|${store.loading}|${store.owned.length}|${store.staff.length}|${store.industryType}|${store.categoryName}`;
   fetchPromise = (async () => {
     try {
       const {
@@ -338,6 +339,35 @@ async function fetchBusinessData(force = false): Promise<void> {
         console.warn("Notice loading api staff businesses:", staffErr);
       }
 
+      // If fetch returned empty due to error, token refresh gap, or network drop, preserve existing businesses
+      if (ownedRows.length === 0 && store.owned.length > 0) {
+        ownedRows = store.owned;
+      } else if (ownedRows.length === 0) {
+        try {
+          const cached = localStorage.getItem(LS_OWNED_KEY);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              ownedRows = parsed;
+            }
+          }
+        } catch {}
+      }
+
+      if (staffRows.length === 0 && store.staff.length > 0) {
+        staffRows = store.staff;
+      } else if (staffRows.length === 0) {
+        try {
+          const cached = localStorage.getItem(LS_STAFF_KEY);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              staffRows = parsed;
+            }
+          }
+        } catch {}
+      }
+
       // If user has no owned businesses, keep ownedRows empty so user is guided to business setup
       store.owned = ownedRows;
       store.staff = staffRows;
@@ -445,7 +475,10 @@ async function fetchBusinessData(force = false): Promise<void> {
     } finally {
       isFetching = false;
       fetchPromise = null;
-      notifyListeners();
+      const nextSnapshot = `${store.activeId}|${store.mode}|${store.loading}|${store.owned.length}|${store.staff.length}|${store.industryType}|${store.categoryName}`;
+      if (force || prevSnapshot !== nextSnapshot) {
+        notifyListeners();
+      }
     }
   })();
 
@@ -458,18 +491,23 @@ function ensureRealtime() {
   if (isRealtimeSubscribed) return;
   isRealtimeSubscribed = true;
 
-  supabase
-    .channel("active_business_global_sync")
-    .on("postgres_changes", { event: "*", schema: "public", table: "businesses" }, () => {
-      fetchBusinessData();
-    })
-    .on("postgres_changes", { event: "*", schema: "public", table: "support_team_members" }, () => {
-      fetchBusinessData();
-    })
-    .on("postgres_changes", { event: "*", schema: "public", table: "business_categories" }, () => {
-      fetchBusinessData();
-    })
-    .subscribe();
+  try {
+    const channelId = `active_business_global_sync_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    supabase
+      .channel(channelId)
+      .on("postgres_changes", { event: "*", schema: "public", table: "businesses" }, () => {
+        fetchBusinessData();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "support_team_members" }, () => {
+        fetchBusinessData();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "business_categories" }, () => {
+        fetchBusinessData();
+      })
+      .subscribe();
+  } catch (err) {
+    console.warn("Notice subscribing to active business realtime sync:", err);
+  }
 
   supabase.auth.onAuthStateChange((event, session) => {
     if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
@@ -512,8 +550,8 @@ export const useActiveBusiness = () => {
     const update = () => setTick((t) => t + 1);
     listeners.add(update);
 
-    // Always ensure fresh data from Supabase on mount
-    if (!isFetching) {
+    // Ensure fresh data on initial mount without thrashing already loaded state
+    if (!isFetching && !store.hasLoaded) {
       fetchBusinessData();
     }
 

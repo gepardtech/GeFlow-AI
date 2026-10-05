@@ -115,7 +115,7 @@ export class HeuristicFallbackProvider implements AIProviderInterface {
     // 4. UOM Verification against business's allowed stock units
     const validUoms = (allowedStockUnits && allowedStockUnits.length > 0)
       ? allowedStockUnits.map((u) => u.toLowerCase())
-      : ["piece", "box", "bottle", "strip", "tablet", "capsule", "can", "bag", "pack", "tube", "sachet", "vial"];
+      : ["piece", "box", "bottle", "strip", "tablet", "capsule", "can", "bag", "pack", "tube", "sachet", "vial", "pizza", "burger", "fries", "portion", "plate", "slice", "cup", "kg", "g", "mg", "liter", "ml", "dozen", "pair", "set"];
 
     let uomStatus: "verified" | "invalid" | "uncertain" = "verified";
     const candidateUom = (s.uom.stock_unit || "").toLowerCase();

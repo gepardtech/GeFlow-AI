@@ -66,8 +66,9 @@ export const usePricingPlans = () => {
     setLoading(true);
     load();
 
+    const channelId = `pricing_plans_rt_${Math.random().toString(36).slice(2, 9)}`;
     const ch = supabase
-      .channel("pricing_plans_rt")
+      .channel(channelId)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "pricing_plans" },

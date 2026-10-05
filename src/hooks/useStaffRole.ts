@@ -280,20 +280,32 @@ export const useStaffRole = (): StaffRoleState => {
     window.addEventListener("geflow:mode-changed", onModeChange);
     window.addEventListener("geflow:business-changed", onModeChange);
 
-    const channel = supabase
-      .channel(`staff_role_realtime_${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "support_team_members" }, () => {
-        fetchRole();
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "user_roles" }, () => {
-        fetchRole();
-      })
-      .subscribe();
+    const channelId = `staff_role_rt_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    let channel: any = null;
+    try {
+      channel = supabase
+        .channel(channelId)
+        .on("postgres_changes", { event: "*", schema: "public", table: "support_team_members" }, () => {
+          fetchRole();
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "user_roles" }, () => {
+          fetchRole();
+        })
+        .subscribe();
+    } catch (subErr) {
+      console.warn("Notice subscribing to staff role realtime changes:", subErr);
+    }
 
     return () => {
       window.removeEventListener("geflow:mode-changed", onModeChange);
       window.removeEventListener("geflow:business-changed", onModeChange);
-      supabase.removeChannel(channel);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          /* ignore cleanup errors */
+        }
+      }
     };
   }, [fetchRole]);
 

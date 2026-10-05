@@ -37,25 +37,32 @@ const Navbar = () => {
       <div className="container mx-auto flex items-center justify-between h-16 px-4">
         {/* Left: Logo */}
         <Link to="/" className="flex items-center gap-2.5 flex-shrink-0 group">
-          {settings?.logo_url ? (
-            <img src={settings.logo_url} alt={settings?.app_name ?? "GeFlow"} className="h-9 max-w-[160px] object-contain" />
-          ) : (
-            <>
-              <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center p-1.5 shrink-0 shadow-xs overflow-hidden">
-                <img src={settings?.favicon_url || "/favicon.ico"} alt="Logo" className="w-full h-full object-contain" onError={(e) => { (e.currentTarget as HTMLElement).style.display = 'none'; }} />
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="font-bold text-base text-foreground leading-none group-hover:text-primary transition-colors">
-                  {settings?.app_name ?? "GeFlow"}
+          <img
+            src={settings?.logo_url || "/logo.png"}
+            alt={settings?.app_name ?? "GeFlow"}
+            className="h-10 max-w-[160px] object-contain"
+            onError={(e) => {
+              const target = e.currentTarget as HTMLElement;
+              target.style.display = "none";
+              const nextEl = target.nextElementSibling as HTMLElement;
+              if (nextEl) nextEl.style.display = "flex";
+            }}
+          />
+          <div className="hidden items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center p-1.5 shrink-0 shadow-xs overflow-hidden">
+              <img src={settings?.favicon_url || "/favicon.png"} alt="Logo" className="w-full h-full object-contain" />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="font-bold text-base text-foreground leading-none group-hover:text-primary transition-colors">
+                {settings?.app_name ?? "GeFlow"}
+              </span>
+              {settings?.tagline && (
+                <span className="text-[10px] text-muted-foreground font-medium truncate leading-tight mt-0.5 max-w-[200px] sm:max-w-xs">
+                  {settings.tagline}
                 </span>
-                {settings?.tagline && (
-                  <span className="text-[10px] text-muted-foreground font-medium truncate leading-tight mt-0.5 max-w-[200px] sm:max-w-xs">
-                    {settings.tagline}
-                  </span>
-                )}
-              </div>
-            </>
-          )}
+              )}
+            </div>
+          </div>
         </Link>
 
         {/* Center: Nav links */}

@@ -21,22 +21,11 @@ export function logTrace(trace: TraceRecord): void {
     memoryTraces.pop();
   }
 
-  // Safe internal structured console logging
-  const safeLog = {
-    tag: "[AI-TRACE]",
-    requestId: trace.requestId,
-    task: trace.taskType,
-    provider: trace.provider,
-    model: trace.model,
-    status: trace.status,
-    latencyMs: trace.latencyMs,
-    errorCode: trace.errorCode || null,
-  };
-
+  // Safe internal human-readable console logging
   if (trace.status === "error") {
-    console.error(JSON.stringify(safeLog));
+    console.warn(`[AI Engine] ${trace.taskType} error on ${trace.provider}: ${trace.errorCode || "Unknown error"}`);
   } else {
-    console.log(JSON.stringify(safeLog));
+    console.log(`[AI Engine] ${trace.taskType} resolved via ${trace.provider} (${trace.model}) in ${trace.latencyMs}ms`);
   }
 }
 

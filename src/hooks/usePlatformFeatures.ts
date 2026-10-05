@@ -49,8 +49,9 @@ export const usePlatformFeatures = (planId?: string) => {
     setLoading(true);
     load();
 
+    const channelId = `pub_features_rt_${Math.random().toString(36).slice(2, 9)}`;
     const ch = supabase
-      .channel("public_feature_modules_rt")
+      .channel(channelId)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "public_feature_modules" },

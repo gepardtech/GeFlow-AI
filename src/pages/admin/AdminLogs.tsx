@@ -104,8 +104,9 @@ export const AdminLogs = () => {
 
   // Real-time Supabase postgres_changes Subscription
   useEffect(() => {
+    const channelId = `admin_exact_audit_stream_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const channel = supabase
-      .channel("admin_exact_audit_stream")
+      .channel(channelId)
       .on("postgres_changes", { event: "*", schema: "public", table: "sales" }, () => loadLogs())
       .on("postgres_changes", { event: "*", schema: "public", table: "payment_transactions" }, () => loadLogs())
       .on("postgres_changes", { event: "*", schema: "public", table: "invoices" }, () => loadLogs())
@@ -334,8 +335,8 @@ export const AdminLogs = () => {
   return (
     <PanelLayout
       navItems={ADMIN_NAV}
-      identity={ADMIN_IDENTITY}
-      defaultTitle="System Logs & Activity Monitor"
+      {...ADMIN_IDENTITY}
+      isAdmin
     >
       <div className="w-full space-y-5 sm:space-y-6 pb-12 min-w-0">
         {/* ========================================================================= */}

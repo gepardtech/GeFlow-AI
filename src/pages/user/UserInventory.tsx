@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   Package, Plus, Lock, Search, MoreVertical, Eye, ArrowRightLeft, Boxes as BoxesIcon,
   Pencil, Trash2, DollarSign, AlertTriangle, XCircle, ChevronDown, Download, Upload,
   ScanLine, Barcode, PackagePlus, TriangleAlert, CheckCircle2, FileText, Clock, History,
+  Sparkles, LayoutGrid, List, SlidersHorizontal,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import UserPanelGate from "@/components/UserPanelGate";
@@ -47,6 +48,7 @@ const UserInventory = () => {
 
   const [products, setProducts] = useState<ProductRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"auto" | "cards" | "table">("auto");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -57,6 +59,9 @@ const UserInventory = () => {
   const [targetBulkStatus, setTargetBulkStatus] = useState<string>("active");
   const [bulkUpdatingStatus, setBulkUpdatingStatus] = useState(false);
   const [userId, setUserId] = useState<string>("");
+
+  const productsCountRef = useRef(0);
+  productsCountRef.current = products.length;
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ProductRecord | null>(null);
@@ -79,7 +84,8 @@ const UserInventory = () => {
       setLoading(false);
       return;
     }
-    if (!isSilent) {
+    // Only show full loading skeleton on cold initial load when no products exist yet
+    if (!isSilent && productsCountRef.current === 0) {
       setLoading(true);
     }
     try {
@@ -118,6 +124,7 @@ const UserInventory = () => {
       const cleanProducts = ((data as ProductRecord[]) ?? []).filter((p) => !isDemoProduct(p));
 
       setProducts(cleanProducts);
+      productsCountRef.current = cleanProducts.length;
     } catch (err) {
       console.warn("Failed to fetch inventory products:", err);
     } finally {
@@ -134,7 +141,7 @@ const UserInventory = () => {
 
   useEffect(() => {
     if (!bizLoading && activeId) {
-      load(false);
+      load(productsCountRef.current > 0);
     }
   }, [bizLoading, activeId, load]);
 
@@ -189,50 +196,107 @@ const UserInventory = () => {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    try {
-      fetch("/api/sync/product", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId: activeId, productId: deleteTarget.id }),
-      }).catch(() => {});
-    } catch {
-      /* ignore */
-    }
-    const { error } = await supabase.from("products").delete().eq("id", deleteTarget.id);
-    if (error && !active?.is_staff) { toast({ title: "Could not delete", description: error.message, variant: "destructive" }); }
-    else {
-      toast({ title: "Product deleted", description: deleteTarget.name });
-      window.dispatchEvent(new CustomEvent("geflow:products-updated", { detail: { businessId: activeId } }));
-      load();
-    }
+    const targetId = deleteTarget.id;
+    const targetName = deleteTarget.name;
     setDeleteTarget(null);
+
+    // 1. Optimistic removal from UI state immediately
+    setProducts((prev) => {
+      const next = prev.filter((p) => p.id !== targetId);
+      productsCountRef.current = next.length;
+      return next;
+    });
+    setSelectedIds((prev) => prev.filter((id) => id !== targetId));
+
+    // 2. Remove from local storage cache
+    if (activeId) {
+      try {
+        const cacheKey = `geflow_products_${activeId}`;
+        const raw = localStorage.getItem(cacheKey);
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            localStorage.setItem(cacheKey, JSON.stringify(list.filter((x: any) => x.id !== targetId)));
+          }
+        }
+      } catch {
+        /* ignore local storage error */
+      }
+    }
+
+    try {
+      // 3. Delete via backend service-role API (cascades child tables and updates counts)
+      const res = await fetch(`/api/user/products/${targetId}?businessId=${encodeURIComponent(activeId || "")}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to remove product from server.");
+      }
+
+      // 4. Client-side delete attempt as secondary
+      await supabase.from("products").delete().eq("id", targetId).catch(() => {});
+
+      toast({ title: "Product deleted", description: `${targetName} has been permanently deleted.` });
+      window.dispatchEvent(new CustomEvent("geflow:stock-updated", { detail: { businessId: activeId } }));
+    } catch (err: any) {
+      toast({ title: "Could not delete", description: err?.message || "Failed to delete product.", variant: "destructive" });
+      load(true);
+    }
   };
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
+    const toDeleteIds = [...selectedIds];
     setBulkDeleting(true);
-    try {
-      selectedIds.forEach((id) => {
-        fetch("/api/sync/product", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ businessId: activeId, productId: id }),
-        }).catch(() => {});
-      });
-      const { error } = await supabase.from("products").delete().in("id", selectedIds);
-      if (error && !active?.is_staff) {
-        toast({ title: "Bulk delete failed", description: error.message, variant: "destructive" });
-      } else {
-        toast({ title: "Products deleted", description: `Successfully deleted ${selectedIds.length} product(s).` });
-        setSelectedIds([]);
-        window.dispatchEvent(new CustomEvent("geflow:products-updated", { detail: { businessId: activeId } }));
-        load();
+
+    // 1. Optimistic removal from UI state immediately
+    setProducts((prev) => {
+      const next = prev.filter((p) => !toDeleteIds.includes(p.id));
+      productsCountRef.current = next.length;
+      return next;
+    });
+    setSelectedIds([]);
+    setBulkDeleteModalOpen(false);
+
+    // 2. Remove from local storage cache
+    if (activeId) {
+      try {
+        const cacheKey = `geflow_products_${activeId}`;
+        const raw = localStorage.getItem(cacheKey);
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            localStorage.setItem(cacheKey, JSON.stringify(list.filter((x: any) => !toDeleteIds.includes(x.id))));
+          }
+        }
+      } catch {
+        /* ignore local storage error */
       }
+    }
+
+    try {
+      // 3. Bulk delete via server service-role API
+      const res = await fetch("/api/user/products/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: toDeleteIds, businessId: activeId }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to delete selected products.");
+      }
+
+      // 4. Secondary client delete
+      await supabase.from("products").delete().in("id", toDeleteIds).catch(() => {});
+
+      toast({ title: "Products deleted", description: `Successfully deleted ${toDeleteIds.length} product(s).` });
+      window.dispatchEvent(new CustomEvent("geflow:stock-updated", { detail: { businessId: activeId } }));
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Bulk delete failed", description: err?.message || "Could not delete products.", variant: "destructive" });
+      load(true);
     } finally {
       setBulkDeleting(false);
-      setBulkDeleteModalOpen(false);
     }
   };
 
@@ -365,16 +429,22 @@ const UserInventory = () => {
             All products, batches and stock levels for {active?.business_name ?? "your workspace"}.
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap shrink-0">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-2.5 flex-wrap shrink-0 w-full sm:w-auto">
           <Button
             variant="outline"
             onClick={() => setStockLedgerOpen(true)}
-            className="h-9 sm:h-10 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold border-sky-500/30 text-sky-600 dark:text-sky-400 bg-sky-500/5 hover:bg-sky-500/15"
+            className="h-9 sm:h-10 px-2.5 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold border-sky-500/30 text-sky-600 dark:text-sky-400 bg-sky-500/5 hover:bg-sky-500/15 justify-center"
           >
-            <History className="h-4 w-4 mr-1.5" /> Stock Ledger
+            <History className="h-4 w-4 mr-1.5 shrink-0" />
+            <span className="truncate">Stock Ledger</span>
           </Button>
-          <Button variant="outline" onClick={() => setExportOpen(true)} className="h-9 sm:h-10 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold">
-            <Download className="h-4 w-4 mr-1.5" /> Export Ledger
+          <Button
+            variant="outline"
+            onClick={() => setExportOpen(true)}
+            className="h-9 sm:h-10 px-2.5 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold justify-center"
+          >
+            <Download className="h-4 w-4 mr-1.5 shrink-0" />
+            <span className="truncate">Export</span>
           </Button>
           <Button
             variant="outline"
@@ -389,20 +459,32 @@ const UserInventory = () => {
               }
               setImportOpen(true);
             }}
-            className="h-9 sm:h-10 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold"
+            className="h-9 sm:h-10 px-2.5 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold justify-center"
           >
-            <Upload className="h-4 w-4 mr-1.5" /> Bulk Import
+            <Upload className="h-4 w-4 mr-1.5 shrink-0" />
+            <span className="truncate">Bulk Import</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button disabled={exceeded} className="h-9 sm:h-10 px-3.5 sm:px-4 rounded-xl bg-sky-400 hover:bg-sky-500 text-white text-xs sm:text-sm font-bold disabled:opacity-60">
-                {exceeded ? <Lock className="h-4 w-4 mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />} New Product <ChevronDown className="h-4 w-4 ml-1.5" />
+              <Button disabled={exceeded} className="h-9 sm:h-10 px-3 sm:px-4 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs sm:text-sm font-bold disabled:opacity-60 justify-center shadow-xs">
+                {exceeded ? <Lock className="h-4 w-4 mr-1.5 shrink-0" /> : <Plus className="h-4 w-4 mr-1.5 shrink-0" />}
+                <span className="truncate">New Product</span>
+                <ChevronDown className="h-4 w-4 ml-1 shrink-0" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={() => openAdd()}><PackagePlus className="h-4 w-4 mr-2" /> Add Manual</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setBarcode("scanner")}><ScanLine className="h-4 w-4 mr-2" /> Scan Barcode</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setBarcode("manual")}><Barcode className="h-4 w-4 mr-2" /> Direct Barcode Entry</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openAdd({ _triggerAI: "true" })} className="text-sky-600 dark:text-sky-400 font-semibold cursor-pointer">
+                <Sparkles className="h-4 w-4 mr-2 text-sky-500" /> ✨ Add with AI
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openAdd()} className="cursor-pointer">
+                <PackagePlus className="h-4 w-4 mr-2" /> Add Manual
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setBarcode("scanner")} className="cursor-pointer">
+                <ScanLine className="h-4 w-4 mr-2" /> Scan Barcode
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setBarcode("manual")} className="cursor-pointer">
+                <Barcode className="h-4 w-4 mr-2" /> Direct Barcode Entry
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -503,50 +585,52 @@ const UserInventory = () => {
       </div>
 
       {/* Search & Filter Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 mb-5">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search products by name, SKU or barcode..."
-            className="w-full h-11 pl-11 pr-4 bg-card border border-border rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full h-10 sm:h-11 pl-10 pr-4 bg-card border border-border rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>
 
-        {/* Category Filter */}
-        <div className="w-full sm:w-48 shrink-0">
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="w-full h-11 px-3 bg-card border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
-          >
-            <option value="all">All Categories</option>
-            {allCategories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-3 shrink-0">
+          {/* Category Filter */}
+          <div className="w-full sm:w-44 md:w-48 shrink-0">
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="w-full h-10 sm:h-11 px-3 bg-card border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="all">All Categories</option>
+              {allCategories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        {/* Status Filter */}
-        <div className="w-full sm:w-44 shrink-0">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full h-11 px-3 bg-card border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
-          >
-            <option value="all">All Statuses</option>
-            <option value="in_stock">In Stock</option>
-            <option value="low_stock">Low Stock (Alert)</option>
-            <option value="out_of_stock">Out of Stock</option>
-            <option value="expiring_30">🔴 Expiring in 30 Days (Urgent)</option>
-            <option value="expiring_60">🟡 Expiring in 31–60 Days (Watchlist)</option>
-            <option value="expiring">All Expiring Soon (≤60d)</option>
-            <option value="active">Active Only</option>
-            <option value="draft">Draft Only</option>
-          </select>
+          {/* Status Filter */}
+          <div className="w-full sm:w-40 md:w-44 shrink-0">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full h-10 sm:h-11 px-3 bg-card border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="all">All Statuses</option>
+              <option value="in_stock">In Stock</option>
+              <option value="low_stock">Low Stock (Alert)</option>
+              <option value="out_of_stock">Out of Stock</option>
+              <option value="expiring_30">🔴 Expiring ≤30d</option>
+              <option value="expiring_60">🟡 Expiring 31–60d</option>
+              <option value="expiring">All Expiring ≤60d</option>
+              <option value="active">Active Only</option>
+              <option value="draft">Draft Only</option>
+            </select>
+          </div>
         </div>
 
         {(search || categoryFilter !== "all" || statusFilter !== "all") && (
@@ -557,9 +641,9 @@ const UserInventory = () => {
               setCategoryFilter("all");
               setStatusFilter("all");
             }}
-            className="h-11 px-3 text-xs text-muted-foreground hover:text-foreground shrink-0 rounded-xl"
+            className="h-10 sm:h-11 px-3 text-xs text-muted-foreground hover:text-foreground shrink-0 rounded-xl"
           >
-            Reset Filters
+            Reset
           </Button>
         )}
       </div>
@@ -640,30 +724,183 @@ const UserInventory = () => {
             <p className="text-sm text-muted-foreground mt-1">{search || categoryFilter !== "all" || statusFilter !== "all" ? "Try adjusting your filters or search." : "Add your first product to start tracking stock, batches and pricing."}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-[10px] font-bold tracking-widest text-muted-foreground border-b border-border bg-muted/20">
-                  <th className="w-10 px-4 py-4 text-center">
-                    <input
-                      type="checkbox"
-                      checked={allFilteredSelected}
-                      ref={(el) => {
-                        if (el) el.indeterminate = someFilteredSelected;
-                      }}
-                      onChange={toggleSelectAll}
-                      className="rounded border-border text-sky-500 accent-sky-500 focus:ring-sky-500 cursor-pointer h-4 w-4 bg-background"
-                    />
-                  </th>
-                  <th className="text-left px-4 py-4">PRODUCT / SKU</th>
-                  <th className="text-left px-4 py-4">CATEGORY</th>
-                  <th className="text-left px-4 py-4">PRICING</th>
-                  <th className="text-left px-4 py-4">STOCK</th>
-                  <th className="text-left px-4 py-4">STATUS</th>
-                  <th className="text-right px-6 py-4">ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
+          <>
+            {/* Desktop Table View (lg and above) */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-[10px] font-bold tracking-widest text-muted-foreground border-b border-border bg-muted/20">
+                    <th className="w-10 px-4 py-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={allFilteredSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = someFilteredSelected;
+                        }}
+                        onChange={toggleSelectAll}
+                        className="rounded border-border text-sky-500 accent-sky-500 focus:ring-sky-500 cursor-pointer h-4 w-4 bg-background"
+                      />
+                    </th>
+                    <th className="text-left px-4 py-4">PRODUCT / SKU</th>
+                    <th className="text-left px-4 py-4">CATEGORY</th>
+                    <th className="text-left px-4 py-4">PRICING</th>
+                    <th className="text-left px-4 py-4">STOCK</th>
+                    <th className="text-left px-4 py-4">STATUS</th>
+                    <th className="text-right px-6 py-4">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((p) => {
+                    const threshold = (p.min_stock_alert !== null && p.min_stock_alert !== undefined && p.min_stock_alert > 0)
+                      ? p.min_stock_alert
+                      : defaultMinAlert;
+                    const stockInfo = computeProductStock(p.stock_units, p.name, p.description, p.uom, p.units_per_uom, p.base_unit);
+                    const out = stockInfo.totalSubUnits <= 0;
+                    const low = !out && stockInfo.listingStock <= threshold;
+                    const margin = Number(p.retail_price) > 0 ? Math.round(((Number(p.retail_price) - Number(p.purchase_cost)) / Number(p.retail_price)) * 100) : 0;
+                    const isSelected = selectedIds.includes(p.id);
+                    
+                    // Batch and expiry checks
+                    const nowTime = Date.now();
+                    const expTime = p.expiry_date ? new Date(p.expiry_date).getTime() : null;
+                    const isExpired = expTime !== null ? expTime < nowTime : false;
+                    const daysLeft = expTime !== null && !isExpired ? Math.ceil((expTime - nowTime) / (1000 * 3600 * 24)) : null;
+                    const isExpiring30 = daysLeft !== null && daysLeft <= 30;
+                    const isExpiring60 = daysLeft !== null && daysLeft > 30 && daysLeft <= 60;
+
+                    return (
+                      <tr
+                        key={p.id}
+                        className={`border-b border-border last:border-0 transition-colors ${
+                          isSelected ? "bg-sky-500/5 hover:bg-sky-500/10" : "hover:bg-muted/30"
+                        }`}
+                      >
+                        <td className="w-10 px-4 py-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelectProduct(p.id)}
+                            className="rounded border-border text-sky-500 accent-sky-500 focus:ring-sky-500 cursor-pointer h-4 w-4 bg-background"
+                          />
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-3">
+                            {p.images && p.images[0]
+                              ? <img src={p.images[0]} alt="" className="h-10 w-10 rounded-xl object-cover border border-border shrink-0" />
+                              : <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"><Package className="h-4 w-4" /></div>}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-bold text-sm truncate text-foreground">{p.name}</p>
+                                {isExpired && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-destructive/15 text-destructive shrink-0">EXPIRED</span>
+                                )}
+                                {isExpiring30 && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-500/15 text-rose-600 dark:text-rose-400 shrink-0">
+                                    EXPIRING ({daysLeft}d)
+                                  </span>
+                                )}
+                                {isExpiring60 && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0">
+                                    EXPIRING ({daysLeft}d)
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-muted-foreground tracking-wider truncate mt-0.5">
+                                {p.internal_sku || p.barcode || "—"}
+                                {p.batch_number ? ` · Batch: ${p.batch_number}` : ""}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4"><span className="text-xs text-muted-foreground">{catName(p.category_id)}</span></td>
+                        <td className="px-4 py-4">
+                          {(() => {
+                            const parsed = parseProductUOM(p.name, p.description || "", p.uom, p.units_per_uom, p.base_unit);
+                            const isScaled = parsed.packSize > 1;
+                            const retail = Number(p.discount_price ?? p.retail_price);
+                            return (
+                              <div>
+                                <p className="font-bold text-sm">
+                                  {fmt(retail)}
+                                  <span className="text-xs font-normal text-muted-foreground ml-1">/{parsed.uomLabel}</span>
+                                </p>
+                                {isScaled && (
+                                  <p className="text-[10px] text-muted-foreground">
+                                    ~{fmt(retail / parsed.packSize)}/{parsed.subUnitName}
+                                  </p>
+                                )}
+                                <p className="text-[10px] text-muted-foreground mt-0.5">
+                                  cost {fmt(Number(p.purchase_cost))} · <span className={margin >= 0 ? "text-emerald-500 font-semibold" : "text-rose-500 font-semibold"}>{margin}% margin</span>
+                                </p>
+                              </div>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-4 py-4">
+                          {(() => {
+                            const isScaled = stockInfo.packSize > 1;
+                            return (
+                              <div className="flex flex-col">
+                                <span className={`text-base font-extrabold ${out ? "text-rose-500" : low ? "text-amber-500" : "text-foreground"}`}>
+                                  {stockInfo.displayText}
+                                </span>
+                                {isScaled && (
+                                  <span className="text-[11px] font-semibold text-muted-foreground">
+                                    {stockInfo.subText}
+                                  </span>
+                                )}
+                                <p className="text-[10px] text-muted-foreground tracking-wider mt-0.5">alert ≤ {threshold}</p>
+                              </div>
+                            );
+                          })()}
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className={`text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full ${out ? "bg-rose-500/15 text-rose-500" : low ? "bg-amber-500/15 text-amber-500" : p.status !== "active" ? "bg-muted text-muted-foreground" : "bg-emerald-500/15 text-emerald-500"}`}>
+                            {p.status !== "active" ? p.status.toUpperCase() : out ? "OUT OF STOCK" : low ? "LOW STOCK" : "IN STOCK"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52">
+                              <DropdownMenuItem onClick={() => setViewTarget(p)}><Eye className="h-4 w-4 mr-2" /> View Identity</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setTransferTarget(p)}><ArrowRightLeft className="h-4 w-4 mr-2" /> Bulk Transfer</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setStockTarget(p)}><BoxesIcon className="h-4 w-4 mr-2" /> Update Stock</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openEdit(p)}><Pencil className="h-4 w-4 mr-2" /> Edit Metadata</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => setDeleteTarget(p)} className="text-rose-500 focus:text-rose-500"><Trash2 className="h-4 w-4 mr-2" /> Delete</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile & Tablet Responsive Cards View (below lg) */}
+            <div className="lg:hidden p-3 sm:p-4">
+              {/* Select All on mobile / tablet */}
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-border text-xs text-muted-foreground font-semibold">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someFilteredSelected;
+                    }}
+                    onChange={toggleSelectAll}
+                    className="rounded border-border text-sky-500 accent-sky-500 focus:ring-sky-500 h-4 w-4"
+                  />
+                  <span>Select All ({filtered.length})</span>
+                </label>
+                <span>{selectedIds.length} selected</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                 {filtered.map((p) => {
                   const threshold = (p.min_stock_alert !== null && p.min_stock_alert !== undefined && p.min_stock_alert > 0)
                     ? p.min_stock_alert
@@ -673,127 +910,144 @@ const UserInventory = () => {
                   const low = !out && stockInfo.listingStock <= threshold;
                   const margin = Number(p.retail_price) > 0 ? Math.round(((Number(p.retail_price) - Number(p.purchase_cost)) / Number(p.retail_price)) * 100) : 0;
                   const isSelected = selectedIds.includes(p.id);
+                  const parsed = parseProductUOM(p.name, p.description || "", p.uom, p.units_per_uom, p.base_unit);
+                  const retail = Number(p.discount_price ?? p.retail_price);
                   
-                  // Batch and expiry checks
                   const nowTime = Date.now();
                   const expTime = p.expiry_date ? new Date(p.expiry_date).getTime() : null;
                   const isExpired = expTime !== null ? expTime < nowTime : false;
                   const daysLeft = expTime !== null && !isExpired ? Math.ceil((expTime - nowTime) / (1000 * 3600 * 24)) : null;
-                  const isExpiring30 = daysLeft !== null && daysLeft <= 30;
-                  const isExpiring60 = daysLeft !== null && daysLeft > 30 && daysLeft <= 60;
 
                   return (
-                    <tr
-                      key={p.id}
-                      className={`border-b border-border last:border-0 transition-colors ${
-                        isSelected ? "bg-sky-500/5 hover:bg-sky-500/10" : "hover:bg-muted/30"
+                    <div
+                      key={`card-${p.id}`}
+                      className={`rounded-2xl border p-3.5 sm:p-4 transition-all ${
+                        isSelected
+                          ? "bg-sky-500/10 border-sky-500/40 shadow-sm"
+                          : "bg-card/70 border-border/80 hover:border-border"
                       }`}
                     >
-                      <td className="w-10 px-4 py-4 text-center">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelectProduct(p.id)}
-                          className="rounded border-border text-sky-500 accent-sky-500 focus:ring-sky-500 cursor-pointer h-4 w-4 bg-background"
-                        />
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-3">
-                          {p.images && p.images[0]
-                            ? <img src={p.images[0]} alt="" className="h-10 w-10 rounded-xl object-cover border border-border" />
-                            : <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"><Package className="h-4 w-4" /></div>}
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-bold text-sm truncate text-foreground">{p.name}</p>
-                              {isExpired && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-destructive/15 text-destructive shrink-0">EXPIRED</span>
-                              )}
-                              {isExpiring30 && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-rose-500/15 text-rose-600 dark:text-rose-400 shrink-0">
-                                  EXPIRING ({daysLeft}d)
-                                </span>
-                              )}
-                              {isExpiring60 && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0">
-                                  EXPIRING ({daysLeft}d)
-                                </span>
-                              )}
+                      {/* Top Header Row */}
+                      <div className="flex items-start justify-between gap-2.5 mb-3">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelectProduct(p.id)}
+                            className="rounded border-border text-sky-500 accent-sky-500 focus:ring-sky-500 cursor-pointer h-4 w-4 bg-background shrink-0"
+                          />
+                          {p.images && p.images[0] ? (
+                            <img src={p.images[0]} alt="" className="h-11 w-11 rounded-xl object-cover border border-border shrink-0" />
+                          ) : (
+                            <div className="h-11 w-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                              <Package className="h-5 w-5" />
                             </div>
-                            <p className="text-[10px] text-muted-foreground tracking-wider truncate mt-0.5">
-                              {p.internal_sku || p.barcode || "—"}
-                              {p.batch_number ? ` · Batch: ${p.batch_number}` : ""}
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold text-sm text-foreground truncate">{p.name}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              {catName(p.category_id)} · SKU: {p.internal_sku || p.barcode || "—"}
                             </p>
                           </div>
                         </div>
-                      </td>
-                      <td className="px-4 py-4"><span className="text-xs text-muted-foreground">{catName(p.category_id)}</span></td>
-                      <td className="px-4 py-4">
-                        {(() => {
-                          const parsed = parseProductUOM(p.name, p.description || "", p.uom, p.units_per_uom, p.base_unit);
-                          const isScaled = parsed.packSize > 1;
-                          const retail = Number(p.discount_price ?? p.retail_price);
-                          return (
-                            <div>
-                              <p className="font-bold text-sm">
-                                {fmt(retail)}
-                                <span className="text-xs font-normal text-muted-foreground ml-1">/{parsed.uomLabel}</span>
-                              </p>
-                              {isScaled && (
-                                <p className="text-[10px] text-muted-foreground">
-                                  ~{fmt(retail / parsed.packSize)}/{parsed.subUnitName}
-                                </p>
-                              )}
-                              <p className="text-[10px] text-muted-foreground mt-0.5">
-                                cost {fmt(Number(p.purchase_cost))} · <span className={margin >= 0 ? "text-emerald-500 font-semibold" : "text-rose-500 font-semibold"}>{margin}% margin</span>
-                              </p>
-                            </div>
-                          );
-                        })()}
-                      </td>
-                      <td className="px-4 py-4">
-                        {(() => {
-                          const isScaled = stockInfo.packSize > 1;
-                          return (
-                            <div className="flex flex-col">
-                              <span className={`text-base font-extrabold ${out ? "text-rose-500" : low ? "text-amber-500" : "text-foreground"}`}>
-                                {stockInfo.displayText}
-                              </span>
-                              {isScaled && (
-                                <span className="text-[11px] font-semibold text-muted-foreground">
-                                  {stockInfo.subText}
-                                </span>
-                              )}
-                              <p className="text-[10px] text-muted-foreground tracking-wider mt-0.5">alert ≤ {threshold}</p>
-                            </div>
-                          );
-                        })()}
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className={`text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full ${out ? "bg-rose-500/15 text-rose-500" : low ? "bg-amber-500/15 text-amber-500" : p.status !== "active" ? "bg-muted text-muted-foreground" : "bg-emerald-500/15 text-emerald-500"}`}>
-                          {p.status !== "active" ? p.status.toUpperCase() : out ? "OUT OF STOCK" : low ? "LOW STOCK" : "IN STOCK"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-52">
-                            <DropdownMenuItem onClick={() => setViewTarget(p)}><Eye className="h-4 w-4 mr-2" /> View Identity</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setTransferTarget(p)}><ArrowRightLeft className="h-4 w-4 mr-2" /> Bulk Transfer</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setStockTarget(p)}><BoxesIcon className="h-4 w-4 mr-2" /> Update Stock</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(p)}><Pencil className="h-4 w-4 mr-2" /> Edit Metadata</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => setDeleteTarget(p)} className="text-rose-500 focus:text-rose-500"><Trash2 className="h-4 w-4 mr-2" /> Delete</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </td>
-                    </tr>
+
+                        {/* Status badge & Menu */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className={`text-[9px] font-bold tracking-wider px-2 py-0.5 rounded-full ${out ? "bg-rose-500/15 text-rose-600 dark:text-rose-400" : low ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : p.status !== "active" ? "bg-muted text-muted-foreground" : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"}`}>
+                            {out ? "OUT" : low ? "LOW" : p.status !== "active" ? "DRAFT" : "IN STOCK"}
+                          </span>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem onClick={() => setViewTarget(p)}><Eye className="h-4 w-4 mr-2" /> View Details</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setTransferTarget(p)}><ArrowRightLeft className="h-4 w-4 mr-2" /> Bulk Transfer</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setStockTarget(p)}><BoxesIcon className="h-4 w-4 mr-2" /> Update Stock</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openEdit(p)}><Pencil className="h-4 w-4 mr-2" /> Edit Metadata</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => setDeleteTarget(p)} className="text-rose-500 focus:text-rose-500"><Trash2 className="h-4 w-4 mr-2" /> Delete</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+
+                      {/* Expiry alerts if any */}
+                      {(isExpired || (daysLeft !== null && daysLeft <= 60)) && (
+                        <div className="mb-2.5">
+                          {isExpired ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-destructive/15 text-destructive inline-block">
+                              EXPIRED
+                            </span>
+                          ) : (
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase inline-block ${daysLeft! <= 30 ? "bg-rose-500/15 text-rose-600 dark:text-rose-400" : "bg-amber-500/15 text-amber-600 dark:text-amber-400"}`}>
+                              Expiring in {daysLeft} days
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Stats 2-column info */}
+                      <div className="grid grid-cols-2 gap-2 bg-muted/30 border border-border/50 rounded-xl p-2.5 mb-3 text-xs">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Price & Margin</p>
+                          <p className="font-bold text-sm mt-0.5 text-foreground">
+                            {fmt(retail)}
+                            <span className="text-[11px] font-normal text-muted-foreground">/{parsed.uomLabel}</span>
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            Cost {fmt(Number(p.purchase_cost))} · <span className={margin >= 0 ? "text-emerald-500 font-bold" : "text-rose-500 font-bold"}>{margin}%</span>
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Stock Level</p>
+                          <p className={`font-extrabold text-sm mt-0.5 ${out ? "text-rose-500" : low ? "text-amber-500" : "text-foreground"}`}>
+                            {stockInfo.displayText}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            Alert at ≤ {threshold} {parsed.uomLabel}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Quick Action Touch Buttons */}
+                      <div className="flex items-center gap-1.5 pt-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setStockTarget(p)}
+                          className="flex-1 h-8 text-[11px] font-bold rounded-lg border-border hover:bg-muted"
+                        >
+                          <BoxesIcon className="h-3.5 w-3.5 mr-1 text-sky-500" />
+                          Stock
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openEdit(p)}
+                          className="flex-1 h-8 text-[11px] font-bold rounded-lg border-border hover:bg-muted"
+                        >
+                          <Pencil className="h-3.5 w-3.5 mr-1 text-amber-500" />
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDeleteTarget(p)}
+                          className="h-8 px-2.5 text-[11px] font-bold rounded-lg border-rose-500/20 text-rose-500 hover:bg-rose-500/10 hover:text-rose-600"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            </div>
+          </>
         )}
       </div>
 

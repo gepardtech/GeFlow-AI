@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import PanelLayout from "@/components/PanelLayout";
 import { ADMIN_NAV, ADMIN_IDENTITY } from "@/lib/panelNav";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Search, Filter, Tag, MoreVertical, Eye, Pencil, Trash2, Loader2,
-  LayoutDashboard, Package, ShoppingCart, ShoppingBag, FileText, BarChart3, Users, Settings,
+  LayoutDashboard, Package, ShoppingCart, ShoppingBag, FileText, BarChart3, Users, Settings, Scale,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -136,7 +137,7 @@ const AdminBusinessCategories = () => {
   useEffect(() => {
     load();
     const ch = supabase
-      .channel("admin_categories_realtime")
+      .channel(`admin_categories_realtime_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "business_categories" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "business_category_internal" }, load)
       .on("postgres_changes", { event: "*", schema: "public", table: "businesses" }, load)
@@ -291,9 +292,16 @@ const AdminBusinessCategories = () => {
           </div>
           <p className="text-sm text-muted-foreground">Define real-world business models and provision specialized module payloads.</p>
         </div>
-        <Button onClick={openCreate} className="h-10 px-5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-500 hover:opacity-90 text-white font-bold shadow-lg shadow-sky-500/30">
-          <Plus className="h-4 w-4 mr-2" /> Add New Category
-        </Button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <Button variant="outline" asChild className="h-10 px-4 rounded-xl border-border text-xs font-semibold hover:bg-muted">
+            <Link to="/admin/business-categories/uom">
+              <Scale className="h-4 w-4 mr-2 text-primary" /> Manage UoMs
+            </Link>
+          </Button>
+          <Button onClick={openCreate} className="h-10 px-5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-500 hover:opacity-90 text-white font-bold shadow-lg shadow-sky-500/30">
+            <Plus className="h-4 w-4 mr-2" /> Add New Category
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 mb-6 flex-wrap">

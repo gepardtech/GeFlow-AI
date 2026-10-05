@@ -20,6 +20,15 @@ export interface UOMOption {
 }
 
 export const ALL_STANDARD_UOMS: UOMOption[] = [
+  // Restaurant & Food Business units
+  { id: "pizza", name: "Pizza", abbreviation: "pz", category: "quantity", description: "Whole pizza item. Units/Pieces define size/slice count (e.g. 4 piece, 8 piece)", industries: ["restaurant", "cafe", "fast food", "food"], baseUnit: "slice", defaultMultiplier: 8 },
+  { id: "burger", name: "Burger", abbreviation: "bgr", category: "quantity", description: "Prepared burger or sandwich", industries: ["restaurant", "cafe", "fast food", "food"], baseUnit: "unit", defaultMultiplier: 1 },
+  { id: "fries", name: "Fries", abbreviation: "fr", category: "quantity", description: "Serving of fries (regular, large)", industries: ["restaurant", "cafe", "fast food", "food"], baseUnit: "portion", defaultMultiplier: 1 },
+  { id: "portion", name: "Portion", abbreviation: "port", category: "quantity", description: "Standard kitchen food portion or recipe serving", industries: ["restaurant", "cafe", "food"], baseUnit: "g", defaultMultiplier: 250 },
+  { id: "plate", name: "Plate", abbreviation: "plt", category: "quantity", description: "Plated meal serving (e.g. Biryani plate, BBQ)", industries: ["restaurant", "cafe", "food"], baseUnit: "portion", defaultMultiplier: 1 },
+  { id: "cup", name: "Cup", abbreviation: "cup", category: "volume", description: "Beverage cup or dessert container (e.g. coffee, tea)", industries: ["restaurant", "cafe", "food"], baseUnit: "ml", defaultMultiplier: 250 },
+  { id: "slice", name: "Slice", abbreviation: "slc", category: "quantity", description: "Single cut slice of pizza, pie, or cake", industries: ["restaurant", "bakery", "cafe"], baseUnit: "piece", defaultMultiplier: 1 },
+
   // Quantity / Count units
   { id: "piece", name: "Piece", abbreviation: "pc", category: "quantity", description: "Individual single item count", baseUnit: "piece", defaultMultiplier: 1 },
   { id: "unit", name: "Unit", abbreviation: "unit", category: "quantity", description: "Generic standard single unit", baseUnit: "unit", defaultMultiplier: 1 },
@@ -108,6 +117,7 @@ export function getUOMsForBusiness(industryType?: string | null, categoryName?: 
     ];
   } else if (isRestaurant) {
     allowedIds = [
+      "pizza", "burger", "fries", "portion", "plate", "cup", "slice",
       "piece", "pack", "box", "bottle", "can", "dozen", "kg", "g", "l", "ml", "unit"
     ];
   } else if (isFashion) {

@@ -6,6 +6,25 @@ import "./index.css";
 // Polyfill/guard against uncaught network rejections
 if (typeof window !== "undefined") {
   window.addEventListener(
+    "error",
+    (event) => {
+      const msg = (event.message || String(event.error?.message || "")).toLowerCase();
+      if (
+        msg.includes("failed to fetch") ||
+        msg.includes("networkerror") ||
+        msg.includes("load failed") ||
+        msg.includes("aborted") ||
+        msg.includes("non-2xx")
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        console.warn("Handled network error safely:", msg);
+      }
+    },
+    true
+  );
+
+  window.addEventListener(
     "unhandledrejection",
     (event) => {
       const reason = event.reason;
@@ -18,6 +37,7 @@ if (typeof window !== "undefined") {
         msg.includes("non-2xx")
       ) {
         event.preventDefault();
+        event.stopPropagation();
         console.warn("Handled network rejection safely:", msg);
       }
     },

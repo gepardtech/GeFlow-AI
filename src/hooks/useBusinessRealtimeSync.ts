@@ -10,10 +10,11 @@ import { isDemoProduct } from "@/lib/businessSync";
 export function useBusinessRealtimeSync() {
   const { active } = useActiveBusiness();
   const lastSyncHashRef = useRef<string>("");
+  const initialSyncDoneRef = useRef<boolean>(false);
   const activeId = active?.id;
   const isStaff = Boolean(active?.is_staff);
   const ownerUserId = active?.owner_user_id;
-  const businessName = active?.name;
+  const businessName = active?.business_name || "";
 
   // 1. Business Owner Pipeline:
   // When owner is online or updates inventory, mirror Supabase directly to sync engine
@@ -21,8 +22,9 @@ export function useBusinessRealtimeSync() {
     if (!activeId || isStaff) return;
 
     let isMounted = true;
+    let syncTimeout: any = null;
 
-    async function syncOwnerCatalog() {
+    async function syncOwnerCatalog(isFromRealtimeEvent = false) {
       try {
         const { data, error } = await supabase
           .from("products")
@@ -36,7 +38,9 @@ export function useBusinessRealtimeSync() {
         const hash = JSON.stringify(
           cleanList.map((p: any) => [p.id, p.updated_at, p.stock_units, p.retail_price])
         );
+
         if (hash === lastSyncHashRef.current) return;
+        const prevHash = lastSyncHashRef.current;
         lastSyncHashRef.current = hash;
 
         await fetch("/api/sync/batch", {
@@ -49,40 +53,60 @@ export function useBusinessRealtimeSync() {
             products: cleanList,
             replace: true,
           }),
-        });
+        }).catch(() => {});
 
-        window.dispatchEvent(
-          new CustomEvent("geflow:products-updated", { detail: { businessId: activeId } })
-        );
+        // Only dispatch products-updated if this is an actual change after initial load
+        if (isFromRealtimeEvent || (initialSyncDoneRef.current && prevHash !== "")) {
+          window.dispatchEvent(
+            new CustomEvent("geflow:products-updated", { detail: { businessId: activeId } })
+          );
+        }
+        initialSyncDoneRef.current = true;
       } catch (err) {
         console.warn("Realtime sync notice for owner catalog:", err);
       }
     }
 
-    syncOwnerCatalog();
+    // Schedule initial sync without storming
+    syncTimeout = setTimeout(() => {
+      syncOwnerCatalog(false);
+    }, 400);
 
     // Supabase Realtime channel for instant DB changes
-    const channel = supabase
-      .channel(`rt-products-${activeId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "products",
-          filter: `business_id=eq.${activeId}`,
-        },
-        () => {
-          syncOwnerCatalog();
-        }
-      )
-      .subscribe();
+    const channelId = `rt-products-${activeId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    let channel: any = null;
+    try {
+      channel = supabase
+        .channel(channelId)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "products",
+            filter: `business_id=eq.${activeId}`,
+          },
+          () => {
+            syncOwnerCatalog(true);
+          }
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn("Notice subscribing to product realtime sync:", err);
+    }
 
     return () => {
       isMounted = false;
-      supabase.removeChannel(channel);
+      if (syncTimeout) clearTimeout(syncTimeout);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          /* ignore cleanup */
+        }
+      }
     };
-  }, [activeId, isStaff, ownerUserId, businessName]);
+  }, [activeId, isStaff, ownerUserId]);
 
   // 2. Employee Pipeline:
   // Continuously pulls the authoritative business catalog from the sync engine

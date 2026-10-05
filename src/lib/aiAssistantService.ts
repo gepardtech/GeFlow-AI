@@ -51,7 +51,7 @@ export function formatToProfessionalBullets(rawText: string): string {
   if (paragraphs.length === 1) {
     const singlePara = paragraphs[0];
     const sentences = singlePara
-      .split(/(?<=[.?!])\s+(?=[A-Z0-9#•\-])/)
+      .split(/(?<=[.?!])\s+(?=[A-Z0-9#•-])/)
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
 

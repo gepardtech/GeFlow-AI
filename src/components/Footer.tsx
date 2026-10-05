@@ -252,21 +252,21 @@ const Footer = () => {
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
             <Link to="/" className="flex items-center gap-2 mb-4">
-              {settings?.logo_url ? (
-                <img
-                  src={settings.logo_url}
-                  alt={settings?.app_name ?? "GeFlow"}
-                  className="h-8 max-w-[150px] object-contain"
-                />
-              ) : (
-                <>
-                  <svg width="24" height="24" viewBox="0 0 28 28" fill="none" className="text-primary">
-                    <path d="M14 2L4 8v12l10 6 10-6V8L14 2z" stroke="currentColor" strokeWidth="2" fill="none" />
-                    <path d="M14 8l-5 3v6l5 3 5-3v-6l-5-3z" fill="currentColor" opacity="0.3" />
-                  </svg>
-                  <span className="font-bold text-lg text-primary">{settings?.app_name ?? "GeFlow"}</span>
-                </>
-              )}
+              <img
+                src={settings?.logo_url || "/logo.png"}
+                alt={settings?.app_name ?? "GeFlow"}
+                className="h-8 max-w-[150px] object-contain"
+                onError={(e) => {
+                  const target = e.currentTarget as HTMLElement;
+                  target.style.display = "none";
+                  const nextEl = target.nextElementSibling as HTMLElement;
+                  if (nextEl) nextEl.style.display = "flex";
+                }}
+              />
+              <div className="hidden items-center gap-2">
+                <img src={settings?.favicon_url || "/favicon.png"} alt="GeFlow Icon" className="w-6 h-6 object-contain" />
+                <span className="font-bold text-lg text-foreground">{settings?.app_name ?? "GeFlow"}</span>
+              </div>
             </Link>
             <p className="text-muted-foreground text-sm leading-relaxed mb-4">
               GeFlow is a modern business operating system designed to manage inventory, sales, and profit tracking in real time.

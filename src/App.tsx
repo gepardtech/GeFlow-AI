@@ -34,6 +34,7 @@ import AdminBillingCoupons from "./pages/admin/AdminBillingCoupons";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminBusinesses from "./pages/admin/AdminBusinesses";
 import AdminBusinessCategories from "./pages/admin/AdminBusinessCategories";
+import AdminUoM from "./pages/admin/AdminUoM";
 import AdminProductCategories from "./pages/admin/AdminProductCategories";
 import AdminBilling from "./pages/admin/AdminBilling";
 import AdminPayments from "./pages/admin/AdminPayments";
@@ -104,9 +105,12 @@ const App = () => (
           <Route path="/auth/confirm" element={<AuthCallback />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/admin" element={<AdminGuard><Admin /></AdminGuard>} />
+          <Route path="/admin/dashboard" element={<AdminGuard><Admin /></AdminGuard>} />
           <Route path="/admin/users" element={<AdminGuard><AdminUsers /></AdminGuard>} />
           <Route path="/admin/businesses" element={<AdminGuard><AdminBusinesses /></AdminGuard>} />
           <Route path="/admin/business-categories" element={<AdminGuard><AdminBusinessCategories /></AdminGuard>} />
+          <Route path="/admin/business-categories/uom" element={<AdminGuard><AdminUoM /></AdminGuard>} />
+          <Route path="/admin/uom" element={<AdminGuard><AdminUoM /></AdminGuard>} />
           <Route path="/admin/product-categories" element={<AdminGuard><AdminProductCategories /></AdminGuard>} />
           <Route path="/admin/billing" element={<AdminGuard><AdminBilling /></AdminGuard>} />
           <Route path="/admin/billing/subscriptions" element={<AdminGuard><AdminBillingSubscriptions /></AdminGuard>} />

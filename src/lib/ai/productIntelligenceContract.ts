@@ -38,10 +38,21 @@ export const STANDARD_STOCK_UNITS = [
   "set",
   "dozen",
   "unit",
+  "pizza",
+  "burger",
+  "fries",
+  "portion",
+  "plate",
+  "slice",
+  "cup",
   "kg",
   "g",
+  "mg",
   "liter",
+  "ml",
   "meter",
+  "hour",
+  "session",
 ] as const;
 
 export { CONFIDENCE_THRESHOLDS, getConfidenceLevel } from "./confidenceThresholds";
