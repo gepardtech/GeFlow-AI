@@ -138,12 +138,34 @@ export const AnnouncementBar = ({ audience, position = "top" }: Props) => {
   const IconComp = style.icon;
 
   const handleCtaClick = () => {
+    // Open announcement detail popup modal
     setSelectedAnnouncement(cur);
   };
 
   const handleRedirect = (url: string, couponCode?: string | null) => {
     if (!url) return;
     let target = url.trim();
+
+    // Check if target is a full URL to the current domain or internal route
+    try {
+      if (target.startsWith("http://") || target.startsWith("https://")) {
+        const parsed = new URL(target);
+        if (
+          parsed.origin === window.location.origin ||
+          parsed.pathname.startsWith("/checkout") ||
+          parsed.pathname.startsWith("/pricing") ||
+          parsed.pathname.startsWith("/dashboard")
+        ) {
+          target = parsed.pathname + parsed.search + parsed.hash;
+        }
+      }
+    } catch {
+      /* ignore invalid URL */
+    }
+
+    if (!target.startsWith("http://") && !target.startsWith("https://") && !target.startsWith("/")) {
+      target = "/" + target;
+    }
 
     const code = couponCode || detectAnnouncementCoupon(selectedAnnouncement || cur);
     if (code) {

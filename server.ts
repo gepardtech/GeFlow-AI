@@ -18,6 +18,7 @@ import { usageLogger } from "./src/server/ai/usage/usageLogger";
 import { teamService } from "./src/server/team/teamService";
 import { businessDataSyncService } from "./src/server/team/businessDataSyncService";
 import { settingsService } from "./src/server/settings/settingsService";
+import { businessExtendedStorage } from "./src/server/businesses/businessExtendedStorage";
 import { newsletterService } from "./src/server/newsletter/newsletterService";
 import { promotionsService } from "./src/server/promotions/promotionsService";
 import { uomService } from "./src/server/uom/uomService";
@@ -220,7 +221,58 @@ app.use("/api/supabase-proxy", async (req: Request, res: Response) => {
       }
     }
 
+    // Intercept businesses queries requesting solely extended_settings
+    if (/^\/rest\/v1\/businesses/i.test(rawUrl) && req.method === "GET") {
+      const isOnlyExtended = /select=extended_settings(&|$)/i.test(rawUrl);
+      if (isOnlyExtended) {
+        const idMatch = rawUrl.match(/id=eq\.([^&]+)/i);
+        const bizId = idMatch ? decodeURIComponent(idMatch[1]) : "";
+        const settings = businessExtendedStorage.getSettings(bizId);
+        const acceptHdr = (headers["accept"] || "").toLowerCase();
+        res.setHeader("content-type", "application/json");
+        if (acceptHdr.includes("vnd.pgrst.object+json")) {
+          return res.status(200).json({ extended_settings: settings });
+        } else {
+          return res.status(200).json([{ extended_settings: settings }]);
+        }
+      }
+    }
+
+    let proxyTargetUrl = targetUrl;
+    if (/^\/rest\/v1\/businesses/i.test(rawUrl) && req.method === "GET") {
+      // Strip extended_settings from select query string so Supabase does not fail with column does not exist
+      proxyTargetUrl = targetUrl
+        .replace(/([?&]select=.*?),extended_settings(?=[&,?]|$)/gi, "$1")
+        .replace(/([?&]select=)extended_settings,(.*?)/gi, "$1$2")
+        .replace(/([?&]select=)extended_settings(?=[&?]|$)/gi, "$1*");
+    }
+
     let bodyPayload: any = req.body;
+
+    // Intercept businesses mutations to safely save extended_settings and strip invalid column
+    if (/^\/rest\/v1\/businesses/i.test(rawUrl) && (req.method === "POST" || req.method === "PATCH" || req.method === "PUT")) {
+      if (bodyPayload && typeof bodyPayload === "object") {
+        const sanitizeBizRow = (raw: any) => {
+          const item = { ...raw };
+          if ("extended_settings" in item) {
+            const ext = item.extended_settings;
+            const idMatch = rawUrl.match(/id=eq\.([^&]+)/i);
+            const bizId = item.id || (idMatch ? decodeURIComponent(idMatch[1]) : "");
+            if (bizId && ext && typeof ext === "object") {
+              businessExtendedStorage.saveSettings(bizId, ext).catch(() => {});
+            }
+            delete item.extended_settings;
+          }
+          return item;
+        };
+
+        if (Array.isArray(bodyPayload)) {
+          bodyPayload = bodyPayload.map(sanitizeBizRow);
+        } else {
+          bodyPayload = sanitizeBizRow(bodyPayload);
+        }
+      }
+    }
     // Intercept platform_settings mutations to safely store parent_company in alerts JSON and strip invalid columns
     if (/^\/rest\/v1\/platform_settings/i.test(rawUrl) && (req.method === "POST" || req.method === "PATCH" || req.method === "PUT")) {
       if (bodyPayload && typeof bodyPayload === "object") {
@@ -285,8 +337,8 @@ app.use("/api/supabase-proxy", async (req: Request, res: Response) => {
       }
     }
 
-    fs.appendFileSync("/tmp/proxy-trace.log", `Before fetch to ${targetUrl}, body type: ${typeof fetchOptions.body}\n`);
-    const upstreamRes = await fetch(targetUrl, fetchOptions);
+    fs.appendFileSync("/tmp/proxy-trace.log", `Before fetch to ${proxyTargetUrl}, body type: ${typeof fetchOptions.body}\n`);
+    const upstreamRes = await fetch(proxyTargetUrl, fetchOptions);
     fs.appendFileSync("/tmp/proxy-trace.log", `After fetch, status: ${upstreamRes.status}\n`);
 
     if (res.headersSent || res.writableEnded) return;
@@ -332,6 +384,27 @@ app.use("/api/supabase-proxy", async (req: Request, res: Response) => {
         } else if (parsed && typeof parsed === "object") {
           const alerts = parsed.alerts || {};
           parsed.parent_company = alerts.parent_company || alerts.general_settings?.parent_company || "Gepard Techs";
+          return res.json(parsed);
+        }
+      } catch {
+        /* fallback to raw buffer */
+      }
+    }
+
+    // If reading businesses, unpack extended_settings onto rows
+    if (/^\/rest\/v1\/businesses/i.test(rawUrl) && upstreamRes.status === 200 && req.method === "GET") {
+      try {
+        const text = new TextDecoder().decode(buffer);
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((row: any) => {
+            if (row && typeof row === "object" && row.id) {
+              row.extended_settings = businessExtendedStorage.getSettings(row.id);
+            }
+          });
+          return res.json(parsed);
+        } else if (parsed && typeof parsed === "object" && parsed.id) {
+          parsed.extended_settings = businessExtendedStorage.getSettings(parsed.id);
           return res.json(parsed);
         }
       } catch {
@@ -1254,12 +1327,16 @@ app.post("/api/user/products/save", async (req: Request, res: Response) => {
           await serverSupabase.from("profiles").update({ listed_products: uCount, updated_at: now }).eq("user_id", resolvedOwnerId);
         }
       }
-    } catch {}
+    } catch {
+      /* ignore product count update error */
+    }
 
     // Also update sync service cache
     try {
       businessDataSyncService.saveProduct(businessId, productRow, resolvedOwnerId);
-    } catch {}
+    } catch {
+      /* ignore sync cache update error */
+    }
 
     return res.json({ success: true, product: savedData || productRow });
   } catch (err: any) {
@@ -1285,13 +1362,15 @@ app.delete("/api/user/products/:id", async (req: Request, res: Response) => {
           targetBizId = targetBizId || prod.business_id;
           targetOwnerId = prod.owner_user_id;
         }
-      } catch {}
+      } catch {
+        /* ignore fetch error */
+      }
 
       // 2. Delete associated child records to prevent foreign key errors
-      await serverSupabase.from("sale_items").delete().eq("product_id", id).catch(() => {});
-      await serverSupabase.from("purchase_items").delete().eq("product_id", id).catch(() => {});
-      await serverSupabase.from("order_items").delete().eq("product_id", id).catch(() => {});
-      await serverSupabase.from("stock_movements").delete().eq("product_id", id).catch(() => {});
+      try { await serverSupabase.from("sale_items").delete().eq("product_id", id); } catch { /* ignore */ }
+      try { await serverSupabase.from("purchase_items").delete().eq("product_id", id); } catch { /* ignore */ }
+      try { await serverSupabase.from("order_items").delete().eq("product_id", id); } catch { /* ignore */ }
+      try { await serverSupabase.from("stock_movements").delete().eq("product_id", id); } catch { /* ignore */ }
 
       // 3. Delete physical product from PostgreSQL
       const { error: delErr } = await serverSupabase.from("products").delete().eq("id", id);
@@ -1306,15 +1385,27 @@ app.delete("/api/user/products/:id", async (req: Request, res: Response) => {
       businessDataSyncService.deleteProduct(targetBizId || businessId || "", id);
       if (isUUID && targetBizId) {
         const { count: bCount } = await serverSupabase.from("products").select("*", { count: "exact", head: true }).eq("business_id", targetBizId);
-        await serverSupabase.from("businesses").update({ listed_products: bCount ?? 0, updated_at: new Date().toISOString() }).eq("id", targetBizId).catch(() => {});
+        try {
+          await serverSupabase.from("businesses").update({ listed_products: bCount ?? 0, updated_at: new Date().toISOString() }).eq("id", targetBizId);
+        } catch {
+          /* ignore business count update error */
+        }
       }
-    } catch {}
+    } catch {
+      /* ignore sync cache delete error */
+    }
 
     if (targetOwnerId && isUUID) {
       try {
         const { count: uCount } = await serverSupabase.from("products").select("*", { count: "exact", head: true }).eq("owner_user_id", targetOwnerId);
-        await serverSupabase.from("profiles").update({ listed_products: uCount ?? 0, updated_at: new Date().toISOString() }).eq("user_id", targetOwnerId).catch(() => {});
-      } catch {}
+        try {
+          await serverSupabase.from("profiles").update({ listed_products: uCount ?? 0, updated_at: new Date().toISOString() }).eq("user_id", targetOwnerId);
+        } catch {
+          /* ignore profile count update error */
+        }
+      } catch {
+        /* ignore count query error */
+      }
     }
 
     return res.json({ success: true, id });
@@ -1334,10 +1425,10 @@ app.post("/api/user/products/bulk-delete", async (req: Request, res: Response) =
 
     if (uuidList.length > 0) {
       // 1. Delete associated child records
-      await serverSupabase.from("sale_items").delete().in("product_id", uuidList).catch(() => {});
-      await serverSupabase.from("purchase_items").delete().in("product_id", uuidList).catch(() => {});
-      await serverSupabase.from("order_items").delete().in("product_id", uuidList).catch(() => {});
-      await serverSupabase.from("stock_movements").delete().in("product_id", uuidList).catch(() => {});
+      try { await serverSupabase.from("sale_items").delete().in("product_id", uuidList); } catch { /* ignore */ }
+      try { await serverSupabase.from("purchase_items").delete().in("product_id", uuidList); } catch { /* ignore */ }
+      try { await serverSupabase.from("order_items").delete().in("product_id", uuidList); } catch { /* ignore */ }
+      try { await serverSupabase.from("stock_movements").delete().in("product_id", uuidList); } catch { /* ignore */ }
 
       // 2. Delete physical products
       const { error: delErr } = await serverSupabase.from("products").delete().in("id", uuidList);
@@ -1352,9 +1443,15 @@ app.post("/api/user/products/bulk-delete", async (req: Request, res: Response) =
       ids.forEach((id: string) => businessDataSyncService.deleteProduct(businessId || "", id));
       if (businessId && typeof businessId === "string") {
         const { count: bCount } = await serverSupabase.from("products").select("*", { count: "exact", head: true }).eq("business_id", businessId);
-        await serverSupabase.from("businesses").update({ listed_products: bCount ?? 0, updated_at: new Date().toISOString() }).eq("id", businessId).catch(() => {});
+        try {
+          await serverSupabase.from("businesses").update({ listed_products: bCount ?? 0, updated_at: new Date().toISOString() }).eq("id", businessId);
+        } catch {
+          /* ignore business count update error */
+        }
       }
-    } catch {}
+    } catch {
+      /* ignore operational sync cache delete error */
+    }
 
     return res.json({ success: true, count: ids.length });
   } catch (err: any) {
@@ -1410,7 +1507,7 @@ app.post("/api/sync/sale", (req: Request, res: Response) => {
 });
 
 // Adjust stock / restock
-app.post("/api/sync/adjust-stock", (req: Request, res: Response) => {
+app.post("/api/sync/adjust-stock", async (req: Request, res: Response) => {
   try {
     const { businessId, productId, deltaQuantity, type, reason, note, userId } = req.body || {};
     if (!businessId || !productId || deltaQuantity === undefined) {
@@ -1425,6 +1522,25 @@ app.post("/api/sync/adjust-stock", (req: Request, res: Response) => {
       note,
       userId
     );
+    if (result.success && result.newStock !== undefined) {
+      try {
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productId);
+        if (isUUID) {
+          await serverSupabase
+            .from("products")
+            .update({ stock_units: result.newStock, updated_at: new Date().toISOString() })
+            .eq("id", productId);
+        } else {
+          await serverSupabase
+            .from("products")
+            .update({ stock_units: result.newStock, updated_at: new Date().toISOString() })
+            .eq("business_id", businessId)
+            .ilike("id", productId);
+        }
+      } catch (err) {
+        console.warn("Notice updating stock in serverSupabase:", err);
+      }
+    }
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
@@ -1485,18 +1601,45 @@ app.get("/api/sync/returns", (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/sync/return", (req: Request, res: Response) => {
+app.post("/api/sync/return", async (req: Request, res: Response) => {
   try {
     const { businessId, returnRecord, items, userId } = req.body || {};
     if (!businessId || !returnRecord || !items || !Array.isArray(items)) {
       return res.status(400).json({ success: false, error: "businessId, returnRecord, and items are required." });
     }
-    const result = businessDataSyncService.recordReturn(businessId, {
+    const result = await businessDataSyncService.recordReturn(businessId, {
       returnRecord,
       items,
       userId,
     });
     res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/sync/sales/remove-from-return", async (req: Request, res: Response) => {
+  try {
+    const { businessId, saleId } = req.body || {};
+    if (!businessId || !saleId) {
+      return res.status(400).json({ success: false, error: "businessId and saleId are required." });
+    }
+    const result = businessDataSyncService.dismissSaleFromReturn(businessId, saleId);
+    try {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(saleId);
+      if (isUUID) {
+        await serverSupabase.from("sales").update({ status: "refunded" }).eq("id", saleId);
+      } else {
+        await serverSupabase
+          .from("sales")
+          .update({ status: "refunded" })
+          .eq("business_id", businessId)
+          .or(`id.eq.${saleId},invoice_no.eq.${saleId}`);
+      }
+    } catch {
+      /* ignore sale status update error */
+    }
+    res.json({ success: true, removed: result });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1523,7 +1666,39 @@ app.post("/api/sync/settings", (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: "businessId is required." });
     }
     const result = businessDataSyncService.saveSettings(businessId, settings || {});
+    // Also mirror to businessExtendedStorage for persistent extended data
+    businessExtendedStorage.saveSettings(businessId, settings || {}).catch(() => {});
     res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Dedicated Business Extended Settings endpoints (replaces non-existent businesses.extended_settings column)
+app.get("/api/businesses/:id/extended-settings", (req: Request, res: Response) => {
+  try {
+    const businessId = req.params.id || "";
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "businessId parameter is required." });
+    }
+    const settings = businessExtendedStorage.getSettings(businessId);
+    res.json({ success: true, settings });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/businesses/:id/extended-settings", async (req: Request, res: Response) => {
+  try {
+    const businessId = req.params.id || "";
+    const { settings } = req.body || {};
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "businessId parameter is required." });
+    }
+    const saved = await businessExtendedStorage.saveSettings(businessId, settings || {});
+    // Mirror to businessDataSyncService as well
+    businessDataSyncService.saveSettings(businessId, saved);
+    res.json({ success: true, settings: saved });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1967,7 +2142,7 @@ app.get("/api/user/businesses", async (req: Request, res: Response) => {
     (bgOwnedRes.data || []).forEach((b: any) => ownedMap.set(b.id, b));
     (srvOwnedRes.data || []).forEach((b: any) => ownedMap.set(b.id, b));
 
-    let ownedList = Array.from(ownedMap.values());
+    const ownedList = Array.from(ownedMap.values());
 
     // 2. Fetch staff memberships
     const staffData: any[] = [];
@@ -2267,7 +2442,9 @@ app.post("/api/user/businesses/create", async (req: Request, res: Response) => {
     }
     try {
       await bgSupabase.from("businesses").insert(bizRow);
-    } catch {}
+    } catch {
+      /* ignore secondary db insert error */
+    }
 
     recordSystemActivity({
       type: "business_registered",
@@ -2346,7 +2523,9 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
         (async () => {
           try {
             await bgSupabase.from("profiles").update(profileUpdates).or(`user_id.eq.${user_id},id.eq.${user_id}`);
-          } catch {}
+          } catch {
+            /* ignore secondary db update error */
+          }
         })(),
       ];
 
@@ -2359,10 +2538,10 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
         metadataUpdates.role = cleanRole;
         tasks.push(
           (async () => {
-            try { await serverSupabase.from("user_roles").delete().or(`user_id.eq.${authUserId},user_id.eq.${user_id}`); } catch {}
-            try { await serverSupabase.from("user_roles").insert({ user_id: authUserId, role: cleanRole }); } catch {}
-            try { await bgSupabase.from("user_roles").delete().or(`user_id.eq.${authUserId},user_id.eq.${user_id}`); } catch {}
-            try { await bgSupabase.from("user_roles").insert({ user_id: authUserId, role: cleanRole }); } catch {}
+            try { await serverSupabase.from("user_roles").delete().or(`user_id.eq.${authUserId},user_id.eq.${user_id}`); } catch { /* ignore */ }
+            try { await serverSupabase.from("user_roles").insert({ user_id: authUserId, role: cleanRole }); } catch { /* ignore */ }
+            try { await bgSupabase.from("user_roles").delete().or(`user_id.eq.${authUserId},user_id.eq.${user_id}`); } catch { /* ignore */ }
+            try { await bgSupabase.from("user_roles").insert({ user_id: authUserId, role: cleanRole }); } catch { /* ignore */ }
           })()
         );
       }
@@ -2408,17 +2587,29 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
         (async () => {
           try {
             await bgSupabase.from("profiles").update({ plan: cleanPlan, updated_at: new Date().toISOString() }).or(`user_id.eq.${user_id},id.eq.${user_id}`);
-          } catch {}
+          } catch {
+            /* ignore secondary db error */
+          }
         })(),
         (async () => {
-          await serverSupabase.from("subscriptions").update({ status: "superseded" }).eq("owner_user_id", authUserId).eq("status", "active").then(() => {}).catch(() => {});
-          await serverSupabase.from("subscriptions").insert({
-            owner_user_id: authUserId,
-            tier: cleanPlan,
-            cycle: cleanPlan === "lifetime" ? "lifetime" : "monthly",
-            status: "active",
-            created_at: new Date().toISOString()
-          });
+          try {
+            await serverSupabase.from("subscriptions").update({ status: "superseded" }).eq("owner_user_id", authUserId).eq("status", "active");
+          } catch {
+            /* ignore subscription supersede error */
+          }
+          try {
+            await serverSupabase.from("subscriptions").insert({
+              owner_user_id: authUserId,
+              tier: cleanPlan,
+              cycle: cleanPlan === "lifetime" ? "lifetime" : "monthly",
+              status: "active",
+              source: "admin_manual",
+              payment_method: "Admin Manual Assignment",
+              created_at: new Date().toISOString()
+            });
+          } catch {
+            /* ignore subscription insert error */
+          }
         })(),
         serverSupabase.auth.admin.updateUserById(authUserId, {
           user_metadata: { plan: cleanPlan }
@@ -2436,8 +2627,8 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
         (async () => {
           await serverSupabase.from("user_roles").delete().eq("user_id", user_id);
           await serverSupabase.from("user_roles").insert({ user_id, role: cleanRole });
-          try { await bgSupabase.from("user_roles").delete().eq("user_id", user_id); } catch {}
-          try { await bgSupabase.from("user_roles").insert({ user_id, role: cleanRole }); } catch {}
+          try { await bgSupabase.from("user_roles").delete().eq("user_id", user_id); } catch { /* ignore */ }
+          try { await bgSupabase.from("user_roles").insert({ user_id, role: cleanRole }); } catch { /* ignore */ }
         })(),
         serverSupabase.auth.admin.updateUserById(user_id, {
           user_metadata: { role: cleanRole }
@@ -2913,11 +3104,12 @@ app.post("/api/admin/businesses/reset", async (req: Request, res: Response) => {
 // Admin settings query (always returns latest database state with parent_company)
 app.get("/api/admin/settings", async (_req: Request, res: Response) => {
   try {
-    let { data, error } = await serverSupabase
+    const { data: initialData, error } = await serverSupabase
       .from("platform_settings")
       .select("*")
       .eq("singleton", true)
       .maybeSingle();
+    let data = initialData;
 
     if (!data) {
       const fallback = await serverSupabase
@@ -3038,7 +3230,9 @@ app.post("/api/admin/settings", async (req: Request, res: Response) => {
     // Mirror to secondary database
     try {
       await bgSupabase.from("platform_settings").update(cleanPayload).eq("singleton", true);
-    } catch {}
+    } catch {
+      /* ignore secondary database error */
+    }
 
     // 2. Also mirror to public_settings
     const ALLOWED_PUBLIC_COLS = new Set([
@@ -3335,7 +3529,9 @@ app.get("/api/admin/business-categories", async (_req: Request, res: Response) =
     }));
     try {
       uomService.seedMappingsForCategories(categories);
-    } catch {}
+    } catch {
+      /* ignore uom mapping error */
+    }
     return res.json({ success: true, categories });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
@@ -3650,7 +3846,9 @@ app.post("/api/admin/pricing-plans/lifetime-customizations", async (req: Request
           lifetime_price: Number(lifetime_price) || 0,
           updated_at: new Date().toISOString()
         }).eq("plan_key", cleanKey);
-      } catch {}
+      } catch {
+        /* ignore secondary db update */
+      }
     }
 
     // 2. Save lifetime-specific badge, popular status, and features into platform_settings alerts
@@ -3673,7 +3871,9 @@ app.post("/api/admin/pricing-plans/lifetime-customizations", async (req: Request
     }
     try {
       await bgSupabase.from("platform_settings").update({ alerts, updated_at: new Date().toISOString() }).eq("singleton", true);
-    } catch {}
+    } catch {
+      /* ignore secondary db update */
+    }
 
     return res.json({ success: true, lifetime_customizations: customs });
   } catch (err: any) {
@@ -3735,14 +3935,18 @@ app.post("/api/admin/pricing-plans", async (req: Request, res: Response) => {
       if (error) return res.status(500).json({ success: false, error: error.message });
       try {
         await bgSupabase.from("pricing_plans").update(payload).eq("id", id);
-      } catch {}
+      } catch {
+        /* ignore secondary db error */
+      }
       savedPlan = data;
     } else {
       const { data, error } = await serverSupabase.from("pricing_plans").insert(payload).select().maybeSingle();
       if (error) return res.status(500).json({ success: false, error: error.message });
       try {
         await bgSupabase.from("pricing_plans").insert(payload);
-      } catch {}
+      } catch {
+        /* ignore secondary db error */
+      }
       savedPlan = data;
     }
     return res.json({ success: true, plan: savedPlan });
@@ -4367,8 +4571,9 @@ const CORE_RETAIL_FEATURES = [
 
 app.get("/api/admin/feature-modules", async (_req: Request, res: Response) => {
   try {
-    let { data, error } = await serverSupabase.from("feature_modules").select("*").order("created_at", { ascending: true });
+    const { data: initialData, error } = await serverSupabase.from("feature_modules").select("*").order("created_at", { ascending: true });
     if (error) return res.status(500).json({ success: false, error: error.message });
+    let data = initialData;
 
     const existingCodes = new Set((data || []).map((m: any) => m.module_code));
     const missingCore = CORE_RETAIL_FEATURES.filter((f) => !existingCodes.has(f.module_code));
@@ -4383,7 +4588,9 @@ app.get("/api/admin/feature-modules", async (_req: Request, res: Response) => {
 
       try {
         await serverSupabase.from("feature_modules").insert(inserts);
-      } catch {}
+      } catch {
+        /* ignore insert error */
+      }
       const refreshed = await serverSupabase.from("feature_modules").select("*").order("created_at", { ascending: true });
       data = refreshed.data || data;
     }
@@ -4560,6 +4767,10 @@ app.post("/api/ai/assistant", async (req: Request, res: Response) => {
       businessId,
     });
 
+    const businessCurrency = (businessContext?.currency || "USD").toUpperCase();
+    const currencySym = businessCurrency === "PKR" ? "₨" : (businessCurrency === "EUR" ? "€" : (businessCurrency === "GBP" ? "£" : (businessCurrency === "INR" ? "₹" : (businessCurrency === "AED" ? "AED " : (businessCurrency === "SAR" ? "SAR " : (businessCurrency === "USD" ? "$" : `${businessCurrency} `))))));
+    const fmtCur = (n: number) => `${currencySym}${Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
     const client = getGeminiClient();
     if (client) {
       try {
@@ -4569,10 +4780,19 @@ Operating mode: ${mode || "business"}
 Active plan: ${planId || "free"}
 ${businessContext ? `Store Context:
 Store Name: ${businessContext.businessName || "Store"}
+Store Profile Currency: ${businessCurrency} (Currency Symbol: "${currencySym}")
 Total Catalog: ${businessContext.totalProducts ?? 0}
 Low Stock Items: ${businessContext.lowStockCount ?? 0}
-Today Revenue: $${businessContext.todayRevenue ?? 0}
+Today Revenue: ${fmtCur(businessContext.todayRevenue ?? 0)}
+Today Profit: ${fmtCur(businessContext.todayProfit ?? 0)}
+Month Revenue: ${fmtCur(businessContext.monthRevenue ?? 0)}
+Month Net Profit: ${fmtCur(businessContext.monthProfit ?? 0)}
 Transactions: ${businessContext.todaySalesCount ?? 0}` : "No specific business loaded yet."}
+
+CRITICAL CURRENCY INSTRUCTION:
+- You MUST report ALL monetary numbers, profit, revenue, cost, and earning information strictly in the user's business profile currency: "${businessCurrency}" (Symbol: "${currencySym}").
+- NEVER use "$" or USD unless the user's business currency is explicitly "USD".
+- When giving profit and earning info, always prefix with "${currencySym}" or write "${businessCurrency}".
 
 CRITICAL FORMATTING REQUIREMENT:
 - NEVER respond in a single continuous paragraph or wall of text.
@@ -4591,8 +4811,17 @@ CRITICAL FORMATTING REQUIREMENT:
           },
         });
 
-        const rawReply = (response.text || "").trim();
+        let rawReply = (response.text || "").trim();
         if (rawReply) {
+          // If the model mistakenly used $ for a non-USD currency (e.g. PKR), normalize it strictly
+          if (businessCurrency !== "USD") {
+            rawReply = rawReply
+              .replace(/\$\s*([0-9,]+(?:\.[0-9]+)?)/g, `${currencySym}$1`)
+              .replace(/\bUSD\s*([0-9,]+(?:\.[0-9]+)?)/gi, `${currencySym}$1`)
+              .replace(/([0-9,]+(?:\.[0-9]+)?)\s*\$/g, `${currencySym}$1`)
+              .replace(/([0-9,]+(?:\.[0-9]+)?)\s*USD\b/gi, `${currencySym}$1`);
+          }
+
           // Guarantee that response is formatted in clean bullets, never a single wall of text
           let formattedReply = rawReply;
           if (!formattedReply.includes("•") && !formattedReply.includes("\n- ") && !formattedReply.includes("\n* ")) {
@@ -4628,10 +4857,16 @@ CRITICAL FORMATTING REQUIREMENT:
         `• **Multi-Unit Pricing**: Set piece, pack, or carton ratios for wholesale and retail pricing.`;
     } else if (lowerQuery.includes("profit") || lowerQuery.includes("margin") || lowerQuery.includes("revenue") || lowerQuery.includes("sales") || lowerQuery.includes("earning")) {
       const storeName = businessContext?.businessName || "Your Store";
-      const rev = businessContext?.todayRevenue ? `$${Number(businessContext.todayRevenue).toFixed(2)}` : "$0.00";
+      const rev = fmtCur(Number(businessContext?.todayRevenue || 0));
+      const todayProf = fmtCur(Number(businessContext?.todayProfit || 0));
+      const mRev = fmtCur(Number(businessContext?.monthRevenue || 0));
+      const mProf = fmtCur(Number(businessContext?.monthProfit || 0));
       const tx = businessContext?.todaySalesCount ?? 0;
       reply = `### 📊 Real-Time Financial & Profit Overview: ${storeName}\n\n` +
         `• **Today's Gross Sales**: ${rev} across ${tx} transactions\n` +
+        `• **Today's Net Profit**: ${todayProf}\n` +
+        `• **Trailing 30 Days (Monthly)**: ${mProf} net profit on ${mRev} revenue\n` +
+        `• **Currency In Use**: All earnings and profit calculations are in **${businessCurrency}** (${currencySym})\n` +
         `• **Net Margin Formula**: (Selling Price - Cost Price) / Selling Price × 100%\n` +
         `• **Daily & Weekly Reports**: View gross revenue, product margins, discounts applied, and tax collections in **Analytics > Reports**.\n` +
         `• **Recommendation**: Review high-margin items in your top sales chart to optimize shelf layout and promotions.`;
@@ -4899,7 +5134,7 @@ app.delete("/api/coupons/:id", async (req: Request, res: Response) => {
 
 app.post("/api/coupons/validate", async (req: Request, res: Response) => {
   try {
-    const { code, plan, subtotal } = req.body || {};
+    const { code, plan, subtotal, period } = req.body || {};
     const cleanCode = (code || "").trim().toUpperCase();
     if (!cleanCode) {
       return res.json({ success: true, valid: false, code: "", amount: 0, label: "", reason: "No code provided" });
@@ -4919,6 +5154,34 @@ app.post("/api/coupons/validate", async (req: Request, res: Response) => {
     }
     if (coupon.max_uses && (coupon.used_count || 0) >= coupon.max_uses) {
       return res.json({ success: true, valid: false, code: cleanCode, amount: 0, label: "", reason: "Coupon usage limit reached" });
+    }
+
+    // Strict plan & billing cycle validation
+    if (coupon.applies_to_plan && coupon.applies_to_plan.toLowerCase() !== "all") {
+      const allowed = coupon.applies_to_plan.toLowerCase().trim();
+      const targetPlan = String(plan || "").toLowerCase().trim();
+      const targetPeriod = String(period || "").toLowerCase().trim();
+
+      let matches = false;
+      if (allowed === targetPlan) {
+        matches = true;
+      } else if (targetPeriod && (allowed === `${targetPlan}_${targetPeriod}` || allowed === `${targetPeriod}_${targetPlan}`)) {
+        matches = true;
+      } else if (!targetPeriod && (allowed.startsWith(`${targetPlan}_`) || allowed === targetPlan)) {
+        matches = true;
+      }
+
+      if (!matches) {
+        const prettyPlan = allowed.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+        return res.json({
+          success: true,
+          valid: false,
+          code: cleanCode,
+          amount: 0,
+          label: "",
+          reason: `This coupon code is only valid for the ${prettyPlan} plan.`,
+        });
+      }
     }
 
     const sub = Number(subtotal) || 0;

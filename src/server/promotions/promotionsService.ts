@@ -1,4 +1,8 @@
+import fs from "fs";
+import path from "path";
 import { serverSupabase } from "../supabase";
+
+const ANNOUNCEMENTS_FILE = path.join(process.cwd(), "data", "announcements.json");
 
 export interface ServerAnnouncement {
   id: string;
@@ -121,7 +125,74 @@ class PromotionsService {
   ];
 
   constructor() {
+    this.loadAnnouncements();
     this.syncFromSupabase();
+    this.syncAnnouncementsFromSupabase();
+  }
+
+  private async syncAnnouncementsFromSupabase(): Promise<void> {
+    try {
+      const { data, error } = await serverSupabase
+        .from("announcements")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        // Merge Supabase announcements with in-memory announcements
+        const map = new Map<string, ServerAnnouncement>();
+        this.announcements.forEach((a) => map.set(a.id, a));
+        data.forEach((r: any) => {
+          map.set(r.id, {
+            id: r.id,
+            title: r.title,
+            body: r.body,
+            audience: r.audience || "all",
+            position: r.position || "top",
+            variant: r.variant || "info",
+            link_url: r.link_url || null,
+            link_label: r.link_label || null,
+            coupon_code: r.coupon_code || "",
+            starts_at: r.starts_at || new Date().toISOString(),
+            ends_at: r.ends_at || null,
+            is_active: Boolean(r.is_active),
+            created_at: r.created_at || new Date().toISOString(),
+            updated_at: r.updated_at || new Date().toISOString(),
+          });
+        });
+        this.announcements = Array.from(map.values()).sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        this.saveAnnouncements();
+      }
+    } catch (err) {
+      console.warn("Notice syncing announcements from Supabase:", err);
+    }
+  }
+
+  private loadAnnouncements(): void {
+    try {
+      if (fs.existsSync(ANNOUNCEMENTS_FILE)) {
+        const raw = fs.readFileSync(ANNOUNCEMENTS_FILE, "utf-8");
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          this.announcements = list;
+        }
+      }
+    } catch (e) {
+      console.warn("Notice loading announcements from disk:", e);
+    }
+  }
+
+  private saveAnnouncements(): void {
+    try {
+      const dir = path.dirname(ANNOUNCEMENTS_FILE);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(ANNOUNCEMENTS_FILE, JSON.stringify(this.announcements, null, 2), "utf-8");
+    } catch (e) {
+      console.warn("Notice saving announcements to disk:", e);
+    }
   }
 
   private async syncFromSupabase(): Promise<void> {
@@ -168,10 +239,6 @@ class PromotionsService {
     } catch (err) {
       console.warn("Notice syncing coupons with Supabase:", err);
     }
-  }
-
-  private saveAnnouncements(): void {
-    // Announcements maintained in memory
   }
 
   private saveCoupons(): void {
@@ -235,6 +302,30 @@ class PromotionsService {
     };
     this.announcements.unshift(newAnn);
     this.saveAnnouncements();
+
+    // Async sync to Supabase
+    serverSupabase
+      .from("announcements")
+      .insert({
+        title: newAnn.title,
+        body: newAnn.body,
+        audience: newAnn.audience,
+        position: newAnn.position,
+        variant: newAnn.variant,
+        link_url: newAnn.link_url,
+        link_label: newAnn.link_label,
+        starts_at: newAnn.starts_at,
+        ends_at: newAnn.ends_at,
+        is_active: newAnn.is_active,
+      })
+      .then((res) => {
+        if (res.data?.[0]?.id) {
+          newAnn.id = res.data[0].id;
+          this.saveAnnouncements();
+        }
+      })
+      .catch((err) => console.warn("Supabase announcement insert notice:", err));
+
     return newAnn;
   }
 
@@ -247,6 +338,28 @@ class PromotionsService {
       updated_at: new Date().toISOString(),
     };
     this.saveAnnouncements();
+
+    const isUUID = (str?: string) => Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
+    if (isUUID(id)) {
+      serverSupabase
+        .from("announcements")
+        .update({
+          ...(data.title !== undefined ? { title: data.title } : {}),
+          ...(data.body !== undefined ? { body: data.body } : {}),
+          ...(data.audience !== undefined ? { audience: data.audience } : {}),
+          ...(data.position !== undefined ? { position: data.position } : {}),
+          ...(data.variant !== undefined ? { variant: data.variant } : {}),
+          ...(data.link_url !== undefined ? { link_url: data.link_url } : {}),
+          ...(data.link_label !== undefined ? { link_label: data.link_label } : {}),
+          ...(data.starts_at !== undefined ? { starts_at: data.starts_at } : {}),
+          ...(data.ends_at !== undefined ? { ends_at: data.ends_at } : {}),
+          ...(data.is_active !== undefined ? { is_active: data.is_active } : {}),
+        })
+        .eq("id", id)
+        .then()
+        .catch((err) => console.warn("Supabase announcement update notice:", err));
+    }
+
     return this.announcements[idx];
   }
 
@@ -255,6 +368,15 @@ class PromotionsService {
     this.announcements = this.announcements.filter((a) => a.id !== id);
     if (this.announcements.length !== prevLen) {
       this.saveAnnouncements();
+      const isUUID = (str?: string) => Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
+      if (isUUID(id)) {
+        serverSupabase
+          .from("announcements")
+          .delete()
+          .eq("id", id)
+          .then()
+          .catch((err) => console.warn("Supabase announcement delete notice:", err));
+      }
       return true;
     }
     return false;

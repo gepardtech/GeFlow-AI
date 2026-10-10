@@ -225,7 +225,7 @@ export async function searchSalesForReturn(
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.sales)) {
-        const sales = data.sales;
+        const sales = data.sales.filter((s: any) => s.status !== "refunded");
         const allItems = Array.isArray(data.sale_items) ? data.sale_items : [];
         const catalogProducts = Array.isArray(data.products) ? data.products : [];
 
@@ -263,6 +263,7 @@ export async function searchSalesForReturn(
       .from("sales")
       .select("*")
       .eq("business_id", businessId)
+      .neq("status", "refunded")
       .order("created_at", { ascending: false })
       .limit(60);
 
@@ -345,6 +346,7 @@ export async function fetchRecentSalesForReturn(
       if (data.success && Array.isArray(data.sales)) {
         const allItems = Array.isArray(data.sale_items) ? data.sale_items : [];
         return data.sales
+          .filter((s: any) => s.status !== "refunded")
           .slice()
           .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
           .slice(0, limit)
@@ -376,6 +378,7 @@ export async function fetchRecentSalesForReturn(
       .from("sales")
       .select("*")
       .eq("business_id", businessId)
+      .neq("status", "refunded")
       .order("created_at", { ascending: false })
       .limit(limit);
 

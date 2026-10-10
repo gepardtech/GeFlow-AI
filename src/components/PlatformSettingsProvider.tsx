@@ -123,7 +123,9 @@ export const PlatformSettingsProvider = ({ children }: { children: ReactNode }) 
         if (active && Object.keys(combined).length > 0) {
           try {
             localStorage.setItem(CACHE_KEY, JSON.stringify(combined));
-          } catch {}
+          } catch {
+            /* ignore cache write error */
+          }
           setSettings(combined);
           applyPlatformSettings(combined);
         }
@@ -142,7 +144,9 @@ export const PlatformSettingsProvider = ({ children }: { children: ReactNode }) 
           const next = { ...(prev || {}), ...e.detail };
           try {
             localStorage.setItem(CACHE_KEY, JSON.stringify(next));
-          } catch {}
+          } catch {
+            /* ignore cache write error */
+          }
           applyPlatformSettings(next);
           return next;
         });
@@ -156,7 +160,9 @@ export const PlatformSettingsProvider = ({ children }: { children: ReactNode }) 
           const parsed = JSON.parse(e.newValue);
           setSettings(parsed);
           applyPlatformSettings(parsed);
-        } catch {}
+        } catch {
+          /* ignore parse error */
+        }
       }
     };
     window.addEventListener("storage", onStorage);

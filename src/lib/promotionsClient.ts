@@ -105,10 +105,30 @@ export async function getLiveAnnouncements(
       const json = await res.json();
       if (Array.isArray(json.announcements)) {
         apiItems = json.announcements;
+        try {
+          localStorage.setItem("geflow_cached_announcements", JSON.stringify(apiItems));
+        } catch {
+          /* ignore */
+        }
       }
     }
   } catch (err) {
     console.warn("API announcements notice:", err);
+  }
+
+  // Fallback to local cache if API failed
+  if (apiItems.length === 0) {
+    try {
+      const cached = localStorage.getItem("geflow_cached_announcements");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          apiItems = parsed;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
   }
 
   // 2. Also check Supabase for real-time sync
@@ -132,9 +152,15 @@ export async function getLiveAnnouncements(
       const map = new Map<string, AnnouncementItem>();
       apiItems.forEach((item) => map.set(item.id, item));
       sbItems.forEach((item) => map.set(item.id, item));
-      return Array.from(map.values()).sort(
+      const merged = Array.from(map.values()).sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
+      try {
+        localStorage.setItem("geflow_cached_announcements", JSON.stringify(merged));
+      } catch {
+        /* ignore */
+      }
+      return merged;
     }
   } catch (err) {
     console.warn("Supabase announcements notice:", err);
@@ -165,8 +191,48 @@ export async function saveLiveAnnouncement(
     console.warn("API announcement save notice:", err?.message);
   }
 
-  // 2. Sync to Supabase
+  // Ensure saved record is locally cached immediately
   try {
+    const cached = localStorage.getItem("geflow_cached_announcements");
+    let list: AnnouncementItem[] = cached ? JSON.parse(cached) : [];
+    if (!Array.isArray(list)) list = [];
+
+    const effectiveItem: AnnouncementItem = saved || {
+      id: editId || `ann_${Date.now()}`,
+      title: payload.title || "Announcement",
+      body: payload.body || "",
+      audience: payload.audience || "all",
+      position: payload.position || "top",
+      variant: payload.variant || "promo",
+      link_url: payload.link_url || null,
+      link_label: payload.link_label || null,
+      coupon_code: payload.coupon_code || "",
+      starts_at: payload.starts_at || new Date().toISOString(),
+      ends_at: payload.ends_at || null,
+      is_active: payload.is_active !== undefined ? Boolean(payload.is_active) : true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (editId) {
+      const idx = list.findIndex((a) => a.id === editId);
+      if (idx >= 0) {
+        list[idx] = { ...list[idx], ...effectiveItem };
+      } else {
+        list.unshift(effectiveItem);
+      }
+    } else {
+      list.unshift(effectiveItem);
+    }
+    localStorage.setItem("geflow_cached_announcements", JSON.stringify(list));
+    if (!saved) saved = effectiveItem;
+  } catch (e) {
+    console.warn("Local storage announcement cache notice:", e);
+  }
+
+  // 2. Sync to Supabase if valid UUID
+  try {
+    const isUUID = (str?: string) => Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
     const { data: { user } } = await supabase.auth.getUser();
     const sbPayload: any = {
       title: payload.title,
@@ -182,9 +248,9 @@ export async function saveLiveAnnouncement(
     };
     if (user?.id) sbPayload.created_by_user_id = user.id;
 
-    if (editId) {
+    if (editId && isUUID(editId)) {
       await supabase.from("announcements").update(sbPayload).eq("id", editId);
-    } else if (user?.id) {
+    } else if (user?.id && !editId) {
       await supabase.from("announcements").insert(sbPayload);
     }
   } catch (err: any) {

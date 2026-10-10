@@ -189,7 +189,9 @@ const AdminSettings = () => {
     applyPlatformSettings(payload);
     try {
       localStorage.setItem("geflow_cached_platform_settings", JSON.stringify(payload));
-    } catch {}
+    } catch {
+      /* ignore storage error */
+    }
 
     if (savedSuccessfully) {
       toast({ title: "Settings saved", description: "Changes are permanently saved and live across the platform." });

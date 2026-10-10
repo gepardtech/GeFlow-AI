@@ -145,6 +145,7 @@ export type Database = {
           created_at: string
           currency: string
           default_tax: number
+          extended_settings?: Record<string, any> | null
           id: string
           last_active: string
           listed_products: number
@@ -162,6 +163,7 @@ export type Database = {
           created_at?: string
           currency: string
           default_tax?: number
+          extended_settings?: Record<string, any> | null
           id?: string
           last_active?: string
           listed_products?: number
@@ -179,6 +181,7 @@ export type Database = {
           created_at?: string
           currency?: string
           default_tax?: number
+          extended_settings?: Record<string, any> | null
           id?: string
           last_active?: string
           listed_products?: number

@@ -97,8 +97,25 @@ export default function UserReturns() {
         fetchReturnsHistory(activeId),
         fetchRecentSalesForReturn(activeId, 20),
       ]);
+
+      let dismissed: string[] = [];
+      try {
+        const raw = localStorage.getItem(`geflow_dismissed_returns_${activeId}`);
+        if (raw) dismissed = JSON.parse(raw);
+      } catch {
+        /* ignore */
+      }
+
       setHistoryRecords(history);
-      setRecentSales(recent);
+      setRecentSales(
+        recent.filter(
+          (s) =>
+            !dismissed.includes(s.id) &&
+            !dismissed.includes(s.invoice_no || "") &&
+            !dismissed.includes((s as any).receipt_no || "") &&
+            s.status !== "refunded"
+        )
+      );
       setLastSyncedAt(new Date());
     } catch (err) {
       console.warn("Notice loading returns data:", err);
@@ -107,6 +124,34 @@ export default function UserReturns() {
       setIsSyncing(false);
     }
   }, [activeId]);
+
+  const handleRemoveSaleFromReturnPage = (saleId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const targetSale = recentSales.find((s) => s.id === saleId) || searchResults.find((s) => s.id === saleId);
+    setRecentSales((prev) => prev.filter((s) => s.id !== saleId));
+    setSearchResults((prev) => prev.filter((s) => s.id !== saleId));
+    try {
+      const dismissedRaw = localStorage.getItem(`geflow_dismissed_returns_${activeId}`) || "[]";
+      const list = JSON.parse(dismissedRaw);
+      if (!list.includes(saleId)) list.push(saleId);
+      if (targetSale?.invoice_no && !list.includes(targetSale.invoice_no)) list.push(targetSale.invoice_no);
+      if ((targetSale as any)?.receipt_no && !list.includes((targetSale as any).receipt_no)) list.push((targetSale as any).receipt_no);
+      localStorage.setItem(`geflow_dismissed_returns_${activeId}`, JSON.stringify(list));
+    } catch {
+      /* ignore */
+    }
+    if (activeId) {
+      fetch("/api/sync/sales/remove-from-return", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: activeId, saleId }),
+      }).catch(() => {});
+    }
+    toast({
+      title: "Record removed from return page",
+      description: "This purchase record has been removed from the returns selection.",
+    });
+  };
 
   useEffect(() => {
     loadInitialData(true);
@@ -300,6 +345,32 @@ export default function UserReturns() {
 
       // Update history list immediately
       setHistoryRecords((prev) => [record, ...prev]);
+
+      // Remove this sale immediately from the return page lists
+      if (selectedSale) {
+        const returnedId = selectedSale.id;
+        const invNo = selectedSale.invoice_no;
+        const recNo = (selectedSale as any).receipt_no;
+        setRecentSales((prev) => prev.filter((s) => s.id !== returnedId && s.invoice_no !== invNo));
+        setSearchResults((prev) => prev.filter((s) => s.id !== returnedId && s.invoice_no !== invNo));
+        try {
+          const raw = localStorage.getItem(`geflow_dismissed_returns_${activeId}`) || "[]";
+          const list = JSON.parse(raw);
+          if (!list.includes(returnedId)) list.push(returnedId);
+          if (invNo && !list.includes(invNo)) list.push(invNo);
+          if (recNo && !list.includes(recNo)) list.push(recNo);
+          localStorage.setItem(`geflow_dismissed_returns_${activeId}`, JSON.stringify(list));
+        } catch {
+          /* ignore */
+        }
+        if (activeId) {
+          fetch("/api/sync/sales/remove-from-return", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ businessId: activeId, saleId: returnedId }),
+          }).catch(() => {});
+        }
+      }
 
       // Show receipt modal
       setActiveReceiptRecord(record);
@@ -612,7 +683,14 @@ export default function UserReturns() {
                                   </div>
                                 </div>
 
-                                <div className="pt-2 border-t border-border/60 flex items-center justify-end">
+                                <div className="pt-2 border-t border-border/60 flex items-center justify-between">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleRemoveSaleFromReturnPage(s.id, e)}
+                                    className="text-[11px] font-semibold text-rose-500 hover:text-rose-600 hover:underline flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3 h-3" /> Remove Record
+                                  </button>
                                   <Button
                                     size="sm"
                                     onClick={() => handleSelectSale(s)}
@@ -683,9 +761,16 @@ export default function UserReturns() {
                                 </div>
                               </div>
 
-                              <div className="pt-2 border-t border-border/60 flex items-center justify-between text-[11px] text-sky-500 font-bold group-hover:translate-x-0.5 transition-transform">
-                                <span>{s.items.length} Product Line(s)</span>
-                                <span className="flex items-center gap-1">
+                              <div className="pt-2 border-t border-border/60 flex items-center justify-between text-[11px]">
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleRemoveSaleFromReturnPage(s.id, e)}
+                                  title="Remove purchase record from return page"
+                                  className="text-[10px] font-semibold text-muted-foreground hover:text-rose-500 flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Trash2 className="w-3 h-3" /> Remove
+                                </button>
+                                <span className="text-sky-500 font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
                                   Select <ArrowRight className="w-3 h-3" />
                                 </span>
                               </div>

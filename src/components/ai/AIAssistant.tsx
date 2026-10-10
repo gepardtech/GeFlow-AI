@@ -235,7 +235,10 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
                     monthRevenue: currentCtx.sales.monthRevenue,
                     monthProfit: currentCtx.sales.monthProfit,
                   }
-                : { businessName: activeBiz?.business_name || "Your Store" },
+                : {
+                    businessName: activeBiz?.business_name || "Your Store",
+                    currency: activeBiz?.currency || "PKR",
+                  },
             }),
           });
 
@@ -273,7 +276,13 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
 
         // Step 3: If remote did not return a response, execute high-precision plan-aware local analysis
         if (!succeededRemotely || !replyText) {
-          replyText = generateLocalBusinessAnalysis(content, mode, currentCtx, planId);
+          replyText = generateLocalBusinessAnalysis(
+            content,
+            mode,
+            currentCtx,
+            planId,
+            activeBiz?.currency || "PKR"
+          );
         }
 
         const formattedReply = formatToProfessionalBullets(replyText);

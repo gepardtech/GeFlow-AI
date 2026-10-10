@@ -235,7 +235,11 @@ const UserInventory = () => {
       }
 
       // 4. Client-side delete attempt as secondary
-      await supabase.from("products").delete().eq("id", targetId).catch(() => {});
+      try {
+        await supabase.from("products").delete().eq("id", targetId);
+      } catch {
+        // Handled via server-side deletion API
+      }
 
       toast({ title: "Product deleted", description: `${targetName} has been permanently deleted.` });
       window.dispatchEvent(new CustomEvent("geflow:stock-updated", { detail: { businessId: activeId } }));
@@ -288,7 +292,11 @@ const UserInventory = () => {
       }
 
       // 4. Secondary client delete
-      await supabase.from("products").delete().in("id", toDeleteIds).catch(() => {});
+      try {
+        await supabase.from("products").delete().in("id", toDeleteIds);
+      } catch {
+        // Handled via server-side deletion API
+      }
 
       toast({ title: "Products deleted", description: `Successfully deleted ${toDeleteIds.length} product(s).` });
       window.dispatchEvent(new CustomEvent("geflow:stock-updated", { detail: { businessId: activeId } }));

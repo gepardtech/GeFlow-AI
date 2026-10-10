@@ -3,6 +3,7 @@ import {
   LifeBuoy, Settings, LayoutDashboard, AlertCircle, ShoppingCart, ShoppingBag,
   FileText, Settings as SettingsIcon, Repeat, DollarSign, Receipt, Undo2,
   SlidersHorizontal, Megaphone, TriangleAlert, Bell, ScrollText, GitBranch, Mail,
+  User,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { PlanId } from "@/hooks/usePlan";
@@ -52,6 +53,7 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Newsletter", to: "/admin/newsletter", icon: Mail },
   { label: "Support", to: "/admin/support", icon: LifeBuoy },
   { label: "Settings", to: "/admin/settings", icon: Settings },
+  { label: "Profile", to: "/admin/profile", icon: User },
 ];
 
 /**
@@ -120,6 +122,7 @@ export const USER_NAV: NavItem[] = [
   },
   { label: "Support", to: "/dashboard/support", icon: LifeBuoy, module: "support" },
   { label: "Settings", to: "/dashboard/settings", icon: SettingsIcon, module: "settings" },
+  { label: "Profile", to: "/dashboard/profile", icon: User, module: "settings" },
 ];
 
 /** Returns the nav items a given plan is allowed to see. */

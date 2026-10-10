@@ -28,6 +28,11 @@ export interface StaffRoleState {
 export const isPathAllowedForRole = (role: StaffRole, path: string): boolean => {
   const cleanPath = path.toLowerCase().split("?")[0].replace(/\/$/, "");
 
+  // Profile is always universally accessible to all authenticated operators
+  if (cleanPath === "/dashboard/profile" || cleanPath === "/profile" || cleanPath.startsWith("/dashboard/profile/")) {
+    return true;
+  }
+
   // Owner and Platform Admin have unrestricted access
   if (role === "owner" || role === "admin") {
     return true;

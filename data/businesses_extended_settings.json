@@ -1,0 +1,198 @@
+{
+  "09cbccf4-0f16-4397-b4fc-bee0cc48a855": {
+    "timezone": "America/New_York",
+    "dateFormat": "DD/MM/YYYY",
+    "numberFormat": "1,234.56",
+    "language": "en",
+    "taxEnabled": false,
+    "taxName": "VAT",
+    "inventory": {
+      "enableInventory": true,
+      "enableBarcode": true,
+      "enableSku": true,
+      "enableLowStockAlerts": true,
+      "stockAlertLimit": 10,
+      "enableBatchTracking": false,
+      "enableExpiryTracking": false
+    },
+    "pos": {
+      "enablePOS": true,
+      "paymentMethods": {
+        "cash": true,
+        "card": true,
+        "bankTransfer": true,
+        "mobileWallet": true,
+        "other": false
+      },
+      "receipt": {
+        "headerName": "",
+        "phone": "",
+        "address": "",
+        "showLogo": true,
+        "footerMessage": "Thank you for your business!"
+      }
+    },
+    "phone": "+1234567890",
+    "description": "Testing description update"
+  },
+  "abd5e80f-b0f0-4b9c-9167-d183bb905ed3": {
+    "timezone": "UTC",
+    "dateFormat": "YYYY-MM-DD",
+    "numberFormat": "1,234.56",
+    "language": "en",
+    "taxEnabled": false,
+    "taxName": "VAT",
+    "inventory": {
+      "enableInventory": true,
+      "enableBarcode": true,
+      "enableSku": true,
+      "enableLowStockAlerts": true,
+      "stockAlertLimit": 10,
+      "enableBatchTracking": false,
+      "enableExpiryTracking": false
+    },
+    "pos": {
+      "enablePOS": true,
+      "paymentMethods": {
+        "cash": true,
+        "card": true,
+        "bankTransfer": true,
+        "mobileWallet": true,
+        "other": false
+      },
+      "receipt": {
+        "headerName": "",
+        "phone": "",
+        "address": "",
+        "showLogo": true,
+        "footerMessage": "Thank you for your business!"
+      }
+    },
+    "logoUrl": null,
+    "currency": "PKR",
+    "taxLabel": "Sales Tax",
+    "timeFormat": "12h",
+    "accentColor": "sky",
+    "densityMode": "comfortable",
+    "inAppAlerts": true,
+    "scannerMode": "hardware",
+    "alertAudible": true,
+    "businessName": "Gepard Restaurant",
+    "quickAmounts": "10, 20, 50, 100",
+    "businessEmail": "",
+    "businessPhone": "",
+    "receiptFooter": "Thank you for choosing us! Returns accepted within 14 days.",
+    "receiptHeader": "GeFlow Smart Retail POS",
+    "selectedTheme": "dark",
+    "defaultTaxRate": 8,
+    "taxPricingMode": "exclusive",
+    "alertRecipients": "",
+    "businessAddress": "477 GB, Samundri, Faisalabad. Pakistan",
+    "businessTagline": "",
+    "highReturnAlert": true,
+    "payment_methods": [
+      {
+        "id": "cash",
+        "name": "Cash",
+        "type": "cash",
+        "enabled": true,
+        "iconName": "Banknote",
+        "isDefault": true,
+        "sortOrder": 1,
+        "accountDetails": ""
+      },
+      {
+        "id": "card",
+        "name": "Debit / Credit Card",
+        "type": "card",
+        "enabled": true,
+        "iconName": "CreditCard",
+        "isDefault": false,
+        "sortOrder": 2,
+        "accountDetails": ""
+      },
+      {
+        "id": "jazzcash",
+        "name": "JazzCash",
+        "type": "wallet",
+        "enabled": true,
+        "iconName": "Smartphone",
+        "isDefault": false,
+        "sortOrder": 3,
+        "accountDetails": ""
+      },
+      {
+        "id": "easypaisa",
+        "name": "Easypaisa",
+        "type": "wallet",
+        "enabled": true,
+        "iconName": "Smartphone",
+        "isDefault": false,
+        "sortOrder": 4,
+        "accountDetails": ""
+      },
+      {
+        "id": "bank_transfer",
+        "name": "Bank Transfer",
+        "type": "bank",
+        "enabled": false,
+        "iconName": "Building2",
+        "isDefault": false,
+        "sortOrder": 5,
+        "accountDetails": ""
+      },
+      {
+        "id": "credit",
+        "name": "Store Credit / Udhar",
+        "type": "credit",
+        "enabled": true,
+        "iconName": "FileText",
+        "isDefault": false,
+        "sortOrder": 6,
+        "accountDetails": ""
+      }
+    ],
+    "posSoundEffects": true,
+    "showCashierName": true,
+    "taxExemptionB2B": true,
+    "autoPrintReceipt": false,
+    "decimalPrecision": 2,
+    "enableAnimations": true,
+    "openDrawerOnCash": true,
+    "outOfStockNotify": true,
+    "receiptSubheader": "Official Store Receipt & Fiscal Log",
+    "secondaryTaxRate": 1.5,
+    "showTaxBreakdown": true,
+    "customTaxBrackets": [
+      {
+        "id": "1",
+        "name": "Standard Retail Goods",
+        "rate": 8.5,
+        "type": "standard",
+        "isDefault": true
+      },
+      {
+        "id": "2",
+        "name": "Essential Food & Groceries",
+        "rate": 0,
+        "type": "zero"
+      },
+      {
+        "id": "3",
+        "name": "Hospitality & Dining",
+        "rate": 5,
+        "type": "reduced"
+      }
+    ],
+    "expiryWarningDays": 30,
+    "secondaryTaxLabel": "Eco Surcharge",
+    "showLogoOnReceipt": true,
+    "enableSecondaryTax": false,
+    "registrationNumber": "",
+    "defaultCustomerType": "walkin",
+    "emailDigestFrequency": "daily",
+    "enableTaxCalculation": false,
+    "showBarcodeOnReceipt": true,
+    "taxRegistrationNumber": "TAX-US90281"
+  }
+}

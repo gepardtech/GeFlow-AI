@@ -555,11 +555,11 @@ export class BusinessDataSyncService {
 
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
     if (isUUID) {
-      serverSupabase.from("sale_items").delete().eq("product_id", cleanId).then(() => {}).catch(() => {});
-      serverSupabase.from("purchase_items").delete().eq("product_id", cleanId).then(() => {}).catch(() => {});
-      serverSupabase.from("order_items").delete().eq("product_id", cleanId).then(() => {}).catch(() => {});
-      serverSupabase.from("stock_movements").delete().eq("product_id", cleanId).then(() => {}).catch(() => {});
-      serverSupabase.from("products").delete().eq("id", cleanId).then(() => {}).catch(() => {});
+      try { serverSupabase.from("sale_items").delete().eq("product_id", cleanId).then(() => {}); } catch { /* ignore */ }
+      try { serverSupabase.from("purchase_items").delete().eq("product_id", cleanId).then(() => {}); } catch { /* ignore */ }
+      try { serverSupabase.from("order_items").delete().eq("product_id", cleanId).then(() => {}); } catch { /* ignore */ }
+      try { serverSupabase.from("stock_movements").delete().eq("product_id", cleanId).then(() => {}); } catch { /* ignore */ }
+      try { serverSupabase.from("products").delete().eq("id", cleanId).then(() => {}); } catch { /* ignore */ }
     }
     return true;
   }
@@ -739,6 +739,18 @@ export class BusinessDataSyncService {
 
     unit.lastSyncedAt = now;
     this.persist();
+
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(productId);
+    try {
+      if (isUUID) {
+        serverSupabase.from("products").update({ stock_units: newStock, updated_at: now }).eq("id", productId).then(() => {});
+      } else {
+        serverSupabase.from("products").update({ stock_units: newStock, updated_at: now }).eq("business_id", businessId).ilike("id", productId).then(() => {});
+      }
+    } catch {
+      /* ignore stock update error */
+    }
+
     return { success: true, newStock };
   }
 
@@ -790,7 +802,7 @@ export class BusinessDataSyncService {
    * Record a customer return & refund.
    * Restocks eligible products, registers stock movements, and logs refund record.
    */
-  public recordReturn(
+  public async recordReturn(
     businessId: string,
     payload: {
       returnRecord: {
@@ -815,11 +827,11 @@ export class BusinessDataSyncService {
       }[];
       userId?: string;
     }
-  ): {
+  ): Promise<{
     success: boolean;
     returnRecord: SyncedReturn;
     updatedProducts: { id: string; stock_units: number }[];
-  } {
+  }> {
     const unit = this.getOrCreateBusinessUnit(businessId);
     if (!unit.returns) unit.returns = [];
     const now = new Date().toISOString();
@@ -852,6 +864,7 @@ export class BusinessDataSyncService {
     unit.returns.unshift(savedReturn);
 
     const updatedProducts: { id: string; stock_units: number }[] = [];
+    const isUUID = (str?: string | null) => Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
 
     // Restock products and log stock movement
     for (const item of payload.items) {
@@ -871,33 +884,72 @@ export class BusinessDataSyncService {
           );
         }
 
-        if (pIdx >= 0) {
-          const prod = unit.products[pIdx];
-          const newStock = (prod.stock_units || 0) + (Number(item.return_qty) || 0);
-          prod.stock_units = newStock;
-          prod.updated_at = now;
-          updatedProducts.push({ id: prod.id, stock_units: newStock });
+        let targetProdId = pIdx >= 0 ? unit.products[pIdx].id : item.product_id;
+        let targetStock = pIdx >= 0 ? (unit.products[pIdx].stock_units || 0) : 0;
+        let targetName = pIdx >= 0 ? unit.products[pIdx].name : item.product_name;
 
-          // Register atomic stock movement
-          unit.stock_movements.unshift({
-            id: `mov_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-            business_id: businessId,
-            product_id: prod.id,
-            owner_user_id: unit.ownerUserId,
-            type: "return",
-            quantity: Number(item.return_qty) || 0,
-            reason: `Return/Refund: ${item.reason || "Customer Return"}`,
-            note: `Restocked ${item.return_qty}x for Sale #${originalSale?.invoice_no || payload.returnRecord.sale_id}`,
-            reference_id: returnId,
-            reference_type: "return",
-            created_by: payload.userId,
-            created_at: now,
-          });
+        // If not in unit.products memory, query Supabase directly
+        if (pIdx < 0) {
+          try {
+            let q = serverSupabase.from("products").select("id, stock_units, name").eq("business_id", businessId);
+            if (targetProdId && isUUID(targetProdId)) {
+              q = q.eq("id", targetProdId);
+            } else if (item.product_name) {
+              const cleanName = item.product_name.replace(/\[.*?\]/g, "").trim();
+              q = q.ilike("name", cleanName);
+            }
+            const { data: found } = await (q.maybeSingle() as any);
+            if (found) {
+              targetProdId = found.id;
+              targetStock = Number(found.stock_units) || 0;
+              targetName = found.name;
+            }
+          } catch (e) {
+            console.warn("Supabase lookup error during restock:", e);
+          }
         }
+
+        const qtyToAdd = Number(item.return_qty) || 0;
+        const newStock = targetStock + qtyToAdd;
+
+        if (pIdx >= 0) {
+          unit.products[pIdx].stock_units = newStock;
+          unit.products[pIdx].updated_at = now;
+        }
+
+        if (targetProdId) {
+          updatedProducts.push({ id: targetProdId, stock_units: newStock });
+          try {
+            if (isUUID(targetProdId)) {
+              await serverSupabase.from("products").update({ stock_units: newStock, updated_at: now }).eq("id", targetProdId);
+            } else {
+              const cleanName = (targetName || item.product_name).replace(/\[.*?\]/g, "").trim();
+              await serverSupabase.from("products").update({ stock_units: newStock, updated_at: now }).eq("business_id", businessId).ilike("name", cleanName);
+            }
+          } catch (upErr) {
+            console.warn("Notice updating stock in Supabase:", upErr);
+          }
+        }
+
+        // Register atomic stock movement
+        unit.stock_movements.unshift({
+          id: `mov_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          business_id: businessId,
+          product_id: targetProdId || "unknown",
+          owner_user_id: unit.ownerUserId,
+          type: "return",
+          quantity: qtyToAdd,
+          reason: `Return/Refund: ${item.reason || "Customer Return"}`,
+          note: `Restocked ${item.return_qty}x for Sale #${originalSale?.invoice_no || payload.returnRecord.sale_id}`,
+          reference_id: returnId,
+          reference_type: "return",
+          created_by: payload.userId,
+          created_at: now,
+        });
       }
     }
 
-    // Adjust corresponding sale status
+    // Adjust corresponding sale status in memory and Supabase
     const sIdx = unit.sales.findIndex(
       (s) =>
         s.id === payload.returnRecord.sale_id ||
@@ -908,9 +960,43 @@ export class BusinessDataSyncService {
       unit.sales[sIdx].status = "refunded";
     }
 
+    const targetSaleId = originalSale?.id || payload.returnRecord.sale_id;
+    if (targetSaleId) {
+      try {
+        if (isUUID(targetSaleId)) {
+          await serverSupabase.from("sales").update({ status: "refunded" }).eq("id", targetSaleId);
+        }
+        if (originalSale?.id && isUUID(originalSale.id)) {
+          await serverSupabase.from("sales").update({ status: "refunded" }).eq("id", originalSale.id);
+        }
+      } catch (err) {
+        console.warn("Notice updating refunded status in Supabase:", err);
+      }
+    }
+
     unit.lastSyncedAt = now;
     this.persist();
     return { success: true, returnRecord: savedReturn, updatedProducts };
+  }
+
+  public dismissSaleFromReturn(businessId: string, saleId: string): boolean {
+    const unit = this.getOrCreateBusinessUnit(businessId);
+    const sIdx = unit.sales.findIndex((s) => s.id === saleId || s.invoice_no === saleId || (s as any).receipt_no === saleId);
+    if (sIdx >= 0) {
+      unit.sales[sIdx].status = "refunded";
+      this.persist();
+    }
+    const isUUID = (str?: string | null) => Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
+    try {
+      if (isUUID(saleId)) {
+        serverSupabase.from("sales").update({ status: "refunded" }).eq("id", saleId).then(() => {});
+      } else {
+        serverSupabase.from("sales").update({ status: "refunded" }).eq("business_id", businessId).or(`id.eq.${saleId},invoice_no.eq.${saleId}`).then(() => {});
+      }
+    } catch {
+      /* ignore sale update error */
+    }
+    return true;
   }
 
   public getReturns(businessId: string): SyncedReturn[] {

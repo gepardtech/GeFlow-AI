@@ -28,7 +28,9 @@ const AdminGuard = ({ children }: Props) => {
         cachedIsAdmin = true;
         return true;
       }
-    } catch {}
+    } catch {
+      /* ignore */
+    }
     return null;
   });
   const navigate = useNavigate();
@@ -128,7 +130,9 @@ const AdminGuard = ({ children }: Props) => {
         cachedIsAdmin = true;
         try {
           localStorage.setItem("geflow_is_admin", "true");
-        } catch {}
+        } catch {
+          /* ignore */
+        }
         setAllowed(true);
       } catch (err) {
         console.warn("Notice in admin verification:", err);

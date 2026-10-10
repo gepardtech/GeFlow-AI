@@ -150,6 +150,34 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
       try {
         const cloned = res.clone();
         const errText = await cloned.text();
+        if (errText.includes("extended_settings") || errText.includes("42703")) {
+          const idMatch = urlString.match(/id=eq\.([^&]+)/i);
+          const bizId = idMatch ? decodeURIComponent(idMatch[1]) : "";
+          if (bizId) {
+            const apiRes = await fetch(`/api/businesses/${encodeURIComponent(bizId)}/extended-settings`).catch(() => null);
+            if (apiRes && apiRes.ok) {
+              const apiJson = await apiRes.json().catch(() => null);
+              const extData = apiJson?.settings || {};
+              const acceptHdr = (
+                (init?.headers as any)?.["Accept"] ||
+                (init?.headers as any)?.["accept"] ||
+                ""
+              ).toLowerCase();
+              const payload = acceptHdr.includes("vnd.pgrst.object+json")
+                ? { extended_settings: extData }
+                : [{ extended_settings: extData }];
+              return new Response(JSON.stringify(payload), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              });
+            }
+          }
+          return new Response(JSON.stringify([{ extended_settings: {} }]), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
         if (
           errText.includes("infinite recursion") ||
           errText.includes("42P17") ||

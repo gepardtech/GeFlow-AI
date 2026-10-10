@@ -177,19 +177,25 @@ const Login = () => {
         if (hasOwnedBusiness) {
           try {
             localStorage.setItem("geflow.workspaceMode", "business");
-          } catch {}
+          } catch {
+            /* ignore storage error */
+          }
           redirectUrl = redirectUrl && redirectUrl !== "/setup-business" ? redirectUrl : "/dashboard";
         } else if (hasStaffBusiness) {
           // User has only employee account: redirect directly to employee account dashboard
           try {
             localStorage.setItem("geflow.workspaceMode", "employee");
-          } catch {}
+          } catch {
+            /* ignore storage error */
+          }
           redirectUrl = "/dashboard";
         } else {
           // User has no registered business -> redirect to business registration setup
           try {
             localStorage.setItem("geflow.workspaceMode", "business");
-          } catch {}
+          } catch {
+            /* ignore storage error */
+          }
           redirectUrl = "/setup-business";
         }
       }

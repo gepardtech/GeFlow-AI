@@ -123,17 +123,21 @@ const callAdmin = async (body: Record<string, unknown>) => {
 
       const { error: pErr } = await supabase.from("profiles").update(updates).eq("user_id", user_id);
       if (role) {
-        await supabase.from("user_roles").delete().eq("user_id", user_id).catch(() => {});
-        await supabase.from("user_roles").insert({ user_id, role: String(role).toLowerCase() }).catch(() => {});
+        try { await supabase.from("user_roles").delete().eq("user_id", user_id); } catch { /* ignore */ }
+        try { await supabase.from("user_roles").insert({ user_id, role: String(role).toLowerCase() }); } catch { /* ignore */ }
       }
       if (plan) {
-        await supabase.from("subscriptions").insert({
-          owner_user_id: user_id,
-          tier: String(plan).toLowerCase(),
-          cycle: "monthly",
-          status: "active",
-          created_at: new Date().toISOString(),
-        }).catch(() => {});
+        try {
+          await supabase.from("subscriptions").insert({
+            owner_user_id: user_id,
+            tier: String(plan).toLowerCase(),
+            cycle: "monthly",
+            status: "active",
+            created_at: new Date().toISOString(),
+          });
+        } catch {
+          /* ignore subscription insert error */
+        }
       }
       if (!pErr) {
         return { success: true, user_id, plan, role, status };

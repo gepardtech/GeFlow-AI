@@ -736,16 +736,22 @@ const AnnouncementDialog = ({ open, onOpenChange, onSaved, edit }: any) => {
     }
   }, [edit, open]);
 
-  const handleApplyCouponToLink = (couponCode: string, targetPlan: string = "premium") => {
+  const handleApplyCouponToLink = (couponCode: string, targetPlan: string = "premium", period: string = "monthly") => {
     const cleanCode = couponCode.trim().toUpperCase();
-    const targetUrl = `/checkout?plan=${targetPlan}&coupon=${encodeURIComponent(cleanCode)}`;
+    let targetUrl = `/checkout?plan=${targetPlan}`;
+    if (period) {
+      targetUrl += `&period=${period}`;
+    }
+    if (cleanCode) {
+      targetUrl += `&coupon=${encodeURIComponent(cleanCode)}`;
+    }
     setForm((f: any) => ({
       ...f,
       coupon_code: cleanCode,
       variant: "promo",
       link_url: targetUrl,
-      link_label: f.link_label || `Claim ${cleanCode} Discount`,
-      body: f.body || `Special discount! Use code ${cleanCode} at checkout to save instantly.`,
+      link_label: f.link_label || `Claim ${cleanCode ? `${cleanCode} ` : ""}Offer`,
+      body: f.body || (cleanCode ? `Special offer! Use code ${cleanCode} at checkout to save instantly.` : `Upgrade to ${targetPlan === "premium" ? "Premium" : "Standard"} now!`),
     }));
   };
 
@@ -754,8 +760,13 @@ const AnnouncementDialog = ({ open, onOpenChange, onSaved, edit }: any) => {
       toast({ title: "Title & body required", variant: "destructive" });
       return;
     }
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    let userId = "admin_sg_bilal";
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id) userId = user.id;
+    } catch {
+      /* ignore */
+    }
 
     let finalLinkUrl = form.link_url?.trim() || null;
     const cleanCoupon = form.coupon_code?.trim().toUpperCase();
@@ -780,10 +791,11 @@ const AnnouncementDialog = ({ open, onOpenChange, onSaved, edit }: any) => {
       variant: form.variant,
       link_url: finalLinkUrl,
       link_label: form.link_label?.trim() || null,
-      starts_at: new Date(form.starts_at).toISOString(),
+      coupon_code: cleanCoupon || undefined,
+      starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : new Date().toISOString(),
       ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
       is_active: form.is_active,
-      created_by_user_id: user.id,
+      created_by_user_id: userId,
     };
 
     const res = await saveLiveAnnouncement(payload, edit?.id);
@@ -870,25 +882,52 @@ const AnnouncementDialog = ({ open, onOpenChange, onSaved, edit }: any) => {
               </div>
 
               <div>
-                <p className="text-[10px] text-muted-foreground mb-1 font-bold">QUICK TARGET CHECKOUT LINK</p>
-                <div className="flex items-center gap-1.5">
+                <p className="text-[10px] text-muted-foreground mb-1 font-bold">QUICK TARGET CHECKOUT LINK (AUTO-FILLS LINK)</p>
+                <div className="flex flex-wrap gap-1.5">
                   <Button
                     type="button"
                     size="sm"
-                    variant="outline"
-                    className="h-9 text-[11px] font-bold flex-1 bg-background"
-                    onClick={() => handleApplyCouponToLink(form.coupon_code || "PROMO", "standard")}
+                    variant="default"
+                    className="h-8 text-[10px] font-extrabold px-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-xs"
+                    onClick={() => handleApplyCouponToLink(form.coupon_code || "LIFETIME50", "premium", "lifetime")}
                   >
-                    Standard Plan
+                    ⭐ Premium Lifetime
                   </Button>
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-9 text-[11px] font-bold flex-1 bg-background"
-                    onClick={() => handleApplyCouponToLink(form.coupon_code || "PROMO", "premium")}
+                    className="h-8 text-[10px] font-bold px-2 bg-background border-border"
+                    onClick={() => handleApplyCouponToLink(form.coupon_code || "PROMO20", "premium", "monthly")}
                   >
-                    Premium Plan
+                    Premium Monthly
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-[10px] font-bold px-2 bg-background border-border"
+                    onClick={() => handleApplyCouponToLink(form.coupon_code || "PROMO20", "premium", "yearly")}
+                  >
+                    Premium Yearly
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-[10px] font-bold px-2 bg-background border-border"
+                    onClick={() => handleApplyCouponToLink(form.coupon_code || "PROMO20", "standard", "lifetime")}
+                  >
+                    Standard Lifetime
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-[10px] font-bold px-2 bg-background border-border"
+                    onClick={() => handleApplyCouponToLink(form.coupon_code || "PROMO20", "standard", "monthly")}
+                  >
+                    Standard Monthly
                   </Button>
                 </div>
               </div>
@@ -1172,25 +1211,53 @@ const AnnouncementsManager = ({ items, onChange, openCreate }: any) => {
     onChange();
   };
   return (
-    <div className="bg-card border border-border rounded-2xl overflow-hidden">
-      {items.length === 0 ? <div className="p-12 text-center"><p className="text-muted-foreground text-sm">No announcements yet.</p><Button onClick={openCreate} className="mt-3 bg-sky-400 hover:bg-sky-500 text-white"><Plus className="h-4 w-4 mr-2" /> Create First</Button></div> :
-        items.map((a: Announcement) => (
-          <div key={a.id} className="border-b border-border last:border-0 p-4 flex items-center gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap"><p className="font-bold">{a.title}</p>
-                <span className="text-[10px] font-bold tracking-widest bg-muted px-2 py-0.5 rounded-full uppercase">{a.audience}</span>
-                <span className="text-[10px] font-bold tracking-widest bg-muted px-2 py-0.5 rounded-full uppercase">{a.position}</span>
-                <span className={`text-[10px] font-bold tracking-widest px-2 py-0.5 rounded-full ${a.is_active ? "bg-emerald-400/15 text-emerald-500" : "bg-muted text-muted-foreground"}`}>{a.is_active ? "ACTIVE" : "PAUSED"}</span>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1 line-clamp-1">{a.body}</p>
-              <p className="text-[10px] text-muted-foreground mt-1">From {new Date(a.starts_at).toLocaleString()}{a.ends_at ? ` → ${new Date(a.ends_at).toLocaleString()}` : ""}</p>
-            </div>
-            <Switch checked={a.is_active} onCheckedChange={() => toggle(a)} />
-            <button onClick={() => setEdit(a)} className="h-8 w-8 rounded-lg hover:bg-muted inline-flex items-center justify-center"><Pencil className="h-3.5 w-3.5" /></button>
-            <button onClick={() => del(a.id)} className="h-8 w-8 rounded-lg hover:bg-rose-500/10 text-rose-500 inline-flex items-center justify-center"><Trash2 className="h-3.5 w-3.5" /></button>
+    <div>
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+        <div>
+          <h2 className="text-lg font-bold">System Announcements & Promo Banners</h2>
+          <p className="text-xs text-muted-foreground">Broadcast updates, discounts, and notifications to all visitors, users, or admins.</p>
+        </div>
+        <Button onClick={openCreate} className="bg-sky-500 hover:bg-sky-600 text-white font-bold shadow-xs">
+          <Plus className="h-4 w-4 mr-1.5" /> New Announcement
+        </Button>
+      </div>
+
+      <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-xs">
+        {items.length === 0 ? (
+          <div className="p-12 text-center">
+            <Megaphone className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
+            <p className="text-muted-foreground text-sm font-medium">No announcements published yet.</p>
+            <Button onClick={openCreate} className="mt-4 bg-sky-500 hover:bg-sky-600 text-white font-bold">
+              <Plus className="h-4 w-4 mr-1.5" /> Create Announcement
+            </Button>
           </div>
-        ))
-      }
+        ) : (
+          items.map((a: Announcement) => (
+            <div key={a.id} className="border-b border-border last:border-0 p-4 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-bold text-sm">{a.title}</p>
+                  <span className="text-[10px] font-bold tracking-widest bg-muted px-2 py-0.5 rounded-full uppercase">{a.audience}</span>
+                  <span className="text-[10px] font-bold tracking-widest bg-muted px-2 py-0.5 rounded-full uppercase">{a.position}</span>
+                  <span className={`text-[10px] font-bold tracking-widest px-2 py-0.5 rounded-full ${a.is_active ? "bg-emerald-400/15 text-emerald-500" : "bg-muted text-muted-foreground"}`}>{a.is_active ? "ACTIVE" : "PAUSED"}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.body}</p>
+                {a.link_url && (
+                  <p className="text-[11px] text-sky-500 mt-1 font-mono truncate">
+                    Target: {a.link_url} {a.link_label ? `(${a.link_label})` : ""}
+                  </p>
+                )}
+                <p className="text-[10px] text-muted-foreground mt-1">From {new Date(a.starts_at).toLocaleString()}{a.ends_at ? ` → ${new Date(a.ends_at).toLocaleString()}` : ""}</p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Switch checked={a.is_active} onCheckedChange={() => toggle(a)} />
+                <button onClick={() => setEdit(a)} title="Edit announcement" className="h-8 w-8 rounded-lg hover:bg-muted inline-flex items-center justify-center text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                <button onClick={() => del(a.id)} title="Delete announcement" className="h-8 w-8 rounded-lg hover:bg-rose-500/10 text-rose-500 inline-flex items-center justify-center"><Trash2 className="h-3.5 w-3.5" /></button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
       <AnnouncementDialog open={!!edit} edit={edit} onOpenChange={(o: boolean) => !o && setEdit(null)} onSaved={onChange} />
     </div>
   );

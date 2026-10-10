@@ -53,8 +53,34 @@ const Checkout = () => {
   const { priceOf, featuresOf, byKey } = usePricingPlans();
   const { paypalClientId } = usePaymentGateways();
 
-  const plan = (params.get("plan") as Plan) || "standard";
-  const period = (params.get("period") as Period) || "monthly";
+  const rawPlanParam = (params.get("plan") || "").toLowerCase().trim();
+  const rawPeriodParam = (
+    params.get("period") ||
+    params.get("billing") ||
+    params.get("cycle") ||
+    params.get("billing_cycle") ||
+    ""
+  ).toLowerCase().trim();
+
+  let resolvedPlan: Plan = "standard";
+  let resolvedPeriod: Period = "monthly";
+
+  if (rawPlanParam.includes("premium") || rawPlanParam === "lifetime") {
+    resolvedPlan = "premium";
+  } else if (rawPlanParam.includes("standard")) {
+    resolvedPlan = "standard";
+  }
+
+  if (rawPlanParam.includes("lifetime") || rawPeriodParam === "lifetime") {
+    resolvedPeriod = "lifetime";
+  } else if (rawPlanParam.includes("yearly") || rawPeriodParam === "yearly" || rawPeriodParam === "annual") {
+    resolvedPeriod = "yearly";
+  } else if (rawPlanParam.includes("monthly") || rawPeriodParam === "monthly") {
+    resolvedPeriod = "monthly";
+  }
+
+  const plan = resolvedPlan;
+  const period = resolvedPeriod;
   const data = PLAN_DATA[plan] ?? PLAN_DATA.standard;
   const subtotal = priceOf(plan, period, data.pricing[period] ?? data.pricing.monthly);
 

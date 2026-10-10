@@ -502,13 +502,15 @@ export function generateLocalBusinessAnalysis(
   query: string,
   mode: AIMode,
   rawCtx: BusinessAnalyticsContext | null,
-  planId: PlanId = "free"
+  planId: PlanId = "free",
+  preferredCurrency?: string
 ): string {
+  const defaultCurrency = preferredCurrency || "PKR";
   const ctx: BusinessAnalyticsContext = rawCtx || {
     business: {
       id: "store_default",
       name: "Workspace Store",
-      currency: "USD",
+      currency: defaultCurrency,
       taxRate: 0,
       stockAlertLimit: 5,
       status: "active",

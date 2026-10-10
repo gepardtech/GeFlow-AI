@@ -50,6 +50,7 @@ import AdminPlanLimits from "./pages/admin/AdminPlanLimits";
 import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminLogs from "./pages/admin/AdminLogs";
 import AdminNewsletter from "./pages/admin/AdminNewsletter";
+import AdminProfile from "./pages/admin/AdminProfile";
 import ScrollToTop from "./components/ScrollToTop";
 
 import UserInventory from "./pages/user/UserInventory";
@@ -68,6 +69,7 @@ import UserSettings from "./pages/user/UserSettings";
 import UserAnnouncements from "./pages/user/UserAnnouncements";
 import UserNotifications from "./pages/user/UserNotifications";
 import UserSupport from "./pages/user/UserSupport";
+import UserProfile from "./pages/user/UserProfile";
 import { useBusinessRealtimeSync } from "./hooks/useBusinessRealtimeSync";
 
 function BusinessSyncObserver() {
@@ -127,6 +129,7 @@ const App = () => (
           <Route path="/admin/notifications" element={<AdminGuard><AdminNotifications /></AdminGuard>} />
           <Route path="/admin/newsletter" element={<AdminGuard><AdminNewsletter /></AdminGuard>} />
           <Route path="/admin/settings" element={<AdminGuard><AdminSettings /></AdminGuard>} />
+          <Route path="/admin/profile" element={<AdminGuard><AdminProfile /></AdminGuard>} />
           <Route path="/setup/business" element={<AuthGuard><SetupBusiness /></AuthGuard>} />
           <Route path="/setup-business" element={<AuthGuard><SetupBusiness /></AuthGuard>} />
           <Route path="/setup" element={<AuthGuard><SetupBusiness /></AuthGuard>} />
@@ -158,6 +161,9 @@ const App = () => (
           <Route path="/dashboard/support" element={<AuthGuard><UserSupport /></AuthGuard>} />
           <Route path="/dashboard/settings" element={<AuthGuard><UserSettings /></AuthGuard>} />
           <Route path="/dashboard/workspace" element={<AuthGuard><UserSettings /></AuthGuard>} />
+          <Route path="/dashboard/profile" element={<AuthGuard><UserProfile /></AuthGuard>} />
+          <Route path="/profile" element={<AuthGuard><UserProfile /></AuthGuard>} />
+          <Route path="/app/profile" element={<AuthGuard><UserProfile /></AuthGuard>} />
           <Route path="/about" element={<About />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/refund" element={<Refund />} />

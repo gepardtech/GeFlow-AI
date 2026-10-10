@@ -15,11 +15,13 @@ let cachedAuthUserId: string | null = null;
  */
 const AuthGuard = ({ children }: Props) => {
   const [allowed, setAllowed] = useState<boolean>(() => {
-    if (Boolean(cachedAuthUserId)) return true;
+    if (cachedAuthUserId) return true;
     try {
       const raw = localStorage.getItem("sb-gvkvljxhufsrgyfsqrkc-auth-token") || localStorage.getItem("supabase.auth.token");
       if (raw && (raw.includes("access_token") || raw.includes("user"))) return true;
-    } catch {}
+    } catch {
+      /* ignore */
+    }
     return false;
   });
   const navigate = useNavigate();

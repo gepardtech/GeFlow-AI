@@ -351,7 +351,9 @@ async function fetchBusinessData(force = false): Promise<void> {
               ownedRows = parsed;
             }
           }
-        } catch {}
+        } catch {
+          /* ignore cache read error */
+        }
       }
 
       if (staffRows.length === 0 && store.staff.length > 0) {
@@ -365,8 +367,13 @@ async function fetchBusinessData(force = false): Promise<void> {
               staffRows = parsed;
             }
           }
-        } catch {}
+        } catch {
+          /* ignore cache read error */
+        }
       }
+
+      // Deduplicate: If a business is already in ownedRows, it MUST NOT be in staffRows!
+      staffRows = staffRows.filter((sb) => !ownedRows.some((ob) => ob.id === sb.id));
 
       // If user has no owned businesses, keep ownedRows empty so user is guided to business setup
       store.owned = ownedRows;
@@ -530,8 +537,12 @@ function ensureRealtime() {
     }
   });
 
+  let customSyncTimeout: any = null;
   const handleCustomSync = () => {
-    fetchBusinessData(true);
+    if (customSyncTimeout) clearTimeout(customSyncTimeout);
+    customSyncTimeout = setTimeout(() => {
+      fetchBusinessData(false);
+    }, 600);
   };
 
   window.addEventListener("geflow:business-updated", handleCustomSync);

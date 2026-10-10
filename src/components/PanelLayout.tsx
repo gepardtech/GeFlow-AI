@@ -3,10 +3,10 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllContactSubmissions } from "@/lib/contactService";
 import {
-  Bell, ChevronLeft, ChevronDown, LogOut, RefreshCw, Search, Sun, Moon,
+  Bell, ChevronLeft, ChevronDown, ChevronRight, LogOut, RefreshCw, Search, Sun, Moon,
   Settings, LifeBuoy, LogIn, Lock, Menu, Sparkles, LucideIcon,
   Building2, Briefcase, Check, ChevronsUpDown, Store, UserCheck, Plus,
-  UserPlus, CheckCircle2, X, Megaphone
+  UserPlus, CheckCircle2, X, Megaphone, User
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useToast } from "@/hooks/use-toast";
@@ -119,6 +119,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
 
   const settingsPath = isPathAdmin ? "/admin/settings" : "/dashboard/workspace";
   const supportPath = isPathAdmin ? "/admin/support" : "/contact";
+  const profilePath = isPathAdmin ? "/admin/profile" : "/dashboard/profile";
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -561,11 +562,24 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
 
   const IdentityFooter = () => (
     <div className="p-3 border-t border-border flex-shrink-0 bg-background">
-      <div className="bg-muted/40 rounded-xl p-3 mb-2">
-        <p className="text-[10px] font-bold tracking-widest text-muted-foreground">IDENTITY</p>
-        <p className="font-bold text-sm mt-1">{identityName}</p>
-        <span className={`inline-block text-[9px] font-bold tracking-wider px-2 py-0.5 rounded-full mt-1.5 ${identityBadgeClass}`}>{identityRole}</span>
-      </div>
+      <Link
+        to={profilePath}
+        className="block bg-muted/40 hover:bg-muted/70 rounded-xl p-3 mb-2 transition-colors cursor-pointer group"
+        title="View Profile"
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-bold tracking-widest text-muted-foreground group-hover:text-primary transition-colors">
+            IDENTITY
+          </p>
+          <span className="text-[10px] text-muted-foreground group-hover:text-foreground flex items-center font-medium">
+            Profile <ChevronRight className="w-3 h-3 ml-0.5" />
+          </span>
+        </div>
+        <p className="font-bold text-sm mt-1 text-foreground truncate">{identityName}</p>
+        <span className={`inline-block text-[9px] font-bold tracking-wider px-2 py-0.5 rounded-full mt-1.5 ${identityBadgeClass}`}>
+          {identityRole}
+        </span>
+      </Link>
       <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground transition-all">
         <LogOut className="h-4 w-4" /> Logout
       </button>
@@ -933,6 +947,9 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
                   <p className="text-[10px] font-bold tracking-widest text-muted-foreground mt-0.5">{identityRole}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate(profilePath)}>
+                  <User className="h-4 w-4 mr-2" /> Profile
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate(settingsPath)}>
                   <Settings className="h-4 w-4 mr-2" /> Settings
                 </DropdownMenuItem>

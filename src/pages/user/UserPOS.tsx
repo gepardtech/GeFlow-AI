@@ -261,23 +261,78 @@ const UserPOS = () => {
   // 1. Tax Breakdown: turning off turns off tax calculating from pos cart & invoice
   // 2. Automated tax engine: turning off disables tax calculating from pos cart & invoice
   // 3. Price Tax Inclusivity: functional support for inclusive vs exclusive pricing
-  const isTaxEngineActive = posConfig.enableTaxCalculation !== false && posConfig.enableTaxCalculation !== "false";
-  const isTaxBreakdownActive = posConfig.showTaxBreakdown !== false && posConfig.showTaxBreakdown !== "false";
-  const isTaxEnabled = isTaxEngineActive && isTaxBreakdownActive;
+  const [posTaxOverridden, setPosTaxOverridden] = useState<boolean | null>(() => {
+    try {
+      const saved = localStorage.getItem(active?.id ? `geflow_pos_tax_active_${active.id}` : "geflow_pos_tax_active_global");
+      return saved !== null ? saved === "true" : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    if (!active?.id) return;
+    try {
+      const saved = localStorage.getItem(`geflow_pos_tax_active_${active.id}`);
+      if (saved !== null) {
+        setPosTaxOverridden(saved === "true");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [active?.id]);
+
+  const isSettingsTaxExplicitlyDisabled =
+    posConfig.enableTaxCalculation === false ||
+    posConfig.enableTaxCalculation === "false" ||
+    posConfig.taxEnabled === false ||
+    posConfig.taxDisabled === true ||
+    (posConfig.defaultTaxRate !== undefined && Number(posConfig.defaultTaxRate) === 0) ||
+    (!posConfig.defaultTaxRate && active?.default_tax === 0);
+
+  const isSettingsTaxEnabled =
+    !isSettingsTaxExplicitlyDisabled &&
+    posConfig.showTaxBreakdown !== false &&
+    posConfig.showTaxBreakdown !== "false";
+
+  // If user explicitly toggled tax on POS terminal, respect override; otherwise respect business settings
+  const isTaxEnabled = posTaxOverridden !== null
+    ? posTaxOverridden
+    : isSettingsTaxEnabled;
 
   const rawTaxRate = Number(
     posConfig.defaultTaxRate !== undefined
       ? posConfig.defaultTaxRate
       : (active?.default_tax ?? 0)
   );
-  const effectiveTaxRate = isTaxEnabled ? rawTaxRate : 0;
+  // Guarantee: if user disabled tax, effective rate is strictly 0 regardless of items purchased
+  const effectiveTaxRate = isTaxEnabled && !isSettingsTaxExplicitlyDisabled ? rawTaxRate : 0;
   const taxRate = effectiveTaxRate;
 
   const enableSecondaryTax = isTaxEnabled && Boolean(posConfig.enableSecondaryTax);
   const secondaryTaxRate = enableSecondaryTax ? (Number(posConfig.secondaryTaxRate) || 0) : 0;
   const taxPricingMode: "exclusive" | "inclusive" = posConfig.taxPricingMode === "inclusive" ? "inclusive" : "exclusive";
   const isTaxInclusive = taxPricingMode === "inclusive";
-  const showTaxBreakdown = isTaxEnabled;
+  const showTaxBreakdown = isTaxEnabled && effectiveTaxRate > 0;
+
+  const handleToggleTax = () => {
+    const nextState = !isTaxEnabled;
+    setPosTaxOverridden(nextState);
+    try {
+      if (active?.id) {
+        localStorage.setItem(`geflow_pos_tax_active_${active.id}`, String(nextState));
+      }
+      localStorage.setItem("geflow_pos_tax_active_global", String(nextState));
+    } catch {
+      /* ignore */
+    }
+    toast({
+      title: nextState ? "Tax Engine Enabled" : "Tax Engine Disabled (0%)",
+      description: nextState
+        ? `Applied ${rawTaxRate}% sales tax to current and upcoming sales.`
+        : "Tax will not be applied to any products in this sale or future sales.",
+    });
+  };
 
   const quickCashOptions = useMemo(() => {
     const raw = posConfig.quickAmounts || "10, 20, 50, 100";
@@ -1325,14 +1380,30 @@ const UserPOS = () => {
                 <span className="font-bold">−{fmt(discountValue)}</span>
               </div>
             )}
-            {showTaxBreakdown && isTaxEnabled && effectiveTaxRate > 0 && (
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">
-                  {isTaxInclusive ? "Includes " : ""}{posConfig.taxLabel || "Tax"} ({effectiveTaxRate}%)
-                </span>
-                <span className="font-bold">{isTaxInclusive ? "" : "+"}{fmt(gst)}</span>
+            <div className="flex items-center justify-between text-xs py-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground font-medium">{posConfig.taxLabel || "Tax"}</span>
+                <button
+                  type="button"
+                  onClick={handleToggleTax}
+                  title="Click to toggle tax on/off for this terminal"
+                  className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md transition-colors cursor-pointer ${
+                    isTaxEnabled && effectiveTaxRate > 0
+                      ? "bg-sky-500/15 text-sky-600 dark:text-sky-400 hover:bg-sky-500/25 border border-sky-500/30"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80 border border-border"
+                  }`}
+                >
+                  {isTaxEnabled && effectiveTaxRate > 0 ? `${effectiveTaxRate}% (ACTIVE)` : "DISABLED (0%)"}
+                </button>
               </div>
-            )}
+              <span className="font-bold">
+                {isTaxEnabled && effectiveTaxRate > 0 ? (
+                  `${isTaxInclusive ? "(incl. " : "+"}${fmt(gst)}${isTaxInclusive ? ")" : ""}`
+                ) : (
+                  fmt(0)
+                )}
+              </span>
+            </div>
             {showTaxBreakdown && isTaxEnabled && enableSecondaryTax && secondaryTaxRate > 0 && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">

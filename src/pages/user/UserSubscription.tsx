@@ -67,14 +67,6 @@ interface SavedPaymentMethod {
   holderName: string;
 }
 
-const DEFAULT_CARD: SavedPaymentMethod = {
-  brand: "VISA",
-  last4: "4242",
-  expMonth: "12",
-  expYear: "28",
-  holderName: "Alex Gepard",
-};
-
 export const UserSubscription = () => {
   const [searchParams] = useSearchParams();
   const { planId, fullName, email, userId } = usePlan();
@@ -88,16 +80,41 @@ export const UserSubscription = () => {
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [activeSub, setActiveSub] = useState<any>(null);
 
-  // Payment Card state
-  const [paymentCard, setPaymentCard] = useState<SavedPaymentMethod>(() => {
+  // Payment Card state - only real methods; never fake demo cards
+  const [paymentCard, setPaymentCard] = useState<SavedPaymentMethod | null>(() => {
     try {
-      const saved = localStorage.getItem(`geflow_card_${userId || "default"}`);
-      if (saved) return JSON.parse(saved);
+      const activeUid = userId || (typeof localStorage !== "undefined" ? localStorage.getItem("geflow_active_uid") : null);
+      if (activeUid) {
+        const saved = localStorage.getItem(`geflow_card_${activeUid}`);
+        if (saved && saved !== "null" && saved !== "undefined") {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === "object" && parsed.last4) {
+            return parsed;
+          }
+        }
+      }
     } catch {
       // fallback
     }
-    return DEFAULT_CARD;
+    return null;
   });
+
+  useEffect(() => {
+    if (!userId) return;
+    try {
+      const saved = localStorage.getItem(`geflow_card_${userId}`);
+      if (saved && saved !== "null" && saved !== "undefined") {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === "object" && parsed.last4) {
+          setPaymentCard(parsed);
+          return;
+        }
+      }
+      setPaymentCard(null);
+    } catch {
+      setPaymentCard(null);
+    }
+  }, [userId]);
 
   // Modal States
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
@@ -122,12 +139,24 @@ export const UserSubscription = () => {
   const [selectedCycleForUpgrade, setSelectedCycleForUpgrade] = useState<"monthly" | "yearly">("monthly");
 
   // Card Form State
-  const [cardName, setCardName] = useState(paymentCard.holderName);
-  const [cardNumber, setCardNumber] = useState(`•••• •••• •••• ${paymentCard.last4}`);
-  const [cardExp, setCardExp] = useState(`${paymentCard.expMonth}/${paymentCard.expYear}`);
+  const [cardName, setCardName] = useState(() => (paymentCard && paymentCard.holderName) || "");
+  const [cardNumber, setCardNumber] = useState(() => (paymentCard && paymentCard.last4 ? `•••• •••• •••• ${paymentCard.last4}` : ""));
+  const [cardExp, setCardExp] = useState(() => (paymentCard && paymentCard.expMonth && paymentCard.expYear ? `${paymentCard.expMonth}/${paymentCard.expYear}` : ""));
   const [cardCvc, setCardCvc] = useState("•••");
   const [cardZip, setCardZip] = useState("94103");
   const [savingCard, setSavingCard] = useState(false);
+
+  useEffect(() => {
+    if (paymentCard && typeof paymentCard === "object") {
+      setCardName(paymentCard.holderName || "");
+      setCardNumber(paymentCard.last4 ? `•••• •••• •••• ${paymentCard.last4}` : "");
+      setCardExp(paymentCard.expMonth && paymentCard.expYear ? `${paymentCard.expMonth}/${paymentCard.expYear}` : "");
+    } else {
+      setCardName("");
+      setCardNumber("");
+      setCardExp("");
+    }
+  }, [paymentCard]);
 
   // Manage Subscription State
   const [autoRenew, setAutoRenew] = useState(() => {
@@ -203,32 +232,7 @@ export const UserSubscription = () => {
       if (userInvoices.length > 0) {
         setInvoices(userInvoices as InvoiceRecord[]);
       } else {
-        // Fallback placeholder receipts only if 0 records exist
-        const initialInv: InvoiceRecord[] = [
-          {
-            id: "inv-90231",
-            invoice_number: "INV-90231",
-            client_name: fullName || user.email?.split("@")[0] || "Workspace Owner",
-            billing_email: user.email || "owner@geflowai.com",
-            plan: planId.toUpperCase(),
-            payment_method: "Visa •••• 4242",
-            amount: planId === "premium" ? 9.99 : planId === "standard" ? 4.99 : 0.0,
-            status: "paid",
-            issue_date: "2026-03-01",
-          },
-          {
-            id: "inv-88210",
-            invoice_number: "INV-88210",
-            client_name: fullName || user.email?.split("@")[0] || "Workspace Owner",
-            billing_email: user.email || "owner@geflowai.com",
-            plan: planId.toUpperCase(),
-            payment_method: "Visa •••• 4242",
-            amount: planId === "premium" ? 9.99 : planId === "standard" ? 4.99 : 0.0,
-            status: "paid",
-            issue_date: "2026-02-01",
-          },
-        ];
-        setInvoices(initialInv);
+        setInvoices([]);
       }
     } catch (err) {
       console.error("Error loading subscription data:", err);
@@ -427,7 +431,7 @@ export const UserSubscription = () => {
           ? planPricing.premium.yearly
           : planPricing.premium.monthly;
 
-      const res = await validateCoupon(codeClean, planToValidate, priceToValidate);
+      const res = await validateCoupon(codeClean, planToValidate, priceToValidate, selectedCycleForUpgrade);
       if (res.valid) {
         setCouponDiscount(res.discountType === "percent" ? res.discountValue : 0);
         setCouponApplied(true);
@@ -464,6 +468,41 @@ export const UserSubscription = () => {
       setValidatingCoupon(false);
     }
   };
+
+  // Re-validate applied coupon whenever selected plan or cycle changes
+  useEffect(() => {
+    if (!appliedCouponData?.code) return;
+    let isMounted = true;
+    (async () => {
+      const priceToValidate =
+        selectedPlanKey === "free"
+          ? 0
+          : selectedPlanKey === "standard"
+          ? selectedCycleForUpgrade === "yearly"
+            ? planPricing.standard.yearly
+            : planPricing.standard.monthly
+          : selectedCycleForUpgrade === "yearly"
+          ? planPricing.premium.yearly
+          : planPricing.premium.monthly;
+
+      const res = await validateCoupon(appliedCouponData.code, selectedPlanKey, priceToValidate, selectedCycleForUpgrade);
+      if (!isMounted) return;
+      if (!res.valid) {
+        setCouponApplied(false);
+        setAppliedCouponData(null);
+        setCouponDiscount(0);
+        toast({
+          title: "Coupon Not Valid For Selected Plan",
+          description: res.reason || `Coupon ${appliedCouponData.code} is not applicable to the ${selectedPlanKey} plan.`,
+          variant: "destructive",
+        });
+      } else {
+        setCouponDiscount(res.discountType === "percent" ? res.discountValue : 0);
+        setAppliedCouponData((prev) => prev ? { ...prev, amount: res.amount } : null);
+      }
+    })();
+    return () => { isMounted = false; };
+  }, [selectedPlanKey, selectedCycleForUpgrade, planPricing, toast]);
 
   // Open Upgrade Modal
   const openUpgradeModal = (planKey: string) => {
@@ -545,7 +584,7 @@ export const UserSubscription = () => {
         client_name: fullName || user.email?.split("@")[0] || "Workspace Owner",
         billing_email: user.email || "owner@geflowai.com",
         plan: selectedPlanKey.toUpperCase(),
-        payment_method: `${paymentCard.brand} •••• ${paymentCard.last4}`,
+        payment_method: paymentCard ? `${paymentCard.brand} •••• ${paymentCard.last4}` : "Authorized Billing Card",
         amount: finalPrice,
         status: "paid",
         issue_date: new Date().toISOString().slice(0, 10),
@@ -1178,31 +1217,76 @@ export const UserSubscription = () => {
                 <h3 className="text-base font-bold text-foreground">Authorized Gateway</h3>
               </div>
 
-              {/* Saved Card Item */}
-              <div className="p-4 rounded-2xl bg-muted/40 dark:bg-muted/20 border border-border/80 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0 font-black text-xs border border-sky-500/20">
-                    <CreditCard className="w-5 h-5" />
+              {/* Saved Card Item / Admin Manual Plan State */}
+              {activeSub?.source === "admin_manual" ||
+              activeSub?.payment_method?.toLowerCase()?.includes("admin") ||
+              activeSub?.payment_method?.toLowerCase()?.includes("manual") ? (
+                <div className="p-4 rounded-2xl bg-muted/40 dark:bg-muted/20 border border-border/80 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-foreground">Plan Assigned by Platform Administrator</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Assigned manually. No payment method required.</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs font-extrabold text-foreground tracking-wider">
-                      •••• •••• •••• {paymentCard.last4}
-                    </p>
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase mt-0.5">
-                      EXP: {paymentCard.expMonth}/{paymentCard.expYear} • {paymentCard.brand}
-                    </p>
-                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openUpgradeModal("premium")}
+                    className="h-8 px-3 rounded-xl text-[10px] font-bold border-border/80 hover:bg-muted"
+                  >
+                    UPGRADE
+                  </Button>
                 </div>
+              ) : paymentCard ? (
+                <div className="p-4 rounded-2xl bg-muted/40 dark:bg-muted/20 border border-border/80 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0 font-black text-xs border border-sky-500/20">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-extrabold text-foreground tracking-wider">
+                        •••• •••• •••• {paymentCard.last4}
+                      </p>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase mt-0.5">
+                        EXP: {paymentCard.expMonth}/{paymentCard.expYear} • {paymentCard.brand}
+                      </p>
+                    </div>
+                  </div>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCardModalOpen(true)}
-                  className="h-8 px-3 rounded-xl text-[10px] font-bold border-border/80 hover:bg-muted"
-                >
-                  UPDATE CARD
-                </Button>
-              </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCardModalOpen(true)}
+                    className="h-8 px-3 rounded-xl text-[10px] font-bold border-border/80 hover:bg-muted"
+                  >
+                    UPDATE CARD
+                  </Button>
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-muted/40 dark:bg-muted/20 border border-border/80 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-muted text-muted-foreground flex items-center justify-center shrink-0">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-foreground">No payment card on file</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Link a card for automated billing</p>
+                    </div>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCardModalOpen(true)}
+                    className="h-8 px-3 rounded-xl text-[10px] font-bold border-border/80 hover:bg-muted"
+                  >
+                    LINK CARD
+                  </Button>
+                </div>
+              )}
             </div>
 
             <Button
@@ -1407,7 +1491,7 @@ export const UserSubscription = () => {
               <div className="flex items-center gap-2.5">
                 <CreditCard className="w-4 h-4 text-sky-500" />
                 <span className="font-bold text-foreground">
-                  {paymentCard.brand} •••• {paymentCard.last4}
+                  {paymentCard ? `${paymentCard.brand} •••• ${paymentCard.last4}` : "No card linked yet"}
                 </span>
               </div>
               <button
@@ -1418,7 +1502,7 @@ export const UserSubscription = () => {
                 }}
                 className="text-[11px] font-bold text-sky-500 hover:underline"
               >
-                Change
+                {paymentCard ? "Change" : "Add Card"}
               </button>
             </div>
 
