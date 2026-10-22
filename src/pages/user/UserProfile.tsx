@@ -38,6 +38,7 @@ import {
   ChevronRight,
   MapPin,
   Sparkles,
+  X,
 } from "lucide-react";
 import UserPanelGate from "@/components/UserPanelGate";
 import { usePlan } from "@/hooks/usePlan";
@@ -338,7 +339,11 @@ export default function UserProfile() {
           tCount = (teamCount || 0) + 1; // plus owner
         }
 
-        const totalBizCount = (ownedBusinesses?.length || 0) + (staffBusinesses?.length || 0) || 1;
+        const uniqueBizIds = new Set([
+          ...(ownedBusinesses || []).map((b: any) => b.id).filter(Boolean),
+          ...(staffBusinesses || []).map((b: any) => b.id).filter(Boolean),
+        ]);
+        const totalBizCount = uniqueBizIds.size > 0 ? uniqueBizIds.size : 1;
 
         setUsageStats({
           productsCount: pCount,
@@ -618,7 +623,18 @@ export default function UserProfile() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {isEditing && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsEditing(false)}
+                className="gap-1.5 rounded-xl text-xs font-semibold h-9 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-3.5 h-3.5" />
+                Cancel
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -639,7 +655,11 @@ export default function UserProfile() {
                 }
               }}
               disabled={saving}
-              className="gap-2 rounded-xl text-xs font-semibold h-9 shadow-sm"
+              className={`gap-2 rounded-xl text-xs font-bold h-9 shadow-xs transition-all ${
+                isEditing
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90"
+              }`}
             >
               {saving ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -726,17 +746,50 @@ export default function UserProfile() {
               </div>
             </div>
 
-            {/* Edit / Quick button */}
-            <div className="flex items-center gap-2 self-start md:self-center shrink-0">
+            {/* Quick Actions */}
+            <div className="flex flex-wrap items-center gap-2 self-start md:self-center shrink-0">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setIsEditing(true)}
-                className="gap-2 rounded-xl text-xs font-semibold h-9"
+                asChild
+                className="gap-1.5 rounded-xl text-xs font-semibold h-9 border-border/80 hover:bg-muted"
               >
-                <User className="w-3.5 h-3.5" />
-                Edit Profile
+                <Link to="/dashboard/subscription">
+                  <CreditCard className="w-3.5 h-3.5 text-sky-500" />
+                  Manage Plan
+                </Link>
               </Button>
+              {isEditing ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsEditing(false)}
+                    className="gap-1.5 rounded-xl text-xs font-semibold h-9 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSavePersonalInfo}
+                    disabled={saving}
+                    className="gap-1.5 rounded-xl text-xs font-bold h-9 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                  >
+                    {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    Save Changes
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={() => setIsEditing(true)}
+                  className="gap-1.5 rounded-xl text-xs font-bold h-9 bg-sky-500 hover:bg-sky-600 text-white shadow-xs"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  Edit Profile
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -785,44 +838,46 @@ export default function UserProfile() {
         </div>
 
         {/* Profile Content Tabs */}
-        <Tabs defaultValue="personal" className="w-full space-y-6">
-          <TabsList className="bg-muted/70 p-1 rounded-2xl w-full sm:w-auto flex flex-wrap gap-1 border border-border/60">
-            <TabsTrigger value="personal" className="rounded-xl text-xs font-semibold gap-2">
-              <User className="w-3.5 h-3.5" />
-              Personal Info
-            </TabsTrigger>
-            <TabsTrigger value="business" className="rounded-xl text-xs font-semibold gap-2">
-              <Store className="w-3.5 h-3.5" />
-              Business Info
-            </TabsTrigger>
-            <TabsTrigger value="security" className="rounded-xl text-xs font-semibold gap-2">
-              <Shield className="w-3.5 h-3.5" />
-              Security & Sessions
-            </TabsTrigger>
-            <TabsTrigger value="notifications" className="rounded-xl text-xs font-semibold gap-2">
-              <Bell className="w-3.5 h-3.5" />
-              Notifications
-            </TabsTrigger>
-            <TabsTrigger value="subscription" className="rounded-xl text-xs font-semibold gap-2">
-              <CreditCard className="w-3.5 h-3.5" />
-              Subscription
-            </TabsTrigger>
-            <TabsTrigger value="preferences" className="rounded-xl text-xs font-semibold gap-2">
-              <Globe className="w-3.5 h-3.5" />
-              Preferences
-            </TabsTrigger>
-            <TabsTrigger value="activity" className="rounded-xl text-xs font-semibold gap-2">
-              <Clock className="w-3.5 h-3.5" />
-              Activity
-            </TabsTrigger>
-            <TabsTrigger
-              value="danger"
-              className="rounded-xl text-xs font-semibold gap-2 text-rose-500 hover:text-rose-600 data-[state=active]:text-rose-600"
-            >
-              <AlertTriangle className="w-3.5 h-3.5" />
-              Danger Zone
-            </TabsTrigger>
-          </TabsList>
+        <Tabs defaultValue="personal" className="w-full">
+          <div className="overflow-x-auto pb-2 scrollbar-none mb-6">
+            <TabsList className="bg-muted/70 p-1.5 rounded-2xl w-full sm:w-auto min-h-12 h-auto flex flex-nowrap sm:flex-wrap items-center gap-1.5 border border-border/70 shadow-xs">
+              <TabsTrigger value="personal" className="rounded-xl text-xs sm:text-sm font-semibold gap-2 py-2 px-3.5 h-9 sm:h-10 transition-all whitespace-nowrap shrink-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+                <User className="w-3.5 h-3.5" />
+                Personal Info
+              </TabsTrigger>
+              <TabsTrigger value="business" className="rounded-xl text-xs sm:text-sm font-semibold gap-2 py-2 px-3.5 h-9 sm:h-10 transition-all whitespace-nowrap shrink-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+                <Store className="w-3.5 h-3.5" />
+                Business Info
+              </TabsTrigger>
+              <TabsTrigger value="security" className="rounded-xl text-xs sm:text-sm font-semibold gap-2 py-2 px-3.5 h-9 sm:h-10 transition-all whitespace-nowrap shrink-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+                <Shield className="w-3.5 h-3.5" />
+                Security &amp; Sessions
+              </TabsTrigger>
+              <TabsTrigger value="notifications" className="rounded-xl text-xs sm:text-sm font-semibold gap-2 py-2 px-3.5 h-9 sm:h-10 transition-all whitespace-nowrap shrink-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+                <Bell className="w-3.5 h-3.5" />
+                Notifications
+              </TabsTrigger>
+              <TabsTrigger value="subscription" className="rounded-xl text-xs sm:text-sm font-semibold gap-2 py-2 px-3.5 h-9 sm:h-10 transition-all whitespace-nowrap shrink-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+                <CreditCard className="w-3.5 h-3.5" />
+                Subscription
+              </TabsTrigger>
+              <TabsTrigger value="preferences" className="rounded-xl text-xs sm:text-sm font-semibold gap-2 py-2 px-3.5 h-9 sm:h-10 transition-all whitespace-nowrap shrink-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+                <Globe className="w-3.5 h-3.5" />
+                Preferences
+              </TabsTrigger>
+              <TabsTrigger value="activity" className="rounded-xl text-xs sm:text-sm font-semibold gap-2 py-2 px-3.5 h-9 sm:h-10 transition-all whitespace-nowrap shrink-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+                <Clock className="w-3.5 h-3.5" />
+                Activity
+              </TabsTrigger>
+              <TabsTrigger
+                value="danger"
+                className="rounded-xl text-xs sm:text-sm font-semibold gap-2 py-2 px-3.5 h-9 sm:h-10 transition-all whitespace-nowrap shrink-0 text-rose-500 hover:text-rose-600 data-[state=active]:text-rose-600 data-[state=active]:bg-background data-[state=active]:shadow-xs"
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                Danger Zone
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* 1. Personal Information Tab */}
           <TabsContent value="personal" className="space-y-6 mt-0">

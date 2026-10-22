@@ -22,6 +22,7 @@ import {
   Percent,
   Lock,
   Crown,
+  Globe,
 } from "lucide-react";
 import {
   AIMode,
@@ -36,6 +37,60 @@ import {
   getRequiredPlanForMode,
   formatToProfessionalBullets,
 } from "@/lib/aiAssistantService";
+
+export interface LanguageOption {
+  id: string;
+  label: string;
+  flag: string;
+  badge: string;
+}
+
+export const SUPPORTED_LANGUAGES: LanguageOption[] = [
+  { id: "english", label: "English (UK) (Default)", flag: "🇬🇧", badge: "English (UK)" },
+  { id: "auto", label: "Auto Detect (Global)", flag: "🌐", badge: "Auto" },
+  { id: "roman_urdu", label: "Roman Urdu (Urdu in English)", flag: "🇵🇰", badge: "Roman Urdu" },
+  { id: "urdu", label: "اردو (Urdu)", flag: "🇵🇰", badge: "اردو" },
+  { id: "arabic", label: "العربية (Arabic)", flag: "🇸🇦", badge: "العربية" },
+  { id: "spanish", label: "Español (Spanish)", flag: "🇪🇸", badge: "Español" },
+  { id: "french", label: "Français (French)", flag: "🇫🇷", badge: "Français" },
+  { id: "german", label: "Deutsch (German)", flag: "🇩🇪", badge: "Deutsch" },
+  { id: "chinese", label: "中文 (Chinese Simplified)", flag: "🇨🇳", badge: "中文" },
+  { id: "chinese_traditional", label: "繁體中文 (Chinese Traditional)", flag: "🇹🇼", badge: "繁體中文" },
+  { id: "hindi", label: "हिन्दी (Hindi)", flag: "🇮🇳", badge: "हिन्दी" },
+  { id: "hinglish", label: "Hinglish (Hindi in English)", flag: "🇮🇳", badge: "Hinglish" },
+  { id: "bengali", label: "বাংলা (Bengali)", flag: "🇧🇩", badge: "বাংলা" },
+  { id: "portuguese", label: "Português (Portuguese)", flag: "🇧🇷", badge: "Português" },
+  { id: "russian", label: "Русский (Russian)", flag: "🇷🇺", badge: "Русский" },
+  { id: "japanese", label: "日本語 (Japanese)", flag: "🇯🇵", badge: "日本語" },
+  { id: "korean", label: "한국어 (Korean)", flag: "🇰🇷", badge: "한국어" },
+  { id: "turkish", label: "Türkçe (Turkish)", flag: "🇹🇷", badge: "Türkçe" },
+  { id: "italian", label: "Italiano (Italian)", flag: "🇮🇹", badge: "Italiano" },
+  { id: "vietnamese", label: "Tiếng Việt (Vietnamese)", flag: "🇻🇳", badge: "Tiếng Việt" },
+  { id: "indonesian", label: "Bahasa Indonesia", flag: "🇮🇩", badge: "Indonesia" },
+  { id: "malay", label: "Bahasa Melayu", flag: "🇲🇾", badge: "Melayu" },
+  { id: "persian", label: "فارسی (Persian / Farsi)", flag: "🇮🇷", badge: "فارسی" },
+  { id: "pashto", label: "پښتو (Pashto)", flag: "🇦🇫", badge: "پښتو" },
+  { id: "punjabi", label: "پنجابی / ਪੰਜਾਬੀ (Punjabi)", flag: "🇵🇰", badge: "پنجابی" },
+  { id: "sindhi", label: "سنڌي (Sindhi)", flag: "🇵🇰", badge: "سنڌي" },
+  { id: "tamil", label: "தமிழ் (Tamil)", flag: "🇮🇳", badge: "தமிழ்" },
+  { id: "telugu", label: "తెలుగు (Telugu)", flag: "🇮🇳", badge: "తెలుగు" },
+  { id: "marathi", label: "मराठी (Marathi)", flag: "🇮🇳", badge: "मराठी" },
+  { id: "dutch", label: "Nederlands (Dutch)", flag: "🇳🇱", badge: "Nederlands" },
+  { id: "polish", label: "Polski (Polish)", flag: "🇵🇱", badge: "Polski" },
+  { id: "swedish", label: "Svenska (Swedish)", flag: "🇸🇪", badge: "Svenska" },
+  { id: "greek", label: "Ελληνικά (Greek)", flag: "🇬🇷", badge: "Ελληνικά" },
+  { id: "hebrew", label: "עברית (Hebrew)", flag: "🇮🇱", badge: "עברית" },
+  { id: "swahili", label: "Kiswahili (Swahili)", flag: "🇰🇪", badge: "Kiswahili" },
+  { id: "tagalog", label: "Filipino (Tagalog)", flag: "🇵🇭", badge: "Filipino" },
+  { id: "thai", label: "ไทย (Thai)", flag: "🇹🇭", badge: "ไทย" },
+  { id: "czech", label: "Čeština (Czech)", flag: "🇨🇿", badge: "Čeština" },
+  { id: "romanian", label: "Română (Romanian)", flag: "🇷🇴", badge: "Română" },
+  { id: "hungarian", label: "Magyar (Hungarian)", flag: "🇭🇺", badge: "Magyar" },
+  { id: "ukrainian", label: "Українська (Ukrainian)", flag: "🇺🇦", badge: "Українська" },
+  { id: "norwegian", label: "Norsk (Norwegian)", flag: "🇳🇴", badge: "Norsk" },
+  { id: "danish", label: "Dansk (Danish)", flag: "🇩🇰", badge: "Dansk" },
+  { id: "finnish", label: "Suomi (Finnish)", flag: "🇫🇮", badge: "Suomi" },
+];
 
 interface ModeMeta {
   id: AIMode;
@@ -74,22 +129,68 @@ const STARTERS: Record<AIMode, string[]> = {
     "What is my net profit and sales performance this month?",
     "Which products are low in stock or out of stock?",
     "Which items are expiring in the next 30 or 60 days?",
-    "What is my inventory total cost and retail valuation?",
+    "How can I increase my store sales and revenue?",
   ],
   operator: [
     "Draft a purchase order for my low-stock items",
     "Summarize this week's sales transactions",
-    "Stock check karke reorder list banao",
+    "Check inventory levels and generate a reorder list",
+    "Highlight slow-moving products to discount",
   ],
   knowledge: [
     "How does the POS terminal calculate tax and discounts?",
     "How do I update business currency and tax rates in Settings?",
     "How do low stock threshold alerts work?",
+    "How do I add new products and generate barcodes?",
   ],
   advisor: [
-    "Give me 3 strategic ways to improve profit margins",
+    "Give me 5 practical ways to increase my sales and revenue",
     "Which high-demand items should I purchase in bulk?",
     "What inventory risks or expiry dates should I watch?",
+  ],
+};
+
+const ROMAN_URDU_STARTERS: Record<AIMode, string[]> = {
+  analyst: [
+    "Meri dukan ka is mahine ka saaf munafa aur bikri kitni hai?",
+    "Konsi cheezon ka stock khatam ya kam ho raha hai?",
+    "Meri inventory ki total qeemat (worth) kitni hai?",
+    "Sab se zyada bikne walay top products kon se hain?",
+  ],
+  operator: [
+    "Kam stock walay items ki purchase order list banao",
+    "Aaj ki sales transactions ka asaan hisab dikhao",
+    "Stock check karke reorder list banao",
+  ],
+  knowledge: [
+    "POS counter par bill aur discount kaise dete hain?",
+    "Dukan ki currency aur tax settings kaise badlein?",
+    "Naya product aur barcode kaise shamil karein?",
+  ],
+  advisor: [
+    "Munafa barhanay ke 3 asaan aur behtareen mashwaray do",
+    "Konsa samaan wholesale me zyada khareedna chahiye?",
+    "Dukan ki bikri barhanay ka asaan tareeqa batao",
+  ],
+};
+
+const URDU_STARTERS: Record<AIMode, string[]> = {
+  analyst: [
+    "اس مہینے کا کل خالص منافع اور فروخت کتنی ہے؟",
+    "کون سی اشیاء کا اسٹاک کم یا ختم ہو رہا ہے؟",
+    "سب سے زیادہ فروخت ہونے والے پراڈکٹس کون سے ہیں؟",
+  ],
+  operator: [
+    "کم اسٹاک والی اشیاء کا خریداری آرڈر تیار کریں",
+    "آج کے بلوں کا آسان خلاصہ دکھائیں",
+  ],
+  knowledge: [
+    "پی او ایس کاؤنٹر پر بل اور ڈسکاؤنٹ کیسے دیتے ہیں؟",
+    "دکان میں نیا آئٹم اور بارکوڈ کیسے شامل کریں؟",
+  ],
+  advisor: [
+    "منافع بڑھانے کے لیے 3 آسان اور مفید مشورے دیں",
+    "زیادہ بکنے والا مال کون سا ہے؟",
   ],
 };
 
@@ -104,6 +205,13 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [mode, setMode] = useState<AIMode>("analyst");
+  const [selectedLanguage, setSelectedLanguage] = useState<string>(() => {
+    const saved = localStorage.getItem("geflow_ai_selected_language");
+    if (saved && saved !== "roman_urdu" && SUPPORTED_LANGUAGES.some((l) => l.id === saved)) {
+      return saved;
+    }
+    return "english";
+  });
   const [messages, setMessages] = useState<AIChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -114,6 +222,16 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const activeBiz = businesses.find((b) => b.id === activeId);
+
+  const handleLanguageChange = (newLang: string) => {
+    setSelectedLanguage(newLang);
+    localStorage.setItem("geflow_ai_selected_language", newLang);
+    const langObj = SUPPORTED_LANGUAGES.find((l) => l.id === newLang);
+    toast({
+      title: "Assistant Language Updated",
+      description: `Maryam AI will now converse in ${langObj?.label || newLang} with simple, friendly explanations.`,
+    });
+  };
 
   // Auto-reset mode if currently selected mode is not allowed for the plan
   useEffect(() => {
@@ -161,6 +279,12 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
     e.preventDefault();
     e.stopPropagation();
     setMessages([]);
+    setSelectedLanguage("english");
+    try {
+      localStorage.removeItem("geflow_ai_selected_language");
+    } catch (e) {
+      console.debug("Could not clear stored AI language", e);
+    }
     saveAIConversation([], activeId, currentUserId);
   };
 
@@ -209,6 +333,24 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
           setLiveAnalytics(currentCtx);
         }
 
+        // Determine target language:
+        // 1. If user explicitly chose a language in dropdown (e.g. Spanish, French, Urdu, Arabic), respect that choice!
+        // 2. Otherwise (default is English), detect if user typed in Roman Urdu, Urdu script, Arabic, Spanish, etc.
+        let effectiveLanguage = "english";
+        const isExplicitDropdown =
+          selectedLanguage && selectedLanguage !== "english" && selectedLanguage !== "auto";
+
+        if (isExplicitDropdown) {
+          effectiveLanguage = selectedLanguage;
+        } else {
+          const detectedMsgLang = detectQueryLanguage(content);
+          if (detectedMsgLang && detectedMsgLang !== "english" && detectedMsgLang !== "other") {
+            effectiveLanguage = detectedMsgLang;
+          } else {
+            effectiveLanguage = "english";
+          }
+        }
+
         // Step 2: Try Server AI Assistant API endpoint
         let replyText = "";
         let succeededRemotely = false;
@@ -222,6 +364,7 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
               mode,
               businessId: activeId ?? "",
               planId,
+              selectedLanguage: effectiveLanguage,
               businessContext: currentCtx
                 ? {
                     businessName: currentCtx.business.name,
@@ -262,6 +405,7 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
                 mode,
                 businessId: activeId ?? "",
                 planId,
+                selectedLanguage: effectiveLanguage,
               },
             });
 
@@ -274,14 +418,15 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
           }
         }
 
-        // Step 3: If remote did not return a response, execute high-precision plan-aware local analysis
+        // Step 3: If remote did not return a response, execute high-precision friendly plan-aware local analysis
         if (!succeededRemotely || !replyText) {
           replyText = generateLocalBusinessAnalysis(
             content,
             mode,
             currentCtx,
             planId,
-            activeBiz?.currency || "PKR"
+            activeBiz?.currency || "PKR",
+            effectiveLanguage
           );
         }
 
@@ -292,8 +437,8 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
           content: formattedReply,
           timestamp: new Date().toISOString(),
           meta: {
-            language: detectQueryLanguage(content),
-            model: `GeCore AI (${planId.toUpperCase()})`,
+            language: effectiveLanguage,
+            model: `Maryam AI (${planId.toUpperCase()})`,
           },
         };
 
@@ -304,7 +449,7 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
         console.error("AI Assistant critical failure:", err);
         const fallbackMsg: AIChatMessage = {
           role: "assistant",
-          content: "⚠️ I encountered a temporary connection issue. Please check that an active business is selected and try again.",
+          content: "👋 I ran into a quick connection hiccup. Please make sure your store is selected and tap send again—I am ready to help!",
           timestamp: new Date().toISOString(),
         };
         const finalMessages = [...nextMessages, fallbackMsg];
@@ -315,10 +460,25 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
         setTimeout(() => inputRef.current?.focus(), 100);
       }
     },
-    [loading, messages, liveAnalytics, activeId, mode, currentUserId, planId]
+    [loading, messages, liveAnalytics, activeId, mode, currentUserId, planId, selectedLanguage, activeBiz]
   );
 
   const activeMode = MODES.find((m) => m.id === mode) || MODES[0];
+
+  // Pick appropriate starters based on selected language
+  const currentStarters =
+    selectedLanguage === "roman_urdu"
+      ? ROMAN_URDU_STARTERS[mode] || ROMAN_URDU_STARTERS.analyst
+      : selectedLanguage === "urdu"
+      ? URDU_STARTERS[mode] || URDU_STARTERS.analyst
+      : STARTERS[mode] || STARTERS.analyst;
+
+  const currentPlaceholder =
+    selectedLanguage === "roman_urdu"
+      ? "Apni dukan ke munafa, bikri, ya stock ke baray me poochiye..."
+      : selectedLanguage === "urdu"
+      ? "دکان کے منافع، اسٹاک یا فروخت کے بارے میں آسان الفاظ میں پوچھیں..."
+      : "Ask anything about your store sales, profit, or stock in simple words...";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -333,11 +493,11 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
       >
         <DialogTitle className="sr-only">Maryam AI Assistant</DialogTitle>
         <DialogDescription className="sr-only">
-          Maryam AI — Real-time business intelligence, live profit calculations, inventory analysis, and operations assistant.
+          Maryam AI — Friendly store copilot, live profit calculations, stock alerts, and simple step-by-step guidance.
         </DialogDescription>
 
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30">
+        <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-border bg-muted/30 gap-2 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-600 to-sky-500 flex items-center justify-center text-white flex-shrink-0 shadow-sm">
               <Sparkles className="h-5 w-5" />
@@ -346,7 +506,7 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="font-extrabold text-sm sm:text-base leading-tight text-foreground">Maryam AI</p>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                  Live Version • v1.0
+                  Friendly Copilot
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
                   <Crown className="w-3 h-3 text-primary" />
@@ -368,7 +528,25 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto">
+            {/* Language Selector Dropdown */}
+            <div className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-2.5 py-1 text-xs shadow-xs hover:border-primary/50 transition-colors">
+              <Globe className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+              <span className="text-[10px] uppercase font-bold text-muted-foreground hidden sm:inline">Lang:</span>
+              <select
+                value={selectedLanguage}
+                onChange={(e) => handleLanguageChange(e.target.value)}
+                className="bg-transparent font-semibold text-foreground text-xs focus:outline-none cursor-pointer max-w-[140px] sm:max-w-[220px] truncate pr-1"
+                aria-label="Select AI Assistant Language"
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <option key={lang.id} value={lang.id} className="bg-card text-foreground">
+                    {lang.flag} {lang.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {messages.length > 0 && (
               <button
                 type="button"
@@ -388,8 +566,6 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
           {MODES.map((m) => {
             const Icon = m.icon;
             const on = m.id === mode;
-            const isAllowed = isModeAllowedForPlan(m.id, planId);
-            const { label: reqLabel } = getRequiredPlanForMode(m.id);
 
             return (
               <button
@@ -440,12 +616,32 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
               <div className={`h-14 w-14 rounded-2xl flex items-center justify-center mb-4 ${activeMode.color}`}>
                 <activeMode.icon className="h-7 w-7" />
               </div>
-              <p className="font-bold text-lg text-foreground">{activeMode.label} Mode Active</p>
+              <p className="font-bold text-lg text-foreground">
+                {selectedLanguage === "roman_urdu"
+                  ? "Salam! Main Maryam hoon, aapki madadgar"
+                  : selectedLanguage === "urdu"
+                  ? "السلام علیکم! میں مریم ہوں، آپ کی معاون"
+                  : selectedLanguage === "spanish"
+                  ? "¡Hola! Soy Maryam, tu asistente de tienda"
+                  : selectedLanguage === "arabic"
+                  ? "أهلاً بك! أنا مريم، مساعدة متجرك"
+                  : selectedLanguage === "french"
+                  ? "Bonjour ! Je suis Maryam, votre assistante"
+                  : `Hello! I'm Maryam, your store assistant`}
+              </p>
               <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                {activeMode.desc}. Ask anything in English, Roman Urdu, Urdu, or Arabic. I read live profit, sales, and stock records.
+                {selectedLanguage === "roman_urdu"
+                  ? "Aap mujh se apni dukan ki bikri, munafa, ya stock ke baray me asaan lafzon me pooch sakte hain. Main bilkul asaan steps me jawab doongi!"
+                  : selectedLanguage === "urdu"
+                  ? "آپ مجھ سے اپنی دکان کی فروخت، خالص منافع، یا اسٹاک کے بارے میں آسان اور سادہ الفاظ میں پوچھ سکتے ہیں۔"
+                  : selectedLanguage === "spanish"
+                  ? "Te ayudo con actualizaciones de ventas, cálculos de ganancias y consejos de inventario en palabras sencillas."
+                  : selectedLanguage === "arabic"
+                  ? "أساعدك في متابعة المبيعات اليومية، وحساب الأرباح، وإدارة المخزون بكلمات بسيطة وسهلة."
+                  : "I help you with simple sales updates, profit calculations, and easy inventory tips in plain, friendly everyday words."}
               </p>
               <div className="mt-6 flex flex-col gap-2 w-full max-w-lg">
-                {STARTERS[mode].map((s) => (
+                {currentStarters.map((s) => (
                   <button
                     key={s}
                     type="button"
@@ -502,7 +698,13 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
               </div>
               <div className="rounded-2xl px-4 py-3 bg-card border border-border flex items-center gap-2.5 text-sm text-muted-foreground shadow-xs">
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <span>Analyzing real-time business metrics & formulating response…</span>
+                <span>
+                  {selectedLanguage === "roman_urdu"
+                    ? "Aapki dukan ka hisab check kar rahi hoon…"
+                    : selectedLanguage === "urdu"
+                    ? "دکان کا تازہ ترین حساب کتاب دیکھا جا رہا ہے…"
+                    : "Checking your live store numbers and preparing a friendly reply…"}
+                </span>
               </div>
             </div>
           )}
@@ -530,7 +732,7 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
                 }
               }}
               rows={1}
-              placeholder="Ask about sales, profit, margins, low stock, Urdu queries…"
+              placeholder={currentPlaceholder}
               className="flex-1 bg-transparent resize-none max-h-32 px-2 py-2 text-sm text-foreground focus:outline-none placeholder:text-muted-foreground"
             />
             <button
@@ -543,8 +745,10 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
             </button>
           </form>
           <div className="flex items-center justify-between mt-2 px-1 text-[10px] text-muted-foreground">
-            <span>Powered by GeCore AI System Engine</span>
-            <span>Supports English, Roman Urdu, Urdu & Arabic</span>
+            <span>Friendly Store Copilot • Simple everyday words</span>
+            <span className="font-medium text-foreground/80">
+              Active: {SUPPORTED_LANGUAGES.find((l) => l.id === selectedLanguage)?.label || "Auto Detect"}
+            </span>
           </div>
         </div>
       </DialogContent>

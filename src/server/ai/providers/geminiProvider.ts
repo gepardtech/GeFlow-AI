@@ -19,7 +19,7 @@ let geminiClient: GoogleGenAI | null = null;
 
 function getGeminiClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  if (!apiKey || !apiKey.startsWith("AIza")) {
     return null;
   }
   if (!geminiClient) {
@@ -40,7 +40,8 @@ export class GeminiProvider implements AIProviderInterface {
   public readonly defaultModel = "gemini-3.8-flash";
 
   public isConfigured(): boolean {
-    return !!process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
+    return !!apiKey && apiKey.startsWith("AIza");
   }
 
   public async analyzeProduct(request: AIAnalysisRequest): Promise<AIProviderResponse> {

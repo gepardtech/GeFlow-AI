@@ -17,12 +17,14 @@ interface PlanRow {
   features: string[]; is_active: boolean; is_popular: boolean;
   payment_method_synced: boolean; sort_order: number;
   badge_text: string | null; badge_position: string; badge_cycle: string;
+  cta_button_text?: string | null;
 }
 
 const blank = () => ({
   plan_key: "", name: "", tagline: "", monthly_price: 0, yearly_price: 0, lifetime_price: 0,
   features: "", is_active: true, is_popular: false, sort_order: 0,
   badge_text: "", badge_position: "top", badge_cycle: "all",
+  cta_button_text: "",
 });
 
 const AdminBillingPricing = () => {
@@ -46,6 +48,7 @@ const AdminBillingPricing = () => {
     plan_key: "",
     name: "",
     lifetime_price: 199.99,
+    cta_button_text: "",
     badge_text: "",
     badge_position: "top",
     is_popular: false,
@@ -96,6 +99,7 @@ const AdminBillingPricing = () => {
       plan_key: planKey,
       name: r?.name || (planKey.charAt(0).toUpperCase() + planKey.slice(1)),
       lifetime_price: customs.lifetime_price !== undefined ? customs.lifetime_price : (r?.lifetime_price || 199.99),
+      cta_button_text: customs.cta_button_text !== undefined ? (customs.cta_button_text || "") : (r?.cta_button_text || ""),
       badge_text: customs.badge_text !== undefined ? (customs.badge_text || "") : (r?.badge_cycle === "lifetime" ? r.badge_text || "" : ""),
       badge_position: customs.badge_position || "top",
       is_popular: customs.is_popular !== undefined ? customs.is_popular : Boolean(r?.is_popular),
@@ -108,13 +112,14 @@ const AdminBillingPricing = () => {
   const submitLifetimeEdit = async () => {
     setBusy(true);
     try {
-      // 1. Save lifetime customization (independent badges, price, features, popular status)
+      // 1. Save lifetime customization (independent badges, price, cta text, features, popular status)
       const res = await fetch("/api/admin/pricing-plans/lifetime-customizations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           plan_key: editingLifetimeKey,
           lifetime_price: Number(lifetimeForm.lifetime_price),
+          cta_button_text: lifetimeForm.cta_button_text.trim() || null,
           badge_text: lifetimeForm.badge_text.trim() || null,
           badge_position: lifetimeForm.badge_position,
           is_popular: lifetimeForm.is_popular,
@@ -200,6 +205,7 @@ const AdminBillingPricing = () => {
       monthly_price: r.monthly_price, yearly_price: r.yearly_price, lifetime_price: r.lifetime_price,
       features: (r.features ?? []).join("\n"), is_active: r.is_active, is_popular: r.is_popular, sort_order: r.sort_order,
       badge_text: r.badge_text ?? "", badge_position: r.badge_position ?? "top", badge_cycle: r.badge_cycle ?? "all",
+      cta_button_text: r.cta_button_text ?? "",
     });
     setOpen(true);
   };
@@ -222,6 +228,7 @@ const AdminBillingPricing = () => {
       badge_text: form.badge_text?.trim() || null,
       badge_position: form.badge_position,
       badge_cycle: form.badge_cycle,
+      cta_button_text: form.cta_button_text?.trim() || null,
     };
 
     try {
@@ -371,7 +378,14 @@ const AdminBillingPricing = () => {
               {(r.features ?? []).slice(0, 5).map((f) => <li key={f} className="text-xs text-muted-foreground">• {f}</li>)}
             </ul>
             <div className="flex items-center justify-between pt-3 border-t border-border">
-              <span className={`text-[10px] font-bold tracking-widest ${r.is_active ? "text-emerald-500" : "text-muted-foreground"}`}>{r.is_active ? "ACTIVE" : "DISABLED"}</span>
+              <div className="flex flex-col gap-0.5">
+                <span className={`text-[10px] font-bold tracking-widest ${r.is_active ? "text-emerald-500" : "text-muted-foreground"}`}>{r.is_active ? "ACTIVE" : "DISABLED"}</span>
+                {r.cta_button_text && (
+                  <span className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold truncate max-w-[170px]" title={r.cta_button_text}>
+                    CTA: "{r.cta_button_text}"
+                  </span>
+                )}
+              </div>
               <div className="flex gap-1">
                 <button onClick={() => openEdit(r)} className="h-8 w-8 rounded-lg hover:bg-muted inline-flex items-center justify-center"><Pencil className="h-3.5 w-3.5" /></button>
                 <button onClick={() => setDel(r)} className="h-8 w-8 rounded-lg hover:bg-rose-500/10 text-rose-500 inline-flex items-center justify-center"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -405,6 +419,7 @@ const AdminBillingPricing = () => {
                 <th className="p-4">Lifetime Price</th>
                 <th className="p-4">Registration Offer Limit</th>
                 <th className="p-4">Independent Lifetime Badge</th>
+                <th className="p-4">Custom CTA Text</th>
                 <th className="p-4">Popular On Lifetime</th>
                 <th className="p-4 text-right">Actions</th>
               </tr>
@@ -418,6 +433,7 @@ const AdminBillingPricing = () => {
                 const isPop = customs.is_popular !== undefined ? customs.is_popular : Boolean(r?.is_popular);
                 const limit = key === "standard" ? lifetimeLimits.standard : lifetimeLimits.premium;
                 const claimed = key === "standard" ? lifetimeCounts.standard : lifetimeCounts.premium;
+                const ctaText = customs.cta_button_text !== undefined ? customs.cta_button_text : (r?.cta_button_text || "");
 
                 return (
                   <tr key={key} className="hover:bg-muted/30 transition-colors">
@@ -442,6 +458,15 @@ const AdminBillingPricing = () => {
                         </span>
                       ) : (
                         <span className="text-xs text-muted-foreground italic">None configured</span>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      {ctaText ? (
+                        <span className="inline-block px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/20 font-mono">
+                          "{ctaText}"
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">UNLOCK LIFETIME</span>
                       )}
                     </td>
                     <td className="p-4">
@@ -495,6 +520,15 @@ const AdminBillingPricing = () => {
                 />
               </Field>
             </div>
+
+            <Field label="CUSTOM CTA BUTTON TEXT (LIFETIME CARD CTA)">
+              <input
+                value={lifetimeForm.cta_button_text}
+                onChange={(e) => setLifetimeForm((f) => ({ ...f, cta_button_text: e.target.value }))}
+                placeholder="e.g. UNLOCK LIFETIME, Get Lifetime Deal, Lifetime Standard"
+                className="h-10 w-full px-3 bg-muted/40 rounded-lg text-sm border border-border/70"
+              />
+            </Field>
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="LIFETIME OFFER LIMIT (SPOTS)">
@@ -584,6 +618,14 @@ const AdminBillingPricing = () => {
               <Field label="LIFETIME ($)"><input type="number" step="0.01" value={form.lifetime_price} onChange={(e) => setForm((f) => ({ ...f, lifetime_price: Number(e.target.value) }))} className="h-10 w-full px-3 bg-muted/40 rounded-lg text-sm" /></Field>
             </div>
             <Field label="FEATURES (one per line)"><textarea value={form.features} onChange={(e) => setForm((f) => ({ ...f, features: e.target.value }))} rows={5} className="w-full px-3 py-2 bg-muted/40 rounded-lg text-sm" /></Field>
+            <Field label="CUSTOM CTA BUTTON TEXT (PRICING TABLE BUTTON)">
+              <input
+                value={form.cta_button_text}
+                onChange={(e) => setForm((f) => ({ ...f, cta_button_text: e.target.value }))}
+                placeholder="e.g. Choose Standard, Start Trial, Get Started Free"
+                className="h-10 w-full px-3 bg-muted/40 rounded-lg text-sm border border-border/70"
+              />
+            </Field>
             <div className="grid grid-cols-3 gap-3">
               <Toggle label="ACTIVE" checked={form.is_active} onChange={(v) => setForm((f) => ({ ...f, is_active: v }))} />
               <Toggle label="POPULAR" checked={form.is_popular} onChange={(v) => setForm((f) => ({ ...f, is_popular: v }))} />

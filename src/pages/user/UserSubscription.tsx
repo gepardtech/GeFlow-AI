@@ -12,18 +12,24 @@ import {
   Loader2,
   Settings,
   ShieldCheck,
+  ShieldAlert,
   Tag,
   AlertCircle,
   Clock,
   Sparkles,
   Plus,
   RefreshCw,
+  Wallet,
+  Trash2,
+  ExternalLink,
+  Mail,
 } from "lucide-react";
 import UserPanelGate from "@/components/UserPanelGate";
 import { usePlan } from "@/hooks/usePlan";
 import { usePricingPlans } from "@/hooks/usePricingPlans";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
 import { usePlatformSettings } from "@/components/PlatformSettingsProvider";
+import { usePaymentGateways } from "@/hooks/usePaymentGateways";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -60,61 +66,45 @@ interface InvoiceRecord {
 }
 
 interface SavedPaymentMethod {
-  brand: string;
-  last4: string;
-  expMonth: string;
-  expYear: string;
-  holderName: string;
+  id?: string;
+  type?: "card" | "paypal";
+  brand?: string;
+  last4?: string;
+  expMonth?: string;
+  expYear?: string;
+  holderName?: string;
+  paypalEmail?: string;
+  source?: "user_manual" | "checkout";
 }
+
+const detectCardBrand = (digits: string): "VISA" | "Mastercard" | "American Express" | "Discover" | "Card" => {
+  const clean = digits.replace(/\D/g, "");
+  if (/^4/.test(clean)) return "VISA";
+  if (/^(5[1-5]|2[2-7])/.test(clean)) return "Mastercard";
+  if (/^3[47]/.test(clean)) return "American Express";
+  if (/^(6011|65|64[4-9]|622)/.test(clean)) return "Discover";
+  return "Card";
+};
 
 export const UserSubscription = () => {
   const [searchParams] = useSearchParams();
   const { planId, fullName, email, userId } = usePlan();
-  const { plans: livePricing, loading: pricingLoading } = usePricingPlans();
+  const { plans: livePricing, loading: pricingLoading, priceOf, ctaTextOf, badgeOf } = usePricingPlans();
   const { activeBusiness } = useActiveBusiness();
   const { settings } = usePlatformSettings();
   const { toast } = useToast();
 
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly" | "lifetime">("monthly");
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
   const [activeSub, setActiveSub] = useState<any>(null);
 
-  // Payment Card state - only real methods; never fake demo cards
-  const [paymentCard, setPaymentCard] = useState<SavedPaymentMethod | null>(() => {
-    try {
-      const activeUid = userId || (typeof localStorage !== "undefined" ? localStorage.getItem("geflow_active_uid") : null);
-      if (activeUid) {
-        const saved = localStorage.getItem(`geflow_card_${activeUid}`);
-        if (saved && saved !== "null" && saved !== "undefined") {
-          const parsed = JSON.parse(saved);
-          if (parsed && typeof parsed === "object" && parsed.last4) {
-            return parsed;
-          }
-        }
-      }
-    } catch {
-      // fallback
-    }
-    return null;
-  });
+  const { paypalClientId, paypal } = usePaymentGateways();
+  const isPaypalEnabled = paypal ? paypal.enabled : true;
 
-  useEffect(() => {
-    if (!userId) return;
-    try {
-      const saved = localStorage.getItem(`geflow_card_${userId}`);
-      if (saved && saved !== "null" && saved !== "undefined") {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === "object" && parsed.last4) {
-          setPaymentCard(parsed);
-          return;
-        }
-      }
-      setPaymentCard(null);
-    } catch {
-      setPaymentCard(null);
-    }
-  }, [userId]);
+  // Real payment method state — only real methods; never fake demo/fluffy cards
+  const [paymentCard, setPaymentCard] = useState<SavedPaymentMethod | null>(null);
+  const [loadingPaymentMethod, setLoadingPaymentMethod] = useState(true);
 
   // Modal States
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
@@ -136,27 +126,77 @@ export const UserSubscription = () => {
   } | null>(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [upgradeBusy, setUpgradeBusy] = useState(false);
-  const [selectedCycleForUpgrade, setSelectedCycleForUpgrade] = useState<"monthly" | "yearly">("monthly");
+  const [selectedCycleForUpgrade, setSelectedCycleForUpgrade] = useState<"monthly" | "yearly" | "lifetime">("monthly");
 
-  // Card Form State
-  const [cardName, setCardName] = useState(() => (paymentCard && paymentCard.holderName) || "");
-  const [cardNumber, setCardNumber] = useState(() => (paymentCard && paymentCard.last4 ? `•••• •••• •••• ${paymentCard.last4}` : ""));
-  const [cardExp, setCardExp] = useState(() => (paymentCard && paymentCard.expMonth && paymentCard.expYear ? `${paymentCard.expMonth}/${paymentCard.expYear}` : ""));
-  const [cardCvc, setCardCvc] = useState("•••");
-  const [cardZip, setCardZip] = useState("94103");
+  // Payment Method Modal Form State (Synced with Checkout & Admin Gateways)
+  const [paymentMethodType, setPaymentMethodType] = useState<"card" | "paypal">("card");
+  const [paypalEmailInput, setPaypalEmailInput] = useState("");
+  const [cardName, setCardName] = useState("");
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardExp, setCardExp] = useState("");
+  const [cardCvc, setCardCvc] = useState("");
+  const [cardZip, setCardZip] = useState("");
   const [savingCard, setSavingCard] = useState(false);
+  const [removingPaymentMethod, setRemovingPaymentMethod] = useState(false);
 
+  // Renewal email reminder states
+  const [reminderSending, setReminderSending] = useState(false);
+  const [reminderSent, setReminderSent] = useState(false);
+  const autoRenewalReminderSentRef = React.useRef(false);
+
+  // Sync form inputs when editing existing payment card
   useEffect(() => {
-    if (paymentCard && typeof paymentCard === "object") {
+    if (paymentCard?.type === "card") {
+      setPaymentMethodType("card");
       setCardName(paymentCard.holderName || "");
       setCardNumber(paymentCard.last4 ? `•••• •••• •••• ${paymentCard.last4}` : "");
       setCardExp(paymentCard.expMonth && paymentCard.expYear ? `${paymentCard.expMonth}/${paymentCard.expYear}` : "");
+    } else if (paymentCard?.type === "paypal") {
+      setPaymentMethodType("paypal");
+      setPaypalEmailInput(paymentCard.paypalEmail || "");
     } else {
       setCardName("");
       setCardNumber("");
       setCardExp("");
+      setCardCvc("");
+      setCardZip("");
+      setPaypalEmailInput("");
     }
   }, [paymentCard]);
+
+  // Load real user payment method from backend
+  const loadPaymentMethod = useCallback(async (activeUserId: string) => {
+    if (!activeUserId) return;
+    setLoadingPaymentMethod(true);
+    try {
+      const res = await fetch(`/api/user/subscription/payment-method?userId=${encodeURIComponent(activeUserId)}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.paymentMethod) {
+          const pm = json.paymentMethod;
+          setPaymentCard({
+            id: pm.id,
+            type: pm.type,
+            brand: pm.card?.brand,
+            last4: pm.card?.last4,
+            expMonth: pm.card?.expMonth,
+            expYear: pm.card?.expYear,
+            holderName: pm.card?.holderName,
+            paypalEmail: pm.paypal?.email,
+            source: pm.source,
+          });
+          setLoadingPaymentMethod(false);
+          return;
+        }
+      }
+      setPaymentCard(null);
+    } catch (err) {
+      console.warn("Notice loading user payment method:", err);
+      setPaymentCard(null);
+    } finally {
+      setLoadingPaymentMethod(false);
+    }
+  }, []);
 
   // Manage Subscription State
   const [autoRenew, setAutoRenew] = useState(() => {
@@ -196,6 +236,9 @@ export const UserSubscription = () => {
         setActiveSub(subData);
         if (subData.cycle === "yearly") setBillingCycle("yearly");
       }
+
+      // Load user's real payment method (Card or PayPal)
+      await loadPaymentMethod(user.id);
 
       // 2. Fetch user's invoices
       let userInvoices: any[] = [];
@@ -239,7 +282,7 @@ export const UserSubscription = () => {
     } finally {
       setLoadingInvoices(false);
     }
-  }, [fullName, planId]);
+  }, [fullName, planId, loadPaymentMethod]);
 
   useEffect(() => {
     loadSubscriptionData();
@@ -280,16 +323,40 @@ export const UserSubscription = () => {
     };
   }, [livePricing]);
 
+  const activeCycleDisplay = useMemo(() => {
+    if (activeSub?.source === "admin_manual" || activeSub?.payment_method === "Admin Manual Assignment" || activeSub?.payment_method?.toLowerCase()?.includes("admin")) {
+      return "ADMIN ASSIGNED";
+    }
+    if (currentPlanNormalized === "lifetime" || activeSub?.cycle === "lifetime") {
+      return "LIFETIME";
+    }
+    if (activeSub?.cycle === "yearly") {
+      return "ANNUAL";
+    }
+    if (activeSub?.cycle === "monthly") {
+      return "MONTHLY";
+    }
+    if (currentPlanNormalized === "free") {
+      return "FREE TIER";
+    }
+    return "ACTIVE";
+  }, [activeSub, currentPlanNormalized]);
+
   const currentRenewalRate = useMemo(() => {
     if (currentPlanNormalized === "free") return 0;
+    if (currentPlanNormalized === "lifetime" || activeSub?.cycle === "lifetime") return 0;
+    if (activeSub?.source === "admin_manual" || activeSub?.payment_method === "Admin Manual Assignment" || activeSub?.payment_method?.toLowerCase()?.includes("admin")) {
+      return 0;
+    }
+    const effCycle = activeSub?.cycle || "monthly";
     if (currentPlanNormalized === "standard") {
-      return billingCycle === "yearly" ? planPricing.standard.yearly : planPricing.standard.monthly;
+      return effCycle === "yearly" ? planPricing.standard.yearly : planPricing.standard.monthly;
     }
     if (currentPlanNormalized === "premium") {
-      return billingCycle === "yearly" ? planPricing.premium.yearly : planPricing.premium.monthly;
+      return effCycle === "yearly" ? planPricing.premium.yearly : planPricing.premium.monthly;
     }
-    return 9.99;
-  }, [currentPlanNormalized, billingCycle, planPricing]);
+    return 0;
+  }, [currentPlanNormalized, activeSub, planPricing]);
 
   const nextAuditDate = useMemo(() => {
     if (activeSub?.next_billing_date) {
@@ -300,6 +367,45 @@ export const UserSubscription = () => {
     d.setDate(d.getDate() + 30);
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }).toUpperCase();
   }, [activeSub]);
+
+  const isAdminManualPlan = useMemo(() => {
+    return (
+      activeSub?.source === "admin_manual" ||
+      activeSub?.payment_method === "Admin Manual Assignment" ||
+      activeSub?.payment_method === null ||
+      activeSub?.payment_method?.toLowerCase()?.includes("admin") ||
+      activeSub?.payment_method?.toLowerCase()?.includes("manual")
+    );
+  }, [activeSub]);
+
+  const daysRemaining = useMemo(() => {
+    if (!activeSub?.next_billing_date || currentPlanNormalized === "free" || currentPlanNormalized === "lifetime" || activeSub?.cycle === "lifetime") {
+      return 999;
+    }
+    const diff = new Date(activeSub.next_billing_date).getTime() - Date.now();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  }, [activeSub, currentPlanNormalized]);
+
+  const isNearExpiry = daysRemaining <= 7 && daysRemaining >= -30;
+  const isPlanExpired = daysRemaining <= 0;
+
+  // Auto-dispatch renewal reminder email & notification when plan is near expiry (once per session)
+  useEffect(() => {
+    if (isNearExpiry && userId && email && !autoRenewalReminderSentRef.current) {
+      autoRenewalReminderSentRef.current = true;
+      fetch("/api/user/subscription/send-renewal-reminder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          email,
+          plan: currentPlanNormalized,
+          daysRemaining: Math.max(0, daysRemaining),
+          nextBillingDate: activeSub?.next_billing_date || null,
+        }),
+      }).catch(() => {});
+    }
+  }, [isNearExpiry, userId, email, currentPlanNormalized, daysRemaining, activeSub]);
 
   // PDF Generator for Invoices
   const handleDownloadInvoice = (inv: InvoiceRecord) => {
@@ -389,6 +495,9 @@ export const UserSubscription = () => {
   // Upgrade price computations
   const rawUpgradePrice = useMemo(() => {
     if (selectedPlanKey === "free") return 0;
+    if (selectedCycleForUpgrade === "lifetime") {
+      return priceOf(selectedPlanKey, "lifetime", selectedPlanKey === "standard" ? 199.99 : 349.99);
+    }
     if (selectedPlanKey === "standard") {
       return selectedCycleForUpgrade === "yearly"
         ? planPricing.standard.yearly
@@ -397,7 +506,7 @@ export const UserSubscription = () => {
     return selectedCycleForUpgrade === "yearly"
       ? planPricing.premium.yearly
       : planPricing.premium.monthly;
-  }, [selectedPlanKey, selectedCycleForUpgrade, planPricing]);
+  }, [selectedPlanKey, selectedCycleForUpgrade, planPricing, priceOf]);
 
   const calculatedDiscountAmount = useMemo(() => {
     if (!couponApplied || !appliedCouponData) return 0;
@@ -560,7 +669,9 @@ export const UserSubscription = () => {
 
       // 2. Insert into subscriptions table
       const nextDate = new Date();
-      if (selectedCycleForUpgrade === "yearly") {
+      if (selectedCycleForUpgrade === "lifetime") {
+        nextDate.setFullYear(nextDate.getFullYear() + 100);
+      } else if (selectedCycleForUpgrade === "yearly") {
         nextDate.setFullYear(nextDate.getFullYear() + 1);
       } else {
         nextDate.setDate(nextDate.getDate() + 30);
@@ -573,7 +684,7 @@ export const UserSubscription = () => {
         cycle: selectedCycleForUpgrade,
         status: "active",
         amount: finalPrice,
-        next_billing_date: nextDate.toISOString(),
+        next_billing_date: selectedCycleForUpgrade === "lifetime" ? null : nextDate.toISOString(),
       });
 
       // 3. Generate new official invoice
@@ -623,40 +734,174 @@ export const UserSubscription = () => {
     }
   };
 
-  // Save Payment Card
-  const handleSaveCard = (e: React.FormEvent) => {
+  // Save or Update Real Payment Method (Card or PayPal - Synced with Backend & Checkout)
+  const handleSavePaymentMethod = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!userId) {
+      toast({ title: "Authentication Required", description: "Please sign in to link a payment method.", variant: "destructive" });
+      return;
+    }
+
     setSavingCard(true);
-    setTimeout(() => {
-      const cleanDigits = cardNumber.replace(/\D/g, "");
-      const lastFour = cleanDigits.length >= 4 ? cleanDigits.slice(-4) : "4242";
-      const parts = cardExp.split("/");
-      const mm = parts[0]?.trim() || "12";
-      const yy = parts[1]?.trim() || "28";
+    try {
+      if (paymentMethodType === "card") {
+        if (!cardName.trim()) {
+          toast({ title: "Cardholder Name Required", description: "Please enter the full name on the card.", variant: "destructive" });
+          setSavingCard(false);
+          return;
+        }
+        const cleanDigits = cardNumber.replace(/\D/g, "");
+        if (cleanDigits.length < 13) {
+          toast({ title: "Invalid Card Number", description: "Please enter a valid card number with at least 13 digits.", variant: "destructive" });
+          setSavingCard(false);
+          return;
+        }
+        const parts = cardExp.split("/");
+        const mm = parts[0]?.trim() || "12";
+        const rawYy = parts[1]?.trim() || "28";
+        const yy = rawYy.length === 2 ? `20${rawYy}` : rawYy;
 
-      const updated: SavedPaymentMethod = {
-        brand: "VISA",
-        last4: lastFour,
-        expMonth: mm,
-        expYear: yy,
-        holderName: cardName.trim() || "Workspace Owner",
-      };
-
-      setPaymentCard(updated);
-      try {
-        localStorage.setItem(`geflow_card_${userId || "default"}`, JSON.stringify(updated));
-      } catch {
-        // ignore
+        const res = await fetch("/api/user/subscription/payment-method", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            type: "card",
+            card: {
+              cardNumber: cleanDigits,
+              brand: detectCardBrand(cleanDigits),
+              last4: cleanDigits.slice(-4),
+              expMonth: mm,
+              expYear: yy,
+              holderName: cardName.trim(),
+              zip: cardZip.trim(),
+            },
+            source: "user_manual",
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          throw new Error(json.error || "Failed to save card payment method");
+        }
+        setPaymentCard({
+          id: json.paymentMethod?.id,
+          type: "card",
+          brand: json.paymentMethod?.card?.brand || "Card",
+          last4: json.paymentMethod?.card?.last4,
+          expMonth: json.paymentMethod?.card?.expMonth,
+          expYear: json.paymentMethod?.card?.expYear,
+          holderName: json.paymentMethod?.card?.holderName,
+          source: "user_manual",
+        });
+        toast({
+          title: "Payment Card Linked Successfully",
+          description: `${json.paymentMethod?.card?.brand || "Card"} ending in •••• ${json.paymentMethod?.card?.last4} is now your active billing method.`,
+        });
+      } else {
+        // PayPal
+        if (!paypalEmailInput.trim() || !paypalEmailInput.includes("@")) {
+          toast({ title: "Valid PayPal Email Required", description: "Please enter your verified PayPal account email.", variant: "destructive" });
+          setSavingCard(false);
+          return;
+        }
+        const res = await fetch("/api/user/subscription/payment-method", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            type: "paypal",
+            paypal: {
+              email: paypalEmailInput.trim(),
+            },
+            source: "user_manual",
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          throw new Error(json.error || "Failed to link PayPal account");
+        }
+        setPaymentCard({
+          id: json.paymentMethod?.id,
+          type: "paypal",
+          paypalEmail: json.paymentMethod?.paypal?.email,
+          source: "user_manual",
+        });
+        toast({
+          title: "PayPal Account Linked Successfully",
+          description: `PayPal (${json.paymentMethod?.paypal?.email}) authorized for automatic renewals.`,
+        });
       }
-
-      toast({
-        title: "Payment Method Updated",
-        description: `Card ending in •••• ${lastFour} authorized for recurring audits.`,
-      });
-
-      setSavingCard(false);
       setCardModalOpen(false);
-    }, 400);
+      await loadSubscriptionData();
+    } catch (err: any) {
+      toast({
+        title: "Could Not Save Payment Method",
+        description: err.message || "Please check your inputs and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingCard(false);
+    }
+  };
+
+  // Remove Payment Method
+  const handleRemovePaymentMethod = async () => {
+    if (!userId) return;
+    setRemovingPaymentMethod(true);
+    try {
+      const res = await fetch(`/api/user/subscription/payment-method?userId=${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Failed to remove payment method");
+      }
+      setPaymentCard(null);
+      toast({
+        title: "Payment Method Removed",
+        description: "Your payment method has been detached from your subscription.",
+      });
+      await loadSubscriptionData();
+    } catch (err: any) {
+      toast({
+        title: "Remove Failed",
+        description: err.message || "Could not remove payment method.",
+        variant: "destructive",
+      });
+    } finally {
+      setRemovingPaymentMethod(false);
+    }
+  };
+
+  // Dispatch Manual Renewal Reminder Email & Notification
+  const handleSendRenewalReminder = async () => {
+    if (!userId) return;
+    setReminderSending(true);
+    try {
+      const res = await fetch("/api/user/subscription/send-renewal-reminder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          email: email || "",
+          plan: currentPlanNormalized,
+          daysRemaining: Math.max(0, daysRemaining),
+          nextBillingDate: activeSub?.next_billing_date || null,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setReminderSent(true);
+        toast({
+          title: "Renewal Reminder Dispatched",
+          description: `A renewal notice with instructions was dispatched to ${email || "your inbox"}.`,
+        });
+      }
+    } catch (e: any) {
+      toast({ title: "Reminder Notice", description: e.message || "Notification recorded." });
+    } finally {
+      setReminderSending(false);
+    }
   };
 
   // Manage Subscription Submit
@@ -704,32 +949,87 @@ export const UserSubscription = () => {
     <UserPanelGate pageTitle="Subscription" module="subscription">
       <div className="w-full space-y-10 min-w-0 pb-16">
         {/* ========================================================================= */}
-        {/* 1-WEEK EXPIRY & RENEWAL NOTIFICATION SYSTEM                               */}
+        {/* EXPIRY & RENEWAL NOTIFICATION SYSTEM (AUTO-SYNCED)                        */}
         {/* ========================================================================= */}
-        {!expiryNotificationDismissed && (
-          <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs flex items-start sm:items-center justify-between gap-4">
+        {!expiryNotificationDismissed && (isNearExpiry || (isAdminManualPlan && !paymentCard && currentPlanNormalized !== "free")) && (
+          <div className={`p-4 sm:p-5 rounded-2xl text-xs flex flex-col md:flex-row md:items-center justify-between gap-4 border shadow-xs ${
+            !paymentCard
+              ? "bg-amber-500/10 border-amber-500/30 text-amber-900 dark:text-amber-200"
+              : "bg-sky-500/10 border-sky-500/30 text-sky-950 dark:text-sky-200"
+          }`}>
             <div className="flex items-start sm:items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 font-bold">
-                <Clock className="w-5 h-5" />
+              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 font-bold ${
+                !paymentCard
+                  ? "bg-amber-500 text-slate-950 shadow-sm"
+                  : "bg-sky-500 text-slate-950 shadow-sm"
+              }`}>
+                {!paymentCard ? <ShieldAlert className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
               </div>
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
-                  <span className="font-extrabold text-foreground text-sm">Subscription Renewal Notification</span>
-                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-400">
-                    7 Days Notice
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-extrabold text-foreground text-sm">
+                    {isAdminManualPlan && !paymentCard
+                      ? "Plan Assigned by Admin — Payment Method Required for Renewal"
+                      : isPlanExpired
+                      ? "Subscription Billing Cycle Due Today"
+                      : "Subscription Renewal Notice"}
+                  </span>
+                  <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md ${
+                    !paymentCard
+                      ? "bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                      : "bg-sky-500/25 text-sky-700 dark:text-sky-300 border border-sky-500/30"
+                  }`}>
+                    {daysRemaining <= 0 ? "RENEWAL DUE" : `${daysRemaining} DAYS REMAINING`}
                   </span>
                 </div>
-                <p className="text-muted-foreground text-xs">
-                  Your <strong className="text-foreground capitalize">{currentPlanNormalized} Plan</strong> billing cycle renews on <strong className="text-foreground">{nextAuditDate}</strong>. Auto-renew is currently <span className={autoRenew ? "text-emerald-500 font-bold" : "text-rose-500 font-bold"}>{autoRenew ? "ENABLED" : "PAUSED"}</span>.
+                <p className="text-muted-foreground text-xs leading-relaxed">
+                  {isAdminManualPlan && !paymentCard ? (
+                    <>
+                      Your <strong className="text-foreground capitalize">{currentPlanNormalized} Plan</strong> was manually activated by an administrator. Because no billing method is on file, please link your personal <strong>Credit/Debit Card</strong> or <strong>PayPal</strong> before <strong className="text-foreground">{nextAuditDate}</strong> so your workspace never loses access.
+                    </>
+                  ) : (
+                    <>
+                      Your <strong className="text-foreground capitalize">{currentPlanNormalized} Plan</strong> billing cycle renews on <strong className="text-foreground">{nextAuditDate}</strong>. Auto-renew is currently <span className={autoRenew ? "text-emerald-500 font-bold" : "text-rose-500 font-bold"}>{autoRenew ? "ENABLED" : "PAUSED"}</span>.
+                    </>
+                  )}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              {!paymentCard ? (
+                <Button
+                  size="sm"
+                  onClick={() => setCardModalOpen(true)}
+                  className="h-9 px-3.5 text-xs font-extrabold rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" /> Add Payment Method
+                </Button>
+              ) : null}
+
               <Button
                 size="sm"
                 variant="outline"
+                onClick={handleSendRenewalReminder}
+                disabled={reminderSending}
+                className="h-9 px-3 text-xs font-bold rounded-xl border-border/80 hover:bg-muted gap-1.5"
+                title="Send a renewal reminder email and notification to your account"
+              >
+                {reminderSending ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : reminderSent ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                ) : (
+                  <Mail className="w-3.5 h-3.5 text-muted-foreground" />
+                )}
+                <span>{reminderSent ? "Sent to Inbox" : "Send Email Reminder"}</span>
+              </Button>
+
+              <Button
+                size="sm"
+                variant="ghost"
                 onClick={() => setExpiryNotificationDismissed(true)}
-                className="h-8 text-xs font-bold rounded-xl"
+                className="h-9 px-2 text-xs font-semibold rounded-xl text-muted-foreground hover:text-foreground"
               >
                 Dismiss
               </Button>
@@ -754,7 +1054,7 @@ export const UserSubscription = () => {
                       {currentPlanNormalized} Plan
                     </h2>
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-muted text-muted-foreground border border-border">
-                      BILLING CYCLE: {billingCycle.toUpperCase()}
+                      CYCLE: {activeCycleDisplay}
                     </span>
                   </div>
                 </div>
@@ -765,7 +1065,7 @@ export const UserSubscription = () => {
                 <span className="font-bold text-foreground capitalize">{currentPlanNormalized} Plan</span>. Your
                 architectural limits allow for{" "}
                 <span className="font-semibold text-foreground">
-                  {currentPlanNormalized === "premium"
+                  {currentPlanNormalized === "premium" || currentPlanNormalized === "lifetime"
                     ? "Unlimited SKUs, multi-branch synchronization, and automated AI financial forecasting."
                     : currentPlanNormalized === "standard"
                     ? "1,000 SKUs, full POS & returns, and supplier intelligence."
@@ -813,7 +1113,9 @@ export const UserSubscription = () => {
                   STATUS: ACTIVE
                 </span>
                 <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground mt-1">
-                  NEXT AUDIT: {nextAuditDate}
+                  {currentPlanNormalized === "lifetime" || activeSub?.cycle === "lifetime"
+                    ? "PERPETUAL VIP ACCESS"
+                    : `NEXT AUDIT: ${nextAuditDate}`}
                 </p>
               </div>
 
@@ -826,7 +1128,13 @@ export const UserSubscription = () => {
                   ${currentRenewalRate.toFixed(2)}
                 </p>
                 <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground/80 mt-0.5">
-                  {billingCycle === "yearly" ? "BILLED ANNUALLY" : "NEXT AUTOMATIC CHARGE"}
+                  {currentPlanNormalized === "lifetime" || activeSub?.cycle === "lifetime"
+                    ? "LIFETIME ACCESS — NO RENEWAL"
+                    : activeSub?.source === "admin_manual" || activeSub?.payment_method?.toLowerCase()?.includes("admin")
+                    ? "ADMIN ASSIGNED — NO AUTO-CHARGE"
+                    : activeSub?.cycle === "yearly"
+                    ? "BILLED ANNUALLY"
+                    : "NEXT AUTOMATIC CHARGE"}
                 </p>
               </div>
             </div>
@@ -845,13 +1153,13 @@ export const UserSubscription = () => {
               Select a new architectural tier to unlock advanced intelligence.
             </p>
 
-            {/* Monthly / Yearly Toggle */}
+            {/* Monthly / Yearly / Lifetime Toggle */}
             <div className="pt-3">
               <div className="inline-flex p-1 rounded-2xl bg-muted/70 dark:bg-muted/40 border border-border/80">
                 <button
                   type="button"
                   onClick={() => setBillingCycle("monthly")}
-                  className={`px-5 py-2 rounded-xl text-xs font-extrabold tracking-wider transition-all ${
+                  className={`px-4 sm:px-5 py-2 rounded-xl text-xs font-extrabold tracking-wider transition-all ${
                     billingCycle === "monthly"
                       ? "bg-card text-foreground shadow-xs"
                       : "text-muted-foreground hover:text-foreground"
@@ -862,7 +1170,7 @@ export const UserSubscription = () => {
                 <button
                   type="button"
                   onClick={() => setBillingCycle("yearly")}
-                  className={`px-5 py-2 rounded-xl text-xs font-extrabold tracking-wider transition-all flex items-center gap-1.5 ${
+                  className={`px-4 sm:px-5 py-2 rounded-xl text-xs font-extrabold tracking-wider transition-all flex items-center gap-1.5 ${
                     billingCycle === "yearly"
                       ? "bg-card text-foreground shadow-xs"
                       : "text-muted-foreground hover:text-foreground"
@@ -871,6 +1179,20 @@ export const UserSubscription = () => {
                   YEARLY
                   <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-emerald-500/15 text-emerald-500">
                     SAVE 20%
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBillingCycle("lifetime")}
+                  className={`px-4 sm:px-5 py-2 rounded-xl text-xs font-extrabold tracking-wider transition-all flex items-center gap-1.5 ${
+                    billingCycle === "lifetime"
+                      ? "bg-card text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  LIFETIME
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-500/15 text-amber-500">
+                    DEAL
                   </span>
                 </button>
               </div>
@@ -901,7 +1223,7 @@ export const UserSubscription = () => {
                 <div className="flex items-baseline gap-1">
                   <span className="text-3xl sm:text-4xl font-black text-foreground">$0</span>
                   <span className="text-xs font-bold text-muted-foreground uppercase">
-                    / {billingCycle === "yearly" ? "YR" : "MO"}
+                    {billingCycle === "lifetime" ? "FREE FOREVER" : billingCycle === "yearly" ? "/ YR" : "/ MO"}
                   </span>
                 </div>
 
@@ -971,10 +1293,10 @@ export const UserSubscription = () => {
 
                 <div className="flex items-baseline gap-1">
                   <span className="text-3xl sm:text-4xl font-black text-foreground">
-                    ${billingCycle === "yearly" ? planPricing.standard.yearly.toFixed(2) : planPricing.standard.monthly.toFixed(2)}
+                    ${billingCycle === "lifetime" ? priceOf("standard", "lifetime", 199.99).toFixed(2) : billingCycle === "yearly" ? planPricing.standard.yearly.toFixed(2) : planPricing.standard.monthly.toFixed(2)}
                   </span>
                   <span className="text-xs font-bold text-muted-foreground uppercase">
-                    / {billingCycle === "yearly" ? "YR" : "MO"}
+                    {billingCycle === "lifetime" ? "ONE-TIME" : billingCycle === "yearly" ? "/ YR" : "/ MO"}
                   </span>
                 </div>
 
@@ -1009,19 +1331,25 @@ export const UserSubscription = () => {
 
               <div className="pt-6">
                 <Button
-                  disabled={currentPlanNormalized === "standard"}
+                  disabled={
+                    currentPlanNormalized === "lifetime" ||
+                    (currentPlanNormalized === "standard" && (billingCycle !== "lifetime" || activeSub?.cycle === "lifetime"))
+                  }
                   onClick={() => openUpgradeModal("standard")}
                   className={`w-full h-11 rounded-2xl text-xs font-extrabold uppercase tracking-wider ${
-                    currentPlanNormalized === "standard"
+                    currentPlanNormalized === "lifetime" ||
+                    (currentPlanNormalized === "standard" && (billingCycle !== "lifetime" || activeSub?.cycle === "lifetime"))
                       ? "border-border bg-muted/60 text-muted-foreground cursor-default"
                       : "bg-sky-400 hover:bg-sky-500 text-slate-950 shadow-md shadow-sky-400/20 border-0 flex items-center justify-center gap-1.5"
                   }`}
                 >
-                  {currentPlanNormalized === "standard" ? (
+                  {currentPlanNormalized === "lifetime" ? (
+                    "LIFETIME VIP ACTIVE"
+                  ) : currentPlanNormalized === "standard" && (billingCycle !== "lifetime" || activeSub?.cycle === "lifetime") ? (
                     "ACTIVE TIER"
                   ) : (
                     <>
-                      UPGRADE NOW <ArrowRight className="w-4 h-4" />
+                      {billingCycle === "lifetime" ? ctaTextOf("standard", "UNLOCK LIFETIME", "lifetime") : "UPGRADE NOW"} <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </Button>
@@ -1049,10 +1377,10 @@ export const UserSubscription = () => {
 
                 <div className="flex items-baseline gap-1">
                   <span className="text-3xl sm:text-4xl font-black text-foreground">
-                    ${billingCycle === "yearly" ? planPricing.premium.yearly.toFixed(2) : planPricing.premium.monthly.toFixed(2)}
+                    ${billingCycle === "lifetime" ? priceOf("premium", "lifetime", 349.99).toFixed(2) : billingCycle === "yearly" ? planPricing.premium.yearly.toFixed(2) : planPricing.premium.monthly.toFixed(2)}
                   </span>
                   <span className="text-xs font-bold text-muted-foreground uppercase">
-                    / {billingCycle === "yearly" ? "YR" : "MO"}
+                    {billingCycle === "lifetime" ? "ONE-TIME" : billingCycle === "yearly" ? "/ YR" : "/ MO"}
                   </span>
                 </div>
 
@@ -1087,19 +1415,19 @@ export const UserSubscription = () => {
 
               <div className="pt-6">
                 <Button
-                  disabled={currentPlanNormalized === "premium"}
+                  disabled={currentPlanNormalized === "premium" && (billingCycle !== "lifetime" || activeSub?.cycle === "lifetime")}
                   onClick={() => openUpgradeModal("premium")}
                   className={`w-full h-11 rounded-2xl text-xs font-extrabold uppercase tracking-wider ${
-                    currentPlanNormalized === "premium"
+                    currentPlanNormalized === "premium" && (billingCycle !== "lifetime" || activeSub?.cycle === "lifetime")
                       ? "border-border bg-muted/60 text-muted-foreground cursor-default"
                       : "bg-sky-400 hover:bg-sky-500 text-slate-950 shadow-md shadow-sky-400/20 border-0 flex items-center justify-center gap-1.5"
                   }`}
                 >
-                  {currentPlanNormalized === "premium" ? (
+                  {currentPlanNormalized === "premium" && (billingCycle !== "lifetime" || activeSub?.cycle === "lifetime") ? (
                     "ACTIVE TIER"
                   ) : (
                     <>
-                      UPGRADE NOW <ArrowRight className="w-4 h-4" />
+                      {billingCycle === "lifetime" ? ctaTextOf("premium", "UNLOCK LIFETIME", "lifetime") : "UPGRADE NOW"} <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </Button>
@@ -1217,73 +1545,123 @@ export const UserSubscription = () => {
                 <h3 className="text-base font-bold text-foreground">Authorized Gateway</h3>
               </div>
 
-              {/* Saved Card Item / Admin Manual Plan State */}
-              {activeSub?.source === "admin_manual" ||
-              activeSub?.payment_method?.toLowerCase()?.includes("admin") ||
-              activeSub?.payment_method?.toLowerCase()?.includes("manual") ? (
-                <div className="p-4 rounded-2xl bg-muted/40 dark:bg-muted/20 border border-border/80 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                      <ShieldCheck className="w-5 h-5" />
+              {/* Case 1: Plan Assigned Manually by Admin and User hasn't added their payment method yet */}
+              {isAdminManualPlan && !paymentCard && currentPlanNormalized !== "free" ? (
+                <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 dark:bg-amber-500/5 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30">
+                      <ShieldAlert className="w-5 h-5 stroke-[2.2]" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-foreground">Plan Assigned by Platform Administrator</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">Assigned manually. No payment method required.</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-xs font-bold text-foreground">Admin Manual Plan Assignment</p>
+                        <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                          NO PAYMENT METHOD
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                        This plan was assigned manually by the admin. Please add your personal payment method (Card or PayPal) to enable renewals.
+                      </p>
                     </div>
                   </div>
                   <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openUpgradeModal("premium")}
-                    className="h-8 px-3 rounded-xl text-[10px] font-bold border-border/80 hover:bg-muted"
+                    onClick={() => setCardModalOpen(true)}
+                    className="h-8 px-3.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs shrink-0 gap-1.5"
                   >
-                    UPGRADE
+                    <Plus className="w-3.5 h-3.5" /> Add Payment Method
                   </Button>
                 </div>
               ) : paymentCard ? (
-                <div className="p-4 rounded-2xl bg-muted/40 dark:bg-muted/20 border border-border/80 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0 font-black text-xs border border-sky-500/20">
-                      <CreditCard className="w-5 h-5" />
+                /* Case 2: Real User-Added Payment Method (Card or PayPal) */
+                <div className="p-4 sm:p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-start sm:items-center gap-3.5">
+                    <div className="w-11 h-11 rounded-2xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0 border border-sky-500/20 font-bold">
+                      {paymentCard.type === "paypal" ? (
+                        <Wallet className="w-5 h-5 text-sky-500" />
+                      ) : (
+                        <CreditCard className="w-5 h-5 text-sky-500" />
+                      )}
                     </div>
                     <div>
-                      <p className="text-xs font-extrabold text-foreground tracking-wider">
-                        •••• •••• •••• {paymentCard.last4}
-                      </p>
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase mt-0.5">
-                        EXP: {paymentCard.expMonth}/{paymentCard.expYear} • {paymentCard.brand}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-extrabold text-foreground tracking-wide">
+                          {paymentCard.type === "paypal"
+                            ? "PayPal Account"
+                            : `${paymentCard.brand || "Card"} •••• ${paymentCard.last4}`}
+                        </p>
+                        <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+                          USER VERIFIED METHOD
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {paymentCard.type === "paypal"
+                          ? `Account Email: ${paymentCard.paypalEmail || email}`
+                          : `Expires: ${paymentCard.expMonth}/${paymentCard.expYear} • Cardholder: ${paymentCard.holderName || "Workspace Owner"}`}
                       </p>
                     </div>
                   </div>
 
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCardModalOpen(true)}
+                      className="h-8 px-3 rounded-xl text-[11px] font-bold border-border/80 hover:bg-muted"
+                    >
+                      Update
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRemovePaymentMethod}
+                      disabled={removingPaymentMethod}
+                      className="h-8 px-2 rounded-xl text-[11px] font-semibold text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                      title="Detach payment method"
+                    >
+                      {removingPaymentMethod ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                    </Button>
+                  </div>
+                </div>
+              ) : currentPlanNormalized === "free" ? (
+                /* Case 3: Free Tier with no method */
+                <div className="p-4 rounded-2xl bg-muted/40 dark:bg-muted/20 border border-border/80 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-muted text-muted-foreground flex items-center justify-center shrink-0">
+                      <Box className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-foreground">Free Tier • No Payment Method Required</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Link a personal card or PayPal anytime for instant upgrades</p>
+                    </div>
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setCardModalOpen(true)}
-                    className="h-8 px-3 rounded-xl text-[10px] font-bold border-border/80 hover:bg-muted"
+                    className="h-8 px-3 rounded-xl text-[10px] font-bold border-border/80 hover:bg-muted gap-1"
                   >
-                    UPDATE CARD
+                    <Plus className="w-3 h-3" /> ADD METHOD
                   </Button>
                 </div>
               ) : (
+                /* Case 4: No payment method on file */
                 <div className="p-4 rounded-2xl bg-muted/40 dark:bg-muted/20 border border-border/80 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-muted text-muted-foreground flex items-center justify-center shrink-0">
                       <CreditCard className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-foreground">No payment card on file</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">Link a card for automated billing</p>
+                      <p className="text-xs font-bold text-foreground">No payment method on file</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Add a Credit/Debit Card or PayPal to authorize automatic renewals</p>
                     </div>
                   </div>
-
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setCardModalOpen(true)}
-                    className="h-8 px-3 rounded-xl text-[10px] font-bold border-border/80 hover:bg-muted"
+                    className="h-8 px-3 rounded-xl text-[10px] font-bold border-border/80 hover:bg-muted gap-1"
                   >
-                    LINK CARD
+                    <Plus className="w-3 h-3" /> ADD METHOD
                   </Button>
                 </div>
               )}
@@ -1294,7 +1672,7 @@ export const UserSubscription = () => {
               onClick={() => setCardModalOpen(true)}
               className="w-full h-11 rounded-2xl border-dashed border-border/80 hover:border-sky-500/60 hover:bg-sky-500/5 text-xs font-bold text-muted-foreground hover:text-foreground flex items-center justify-center gap-1.5 transition-colors"
             >
-              <Plus className="w-4 h-4" /> LINK NEW METHOD
+              <Plus className="w-4 h-4" /> {paymentCard ? "LINK OR REPLACE PAYMENT METHOD" : "ADD PERSONAL PAYMENT METHOD"}
             </Button>
           </div>
 
@@ -1390,17 +1768,17 @@ export const UserSubscription = () => {
               <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
                 BILLING FREQUENCY
               </label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className={`grid ${selectedPlanKey === "free" ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-3"} gap-2`}>
                 <button
                   type="button"
                   onClick={() => setSelectedCycleForUpgrade("monthly")}
-                  className={`p-3 rounded-2xl border text-left transition-all ${
+                  className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all ${
                     selectedCycleForUpgrade === "monthly"
                       ? "border-sky-500 bg-sky-500/5 text-foreground font-bold"
                       : "border-border/80 text-muted-foreground hover:border-border"
                   }`}
                 >
-                  <p className="text-xs">Monthly Cycle</p>
+                  <p className="text-xs">Monthly</p>
                   <p className="text-[10px] font-bold text-muted-foreground mt-0.5">
                     $
                     {selectedPlanKey === "premium"
@@ -1415,14 +1793,14 @@ export const UserSubscription = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedCycleForUpgrade("yearly")}
-                  className={`p-3 rounded-2xl border text-left transition-all ${
+                  className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all ${
                     selectedCycleForUpgrade === "yearly"
                       ? "border-sky-500 bg-sky-500/5 text-foreground font-bold"
                       : "border-border/80 text-muted-foreground hover:border-border"
                   }`}
                 >
                   <p className="text-xs flex items-center justify-between">
-                    <span>Yearly Cycle</span>
+                    <span>Yearly</span>
                     <span className="text-[9px] font-black text-emerald-500">-20%</span>
                   </p>
                   <p className="text-[10px] font-bold text-muted-foreground mt-0.5">
@@ -1435,6 +1813,26 @@ export const UserSubscription = () => {
                     /yr
                   </p>
                 </button>
+
+                {selectedPlanKey !== "free" && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCycleForUpgrade("lifetime")}
+                    className={`p-2.5 sm:p-3 rounded-2xl border text-left transition-all ${
+                      selectedCycleForUpgrade === "lifetime"
+                        ? "border-amber-500 bg-amber-500/5 text-foreground font-bold"
+                        : "border-border/80 text-muted-foreground hover:border-border"
+                    }`}
+                  >
+                    <p className="text-xs flex items-center justify-between">
+                      <span>Lifetime</span>
+                      <span className="text-[9px] font-black text-amber-500">DEAL</span>
+                    </p>
+                    <p className="text-[10px] font-bold text-muted-foreground mt-0.5">
+                      ${priceOf(selectedPlanKey, "lifetime", selectedPlanKey === "standard" ? 199.99 : 349.99).toFixed(2)}
+                    </p>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1489,9 +1887,17 @@ export const UserSubscription = () => {
             {/* Payment Method Preview */}
             <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/70 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <CreditCard className="w-4 h-4 text-sky-500" />
-                <span className="font-bold text-foreground">
-                  {paymentCard ? `${paymentCard.brand} •••• ${paymentCard.last4}` : "No card linked yet"}
+                {paymentCard?.type === "paypal" ? (
+                  <Wallet className="w-4 h-4 text-sky-500" />
+                ) : (
+                  <CreditCard className="w-4 h-4 text-sky-500" />
+                )}
+                <span className="font-bold text-foreground text-xs">
+                  {paymentCard
+                    ? paymentCard.type === "paypal"
+                      ? `PayPal (${paymentCard.paypalEmail})`
+                      : `${paymentCard.brand || "Card"} •••• ${paymentCard.last4}`
+                    : "No payment method linked yet"}
                 </span>
               </div>
               <button
@@ -1502,7 +1908,7 @@ export const UserSubscription = () => {
                 }}
                 className="text-[11px] font-bold text-sky-500 hover:underline"
               >
-                {paymentCard ? "Change" : "Add Card"}
+                {paymentCard ? "Change" : "Add Method"}
               </button>
             </div>
 
@@ -1593,100 +1999,202 @@ export const UserSubscription = () => {
       </Dialog>
 
       {/* ========================================================================= */}
-      {/* UPDATE / LINK PAYMENT CARD MODAL                                          */}
+      {/* ADD / UPDATE PAYMENT METHOD MODAL (SYNCED WITH CHECKOUT & ADMIN GATEWAYS) */}
       {/* ========================================================================= */}
       <Dialog open={cardModalOpen} onOpenChange={setCardModalOpen}>
         <DialogContent className="max-w-md p-6 sm:p-7 rounded-3xl">
           <DialogHeader>
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-2xl bg-sky-400/15 text-sky-500 flex items-center justify-center shrink-0">
-                <CreditCard className="w-6 h-6 stroke-[2.2]" />
+                {paymentMethodType === "paypal" ? (
+                  <Wallet className="w-6 h-6 stroke-[2.2]" />
+                ) : (
+                  <CreditCard className="w-6 h-6 stroke-[2.2]" />
+                )}
               </div>
               <div>
                 <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
-                  Update Payment Method
+                  {paymentCard ? "Update Payment Method" : "Add Personal Payment Method"}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                  Encrypted authorization stored securely in database.
+                  Synchronized with platform checkout and automated renewal gateways.
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
-          <form onSubmit={handleSaveCard} className="space-y-4 pt-3 text-xs">
-            <div>
-              <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
-                CARDHOLDER NAME
-              </label>
-              <Input
-                value={cardName}
-                onChange={(e) => setCardName(e.target.value)}
-                placeholder="Alex Gepard"
-                className="h-11 rounded-2xl text-xs"
-                required
-              />
-            </div>
+          {/* Payment Method Selector Tabs */}
+          <div className="grid grid-cols-2 gap-2 p-1 bg-muted/60 rounded-2xl mt-2 border border-border/70">
+            <button
+              type="button"
+              onClick={() => setPaymentMethodType("card")}
+              className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-extrabold tracking-wider transition-all ${
+                paymentMethodType === "card"
+                  ? "bg-card text-foreground shadow-xs border border-border/80"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <CreditCard className="w-4 h-4 text-sky-500" />
+              <span>CARD</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaymentMethodType("paypal")}
+              className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-extrabold tracking-wider transition-all ${
+                paymentMethodType === "paypal"
+                  ? "bg-card text-foreground shadow-xs border border-border/80"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Wallet className="w-4 h-4 text-sky-500" />
+              <span>PAYPAL</span>
+              {isPaypalEnabled && (
+                <span className="text-[9px] font-black px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                  LIVE
+                </span>
+              )}
+            </button>
+          </div>
 
-            <div>
-              <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
-                CARD NUMBER
-              </label>
-              <Input
-                value={cardNumber}
-                onChange={(e) => setCardNumber(e.target.value)}
-                placeholder="4242 4242 4242 4242"
-                className="h-11 rounded-2xl text-xs"
-                required
-              />
-            </div>
+          <form onSubmit={handleSavePaymentMethod} className="space-y-4 pt-2 text-xs">
+            {paymentMethodType === "card" ? (
+              <>
+                <div>
+                  <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
+                    CARDHOLDER NAME
+                  </label>
+                  <Input
+                    value={cardName}
+                    onChange={(e) => setCardName(e.target.value)}
+                    placeholder="e.g. Bilal Ahmad"
+                    className="h-11 rounded-2xl text-xs"
+                    required
+                  />
+                </div>
 
-            <div className="grid grid-cols-3 gap-2.5">
-              <div>
-                <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
-                  EXP (MM/YY)
-                </label>
-                <Input
-                  value={cardExp}
-                  onChange={(e) => setCardExp(e.target.value)}
-                  placeholder="12/28"
-                  className="h-11 rounded-2xl text-xs"
-                  required
-                />
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
+                      CARD NUMBER
+                    </label>
+                    {cardNumber.replace(/\D/g, "").length >= 4 && (
+                      <span className="text-[10px] font-bold text-sky-500 bg-sky-500/10 px-2 py-0.5 rounded-md uppercase font-mono">
+                        {detectCardBrand(cardNumber)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Input
+                      value={cardNumber}
+                      onChange={(e) => {
+                        const clean = e.target.value.replace(/\D/g, "").slice(0, 16);
+                        const formatted = clean.replace(/(\d{4})(?=\d)/g, "$1 ");
+                        setCardNumber(formatted);
+                      }}
+                      placeholder="4000 1234 5678 9010"
+                      className="h-11 rounded-2xl text-xs font-mono tracking-wider"
+                      maxLength={19}
+                      required
+                    />
+                    <CreditCard className="w-4 h-4 text-muted-foreground absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
+                      EXP (MM/YY)
+                    </label>
+                    <Input
+                      value={cardExp}
+                      onChange={(e) => {
+                        const clean = e.target.value.replace(/\D/g, "").slice(0, 4);
+                        if (clean.length > 2) {
+                          setCardExp(`${clean.slice(0, 2)}/${clean.slice(2)}`);
+                        } else {
+                          setCardExp(clean);
+                        }
+                      }}
+                      placeholder="12/28"
+                      className="h-11 rounded-2xl text-xs font-mono"
+                      maxLength={5}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
+                      CVC / CVV
+                    </label>
+                    <Input
+                      value={cardCvc}
+                      onChange={(e) => setCardCvc(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                      placeholder="123"
+                      className="h-11 rounded-2xl text-xs font-mono"
+                      maxLength={4}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
+                      ZIP / POSTAL
+                    </label>
+                    <Input
+                      value={cardZip}
+                      onChange={(e) => setCardZip(e.target.value.slice(0, 10))}
+                      placeholder="94103"
+                      className="h-11 rounded-2xl text-xs font-mono"
+                      required
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-3.5">
+                <div>
+                  <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
+                    PAYPAL ACCOUNT EMAIL
+                  </label>
+                  <div className="relative">
+                    <Input
+                      type="email"
+                      value={paypalEmailInput}
+                      onChange={(e) => setPaypalEmailInput(e.target.value)}
+                      placeholder="your.email@paypal.com"
+                      className="h-11 rounded-2xl text-xs pl-10"
+                      required
+                    />
+                    <Wallet className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
+                    Enter the primary email address linked to your verified PayPal wallet. Renewals will be billed automatically.
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/70 flex items-center gap-3">
+                  <ShieldCheck className="w-5 h-5 text-emerald-500 shrink-0" />
+                  <p className="text-[11px] text-muted-foreground">
+                    Secured via PayPal Gateway and synchronized with platform checkout rules.
+                  </p>
+                </div>
               </div>
-
-              <div>
-                <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
-                  CVC
-                </label>
-                <Input
-                  value={cardCvc}
-                  onChange={(e) => setCardCvc(e.target.value)}
-                  placeholder="123"
-                  className="h-11 rounded-2xl text-xs"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
-                  ZIP CODE
-                </label>
-                <Input
-                  value={cardZip}
-                  onChange={(e) => setCardZip(e.target.value)}
-                  placeholder="94103"
-                  className="h-11 rounded-2xl text-xs"
-                  required
-                />
-              </div>
-            </div>
+            )}
 
             <Button
               type="submit"
               disabled={savingCard}
-              className="w-full h-11 rounded-2xl bg-sky-400 hover:bg-sky-500 text-slate-950 font-bold text-xs shadow-md border-0"
+              className="w-full h-11 rounded-2xl bg-sky-400 hover:bg-sky-500 text-slate-950 font-bold text-xs shadow-md border-0 mt-2 gap-2"
             >
-              {savingCard ? "Verifying..." : "Save Payment Gateway"}
+              {savingCard ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> Verifying & Saving...
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4" /> Save & Authorize Payment Method
+                </>
+              )}
             </Button>
           </form>
         </DialogContent>

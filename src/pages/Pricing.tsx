@@ -1,11 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import Layout from "@/components/Layout";
-import { Check, Minus, Tag } from "lucide-react";
+import { Check, Minus, Tag, Crown } from "lucide-react";
 import { useMoney } from "@/lib/currency";
 import { usePricingPlans } from "@/hooks/usePricingPlans";
 import { getPendingCoupon } from "@/lib/couponHelper";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Accordion,
   AccordionContent,
@@ -13,7 +14,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
-const freeFeatures = ["100 items limit", "Basic POS", "Single user", "Real-time Profit"];
+const freeFeatures = ["50 items limit", "Basic POS", "Single user", "Real-time Profit"];
 const standardFeatures = ["1000 items limit", "Full POS & Returns", "Multi-user support", "Financial summaries", "Supplier Portal"];
 const premiumFeatures = ["Unlimited items", "Everything in Standard", "Batch & expiry tracking", "Advanced analytics", "Multi-branch support", "Priority support"];
 
@@ -30,32 +31,20 @@ const faqs = [
   { q: "Does POS work offline?", a: "Yes, our POS continues to function offline and syncs automatically when your connection is restored." },
 ];
 
-const compareRows: { feature: string; free: string | boolean; standard: string | boolean; premium: string | boolean }[] = [
-  { feature: "Inventory Management", free: "100 items", standard: "1000 items", premium: "Unlimited" },
-  { feature: "POS Terminal", free: "Basic", standard: "Full + Returns", premium: "Full + Returns" },
-  { feature: "Sales Reporting", free: "Basic", standard: "Advanced", premium: "Custom Analytics" },
-  { feature: "Multi-user Access", free: false, standard: true, premium: true },
-  { feature: "Supplier Management", free: false, standard: true, premium: true },
-  { feature: "Profit Insights", free: true, standard: true, premium: true },
-  { feature: "Expiry Tracking", free: false, standard: false, premium: true },
-  { feature: "Multi-branch Support", free: false, standard: false, premium: true },
-  { feature: "Barcode Support", free: "Basic", standard: true, premium: true },
-  { feature: "Support", free: "Email", standard: "Priority", premium: "24/7 VIP" },
-];
-
 const Cell = ({ value }: { value: string | boolean }) => {
   if (value === true) return <Check className="h-4 w-4 text-primary mx-auto" />;
   if (value === false) return <Minus className="h-4 w-4 text-muted-foreground mx-auto" />;
-  return <span className="text-sm text-muted-foreground">{value}</span>;
+  return <span className="text-sm font-semibold text-muted-foreground">{value}</span>;
 };
 
 const Pricing = () => {
   const [searchParams] = useSearchParams();
   const { price } = useMoney({ scope: "platform" });
-  const { priceOf, featuresOf, byKey, badgeOf, isPopular, badgePositionOf, nameOf, taglineOf } = usePricingPlans();
+  const { priceOf, featuresOf, byKey, badgeOf, isPopular, badgePositionOf, nameOf, taglineOf, ctaTextOf } = usePricingPlans();
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly" | "lifetime">("monthly");
   const [lifetimeLimits, setLifetimeLimits] = useState<{ standard: number; premium: number }>({ standard: 25, premium: 25 });
   const [lifetimeCounts, setLifetimeCounts] = useState<{ standard: number; premium: number }>({ standard: 0, premium: 0 });
+  const [planLimits, setPlanLimits] = useState<Record<string, Record<string, { value: number | null; isLocked: boolean }>>>({});
 
   useEffect(() => {
     fetch("/api/admin/pricing-plans")
@@ -75,7 +64,122 @@ const Pricing = () => {
         }
       })
       .catch(() => {});
+
+    // Sync comparison table live with Admin Plan Limits & Feature Controls
+    const loadLimits = async () => {
+      try {
+        const res = await fetch("/api/admin/plan-limits");
+        const json = await res.json();
+        if (json.success && Array.isArray(json.limits)) {
+          const map: Record<string, Record<string, { value: number | null; isLocked: boolean }>> = {};
+          json.limits.forEach((r: any) => {
+            const p = (r.plan_key || "").toLowerCase();
+            const resKey = (r.resource_key || "").toLowerCase();
+            if (!map[p]) map[p] = {};
+            map[p][resKey] = {
+              value: r.limit_value !== undefined ? r.limit_value : null,
+              isLocked: Boolean(r.is_locked),
+            };
+          });
+          setPlanLimits(map);
+        }
+      } catch (err) {
+        console.warn("Notice loading plan limits:", err);
+      }
+    };
+    loadLimits();
+
+    const channelId = `pricing_table_limits_${Math.random().toString(36).slice(2, 9)}`;
+    const ch = supabase
+      .channel(channelId)
+      .on("postgres_changes", { event: "*", schema: "public", table: "plan_limits" }, () => {
+        loadLimits();
+      })
+      .subscribe();
+
+    const onLimitsRefresh = () => loadLimits();
+    window.addEventListener("panel:refresh", onLimitsRefresh);
+    window.addEventListener("geflow:pricing-updated", onLimitsRefresh);
+
+    return () => {
+      supabase.removeChannel(ch);
+      window.removeEventListener("panel:refresh", onLimitsRefresh);
+      window.removeEventListener("geflow:pricing-updated", onLimitsRefresh);
+    };
   }, []);
+
+  const dynamicCompareRows = useMemo(() => {
+    const getVal = (plan: string, key: string, fallback: string | boolean, unit?: string, altKey?: string) => {
+      const entry = planLimits[plan]?.[key] ?? (altKey ? planLimits[plan]?.[altKey] : undefined);
+      if (!entry) return fallback;
+      if (entry.isLocked) return false;
+      if (entry.value === null) return "Unlimited";
+      if (entry.value === 0) return false;
+      if (unit) {
+        const label = entry.value === 1 && unit.endsWith("s") ? unit.slice(0, -1) : unit;
+        return `${entry.value.toLocaleString()} ${label}`;
+      }
+      return `${entry.value.toLocaleString()}`;
+    };
+
+    return [
+      {
+        feature: "Inventory / Products Limit",
+        free: getVal("free", "products", "50 items", "items"),
+        standard: getVal("standard", "products", "1,000 items", "items"),
+        premium: getVal("premium", "products", "Unlimited", "items"),
+      },
+      {
+        feature: "Branches & Outlets Limit",
+        free: getVal("free", "branches", "1 Outlet", "Outlets"),
+        standard: getVal("standard", "branches", "3 Outlets", "Outlets"),
+        premium: getVal("premium", "branches", "Unlimited", "Outlets"),
+      },
+      {
+        feature: "Business Categories Limit",
+        free: getVal("free", "categories", "1 Category", "Categories", "business_categories"),
+        standard: getVal("standard", "categories", "1 Category", "Categories", "business_categories"),
+        premium: getVal("premium", "categories", "Unlimited", "Categories", "business_categories"),
+      },
+      {
+        feature: "Team Members / Staff Accounts",
+        free: getVal("free", "team_members", "1 Member", "Members"),
+        standard: getVal("standard", "team_members", "3 Members", "Members"),
+        premium: getVal("premium", "team_members", "Unlimited", "Members"),
+      },
+      {
+        feature: "Low Stock Alert Tracking",
+        free: getVal("free", "low_stock", "5 items", "items"),
+        standard: getVal("standard", "low_stock", "25 items", "items"),
+        premium: getVal("premium", "low_stock", "Unlimited", "items"),
+      },
+      {
+        feature: "Out of Stock Ledger Tracking",
+        free: getVal("free", "out_of_stock", "5 items", "items"),
+        standard: getVal("standard", "out_of_stock", "25 items", "items"),
+        premium: getVal("premium", "out_of_stock", "Unlimited", "items"),
+      },
+      {
+        feature: "Sales Reports History",
+        free: getVal("free", "reports_days", "7 Days", "Days"),
+        standard: getVal("standard", "reports_days", "30 Days", "Days"),
+        premium: getVal("premium", "reports_days", "Unlimited Analytics", "Days"),
+      },
+      {
+        feature: "AI Assistant Requests / Month",
+        free: getVal("free", "ai_requests", "20 req/mo", "req/mo"),
+        standard: getVal("standard", "ai_requests", "200 req/mo", "req/mo"),
+        premium: getVal("premium", "ai_requests", "Unlimited AI", "req/mo"),
+      },
+      { feature: "POS Terminal & Offline Mode", free: "Basic POS", standard: "Full POS + Returns", premium: "Full POS + Multi-Terminal" },
+      { feature: "Multi-user Access & Roles", free: false, standard: true, premium: true },
+      { feature: "Supplier & Purchase Orders", free: false, standard: true, premium: true },
+      { feature: "Real-time Profit Insights", free: true, standard: true, premium: true },
+      { feature: "Batch & Expiry Date Tracking", free: false, standard: false, premium: true },
+      { feature: "Barcode & Thermal Receipts", free: "Basic", standard: true, premium: true },
+      { feature: "Support SLA", free: "Email", standard: "Priority Support", premium: "24/7 VIP Dedicated" },
+    ];
+  }, [planLimits]);
 
   const urlCoupon = searchParams.get("coupon") || searchParams.get("code") || searchParams.get("promo");
   const activePromoCode = (urlCoupon || getPendingCoupon() || "").trim().toUpperCase();
@@ -161,7 +265,7 @@ const Pricing = () => {
                     </span>
                   )}
                   <Button className="cta-btn w-full rounded-full" asChild>
-                    <Link to="/signup">GET STARTED</Link>
+                    <Link to="/signup">{ctaTextOf("free", "GET STARTED")}</Link>
                   </Button>
                   <p className="text-center text-[10px] font-bold tracking-wider text-muted-foreground mt-3">NO CARD NEEDED</p>
                 </div>
@@ -200,7 +304,7 @@ const Pricing = () => {
                     </span>
                   )}
                   <Button className="cta-btn w-full rounded-full" asChild>
-                    <Link to={getCheckoutUrl("standard", billingPeriod)}>CHOOSE PLAN</Link>
+                    <Link to={getCheckoutUrl("standard", billingPeriod)}>{ctaTextOf("standard", "CHOOSE PLAN", billingPeriod)}</Link>
                   </Button>
                 </div>
               );
@@ -238,7 +342,7 @@ const Pricing = () => {
                     </span>
                   )}
                   <Button className="cta-btn w-full rounded-full" asChild>
-                    <Link to={getCheckoutUrl("premium", billingPeriod)}>CHOOSE PLAN</Link>
+                    <Link to={getCheckoutUrl("premium", billingPeriod)}>{ctaTextOf("premium", "CHOOSE PLAN", billingPeriod)}</Link>
                   </Button>
                 </div>
               );
@@ -288,7 +392,7 @@ const Pricing = () => {
                     ))}
                   </ul>
                   <Button className="cta-btn w-full rounded-full" asChild>
-                    <Link to={getCheckoutUrl("standard", "lifetime")}>UNLOCK LIFETIME</Link>
+                    <Link to={getCheckoutUrl("standard", "lifetime")}>{ctaTextOf("standard", "UNLOCK LIFETIME", "lifetime")}</Link>
                   </Button>
                 </div>
               );
@@ -326,7 +430,7 @@ const Pricing = () => {
                     ))}
                   </ul>
                   <Button className="cta-btn w-full rounded-full" asChild>
-                    <Link to={getCheckoutUrl("premium", "lifetime")}>UNLOCK LIFETIME</Link>
+                    <Link to={getCheckoutUrl("premium", "lifetime")}>{ctaTextOf("premium", "UNLOCK LIFETIME", "lifetime")}</Link>
                   </Button>
                 </div>
               );
@@ -340,7 +444,7 @@ const Pricing = () => {
         <div className="container mx-auto px-4">
           <div className="text-center mb-10">
             <h2 className="text-3xl md:text-4xl font-bold mb-3">Compare Our Plans</h2>
-            <p className="text-muted-foreground">Detailed feature breakdown for every tier.</p>
+            <p className="text-muted-foreground">Real-time feature breakdown synchronized with platform plan limits.</p>
           </div>
 
           <div className="premium-card max-w-5xl mx-auto overflow-hidden">
@@ -355,7 +459,7 @@ const Pricing = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {compareRows.map((row) => (
+                  {dynamicCompareRows.map((row) => (
                     <tr key={row.feature} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                       <td className="p-4 text-sm font-semibold">{row.feature}</td>
                       <td className="p-4 text-center"><Cell value={row.free} /></td>
@@ -366,23 +470,49 @@ const Pricing = () => {
                   <tr>
                     <td className="p-4"></td>
                     <td className="p-4 text-center">
-                      <Button size="sm" className="cta-btn rounded-full text-xs" asChild>
-                        <Link to="/signup">GET STARTED</Link>
+                      <Button size="sm" className="cta-btn rounded-full text-xs font-bold" asChild>
+                        <Link to="/signup">{ctaTextOf("free", "GET STARTED", billingPeriod)}</Link>
                       </Button>
                     </td>
                     <td className="p-4 text-center">
-                      <Button size="sm" className="cta-btn rounded-full text-xs" asChild>
-                        <Link to={`/checkout?plan=standard&period=${billingPeriod}`}>CHOOSE STANDARD</Link>
+                      <Button size="sm" className="cta-btn rounded-full text-xs font-bold" asChild>
+                        <Link to={`/checkout?plan=standard&period=${billingPeriod}`}>{ctaTextOf("standard", "CHOOSE STANDARD", billingPeriod)}</Link>
                       </Button>
                     </td>
                     <td className="p-4 text-center">
-                      <Button size="sm" className="cta-btn rounded-full text-xs" asChild>
-                        <Link to={`/checkout?plan=premium&period=${billingPeriod}`}>CHOOSE PREMIUM</Link>
+                      <Button size="sm" className="cta-btn rounded-full text-xs font-bold" asChild>
+                        <Link to={`/checkout?plan=premium&period=${billingPeriod}`}>{ctaTextOf("premium", "CHOOSE PREMIUM", billingPeriod)}</Link>
                       </Button>
                     </td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          {/* Lifetime Deal Callout within Compare Section */}
+          <div className="mt-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-sky-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 max-w-5xl mx-auto shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <Crown className="w-5 h-5 stroke-[2.2]" />
+              </div>
+              <div>
+                <p className="font-bold text-foreground text-sm flex items-center gap-2">
+                  <span>Looking for Lifetime Ownership?</span>
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">LIMITED OFFERS</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Single one-time payment. No monthly renewal fees, complete VIP feature package forever.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 shrink-0 w-full sm:w-auto">
+              <Button size="sm" className="cta-btn rounded-full text-xs font-bold px-4" asChild>
+                <Link to={getCheckoutUrl("standard", "lifetime")}>{ctaTextOf("standard", "LIFETIME STANDARD", "lifetime")}</Link>
+              </Button>
+              <Button size="sm" className="cta-btn rounded-full text-xs font-bold px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white" asChild>
+                <Link to={getCheckoutUrl("premium", "lifetime")}>{ctaTextOf("premium", "LIFETIME PREMIUM", "lifetime")}</Link>
+              </Button>
             </div>
           </div>
         </div>

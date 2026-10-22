@@ -419,6 +419,7 @@ async function fetchBusinessData(force = false): Promise<void> {
         store.activeId = chosen;
         try {
           localStorage.setItem(LS_KEY, chosen);
+          localStorage.setItem("geflow_active_business_id", chosen);
         } catch {
           // Ignore storage errors
         }
@@ -426,6 +427,7 @@ async function fetchBusinessData(force = false): Promise<void> {
         store.activeId = null;
         try {
           localStorage.removeItem(LS_KEY);
+          localStorage.removeItem("geflow_active_business_id");
         } catch {
           // Ignore storage errors
         }
@@ -541,8 +543,8 @@ function ensureRealtime() {
   const handleCustomSync = () => {
     if (customSyncTimeout) clearTimeout(customSyncTimeout);
     customSyncTimeout = setTimeout(() => {
-      fetchBusinessData(false);
-    }, 600);
+      fetchBusinessData(true);
+    }, 50);
   };
 
   window.addEventListener("geflow:business-updated", handleCustomSync);

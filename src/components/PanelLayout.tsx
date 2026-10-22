@@ -99,6 +99,13 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
     return () => window.removeEventListener("geflow:theme-changed", handleThemeChange);
   }, [setTheme]);
 
+  // Listen to open AI assistant event
+  useEffect(() => {
+    const handleOpenAi = () => setAiOpen(true);
+    window.addEventListener("geflow:open-ai-assistant", handleOpenAi);
+    return () => window.removeEventListener("geflow:open-ai-assistant", handleOpenAi);
+  }, []);
+
   // Close the mobile drawer whenever the route changes.
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
 
@@ -639,22 +646,22 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0 h-screen">
-        <AnnouncementBar audience={isPathAdmin ? "admins" : "users"} />
-        <header className="h-16 border-b border-border bg-background flex items-center gap-3 px-3 sm:px-4 md:px-6 flex-shrink-0">
+        <AnnouncementBar audience={isPathAdmin ? "admins" : "users"} position="top" />
+        <header className="h-16 border-b border-border bg-background flex items-center justify-between gap-2 sm:gap-3 px-2.5 sm:px-4 md:px-6 flex-shrink-0">
           {/* Mobile hamburger & brand logo */}
-          <div className="flex items-center gap-2 md:hidden min-w-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 md:hidden min-w-0 shrink-0">
             <button
               onClick={() => setMobileOpen(true)}
-              className="h-10 w-10 rounded-xl hover:bg-muted flex items-center justify-center transition-colors flex-shrink-0"
+              className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl hover:bg-muted flex items-center justify-center transition-colors shrink-0"
               aria-label="Open menu"
             >
               <Menu className="h-5 w-5" />
             </button>
-            <Link to={dashboardLink} className="flex items-center gap-2 min-w-0">
+            <Link to={dashboardLink} className="flex items-center gap-1.5 min-w-0 shrink-0">
               <img
                 src={settings?.logo_url || "/logo.png"}
                 alt={settings?.app_name ?? "GeFlow"}
-                className="h-7 max-w-[110px] object-contain"
+                className="h-6 sm:h-7 max-w-[85px] xs:max-w-[110px] object-contain shrink-0"
                 onError={(e) => {
                   const target = e.currentTarget as HTMLElement;
                   target.style.display = "none";
@@ -749,14 +756,16 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
               </div>
             )}
           </div>
-          <div className="flex items-center gap-1.5 ml-auto pl-2">
+          <div className="flex items-center gap-1 sm:gap-1.5 ml-auto shrink-0 pl-1">
             {!isPathAdmin && (
               <button
                 onClick={() => setAiOpen(true)}
-                className="h-10 pl-2.5 pr-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-sky-500 text-white flex items-center gap-1.5 text-xs font-extrabold transition-all hover:opacity-90 hover:scale-105 shadow-sm active:scale-95"
+                className="h-9 sm:h-10 px-2 sm:pl-2.5 sm:pr-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-sky-500 text-white flex items-center justify-center gap-1.5 text-xs font-extrabold transition-all hover:opacity-90 hover:scale-105 shadow-sm active:scale-95 shrink-0"
                 aria-label="Open Maryam AI"
+                title="Maryam AI Copilot"
               >
-                <Sparkles className="h-4 w-4" /> <span className="hidden sm:inline">Maryam AI</span>
+                <Sparkles className="h-4 w-4 shrink-0" />
+                <span className="hidden sm:inline">Maryam AI</span>
               </button>
             )}
             <button
@@ -771,7 +780,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
                 }
                 window.dispatchEvent(new CustomEvent("geflow:theme-changed", { detail: { theme: next } }));
               }}
-              className="h-10 w-10 rounded-xl hover:bg-muted flex items-center justify-center transition-all hover:scale-105"
+              className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl hover:bg-muted flex items-center justify-center transition-all hover:scale-105 shrink-0"
               aria-label="Toggle theme"
             >
               {mounted && (isDark ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-foreground" />)}
@@ -780,12 +789,12 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
             <Popover open={notifPopoverOpen} onOpenChange={setNotifPopoverOpen}>
               <PopoverTrigger asChild>
                 <button
-                  className="h-10 w-10 rounded-xl hover:bg-muted/80 border border-border/50 hover:border-border flex items-center justify-center relative transition-all duration-200 cursor-pointer text-muted-foreground hover:text-foreground active:scale-95 shadow-2xs"
+                  className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl hover:bg-muted/80 border border-border/50 hover:border-border flex items-center justify-center relative transition-all duration-200 cursor-pointer text-muted-foreground hover:text-foreground active:scale-95 shadow-2xs shrink-0"
                   aria-label="Notifications"
                 >
                   <Bell className="h-4 w-4" />
                   {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1.5 rounded-full bg-rose-500 text-[10px] font-extrabold text-white flex items-center justify-center shadow-xs">
+                    <span className="absolute -top-1 -right-1 h-4 min-w-4 sm:h-5 sm:min-w-5 px-1 rounded-full bg-rose-500 text-[9px] sm:text-[10px] font-extrabold text-white flex items-center justify-center shadow-xs">
                       {unreadCount > 9 ? "9+" : unreadCount}
                     </span>
                   )}
@@ -918,26 +927,30 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
               </PopoverContent>
             </Popover>
 
+            {/* Refresh button: hidden on mobile (<md), accessible via avatar dropdown */}
             <button
               onClick={handleRefresh}
-              className="h-10 w-10 rounded-xl hover:bg-muted border border-transparent hover:border-border/60 flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground"
-              aria-label="Refresh"
+              className="hidden md:flex h-10 w-10 rounded-xl hover:bg-muted border border-transparent hover:border-border/60 items-center justify-center transition-colors text-muted-foreground hover:text-foreground shrink-0"
+              aria-label="Refresh Workspace"
+              title="Refresh Workspace"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             </button>
 
+            {/* Logout button: hidden on small mobile (<sm), accessible via avatar dropdown & sidebar drawer */}
             <button
               onClick={handleLogout}
-              className="h-10 w-10 rounded-xl hover:bg-muted border border-transparent hover:border-border/60 flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground"
+              className="hidden sm:flex h-9 w-9 sm:h-10 sm:w-10 rounded-xl hover:bg-muted border border-transparent hover:border-border/60 items-center justify-center transition-colors text-muted-foreground hover:text-foreground shrink-0"
               aria-label="Logout"
               title="Logout"
             >
               <LogIn className="h-4 w-4 rotate-180" />
             </button>
 
+            {/* User Avatar Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground font-bold text-sm ml-1 transition-opacity hover:opacity-90">
+                <button className="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground font-bold text-xs sm:text-sm ml-0.5 transition-opacity hover:opacity-90 shrink-0">
                   {initial}
                 </button>
               </DropdownMenuTrigger>
@@ -956,6 +969,9 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
                 <DropdownMenuItem onClick={() => navigate(supportPath)}>
                   <LifeBuoy className="h-4 w-4 mr-2" /> Support
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleRefresh} className="md:hidden">
+                  <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} /> Refresh Workspace
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
                   <LogOut className="h-4 w-4 mr-2" /> Logout
@@ -965,6 +981,7 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
           </div>
         </header>
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-3.5 sm:p-5 md:p-8 min-w-0 w-full">{children}</main>
+        <AnnouncementBar audience={isPathAdmin ? "admins" : "users"} position="bottom" />
       </div>
       {!isPathAdmin && <AIAssistant open={aiOpen} onOpenChange={setAiOpen} />}
     </div>

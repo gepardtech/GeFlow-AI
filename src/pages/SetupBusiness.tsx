@@ -124,7 +124,17 @@ const SetupBusiness = () => {
       ]);
 
       setCategories((cats as Category[]) ?? []);
-      setBizCount(count ?? 0);
+      const totalCount = count ?? 0;
+      setBizCount(totalCount);
+
+      // If user already has a business registered, don't trap them in setup step 1!
+      if (totalCount > 0) {
+        const queryParams = new URLSearchParams(window.location.search);
+        if (!queryParams.get("new") && !queryParams.get("create")) {
+          navigate("/dashboard", { replace: true });
+          return;
+        }
+      }
     })();
   }, [navigate]);
 
@@ -199,12 +209,51 @@ const SetupBusiness = () => {
     setBusy(false);
     if (createdBizId) {
       localStorage.setItem("geflow.activeBusinessId", createdBizId);
+      localStorage.setItem("geflow_active_business_id", createdBizId);
+      localStorage.setItem("geflow.workspaceMode", "business");
+      localStorage.setItem("geflow_workspace_mode", "business");
+
+      const newBizObj = {
+        id: createdBizId,
+        business_name: name.trim(),
+        business_address: address.trim() || null,
+        status: "active",
+        currency: chosenCurrency,
+        base_currency: chosenCurrency,
+        default_tax: 0,
+        stock_alert_limit: 10,
+        category_id: categoryId || null,
+        owner_user_id: userId,
+      };
+
+      try {
+        const cachedRaw = localStorage.getItem("geflow_cached_owned_businesses");
+        let list = cachedRaw ? JSON.parse(cachedRaw) : [];
+        if (!Array.isArray(list)) list = [];
+        if (!list.some((b: any) => b.id === createdBizId)) {
+          list.unshift(newBizObj);
+        }
+        localStorage.setItem("geflow_cached_owned_businesses", JSON.stringify(list));
+        localStorage.setItem("geflow_owned_businesses", JSON.stringify(list));
+      } catch {
+        /* ignore */
+      }
     }
-    localStorage.removeItem("geflow_cached_owned_businesses");
+
     window.dispatchEvent(new CustomEvent("panel:refresh"));
     window.dispatchEvent(new CustomEvent("geflow:business-updated"));
     setBizCount((c) => c + 1);
     setStep(3);
+
+    toast({
+      title: "Business Created! 🚀",
+      description: `Welcome to ${name.trim()}! Launching your dashboard...`,
+    });
+
+    // Automatically forward user to their dashboard command center
+    setTimeout(() => {
+      navigate("/dashboard", { replace: true });
+    }, 1200);
   };
 
   if (planLoading || limitsLoading || !userId) {
@@ -395,8 +444,8 @@ const SetupBusiness = () => {
             )}
 
             {step === 3 && (
-              <div className="text-center space-y-5">
-                <div className="h-20 w-20 rounded-3xl bg-emerald-500/15 text-emerald-500 mx-auto flex items-center justify-center">
+              <div className="text-center space-y-5 py-4">
+                <div className="h-20 w-20 rounded-3xl bg-emerald-500/15 text-emerald-500 mx-auto flex items-center justify-center animate-bounce">
                   <CheckCircle2 className="h-10 w-10" />
                 </div>
                 <div>
@@ -405,8 +454,12 @@ const SetupBusiness = () => {
                   </h2>
                   <p className="text-sm text-muted-foreground max-w-md mx-auto">
                     <span className="font-bold text-foreground">{name}</span> is
-                    live. We&apos;re taking you to your dashboard now.
+                    live and configured. Redirecting to your User Panel &amp; Dashboard now...
                   </p>
+                </div>
+                <div className="flex items-center justify-center gap-2 text-xs text-sky-500 font-semibold pt-1">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Launching retail command center...</span>
                 </div>
               </div>
             )}

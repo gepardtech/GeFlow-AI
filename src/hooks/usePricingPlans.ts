@@ -16,6 +16,7 @@ export interface PricingPlanRow {
   badge_text: string | null;
   badge_position: string;
   badge_cycle: string;
+  cta_button_text?: string | null;
 }
 
 export type BillingCycle = "monthly" | "yearly" | "lifetime";
@@ -176,6 +177,18 @@ export const usePricingPlans = () => {
     return p?.badge_position === "bottom" ? "bottom" : "top";
   };
 
+  const ctaTextOf = (key: string, fallback = "", cycle?: BillingCycle): string => {
+    const k = key.toLowerCase();
+    if (cycle === "lifetime") {
+      const customLifetimeCta = lifetimeCustomizations[k]?.cta_button_text;
+      if (customLifetimeCta && customLifetimeCta.trim()) {
+        return customLifetimeCta.trim();
+      }
+    }
+    const custom = byKey(key)?.cta_button_text;
+    return custom && custom.trim() ? custom.trim() : fallback;
+  };
+
   return {
     plans,
     lifetimeCustomizations,
@@ -188,6 +201,7 @@ export const usePricingPlans = () => {
     badgeOf,
     isPopular,
     badgePositionOf,
+    ctaTextOf,
     reload: load,
   };
 };

@@ -109,25 +109,74 @@ function notify(settings: PlatformGeneralSettings) {
   }
 }
 
-/**
- * @deprecated No local cache. Prefer fetchGeneralSettings().
- */
+export const STORAGE_KEY = "geflow_general_settings_cache";
+
+export function getCachedSettings(): PlatformGeneralSettings | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        return normalizeSettings(parsed);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 export function getCachedGeneralSettings(): PlatformGeneralSettings {
+  const cached = getCachedSettings();
+  if (cached && (cached.about_members.length > 0 || cached.social_links.length > 0)) {
+    return cached;
+  }
   return { ...DEFAULT_GENERAL_SETTINGS };
 }
 
-/**
- * @deprecated No local cache.
- */
 export function setCachedGeneralSettings(settings: PlatformGeneralSettings) {
+  setCachedSettings(settings);
   notify(settings);
 }
 
+export function setCachedSettings(settings: PlatformGeneralSettings) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
- * Load general settings from Supabase or server backend.
- * Stored at: platform_settings.alerts.general_settings
+ * Load general settings from server backend, Supabase, or persistent cache.
+ * Stored at: platform_settings.alerts.general_settings & /api/admin/general-settings
  */
 export async function fetchGeneralSettings(): Promise<PlatformGeneralSettings> {
+  const cached = getCachedSettings();
+
+  // 1. Try server API first (which loads from database + file backup with full service role)
+  try {
+    const res = await fetch("/api/admin/general-settings");
+    if (res.ok) {
+      const json = await res.json();
+      if (json?.settings) {
+        const normalized = normalizeSettings(json.settings);
+        // If server had empty members but cache had members, preserve cache
+        if (normalized.about_members.length === 0 && cached && cached.about_members.length > 0) {
+          normalized.about_members = cached.about_members;
+        }
+        setCachedSettings(normalized);
+        notify(normalized);
+        return normalized;
+      }
+    }
+  } catch (apiErr) {
+    console.warn("fetchGeneralSettings API notice:", apiErr);
+  }
+
+  // 2. Query Supabase
   try {
     const { data, error } = await supabase
       .from("platform_settings")
@@ -140,27 +189,24 @@ export async function fetchGeneralSettings(): Promise<PlatformGeneralSettings> {
       const general = alerts.general_settings;
       if (general) {
         const normalized = normalizeSettings(general);
+        if (normalized.about_members.length === 0 && cached && cached.about_members.length > 0) {
+          normalized.about_members = cached.about_members;
+        }
+        setCachedSettings(normalized);
         notify(normalized);
         return normalized;
       }
     }
-
-    // Fallback to backend API endpoint if Supabase direct query had no data or was restricted
-    const res = await fetch("/api/admin/general-settings");
-    if (res.ok) {
-      const json = await res.json();
-      if (json?.settings) {
-        const normalized = normalizeSettings(json.settings);
-        notify(normalized);
-        return normalized;
-      }
-    }
-
-    return { ...DEFAULT_GENERAL_SETTINGS };
   } catch (err) {
-    console.error("fetchGeneralSettings exception:", err);
-    return { ...DEFAULT_GENERAL_SETTINGS };
+    console.warn("fetchGeneralSettings Supabase exception:", err);
   }
+
+  if (cached) {
+    notify(cached);
+    return cached;
+  }
+
+  return { ...DEFAULT_GENERAL_SETTINGS };
 }
 
 /**
@@ -193,6 +239,7 @@ export async function saveGeneralSettings(
     if (res.ok) {
       const result = await res.json();
       if (result.success) {
+        setCachedSettings(normalized);
         notify(normalized);
         return normalized;
       }
@@ -243,6 +290,7 @@ export async function saveGeneralSettings(
       }
     }
 
+    setCachedSettings(normalized);
     notify(normalized);
     return normalized;
   } catch (err: any) {

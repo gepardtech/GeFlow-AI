@@ -74,11 +74,34 @@ const BulkReplenishmentDialog = ({
     for (const [id, add] of entries) {
       const p = products.find((x) => x.id === id);
       if (!p) continue;
-      await supabase.from("products").update({ stock_units: p.stock_units + add }).eq("id", id);
-      await supabase.from("stock_movements").insert({
-        business_id: businessId, owner_user_id: ownerUserId, product_id: id,
-        quantity: add, type: "restock", reason: "Bulk replenishment", note: `Batch ${authId}`,
-      });
+      const targetStock = (Number(p.stock_units) || 0) + add;
+      try {
+        await fetch(`/api/user/products/${id}/stock`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            businessId,
+            stock_units: targetStock,
+            deltaQuantity: add,
+            mode: "add",
+            reason: "Bulk replenishment",
+            note: `Batch ${authId}`,
+            userId: ownerUserId,
+          }),
+        });
+      } catch {
+        /* fallback */
+      }
+      try {
+        await supabase.from("products").update({ stock_units: targetStock }).eq("id", id);
+      } catch {
+        /* ignore */
+      }
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("geflow:stock-updated", { detail: { businessId } }));
+      window.dispatchEvent(new CustomEvent("geflow:products-updated", { detail: { businessId } }));
+      window.dispatchEvent(new CustomEvent("panel:refresh"));
     }
     setSaving(false);
     toast({ title: "Batch authorized", description: `${entries.length} SKU(s) replenished · ID ${authId}` });

@@ -32,15 +32,15 @@ const Navbar = () => {
   }, []);
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "bg-background/80 backdrop-blur-xl shadow-sm border-b border-border/50" : "bg-background"}`}>
-      <AnnouncementBar audience="public" />
-      <div className="container mx-auto flex items-center justify-between h-16 px-4">
+    <nav className={`sticky top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? "bg-background/80 backdrop-blur-xl shadow-sm border-b border-border/50" : "bg-background"}`}>
+      <AnnouncementBar audience="public" position="top" />
+      <div className="container mx-auto flex items-center justify-between h-16 px-3 sm:px-4">
         {/* Left: Logo */}
-        <Link to="/" className="flex items-center gap-2.5 flex-shrink-0 group">
+        <Link to="/" className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0 group min-w-0">
           <img
             src={settings?.logo_url || "/logo.png"}
             alt={settings?.app_name ?? "GeFlow"}
-            className="h-10 max-w-[160px] object-contain"
+            className="h-8 sm:h-10 max-w-[120px] sm:max-w-[160px] object-contain shrink-0"
             onError={(e) => {
               const target = e.currentTarget as HTMLElement;
               target.style.display = "none";
@@ -106,7 +106,7 @@ const Navbar = () => {
         </div>
 
         {/* Mobile */}
-        <div className="lg:hidden flex items-center gap-2">
+        <div className="lg:hidden flex items-center gap-1.5 sm:gap-2 shrink-0">
           <button
             onClick={() => setDark(!dark)}
             className={`theme-toggle scale-90 ${dark ? "dark-active" : ""}`}

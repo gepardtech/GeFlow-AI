@@ -22,6 +22,7 @@ import {
   Truck,
   Settings,
   PackageX,
+  Package,
   AlertTriangle,
   Send,
   Loader2,
@@ -377,7 +378,31 @@ export const UserReports = () => {
       return d >= cutoff;
     });
 
-    // 1. KPI Calculations (Real revenue, real order count, real average order value)
+    // Filter purchases within window
+    const filteredPurchases = dbPurchases.filter((p) => {
+      const d = new Date(p.created_at || p.entry_date || "");
+      if (dateRange === "today") return d.toDateString() === now.toDateString();
+      if (dateRange === "yesterday") {
+        const y = new Date();
+        y.setDate(now.getDate() - 1);
+        return d.toDateString() === y.toDateString();
+      }
+      return d >= cutoff;
+    });
+
+    // Filter stock movements within window
+    const filteredMovements = dbStockMovements.filter((m) => {
+      const d = new Date(m.created_at);
+      if (dateRange === "today") return d.toDateString() === now.toDateString();
+      if (dateRange === "yesterday") {
+        const y = new Date();
+        y.setDate(now.getDate() - 1);
+        return d.toDateString() === y.toDateString();
+      }
+      return d >= cutoff;
+    });
+
+    // 1. Core Data Aggregations
     const validSales = filteredSales.filter((s) => s.status === "completed" || s.status === "verified");
     const salesForKpi = validSales.length > 0 ? validSales : filteredSales;
     
@@ -385,10 +410,34 @@ export const UserReports = () => {
     const totalOrders = salesForKpi.length;
     const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-    // 2. Revenue Stream Daily Trends from Real Transactions
-    const daysMap = new Map<string, { revenue: number; orders: number }>();
+    // Inventory numbers
+    const totalStockUnits = dbProducts.reduce((sum, p) => sum + (Number(p.stock_units) || 0), 0);
+    const totalStockValuation = dbProducts.reduce(
+      (sum, p) => sum + ((Number(p.stock_units) || 0) * (Number(p.retail_price) || Number(p.purchase_cost) || 0)),
+      0
+    );
+    const totalMovedUnits = filteredMovements.reduce((sum, m) => sum + Math.abs(Number(m.quantity || 1)), 0);
 
-    // Seed empty daily buckets for the window
+    // Profit numbers
+    const totalProfit = salesForKpi.reduce((acc, s) => acc + Number(s.profit || (s.total * 0.28)), 0);
+    const overallProfitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+    const totalCogs = Math.max(0, totalRevenue - totalProfit);
+
+    // Purchases numbers
+    const totalPurchasesSpend = filteredPurchases.reduce((acc, p) => acc + Number(p.total || p.total_amount || 0), 0);
+    const totalPurchaseInvoices = filteredPurchases.length;
+    const avgPurchaseTicket = totalPurchaseInvoices > 0 ? totalPurchasesSpend / totalPurchaseInvoices : 0;
+
+    // Tax numbers
+    const activeTaxRate = Number(active?.default_tax ?? 8.5);
+    const totalTaxCollected = salesForKpi.reduce(
+      (acc, s) => acc + Number(s.tax || s.tax_amount || (s.total * (activeTaxRate / (100 + activeTaxRate)))),
+      0
+    );
+    const taxableSalesVolume = totalRevenue;
+
+    // 2. Trend Days Map based on Selected Report Logic
+    const daysMap = new Map<string, { revenue: number; orders: number }>();
     for (let i = daysWindow - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(now.getDate() - i);
@@ -396,7 +445,44 @@ export const UserReports = () => {
       daysMap.set(label, { revenue: 0, orders: 0 });
     }
 
-    if (salesForKpi.length > 0) {
+    if (reportLogic === "inventory_audit") {
+      filteredMovements.forEach((m) => {
+        const d = new Date(m.created_at);
+        const label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        const existing = daysMap.get(label) || { revenue: 0, orders: 0 };
+        existing.revenue += Math.abs(Number(m.quantity || 1));
+        existing.orders += 1;
+        daysMap.set(label, existing);
+      });
+    } else if (reportLogic === "profit_margins") {
+      salesForKpi.forEach((s) => {
+        const d = new Date(s.created_at);
+        const label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        const existing = daysMap.get(label) || { revenue: 0, orders: 0 };
+        existing.revenue += Number(s.profit || (s.total * 0.28));
+        existing.orders += 1;
+        daysMap.set(label, existing);
+      });
+    } else if (reportLogic === "purchases_expenses") {
+      filteredPurchases.forEach((p) => {
+        const d = new Date(p.created_at || p.entry_date || "");
+        const label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        const existing = daysMap.get(label) || { revenue: 0, orders: 0 };
+        existing.revenue += Number(p.total || p.total_amount || 0);
+        existing.orders += 1;
+        daysMap.set(label, existing);
+      });
+    } else if (reportLogic === "tax_ledger") {
+      salesForKpi.forEach((s) => {
+        const d = new Date(s.created_at);
+        const label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        const existing = daysMap.get(label) || { revenue: 0, orders: 0 };
+        existing.revenue += Number(s.tax || s.tax_amount || (s.total * (activeTaxRate / (100 + activeTaxRate))));
+        existing.orders += 1;
+        daysMap.set(label, existing);
+      });
+    } else {
+      // Sales & Revenue (default)
       salesForKpi.forEach((s) => {
         const d = new Date(s.created_at);
         const label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -409,35 +495,62 @@ export const UserReports = () => {
 
     const trendData: DailyTrend[] = Array.from(daysMap.entries()).map(([date, val]) => ({
       date,
-      revenue: val.revenue,
+      revenue: Math.round(val.revenue * 100) / 100,
       orders: val.orders,
     }));
 
-    // 3. Real Category Mix from real sales and items
+    // 3. Category Mix adapted to Report Logic
     const categoryTotals = new Map<string, number>();
-    
-    // Aggregate by item category
-    if (salesForKpi.length > 0) {
+
+    if (reportLogic === "purchases_expenses") {
+      // Breakdown by supplier
+      filteredPurchases.forEach((p) => {
+        const sup = (p.supplier_name || "Direct Supplier").toUpperCase();
+        categoryTotals.set(sup, (categoryTotals.get(sup) || 0) + Number(p.total || p.total_amount || 0));
+      });
+    } else if (reportLogic === "inventory_audit") {
+      // Breakdown by inventory categories
+      dbProducts.forEach((p) => {
+        const catName = ((p.category_id && categoryMap.get(p.category_id)) || "General Inventory").toUpperCase();
+        const val = Number(p.stock_units || 0) * Number(p.retail_price || p.purchase_cost || 0);
+        categoryTotals.set(catName, (categoryTotals.get(catName) || 0) + val);
+      });
+    } else if (reportLogic === "profit_margins") {
+      // Breakdown by profit per category
       salesForKpi.forEach((s) => {
         const items = saleItemsMap.get(s.id) || [];
         if (items.length > 0) {
           items.forEach((item) => {
             const product = item.product_id ? productMap.get(item.product_id) : null;
-            const catName = (product?.category_id && categoryMap.get(product.category_id)) || "General Retail";
-            const subtotal = Number(item.quantity || 1) * Number(item.unit_price || 0);
-            categoryTotals.set(catName, (categoryTotals.get(catName) || 0) + (subtotal || Number(s.total || 0)));
+            const catName = ((product?.category_id && categoryMap.get(product.category_id)) || "General Retail").toUpperCase();
+            const prof = (Number(item.quantity || 1) * Number(item.unit_price || 0)) - (Number(item.quantity || 1) * Number(item.unit_cost || 0));
+            categoryTotals.set(catName, (categoryTotals.get(catName) || 0) + Math.max(0, prof));
           });
-        } else {
-          categoryTotals.set("Direct Sales", (categoryTotals.get("Direct Sales") || 0) + Number(s.total || 0));
         }
       });
-    } else if (dbProducts.length > 0) {
-      // Fallback to active inventory value distribution
-      dbProducts.forEach((p) => {
-        const catName = (p.category_id && categoryMap.get(p.category_id)) || "General Inventory";
-        const val = Number(p.stock_units || 0) * Number(p.retail_price || 0);
-        categoryTotals.set(catName, (categoryTotals.get(catName) || 0) + val);
-      });
+    } else {
+      // Sales & Revenue or Tax
+      if (salesForKpi.length > 0) {
+        salesForKpi.forEach((s) => {
+          const items = saleItemsMap.get(s.id) || [];
+          if (items.length > 0) {
+            items.forEach((item) => {
+              const product = item.product_id ? productMap.get(item.product_id) : null;
+              const catName = ((product?.category_id && categoryMap.get(product.category_id)) || "General Retail").toUpperCase();
+              const subtotal = Number(item.quantity || 1) * Number(item.unit_price || 0);
+              categoryTotals.set(catName, (categoryTotals.get(catName) || 0) + (subtotal || Number(s.total || 0)));
+            });
+          } else {
+            categoryTotals.set("DIRECT SALES", (categoryTotals.get("DIRECT SALES") || 0) + Number(s.total || 0));
+          }
+        });
+      } else if (dbProducts.length > 0) {
+        dbProducts.forEach((p) => {
+          const catName = ((p.category_id && categoryMap.get(p.category_id)) || "General Inventory").toUpperCase();
+          const val = Number(p.stock_units || 0) * Number(p.retail_price || 0);
+          categoryTotals.set(catName, (categoryTotals.get(catName) || 0) + val);
+        });
+      }
     }
 
     const totalMixValue = Array.from(categoryTotals.values()).reduce((a, b) => a + b, 0) || 1;
@@ -446,11 +559,174 @@ export const UserReports = () => {
       : Array.from(categoryTotals.entries())
           .slice(0, 5)
           .map(([name, val], idx) => ({
-            name: name.toUpperCase(),
+            name,
             value: val,
             color: CATEGORY_COLORS[idx % CATEGORY_COLORS.length],
             percentage: Math.max(1, Math.round((val / totalMixValue) * 100)),
           }));
+
+    // 4. Report KPIs Metadata Block
+    let kpisData = {
+      totalRevenue,
+      totalOrders,
+      avgOrderValue,
+      kpi1Title: `TOTAL REVENUE (${getDateRangeLabel(dateRange)})`,
+      kpi1Value: fmt(totalRevenue),
+      kpi1Badge: "Live Sales",
+      kpi1BadgeClass: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+      kpi1Icon: DollarSign,
+      kpi1IconClass: "bg-emerald-500/10 text-emerald-500",
+
+      kpi2Title: "TOTAL ORDERS",
+      kpi2Value: `${totalOrders}`,
+      kpi2Badge: `${totalOrders} Transactions`,
+      kpi2BadgeClass: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+      kpi2Icon: ShoppingCart,
+      kpi2IconClass: "bg-sky-500/10 text-sky-500",
+
+      kpi3Title: "AVG ORDER VALUE",
+      kpi3Value: fmt(avgOrderValue),
+      kpi3Badge: "Avg Yield",
+      kpi3BadgeClass: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+      kpi3Icon: Zap,
+      kpi3IconClass: "bg-amber-500/10 text-amber-500",
+
+      chartTitle: "Revenue Stream Trend",
+      chartSubtitle: "Realtime daily sales performance from verified database transactions.",
+      chartBadge: fmt(totalRevenue),
+      chartColor: "#38bdf8",
+      chartTooltipPrefix: "Revenue: ",
+    };
+
+    if (reportLogic === "inventory_audit") {
+      kpisData = {
+        totalRevenue,
+        totalOrders,
+        avgOrderValue,
+        kpi1Title: "TOTAL STOCK VALUATION",
+        kpi1Value: fmt(totalStockValuation),
+        kpi1Badge: `${dbProducts.length} SKUs Catalog`,
+        kpi1BadgeClass: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+        kpi1Icon: Package,
+        kpi1IconClass: "bg-emerald-500/10 text-emerald-500",
+
+        kpi2Title: "TOTAL UNITS ON HAND",
+        kpi2Value: `${totalStockUnits.toLocaleString()} units`,
+        kpi2Badge: "Current Inventory",
+        kpi2BadgeClass: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+        kpi2Icon: Layers,
+        kpi2IconClass: "bg-sky-500/10 text-sky-500",
+
+        kpi3Title: "STOCK MOVEMENTS IN WINDOW",
+        kpi3Value: `${filteredMovements.length} events`,
+        kpi3Badge: `${totalMovedUnits} units flow`,
+        kpi3BadgeClass: "bg-purple-500/15 text-purple-600 dark:text-purple-400",
+        kpi3Icon: History,
+        kpi3IconClass: "bg-purple-500/10 text-purple-500",
+
+        chartTitle: "Inventory Stock Turnover & Movement",
+        chartSubtitle: "Daily unit turnover, restock arrivals, and counter dispatch logs.",
+        chartBadge: `${totalMovedUnits} units moved`,
+        chartColor: "#10b981",
+        chartTooltipPrefix: "Units Moved: ",
+      };
+    } else if (reportLogic === "profit_margins") {
+      kpisData = {
+        totalRevenue,
+        totalOrders,
+        avgOrderValue,
+        kpi1Title: `NET GROSS PROFIT (${getDateRangeLabel(dateRange)})`,
+        kpi1Value: fmt(totalProfit),
+        kpi1Badge: `${overallProfitMargin.toFixed(1)}% Margin`,
+        kpi1BadgeClass: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+        kpi1Icon: TrendingUp,
+        kpi1IconClass: "bg-emerald-500/10 text-emerald-500",
+
+        kpi2Title: "PROFIT MARGIN RATE",
+        kpi2Value: `${overallProfitMargin.toFixed(1)}%`,
+        kpi2Badge: "Gross Margin",
+        kpi2BadgeClass: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+        kpi2Icon: Zap,
+        kpi2IconClass: "bg-amber-500/10 text-amber-500",
+
+        kpi3Title: "TOTAL COST OF GOODS (COGS)",
+        kpi3Value: fmt(totalCogs),
+        kpi3Badge: "Inventory Cost",
+        kpi3BadgeClass: "bg-rose-500/15 text-rose-600 dark:text-rose-400",
+        kpi3Icon: DollarSign,
+        kpi3IconClass: "bg-rose-500/10 text-rose-500",
+
+        chartTitle: "Daily Net Profit Generation",
+        chartSubtitle: "Real store profit generated after deducting inventory purchase costs.",
+        chartBadge: fmt(totalProfit),
+        chartColor: "#f59e0b",
+        chartTooltipPrefix: "Profit: ",
+      };
+    } else if (reportLogic === "purchases_expenses") {
+      kpisData = {
+        totalRevenue,
+        totalOrders,
+        avgOrderValue,
+        kpi1Title: "TOTAL PROCUREMENT EXPENSE",
+        kpi1Value: fmt(totalPurchasesSpend),
+        kpi1Badge: `${totalPurchaseInvoices} Invoices`,
+        kpi1BadgeClass: "bg-purple-500/15 text-purple-600 dark:text-purple-400",
+        kpi1Icon: ShoppingCart,
+        kpi1IconClass: "bg-purple-500/10 text-purple-500",
+
+        kpi2Title: "PURCHASE INVOICES",
+        kpi2Value: `${totalPurchaseInvoices}`,
+        kpi2Badge: "Supplier Invoices",
+        kpi2BadgeClass: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+        kpi2Icon: FileText,
+        kpi2IconClass: "bg-sky-500/10 text-sky-500",
+
+        kpi3Title: "AVG PROCUREMENT TICKET",
+        kpi3Value: fmt(avgPurchaseTicket),
+        kpi3Badge: "Avg Spend",
+        kpi3BadgeClass: "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400",
+        kpi3Icon: DollarSign,
+        kpi3IconClass: "bg-indigo-500/10 text-indigo-500",
+
+        chartTitle: "Procurement & Purchase Invoicing Flow",
+        chartSubtitle: "Timeline of supplier restocking expenditures and procurement orders.",
+        chartBadge: fmt(totalPurchasesSpend),
+        chartColor: "#8b5cf6",
+        chartTooltipPrefix: "Procurement: ",
+      };
+    } else if (reportLogic === "tax_ledger") {
+      kpisData = {
+        totalRevenue,
+        totalOrders,
+        avgOrderValue,
+        kpi1Title: "TOTAL TAX ACCRUED",
+        kpi1Value: fmt(totalTaxCollected),
+        kpi1Badge: `${activeTaxRate}% Default Rate`,
+        kpi1BadgeClass: "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400",
+        kpi1Icon: ShieldCheck,
+        kpi1IconClass: "bg-indigo-500/10 text-indigo-500",
+
+        kpi2Title: "TAXABLE SALES REVENUE",
+        kpi2Value: fmt(taxableSalesVolume),
+        kpi2Badge: `${totalOrders} Orders`,
+        kpi2BadgeClass: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+        kpi2Icon: DollarSign,
+        kpi2IconClass: "bg-sky-500/10 text-sky-500",
+
+        kpi3Title: "EFFECTIVE TAX COMPLIANCE",
+        kpi3Value: `${activeTaxRate}%`,
+        kpi3Badge: "Configured Standard",
+        kpi3BadgeClass: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+        kpi3Icon: Zap,
+        kpi3IconClass: "bg-emerald-500/10 text-emerald-500",
+
+        chartTitle: "Sales Tax / VAT Collection Timeline",
+        chartSubtitle: "Daily sales tax accrual ready for compliance filing.",
+        chartBadge: fmt(totalTaxCollected),
+        chartColor: "#6366f1",
+        chartTooltipPrefix: "Tax Collected: ",
+      };
+    }
 
     // 4. Build Audit Ledger Rows based on selected Report Logic
     let auditLedger: LedgerItemDetail[] = [];
@@ -573,11 +849,7 @@ export const UserReports = () => {
     }
 
     return {
-      kpis: {
-        totalRevenue,
-        totalOrders,
-        avgOrderValue,
-      },
+      kpis: kpisData,
       trendData,
       categoryMix,
       auditLedger,
@@ -805,83 +1077,83 @@ export const UserReports = () => {
 
         {/* 3 Top KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
-          {/* Card 1: Total Revenue */}
+          {/* Card 1 */}
           <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-3 relative overflow-hidden">
             <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/15 text-emerald-500 flex items-center justify-center font-bold text-lg">
-                <DollarSign className="w-5 h-5" />
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg ${kpis.kpi1IconClass || "bg-emerald-500/10 text-emerald-500"}`}>
+                {kpis.kpi1Icon ? <kpis.kpi1Icon className="w-5 h-5" /> : <DollarSign className="w-5 h-5" />}
               </div>
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                Live Data
+              <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${kpis.kpi1BadgeClass || "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"}`}>
+                {kpis.kpi1Badge || "Live Data"}
               </span>
             </div>
             <div>
               <p className="text-[10px] sm:text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                TOTAL REVENUE ({getDateRangeLabel(dateRange)})
+                {kpis.kpi1Title || `TOTAL REVENUE (${getDateRangeLabel(dateRange)})`}
               </p>
               <p className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-0.5 font-mono">
-                {fmt(kpis.totalRevenue)}
+                {kpis.kpi1Value || fmt(kpis.totalRevenue)}
               </p>
             </div>
           </div>
 
-          {/* Card 2: Total Orders */}
+          {/* Card 2 */}
           <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-3 relative overflow-hidden">
             <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-sky-500/10 dark:bg-sky-500/15 text-sky-500 flex items-center justify-center">
-                <ShoppingCart className="w-5 h-5" />
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${kpis.kpi2IconClass || "bg-sky-500/10 text-sky-500"}`}>
+                {kpis.kpi2Icon ? <kpis.kpi2Icon className="w-5 h-5" /> : <ShoppingCart className="w-5 h-5" />}
               </div>
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-400">
-                {kpis.totalOrders} Transactions
+              <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${kpis.kpi2BadgeClass || "bg-sky-500/15 text-sky-600 dark:text-sky-400"}`}>
+                {kpis.kpi2Badge || `${kpis.totalOrders} Transactions`}
               </span>
             </div>
             <div>
               <p className="text-[10px] sm:text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                TOTAL ORDERS
+                {kpis.kpi2Title || "TOTAL ORDERS"}
               </p>
-              <p className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-0.5">
-                {kpis.totalOrders}
+              <p className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-0.5 font-mono">
+                {kpis.kpi2Value || `${kpis.totalOrders}`}
               </p>
             </div>
           </div>
 
-          {/* Card 3: Avg Order Value */}
+          {/* Card 3 */}
           <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-3 relative overflow-hidden">
             <div className="flex items-center justify-between">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 dark:bg-amber-500/15 text-amber-500 flex items-center justify-center">
-                <Zap className="w-5 h-5" />
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${kpis.kpi3IconClass || "bg-amber-500/10 text-amber-500"}`}>
+                {kpis.kpi3Icon ? <kpis.kpi3Icon className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
               </div>
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
-                Avg Yield
+              <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${kpis.kpi3BadgeClass || "bg-amber-500/15 text-amber-600 dark:text-amber-400"}`}>
+                {kpis.kpi3Badge || "Avg Yield"}
               </span>
             </div>
             <div>
               <p className="text-[10px] sm:text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                AVG ORDER VALUE
+                {kpis.kpi3Title || "AVG ORDER VALUE"}
               </p>
               <p className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight mt-0.5 font-mono">
-                {fmt(kpis.avgOrderValue)}
+                {kpis.kpi3Value || fmt(kpis.avgOrderValue)}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Middle Section: Left (Revenue Stream Chart) & Right (Category Mix & AI Prediction) */}
+        {/* Middle Section: Left (Chart) & Right (Category Mix & AI Prediction) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          {/* Left Chart Card: Revenue Stream (8 cols) */}
+          {/* Left Chart Card (8 cols) */}
           <div className="lg:col-span-8 p-5 sm:p-6 rounded-2xl bg-card border border-border shadow-xs flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
-                    Revenue Stream
+                    {kpis.chartTitle || "Revenue Stream"}
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Realtime daily performance trends from verified database ledger entries.
+                    {kpis.chartSubtitle || "Realtime daily performance trends from verified database ledger entries."}
                   </p>
                 </div>
-                <span className="text-xs font-bold text-sky-500 font-mono">
-                  {fmt(kpis.totalRevenue)}
+                <span className="text-xs font-bold font-mono px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-500 border border-sky-500/20">
+                  {kpis.chartBadge || fmt(kpis.totalRevenue)}
                 </span>
               </div>
             </div>
@@ -894,9 +1166,9 @@ export const UserReports = () => {
                   margin={{ top: 15, right: 10, left: -15, bottom: 0 }}
                 >
                   <defs>
-                    <linearGradient id="revGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#38bdf8" stopOpacity={0.0} />
+                    <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={kpis.chartColor || "#38bdf8"} stopOpacity={0.35} />
+                      <stop offset="95%" stopColor={kpis.chartColor || "#38bdf8"} stopOpacity={0.0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid
@@ -926,12 +1198,13 @@ export const UserReports = () => {
                         return (
                           <div className="bg-popover border border-border p-2.5 rounded-xl shadow-md text-xs">
                             <p className="font-bold text-foreground">{label}</p>
-                            <p className="text-sky-500 font-semibold mt-0.5">
-                              Revenue: {fmt(Number(payload[0].value))}
+                            <p className="font-semibold mt-0.5" style={{ color: kpis.chartColor || "#38bdf8" }}>
+                              {kpis.chartTooltipPrefix || "Volume: "}
+                              {reportLogic === "inventory_audit" ? `${payload[0].value} units` : fmt(Number(payload[0].value))}
                             </p>
                             {payload[0].payload.orders !== undefined && (
                               <p className="text-[10px] text-muted-foreground">
-                                Transactions: {payload[0].payload.orders}
+                                Events: {payload[0].payload.orders}
                               </p>
                             )}
                           </div>
@@ -943,10 +1216,10 @@ export const UserReports = () => {
                   <Area
                     type="monotone"
                     dataKey="revenue"
-                    stroke="#38bdf8"
+                    stroke={kpis.chartColor || "#38bdf8"}
                     strokeWidth={3}
                     fillOpacity={1}
-                    fill="url(#revGradient)"
+                    fill="url(#trendGradient)"
                   />
                 </AreaChart>
               </ResponsiveContainer>

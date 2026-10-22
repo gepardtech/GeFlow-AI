@@ -8,6 +8,7 @@ import { SupportNewsletterTab } from "@/components/admin/SupportNewsletterTab";
 import {
   Search, MessageSquareReply, Megaphone, BookOpen, Users, Bot,
   LifeBuoy, Eye, Send, Plus, Pencil, Trash2, Loader2, X, Sparkles, Activity, Shield, Clock, Mail, CheckCircle2,
+  Target, DollarSign, TrendingUp, MousePointerClick, Ticket as TicketIcon,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -679,6 +680,7 @@ const AnnouncementDialog = ({ open, onOpenChange, onSaved, edit }: any) => {
     link_url: "",
     link_label: "",
     coupon_code: "",
+    priority_order: 1,
     starts_at: new Date().toISOString().slice(0, 16),
     ends_at: "",
     is_active: true,
@@ -715,6 +717,7 @@ const AnnouncementDialog = ({ open, onOpenChange, onSaved, edit }: any) => {
         link_url: edit.link_url ?? "",
         link_label: edit.link_label ?? "",
         coupon_code: detectedCoupon,
+        priority_order: edit.priority_order != null ? Number(edit.priority_order) : 1,
         starts_at: edit.starts_at?.slice(0, 16) ?? "",
         ends_at: edit.ends_at?.slice(0, 16) ?? "",
         is_active: edit.is_active,
@@ -729,6 +732,7 @@ const AnnouncementDialog = ({ open, onOpenChange, onSaved, edit }: any) => {
         link_url: "",
         link_label: "",
         coupon_code: "",
+        priority_order: 1,
         starts_at: new Date().toISOString().slice(0, 16),
         ends_at: "",
         is_active: true,
@@ -792,6 +796,7 @@ const AnnouncementDialog = ({ open, onOpenChange, onSaved, edit }: any) => {
       link_url: finalLinkUrl,
       link_label: form.link_label?.trim() || null,
       coupon_code: cleanCoupon || undefined,
+      priority_order: Number(form.priority_order) || 1,
       starts_at: form.starts_at ? new Date(form.starts_at).toISOString() : new Date().toISOString(),
       ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : null,
       is_active: form.is_active,
@@ -937,7 +942,7 @@ const AnnouncementDialog = ({ open, onOpenChange, onSaved, edit }: any) => {
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <Lab label="AUDIENCE">
               <Select value={form.audience} onValueChange={(v) => setForm((f: any) => ({ ...f, audience: v }))}>
                 <SelectTrigger className="h-10 bg-muted/40 border border-border/60"><SelectValue /></SelectTrigger>
@@ -949,7 +954,7 @@ const AnnouncementDialog = ({ open, onOpenChange, onSaved, edit }: any) => {
                 </SelectContent>
               </Select>
             </Lab>
-            <Lab label="POSITION">
+            <Lab label="BAR POSITION">
               <Select value={form.position} onValueChange={(v) => setForm((f: any) => ({ ...f, position: v }))}>
                 <SelectTrigger className="h-10 bg-muted/40 border border-border/60"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -966,6 +971,23 @@ const AnnouncementDialog = ({ open, onOpenChange, onSaved, edit }: any) => {
                   <SelectItem value="info">Info</SelectItem>
                   <SelectItem value="success">Success</SelectItem>
                   <SelectItem value="warning">Warning</SelectItem>
+                </SelectContent>
+              </Select>
+            </Lab>
+            <Lab label="POSITION / ORDER">
+              <Select value={String(form.priority_order || 1)} onValueChange={(v) => setForm((f: any) => ({ ...f, priority_order: Number(v) }))}>
+                <SelectTrigger className="h-10 bg-muted/40 border border-border/60"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">🥇 1st (Shows 1st)</SelectItem>
+                  <SelectItem value="2">🥈 2nd (Shows 2nd)</SelectItem>
+                  <SelectItem value="3">🥉 3rd (Shows 3rd)</SelectItem>
+                  <SelectItem value="4">4th (Shows 4th)</SelectItem>
+                  <SelectItem value="5">5th (Shows 5th)</SelectItem>
+                  <SelectItem value="6">6th (Shows 6th)</SelectItem>
+                  <SelectItem value="7">7th (Shows 7th)</SelectItem>
+                  <SelectItem value="8">8th (Shows 8th)</SelectItem>
+                  <SelectItem value="9">9th (Shows 9th)</SelectItem>
+                  <SelectItem value="10">10th (Shows 10th)</SelectItem>
                 </SelectContent>
               </Select>
             </Lab>
@@ -1188,6 +1210,7 @@ const Row = ({ k, v }: { k: string; v: string }) => (
 const AnnouncementsManager = ({ items, onChange, openCreate }: any) => {
   const { toast } = useToast();
   const [edit, setEdit] = useState<AnnouncementItem | null>(null);
+
   const del = async (id: string) => {
     const res = await deleteLiveAnnouncement(id);
     if (res.error) {
@@ -1197,6 +1220,7 @@ const AnnouncementsManager = ({ items, onChange, openCreate }: any) => {
     onChange();
     toast({ title: "Announcement deleted", description: "Removed permanently from the site." });
   };
+
   const toggle = async (a: AnnouncementItem) => {
     const next = !a.is_active;
     const res = await toggleLiveAnnouncementActive(a.id, next);
@@ -1206,22 +1230,106 @@ const AnnouncementsManager = ({ items, onChange, openCreate }: any) => {
     }
     toast({
       title: next ? "Announcement Activated" : "Announcement Inactivated",
-      description: next ? "Banner is now live on selected pages." : "Banner has been inactivated and hidden from all users.",
+      description: next ? "Banner is now live on selected pages." : "Banner has been paused and hidden from all users.",
     });
     onChange();
   };
+
+  const handlePositionChange = async (a: AnnouncementItem, newPosition: number) => {
+    const res = await saveLiveAnnouncement({ priority_order: newPosition }, a.id);
+    if (res.error) {
+      toast({ title: "Order update failed", description: res.error, variant: "destructive" });
+      return;
+    }
+    const label = newPosition === 1 ? "1st" : newPosition === 2 ? "2nd" : newPosition === 3 ? "3rd" : `${newPosition}th`;
+    toast({
+      title: "Display Sequence updated",
+      description: `"${a.title}" is now sequenced as ${label}.`,
+    });
+    onChange();
+  };
+
+  const handleBarPositionChange = async (a: AnnouncementItem, newPos: "top" | "bottom") => {
+    const res = await saveLiveAnnouncement({ position: newPos }, a.id);
+    if (res.error) {
+      toast({ title: "Position update failed", description: res.error, variant: "destructive" });
+      return;
+    }
+    toast({
+      title: "Bar Position updated",
+      description: `"${a.title}" will now display at the ${newPos} of the site.`,
+    });
+    onChange();
+  };
+
+  // Compute analytics across announcements
+  const totalOpens = (items || []).reduce((sum: number, a: AnnouncementItem) => sum + (a.popup_opens || 0), 0);
+  const totalConversions = (items || []).reduce((sum: number, a: AnnouncementItem) => sum + (a.conversions || 0), 0);
+  const totalEarnings = (items || []).reduce((sum: number, a: AnnouncementItem) => sum + (a.earnings || 0), 0);
+  const convRate = totalOpens > 0 ? ((totalConversions / totalOpens) * 100).toFixed(1) + "%" : "0.0%";
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
           <h2 className="text-lg font-bold">System Announcements & Promo Banners</h2>
-          <p className="text-xs text-muted-foreground">Broadcast updates, discounts, and notifications to all visitors, users, or admins.</p>
+          <p className="text-xs text-muted-foreground">
+            Adjust positioning sequence (1st, 2nd, etc.) and track live announcement engagement, popup opens, coupon conversions & earnings.
+          </p>
         </div>
         <Button onClick={openCreate} className="bg-sky-500 hover:bg-sky-600 text-white font-bold shadow-xs">
           <Plus className="h-4 w-4 mr-1.5" /> New Announcement
         </Button>
       </div>
 
+      {/* Announcement Performance & Engagement Analytics Section */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+        <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">POPUP OPENS</span>
+            <span className="h-7 w-7 rounded-lg bg-sky-500/10 text-sky-500 flex items-center justify-center">
+              <MousePointerClick className="h-3.5 w-3.5" />
+            </span>
+          </div>
+          <p className="text-2xl font-black text-foreground">{totalOpens.toLocaleString()}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">CTA clicks opening popup</p>
+        </div>
+
+        <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">CONVERSIONS</span>
+            <span className="h-7 w-7 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
+              <Target className="h-3.5 w-3.5" />
+            </span>
+          </div>
+          <p className="text-2xl font-black text-foreground">{totalConversions.toLocaleString()}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">Coupons used & purchases</p>
+        </div>
+
+        <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">TOTAL EARNINGS</span>
+            <span className="h-7 w-7 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center">
+              <DollarSign className="h-3.5 w-3.5" />
+            </span>
+          </div>
+          <p className="text-2xl font-black text-foreground">${totalEarnings.toFixed(2)}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">Direct promo revenue</p>
+        </div>
+
+        <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-xs">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">CONV. RATE</span>
+            <span className="h-7 w-7 rounded-lg bg-purple-500/10 text-purple-500 flex items-center justify-center">
+              <TrendingUp className="h-3.5 w-3.5" />
+            </span>
+          </div>
+          <p className="text-2xl font-black text-foreground">{convRate}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">Opens to completed orders</p>
+        </div>
+      </div>
+
+      {/* Announcements Table & List */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-xs">
         {items.length === 0 ? (
           <div className="p-12 text-center">
@@ -1232,30 +1340,125 @@ const AnnouncementsManager = ({ items, onChange, openCreate }: any) => {
             </Button>
           </div>
         ) : (
-          items.map((a: Announcement) => (
-            <div key={a.id} className="border-b border-border last:border-0 p-4 flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-bold text-sm">{a.title}</p>
-                  <span className="text-[10px] font-bold tracking-widest bg-muted px-2 py-0.5 rounded-full uppercase">{a.audience}</span>
-                  <span className="text-[10px] font-bold tracking-widest bg-muted px-2 py-0.5 rounded-full uppercase">{a.position}</span>
-                  <span className={`text-[10px] font-bold tracking-widest px-2 py-0.5 rounded-full ${a.is_active ? "bg-emerald-400/15 text-emerald-500" : "bg-muted text-muted-foreground"}`}>{a.is_active ? "ACTIVE" : "PAUSED"}</span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.body}</p>
-                {a.link_url && (
-                  <p className="text-[11px] text-sky-500 mt-1 font-mono truncate">
-                    Target: {a.link_url} {a.link_label ? `(${a.link_label})` : ""}
+          items.map((a: AnnouncementItem, idx: number) => {
+            const currentOrder = a.priority_order || (idx + 1);
+            return (
+              <div key={a.id} className="border-b border-border last:border-0 p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                    {/* Position Label / Badge */}
+                    <span className="text-[11px] font-extrabold tracking-wider px-2.5 py-0.5 rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                      {currentOrder === 1 ? "🥇 1st Position" : currentOrder === 2 ? "🥈 2nd Position" : currentOrder === 3 ? "🥉 3rd Position" : `#${currentOrder} Position`}
+                    </span>
+                    <p className="font-bold text-sm text-foreground">{a.title}</p>
+                    <span className="text-[10px] font-bold tracking-widest bg-muted px-2 py-0.5 rounded-full uppercase">{a.audience}</span>
+                    <span className="text-[10px] font-bold tracking-widest bg-muted px-2 py-0.5 rounded-full uppercase">{a.position}</span>
+                    <span className={`text-[10px] font-bold tracking-widest px-2 py-0.5 rounded-full ${a.is_active ? "bg-emerald-400/15 text-emerald-500" : "bg-muted text-muted-foreground"}`}>
+                      {a.is_active ? "ACTIVE" : "PAUSED"}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground line-clamp-2">{a.body}</p>
+
+                  {/* Analytics Stats Pills */}
+                  <div className="flex items-center gap-2 flex-wrap mt-2.5">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-muted/60 px-2.5 py-1 rounded-md border border-border/70 text-foreground" title="Total users who clicked the CTA button to open the popup">
+                      <MousePointerClick className="h-3 w-3 text-sky-500" />
+                      <span>{a.popup_opens || 0} Popup Opens</span>
+                    </span>
+
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-muted/60 px-2.5 py-1 rounded-md border border-border/70 text-foreground" title="Conversions: users who clicked CTA/used coupon and purchased">
+                      <Target className="h-3 w-3 text-emerald-500" />
+                      <span>{a.conversions || 0} Conversions</span>
+                    </span>
+
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-muted/60 px-2.5 py-1 rounded-md border border-border/70 text-emerald-600 dark:text-emerald-400 font-mono font-bold" title="Revenue earned through this announcement">
+                      <DollarSign className="h-3 w-3" />
+                      <span>${(a.earnings || 0).toFixed(2)} Earned</span>
+                    </span>
+
+                    {a.coupon_code && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 px-2.5 py-1 rounded-md border border-amber-500/20 font-mono uppercase">
+                        <TicketIcon className="h-3 w-3 text-amber-500" />
+                        Coupon: {a.coupon_code}
+                      </span>
+                    )}
+                  </div>
+
+                  {a.link_url && (
+                    <p className="text-[11px] text-sky-500 mt-1.5 font-mono truncate">
+                      Target: {a.link_url} {a.link_label ? `(${a.link_label})` : ""}
+                    </p>
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    From {new Date(a.starts_at).toLocaleString()}{a.ends_at ? ` → ${new Date(a.ends_at).toLocaleString()}` : ""}
                   </p>
-                )}
-                <p className="text-[10px] text-muted-foreground mt-1">From {new Date(a.starts_at).toLocaleString()}{a.ends_at ? ` → ${new Date(a.ends_at).toLocaleString()}` : ""}</p>
+                </div>
+
+                <div className="flex items-center gap-3 flex-shrink-0 self-end md:self-center flex-wrap">
+                  {/* Sequence Order Quick Adjuster */}
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Sequence:</span>
+                    <Select
+                      value={String(currentOrder)}
+                      onValueChange={(val) => handlePositionChange(a, Number(val))}
+                    >
+                      <SelectTrigger className="h-8 w-28 text-xs font-semibold bg-muted/50 border border-border/80">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">🥇 1st (Shows 1st)</SelectItem>
+                        <SelectItem value="2">🥈 2nd (Shows 2nd)</SelectItem>
+                        <SelectItem value="3">🥉 3rd (Shows 3rd)</SelectItem>
+                        <SelectItem value="4">4th (Shows 4th)</SelectItem>
+                        <SelectItem value="5">5th (Shows 5th)</SelectItem>
+                        <SelectItem value="6">6th (Shows 6th)</SelectItem>
+                        <SelectItem value="7">7th (Shows 7th)</SelectItem>
+                        <SelectItem value="8">8th (Shows 8th)</SelectItem>
+                        <SelectItem value="9">9th (Shows 9th)</SelectItem>
+                        <SelectItem value="10">10th (Shows 10th)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Bar Position (Top vs Bottom) Quick Adjuster */}
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">Bar Position:</span>
+                    <Select
+                      value={a.position || "top"}
+                      onValueChange={(val: "top" | "bottom") => handleBarPositionChange(a, val)}
+                    >
+                      <SelectTrigger className="h-8 w-24 text-xs font-semibold bg-muted/50 border border-border/80">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="top">Top Bar</SelectItem>
+                        <SelectItem value="bottom">Bottom Bar</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Switch checked={a.is_active} onCheckedChange={() => toggle(a)} />
+                    <button
+                      onClick={() => setEdit(a)}
+                      title="Edit announcement"
+                      className="h-8 w-8 rounded-lg hover:bg-muted inline-flex items-center justify-center text-muted-foreground hover:text-foreground"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => del(a.id)}
+                      title="Delete announcement"
+                      className="h-8 w-8 rounded-lg hover:bg-rose-500/10 text-rose-500 inline-flex items-center justify-center"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <Switch checked={a.is_active} onCheckedChange={() => toggle(a)} />
-                <button onClick={() => setEdit(a)} title="Edit announcement" className="h-8 w-8 rounded-lg hover:bg-muted inline-flex items-center justify-center text-muted-foreground hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
-                <button onClick={() => del(a.id)} title="Delete announcement" className="h-8 w-8 rounded-lg hover:bg-rose-500/10 text-rose-500 inline-flex items-center justify-center"><Trash2 className="h-3.5 w-3.5" /></button>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
       <AnnouncementDialog open={!!edit} edit={edit} onOpenChange={(o: boolean) => !o && setEdit(null)} onSaved={onChange} />

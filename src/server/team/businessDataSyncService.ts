@@ -555,11 +555,21 @@ export class BusinessDataSyncService {
 
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
     if (isUUID) {
-      try { serverSupabase.from("sale_items").delete().eq("product_id", cleanId).then(() => {}); } catch { /* ignore */ }
-      try { serverSupabase.from("purchase_items").delete().eq("product_id", cleanId).then(() => {}); } catch { /* ignore */ }
-      try { serverSupabase.from("order_items").delete().eq("product_id", cleanId).then(() => {}); } catch { /* ignore */ }
-      try { serverSupabase.from("stock_movements").delete().eq("product_id", cleanId).then(() => {}); } catch { /* ignore */ }
-      try { serverSupabase.from("products").delete().eq("id", cleanId).then(() => {}); } catch { /* ignore */ }
+      // Async database cleanup with proper error catching and nullifying foreign keys
+      (async () => {
+        try {
+          await serverSupabase.from("sale_items").update({ product_id: null }).eq("product_id", cleanId);
+        } catch { /* ignore */ }
+        try {
+          await serverSupabase.from("purchase_items").update({ product_id: null }).eq("product_id", cleanId);
+        } catch { /* ignore */ }
+        try {
+          await serverSupabase.from("stock_movements").delete().eq("product_id", cleanId);
+        } catch { /* ignore */ }
+        try {
+          await serverSupabase.from("products").delete().eq("id", cleanId);
+        } catch { /* ignore */ }
+      })().catch(() => {});
     }
     return true;
   }
@@ -702,37 +712,57 @@ export class BusinessDataSyncService {
     businessId: string,
     productId: string,
     deltaQuantity: number,
-    type: "in" | "out",
+    type: "in" | "out" | "set",
     reason: string,
     note?: string,
     userId?: string
   ): { success: boolean; newStock: number } {
     const unit = this.getOrCreateBusinessUnit(businessId);
     const prodIndex = unit.products.findIndex((p) => p.id === productId);
-    if (prodIndex < 0) {
-      return { success: false, newStock: 0 };
-    }
-
-    const prod = unit.products[prodIndex];
     const now = new Date().toISOString();
     const qty = Math.abs(deltaQuantity);
-    const newStock = type === "in" ? prod.stock_units + qty : Math.max(0, prod.stock_units - qty);
 
-    unit.products[prodIndex] = {
-      ...prod,
-      stock_units: newStock,
-      updated_at: now,
-    };
+    let newStock = 0;
+    if (prodIndex >= 0) {
+      const prod = unit.products[prodIndex];
+      if (type === "set") {
+        newStock = Math.max(0, qty);
+      } else if (type === "in") {
+        newStock = prod.stock_units + qty;
+      } else {
+        newStock = Math.max(0, prod.stock_units - qty);
+      }
+      unit.products[prodIndex] = {
+        ...prod,
+        stock_units: newStock,
+        updated_at: now,
+      };
+    } else {
+      // Product not yet in in-memory cache
+      newStock = type === "set" ? Math.max(0, qty) : (type === "in" ? qty : 0);
+      unit.products.push({
+        id: productId,
+        business_id: businessId,
+        name: note?.split("·")?.[0]?.trim() || "Item",
+        purchase_cost: 0,
+        retail_price: 0,
+        stock_units: newStock,
+        min_stock_alert: 5,
+        status: "active",
+        created_at: now,
+        updated_at: now,
+      });
+    }
 
     unit.stock_movements.unshift({
       id: `mov_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       business_id: businessId,
       product_id: productId,
       owner_user_id: unit.ownerUserId,
-      type,
-      quantity: qty,
+      type: type === "out" ? "adjustment" : (type === "set" ? "adjustment" : "restock"),
+      quantity: type === "out" ? -qty : qty,
       reason: reason || (type === "in" ? "Restock Intake" : "Stock Adjustment"),
-      note: note || `Adjusted stock by ${type === "in" ? "+" : "-"}${qty}`,
+      note: note || `Adjusted stock by ${type === "in" ? "+" : (type === "set" ? "=" : "-")}${qty}`,
       created_by: userId,
       created_at: now,
     });
@@ -788,10 +818,26 @@ export class BusinessDataSyncService {
   }
 
   public deleteHeldOrder(businessId: string, orderId: string): boolean {
-    const unit = this.getOrCreateBusinessUnit(businessId);
-    const prev = unit.held_orders.length;
-    unit.held_orders = unit.held_orders.filter((h) => h.id !== orderId);
-    if (unit.held_orders.length !== prev) {
+    if (businessId) {
+      const unit = this.getOrCreateBusinessUnit(businessId);
+      const prev = unit.held_orders.length;
+      unit.held_orders = unit.held_orders.filter((h) => h.id !== orderId);
+      if (unit.held_orders.length !== prev) {
+        this.persist();
+        return true;
+      }
+      return false;
+    }
+    // Search across all businesses
+    let changed = false;
+    for (const unit of Object.values(this.store.businesses)) {
+      const prev = unit.held_orders.length;
+      unit.held_orders = unit.held_orders.filter((h) => h.id !== orderId);
+      if (unit.held_orders.length !== prev) {
+        changed = true;
+      }
+    }
+    if (changed) {
       this.persist();
       return true;
     }

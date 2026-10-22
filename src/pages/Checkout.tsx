@@ -21,6 +21,7 @@ import {
   ValidatedCouponResult,
 } from "@/lib/couponHelper";
 import { Tag } from "lucide-react";
+import { trackAnnouncementConversion } from "@/lib/promotionsClient";
 
 
 type Plan = "standard" | "premium";
@@ -437,6 +438,20 @@ const Checkout = () => {
     setIsAdminEmail(email.toLowerCase() === "gepardwebs@gmail.com" || activeUser?.email?.toLowerCase() === "gepardwebs@gmail.com");
     setShowInvoice(true);
     toast({ title: "Payment successful!", description: `${data.name} activated on your account.` });
+
+    // Track announcement conversion & earnings if coupon or announcement CTA was used
+    try {
+      const annId = sessionStorage.getItem("geflow_announcement_id");
+      const fromCta = sessionStorage.getItem("geflow_from_announcement_cta");
+      const couponCode = appliedCoupon?.code;
+      if (annId || fromCta || couponCode) {
+        trackAnnouncementConversion(annId || couponCode || "announcement_cta", Number(total) || 0);
+        sessionStorage.removeItem("geflow_announcement_id");
+        sessionStorage.removeItem("geflow_from_announcement_cta");
+      }
+    } catch (e) {
+      console.warn("Notice tracking announcement conversion:", e);
+    }
   };
 
   const handleContinue = () => {

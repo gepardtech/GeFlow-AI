@@ -14,6 +14,10 @@ export interface ServerAnnouncement {
   link_url: string | null;
   link_label: string | null;
   coupon_code?: string;
+  priority_order?: number; // 1 = 1st, 2 = 2nd, etc.
+  popup_opens?: number; // Count of user opening popup by clicking CTA
+  conversions?: number; // Count of user completing coupon purchase/task
+  earnings?: number; // Revenue in dollars generated through announcement
   starts_at: string;
   ends_at: string | null;
   is_active: boolean;
@@ -27,7 +31,7 @@ export interface ServerCoupon {
   description: string | null;
   discount_type: "percent" | "fixed";
   discount_value: number;
-  applies_to_plan: string | null; // e.g. null / 'all', 'standard', 'standard_monthly', 'standard_yearly', 'standard_lifetime', 'premium', 'premium_monthly', 'premium_yearly', 'premium_lifetime'
+  applies_to_plan: string | null; // e.g. null / 'all', or comma-separated 'standard,premium', 'standard_monthly,premium_monthly'
   min_amount: number;
   max_uses: number | null;
   used_count: number;
@@ -38,9 +42,8 @@ export interface ServerCoupon {
   updated_at: string;
 }
 
-export function formatPlanLabel(appliesTo: string | null | undefined): string {
-  if (!appliesTo || appliesTo.toLowerCase() === "all") return "All Plans";
-  switch (appliesTo.toLowerCase().replace(/[-:]/g, "_")) {
+export function formatSinglePlanLabel(target: string): string {
+  switch (target.toLowerCase().replace(/[-:]/g, "_")) {
     case "standard": return "Standard (All Cycles)";
     case "standard_monthly": return "Standard Monthly";
     case "standard_yearly": return "Standard Yearly";
@@ -49,8 +52,16 @@ export function formatPlanLabel(appliesTo: string | null | undefined): string {
     case "premium_monthly": return "Premium Monthly";
     case "premium_yearly": return "Premium Yearly";
     case "premium_lifetime": return "Premium Lifetime";
-    default: return appliesTo;
+    case "free": return "Free Plan";
+    default: return target.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   }
+}
+
+export function formatPlanLabel(appliesTo: string | null | undefined): string {
+  if (!appliesTo || appliesTo.toLowerCase() === "all") return "All Plans";
+  const items = appliesTo.split(/[,;]+/).map((s) => s.trim()).filter(Boolean);
+  if (items.length <= 1) return formatSinglePlanLabel(items[0] || appliesTo);
+  return items.map(formatSinglePlanLabel).join(", ");
 }
 
 export function checkPlanMatch(
@@ -63,25 +74,27 @@ export function checkPlanMatch(
     return { matches: true, label };
   }
 
-  const target = appliesTo.trim().toLowerCase()
-    .replace(/^plan\s*:\s*/i, "")
-    .replace(/[^a-z0-9]/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_|_$/g, "");
+  const targets = appliesTo
+    .split(/[,;]+/)
+    .map((t) =>
+      t
+        .trim()
+        .toLowerCase()
+        .replace(/^plan\s*:\s*/i, "")
+        .replace(/[^a-z0-9]/g, "_")
+        .replace(/_+/g, "_")
+        .replace(/^_|_$/g, "")
+    )
+    .filter(Boolean);
 
-  const planKey = (currentPlan || "").trim().toLowerCase()
-    .replace(/[^a-z0-9]/g, "_");
-  const periodKey = (currentPeriod || "").trim().toLowerCase()
-    .replace(/[^a-z0-9]/g, "_");
+  const planKey = (currentPlan || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "_");
+  const periodKey = (currentPeriod || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "_");
 
-  // If matches whole tier, e.g. "standard" or "premium"
-  if (target === planKey) {
-    return { matches: true, label };
-  }
-
-  // If matches specific plan + billing cycle, e.g. "premium_lifetime"
-  if (periodKey && target === `${planKey}_${periodKey}`) {
-    return { matches: true, label };
+  for (const target of targets) {
+    if (target === "all") return { matches: true, label };
+    if (target === planKey) return { matches: true, label };
+    if (periodKey && target === `${planKey}_${periodKey}`) return { matches: true, label };
+    if (target.startsWith(`${planKey}_`) && periodKey && target === `${planKey}_${periodKey}`) return { matches: true, label };
   }
 
   return { matches: false, label };
@@ -132,16 +145,32 @@ class PromotionsService {
 
   private async syncAnnouncementsFromSupabase(): Promise<void> {
     try {
+      // 1. Fetch persistent announcements_meta from platform_settings
+      let alertsMeta: Record<string, any> = {};
+      try {
+        const { data: setRow } = await serverSupabase
+          .from("platform_settings")
+          .select("id, alerts")
+          .limit(1)
+          .maybeSingle();
+        if (setRow?.alerts && typeof setRow.alerts === "object") {
+          alertsMeta = (setRow.alerts as any).announcements_meta || {};
+        }
+      } catch {
+        /* ignore */
+      }
+
       const { data, error } = await serverSupabase
         .from("announcements")
         .select("*")
         .order("created_at", { ascending: false });
 
       if (!error && Array.isArray(data) && data.length > 0) {
-        // Merge Supabase announcements with in-memory announcements
         const map = new Map<string, ServerAnnouncement>();
         this.announcements.forEach((a) => map.set(a.id, a));
         data.forEach((r: any) => {
+          const existing = map.get(r.id);
+          const meta = alertsMeta[r.id] || {};
           map.set(r.id, {
             id: r.id,
             title: r.title,
@@ -151,7 +180,11 @@ class PromotionsService {
             variant: r.variant || "info",
             link_url: r.link_url || null,
             link_label: r.link_label || null,
-            coupon_code: r.coupon_code || "",
+            coupon_code: r.coupon_code || existing?.coupon_code || meta.coupon_code || "",
+            priority_order: existing?.priority_order ?? meta.priority_order ?? (r.priority_order != null ? Number(r.priority_order) : 1),
+            popup_opens: existing?.popup_opens ?? meta.popup_opens ?? 0,
+            conversions: existing?.conversions ?? meta.conversions ?? 0,
+            earnings: existing?.earnings ?? meta.earnings ?? 0,
             starts_at: r.starts_at || new Date().toISOString(),
             ends_at: r.ends_at || null,
             is_active: Boolean(r.is_active),
@@ -159,9 +192,12 @@ class PromotionsService {
             updated_at: r.updated_at || new Date().toISOString(),
           });
         });
-        this.announcements = Array.from(map.values()).sort(
-          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
+        this.announcements = Array.from(map.values()).sort((a, b) => {
+          const orderA = a.priority_order != null && a.priority_order > 0 ? a.priority_order : 9999;
+          const orderB = b.priority_order != null && b.priority_order > 0 ? b.priority_order : 9999;
+          if (orderA !== orderB) return orderA - orderB;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
         this.saveAnnouncements();
       }
     } catch (err) {
@@ -190,6 +226,30 @@ class PromotionsService {
         fs.mkdirSync(dir, { recursive: true });
       }
       fs.writeFileSync(ANNOUNCEMENTS_FILE, JSON.stringify(this.announcements, null, 2), "utf-8");
+
+      // Background sync meta to platform_settings.alerts
+      (async () => {
+        try {
+          const metaMap: Record<string, any> = {};
+          this.announcements.forEach((a) => {
+            metaMap[a.id] = {
+              priority_order: a.priority_order || 1,
+              coupon_code: a.coupon_code || "",
+              popup_opens: a.popup_opens || 0,
+              conversions: a.conversions || 0,
+              earnings: a.earnings || 0,
+            };
+          });
+          const { data: row } = await serverSupabase.from("platform_settings").select("id, alerts").limit(1).maybeSingle();
+          if (row?.id) {
+            const alerts = row.alerts && typeof row.alerts === "object" ? { ...(row.alerts as any) } : {};
+            alerts.announcements_meta = metaMap;
+            await serverSupabase.from("platform_settings").update({ alerts, updated_at: new Date().toISOString() }).eq("id", row.id);
+          }
+        } catch {
+          /* ignore */
+        }
+      })();
     } catch (e) {
       console.warn("Notice saving announcements to disk:", e);
     }
@@ -266,16 +326,23 @@ class PromotionsService {
   // --- ANNOUNCEMENTS ---
   public getAnnouncements(activeOnly: boolean = false, audience?: string, position?: string): ServerAnnouncement[] {
     const now = new Date();
-    return this.announcements.filter((a) => {
-      if (activeOnly) {
-        if (!a.is_active) return false;
-        if (a.starts_at && new Date(a.starts_at) > now) return false;
-        if (a.ends_at && new Date(a.ends_at) < now) return false;
-      }
-      if (position && a.position !== position) return false;
-      if (audience && audience !== "all" && a.audience !== "all" && a.audience !== audience) return false;
-      return true;
-    });
+    return this.announcements
+      .filter((a) => {
+        if (activeOnly) {
+          if (!a.is_active) return false;
+          if (a.starts_at && new Date(a.starts_at) > now) return false;
+          if (a.ends_at && new Date(a.ends_at) < now) return false;
+        }
+        if (position && a.position !== position) return false;
+        if (audience && audience !== "all" && a.audience !== "all" && a.audience !== audience) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const orderA = a.priority_order != null && a.priority_order > 0 ? a.priority_order : 9999;
+        const orderB = b.priority_order != null && b.priority_order > 0 ? b.priority_order : 9999;
+        if (orderA !== orderB) return orderA - orderB;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
   }
 
   public getAnnouncementById(id: string): ServerAnnouncement | undefined {
@@ -284,8 +351,9 @@ class PromotionsService {
 
   public createAnnouncement(data: Partial<ServerAnnouncement>): ServerAnnouncement {
     const now = new Date().toISOString();
+    const newId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "ann_" + Math.random().toString(36).slice(2, 11);
     const newAnn: ServerAnnouncement = {
-      id: "ann_" + Math.random().toString(36).slice(2, 11),
+      id: newId,
       title: data.title || "Announcement",
       body: data.body || "",
       audience: data.audience || "all",
@@ -294,6 +362,10 @@ class PromotionsService {
       link_url: data.link_url || null,
       link_label: data.link_label || null,
       coupon_code: data.coupon_code || "",
+      priority_order: data.priority_order != null ? Number(data.priority_order) : 1,
+      popup_opens: data.popup_opens != null ? Number(data.popup_opens) : 0,
+      conversions: data.conversions != null ? Number(data.conversions) : 0,
+      earnings: data.earnings != null ? Number(data.earnings) : 0,
       starts_at: data.starts_at || now,
       ends_at: data.ends_at || null,
       is_active: data.is_active !== undefined ? Boolean(data.is_active) : true,
@@ -303,10 +375,11 @@ class PromotionsService {
     this.announcements.unshift(newAnn);
     this.saveAnnouncements();
 
-    // Async sync to Supabase
+    // Async sync to Supabase with identical ID
     serverSupabase
       .from("announcements")
       .insert({
+        id: newAnn.id,
         title: newAnn.title,
         body: newAnn.body,
         audience: newAnn.audience,
@@ -330,11 +403,22 @@ class PromotionsService {
   }
 
   public updateAnnouncement(id: string, data: Partial<ServerAnnouncement>): ServerAnnouncement | null {
-    const idx = this.announcements.findIndex((a) => a.id === id);
+    let idx = this.announcements.findIndex((a) => a.id === id);
+    if (idx === -1) {
+      // Check if id matches partial or title fallback
+      idx = this.announcements.findIndex((a) => a.id?.toLowerCase() === id?.toLowerCase());
+    }
     if (idx === -1) return null;
+
+    const nextOrder = data.priority_order !== undefined ? Number(data.priority_order) : (this.announcements[idx].priority_order || 1);
+
     this.announcements[idx] = {
       ...this.announcements[idx],
       ...data,
+      priority_order: nextOrder,
+      popup_opens: data.popup_opens !== undefined ? Number(data.popup_opens) : this.announcements[idx].popup_opens,
+      conversions: data.conversions !== undefined ? Number(data.conversions) : this.announcements[idx].conversions,
+      earnings: data.earnings !== undefined ? Number(data.earnings) : this.announcements[idx].earnings,
       updated_at: new Date().toISOString(),
     };
     this.saveAnnouncements();
@@ -361,6 +445,52 @@ class PromotionsService {
     }
 
     return this.announcements[idx];
+  }
+
+  public trackOpen(id: string): boolean {
+    const item = this.announcements.find((a) => a.id === id);
+    if (item) {
+      item.popup_opens = (item.popup_opens || 0) + 1;
+      item.updated_at = new Date().toISOString();
+      this.saveAnnouncements();
+      return true;
+    }
+    return false;
+  }
+
+  public trackConversion(idOrCoupon: string, amount: number): boolean {
+    if (!idOrCoupon) return false;
+    const clean = idOrCoupon.trim().toUpperCase();
+    const item = this.announcements.find(
+      (a) => a.id === idOrCoupon || (a.coupon_code && a.coupon_code.toUpperCase() === clean)
+    );
+    if (item) {
+      item.conversions = (item.conversions || 0) + 1;
+      item.earnings = Number(((item.earnings || 0) + (Number(amount) || 0)).toFixed(2));
+      item.updated_at = new Date().toISOString();
+      this.saveAnnouncements();
+      return true;
+    }
+    return false;
+  }
+
+  public getAnalytics() {
+    let totalOpens = 0;
+    let totalConversions = 0;
+    let totalEarnings = 0;
+
+    for (const a of this.announcements) {
+      totalOpens += a.popup_opens || 0;
+      totalConversions += a.conversions || 0;
+      totalEarnings += a.earnings || 0;
+    }
+
+    return {
+      totalOpens,
+      totalConversions,
+      totalEarnings: Number(totalEarnings.toFixed(2)),
+      conversionRate: totalOpens > 0 ? Number(((totalConversions / totalOpens) * 100).toFixed(1)) : 0,
+    };
   }
 
   public deleteAnnouncement(id: string): boolean {

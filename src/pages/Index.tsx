@@ -20,6 +20,7 @@ import {
   Activity,
   Smartphone,
   Expand,
+  Crown,
 } from "lucide-react";
 
 const workflowSteps = [
@@ -108,7 +109,7 @@ const premiumFeatures = [
 const Index = () => {
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly");
   const { price } = useMoney({ scope: "platform" });
-  const { priceOf, featuresOf, byKey, badgeOf, isPopular, badgePositionOf, nameOf, taglineOf } = usePricingPlans();
+  const { priceOf, featuresOf, byKey, badgeOf, isPopular, badgePositionOf, nameOf, taglineOf, ctaTextOf } = usePricingPlans();
 
   return (
     <Layout>
@@ -362,7 +363,7 @@ const Index = () => {
                     className="w-full cta-btn-outline"
                     asChild
                   >
-                    <Link to="/signup">Get Started Free</Link>
+                    <Link to="/signup">{ctaTextOf("free", "Get Started Free", billingPeriod)}</Link>
                   </Button>
                 </div>
               );
@@ -415,7 +416,7 @@ const Index = () => {
                   )}
                   <Button className="w-full cta-btn" asChild>
                     <Link to={`/checkout?plan=standard&period=${billingPeriod}`}>
-                      Choose Plan
+                      {ctaTextOf("standard", "Choose Plan", billingPeriod)}
                     </Link>
                   </Button>
                 </div>
@@ -479,12 +480,38 @@ const Index = () => {
                     asChild
                   >
                     <Link to={`/checkout?plan=premium&period=${billingPeriod}`}>
-                      Choose Plan
+                      {ctaTextOf("premium", "Choose Plan", billingPeriod)}
                     </Link>
                   </Button>
                 </div>
               );
             })()}
+          </div>
+
+          {/* Lifetime Deal Callout with Direct CTA */}
+          <div className="mt-8 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-sky-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 max-w-5xl mx-auto shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <Crown className="w-5 h-5 stroke-[2.2]" />
+              </div>
+              <div>
+                <p className="font-bold text-foreground text-sm flex items-center gap-2">
+                  <span>Exclusive Lifetime Pass</span>
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">ONE-TIME FEE</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Pay once, own GeFlow forever with unlimited limits, AI intelligence, and priority updates.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 shrink-0 w-full sm:w-auto">
+              <Button size="sm" className="cta-btn rounded-full text-xs font-bold px-4" asChild>
+                <Link to="/pricing">{ctaTextOf("standard", "UNLOCK LIFETIME", "lifetime")}</Link>
+              </Button>
+              <Button size="sm" variant="outline" className="rounded-full text-xs font-bold px-4 hover:bg-muted" asChild>
+                <Link to="/pricing">Compare Lifetime Deals →</Link>
+              </Button>
+            </div>
           </div>
         </div>
       </section>

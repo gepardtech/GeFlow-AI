@@ -115,7 +115,20 @@ export const PlatformSettingsProvider = ({ children }: { children: ReactNode }) 
         if (genRes.status === "fulfilled" && genRes.value?.settings) {
           const gen = genRes.value.settings;
           combined.parent_company = gen.parent_company || combined.parent_company || "Gepard Techs";
+          if (gen.footer_copyright) combined.footer_copyright = gen.footer_copyright;
+          if (Array.isArray(gen.social_links)) combined.social_links = gen.social_links;
         }
+
+        const platAlerts = (platRes.status === "fulfilled" ? (platRes.value as any)?.data?.alerts : null) || {};
+        if (platAlerts.general_settings?.footer_copyright) {
+          combined.footer_copyright = platAlerts.general_settings.footer_copyright;
+        } else if (platAlerts.footer_copyright && !combined.footer_copyright) {
+          combined.footer_copyright = platAlerts.footer_copyright;
+        }
+        if (Array.isArray(platAlerts.social_links) && (!combined.social_links || combined.social_links.length === 0)) {
+          combined.social_links = platAlerts.social_links;
+        }
+
         if (!combined.parent_company) {
           combined.parent_company = "Gepard Techs";
         }

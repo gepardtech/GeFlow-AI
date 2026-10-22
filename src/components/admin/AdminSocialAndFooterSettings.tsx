@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   fetchGeneralSettings,
   saveGeneralSettings,
+  getCachedSettings,
   SocialMediaLink,
   FooterCopyrightSettings,
   WordUrlMapping,
@@ -134,7 +135,13 @@ export const AdminSocialAndFooterSettings = () => {
   const [newOpenInNewTab, setNewOpenInNewTab] = useState(true);
 
   // About Page Members state
-  const [aboutMembers, setAboutMembers] = useState<AboutPageMember[]>(DEFAULT_GENERAL_SETTINGS.about_members);
+  const [aboutMembers, setAboutMembers] = useState<AboutPageMember[]>(() => {
+    const cached = getCachedSettings();
+    if (cached && Array.isArray(cached.about_members) && cached.about_members.length > 0) {
+      return cached.about_members;
+    }
+    return DEFAULT_GENERAL_SETTINGS.about_members;
+  });
   const [memberModalOpen, setMemberModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Partial<AboutPageMember> | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -297,8 +304,8 @@ export const AdminSocialAndFooterSettings = () => {
         wordUrls,
       };
 
-      const membersToSave = overrideMembers || aboutMembers;
-      const socialToSave = overrideSocial !== undefined ? overrideSocial : socialLinks;
+      const membersToSave = Array.isArray(overrideMembers) ? overrideMembers : aboutMembers;
+      const socialToSave = Array.isArray(overrideSocial) ? overrideSocial : socialLinks;
 
       await saveGeneralSettings({
         social_links: socialToSave,
@@ -655,7 +662,7 @@ export const AdminSocialAndFooterSettings = () => {
             </p>
           </div>
           <Button
-            onClick={handleSaveAll}
+            onClick={() => handleSaveAll()}
             disabled={saving}
             className="bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl h-10 px-5 gap-2"
           >
@@ -787,7 +794,7 @@ export const AdminSocialAndFooterSettings = () => {
             </p>
           </div>
           <Button
-            onClick={handleSaveAll}
+            onClick={() => handleSaveAll()}
             disabled={saving}
             className="bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl h-10 px-5 gap-2"
           >

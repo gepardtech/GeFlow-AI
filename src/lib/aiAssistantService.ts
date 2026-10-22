@@ -458,34 +458,81 @@ export async function fetchLiveBusinessAnalytics(businessId: string): Promise<Bu
 export function detectQueryLanguage(text: string): "english" | "roman_urdu" | "urdu" | "arabic" | "spanish" | "other" {
   const t = text.trim().toLowerCase();
 
+  // Devanagari script (Hindi)
+  if (/[\u0900-\u097F]/.test(t)) {
+    return "hindi";
+  }
+
+  // Chinese characters
+  if (/[\u4E00-\u9FFF]/.test(t)) {
+    return "chinese";
+  }
+
   // Arabic / Urdu unicode scripts
   if (/[\u0600-\u06FF]/.test(t)) {
-    // Check for Urdu specific characters or words
-    if (/[\u0679\u067E\u0686\u0688\u0691\u06BA\u06BE\u06C1\u06D2]/.test(t) || t.includes("ہے") || t.includes("کیا") || t.includes("میرا") || t.includes("کتنا")) {
+    if (
+      /[\u0679\u067E\u0686\u0688\u0691\u06BA\u06BE\u06C1\u06D2]/.test(t) ||
+      t.includes("ہے") ||
+      t.includes("کیا") ||
+      t.includes("میرا") ||
+      t.includes("کتنا") ||
+      t.includes("منافع") ||
+      t.includes("دکان") ||
+      t.includes("سیل") ||
+      t.includes("فروخت") ||
+      t.includes("بڑھائیں")
+    ) {
       return "urdu";
     }
     return "arabic";
   }
 
-  // Roman Urdu keyword heuristics
-  const romanUrduKeywords = [
-    "mera", "meri", "mere", "kitna", "kitni", "kitne", "hai", "hain", "kaisa", "kaisi", "kaise",
-    "chal", "raha", "rahi", "batao", "bataen", "btao", "konsi", "konsa", "kya", "kyun", "karo",
-    "bik", "bikne", "wali", "cheez", "munafa", "bikri", "karobar", "dukan", "maal", "bacha", "kamai",
-    "faida", "nuksan", "kharid", "becha", "aaj", "kal", "mahina", "hafta"
+  // Distinctive Roman Urdu markers that NEVER appear in valid English sentences
+  const strongRomanUrduMarkers = [
+    "mujhy", "mujhe", "mujy",
+    "btao", "batao", "bataen", "batayein",
+    "kesy", "kese", "kaise", "kaisay",
+    "apni", "apna", "apne",
+    "karobar", "karobaar",
+    "bikri", "munafa", "munafah",
+    "kamai", "bachat", "grahak",
+    "barhana", "barhao", "barhaoon",
+    "sale barha", "bikri barha", "apni sale", "kesy apni", "kese apni", "kaise apni",
+    "udhar", "khata", "dukan", "dukaan"
   ];
 
-  const words = t.split(/\s+/);
-  const matchedUrdu = words.filter((w) => romanUrduKeywords.includes(w)).length;
-  if (matchedUrdu >= 1 || (words.length <= 4 && matchedUrdu >= 1)) {
+  if (strongRomanUrduMarkers.some((marker) => t.includes(marker))) {
+    return "roman_urdu";
+  }
+
+  // Broader Roman Urdu word list (requiring at least 2 matches to prevent false positives)
+  const broaderRomanUrduWords = [
+    "kya", "kyun", "kyon", "kab", "kahan", "kidhar", "konsa", "konsi", "konse",
+    "karna", "karein", "karo", "skta", "sakti", "sakte", "sakta",
+    "hoon", "hain", "shukriya", "meherbani", "theek", "acha", "achi"
+  ];
+  const words = t.split(/[\s,?.!;:()]+/).filter(Boolean);
+  const matchedUrduWords = words.filter((w) => broaderRomanUrduWords.includes(w)).length;
+  if (matchedUrduWords >= 2) {
     return "roman_urdu";
   }
 
   // Spanish heuristics
-  const spanishKeywords = ["que", "cual", "cómo", "beneficio", "ganancia", "ventas", "inventario", "stock", "cuanto", "hoy", "mes"];
-  const matchedSpanish = words.filter((w) => spanishKeywords.includes(w)).length;
-  if (matchedSpanish >= 2) {
+  const spanishMarkers = ["cómo", "como aumentar", "ventas", "ganancia", "beneficio", "tienda", "hola", "inventario", "cuanto"];
+  if (spanishMarkers.some((m) => t.includes(m))) {
     return "spanish";
+  }
+
+  // French heuristics
+  const frenchMarkers = ["comment", "ventes", "bénéfice", "magasin", "bonjour", "combien"];
+  if (frenchMarkers.some((m) => t.includes(m))) {
+    return "french";
+  }
+
+  // German heuristics
+  const germanMarkers = ["wie", "umsatz", "gewinn", "geschäft", "hallo", "wieviel"];
+  if (germanMarkers.some((m) => t.includes(m))) {
+    return "german";
   }
 
   return "english";
@@ -503,7 +550,8 @@ export function generateLocalBusinessAnalysis(
   mode: AIMode,
   rawCtx: BusinessAnalyticsContext | null,
   planId: PlanId = "free",
-  preferredCurrency?: string
+  preferredCurrency?: string,
+  selectedLanguage: string = "english"
 ): string {
   const defaultCurrency = preferredCurrency || "PKR";
   const ctx: BusinessAnalyticsContext = rawCtx || {
@@ -557,7 +605,21 @@ export function generateLocalBusinessAnalysis(
     },
   };
 
-  const lang = detectQueryLanguage(query);
+  const detected = detectQueryLanguage(query);
+  // Determine effective response language:
+  // 1. If user explicitly chose a language in dropdown (other than English and other than auto), respect it!
+  // 2. Otherwise (default is English), if user writes in Roman Urdu, Urdu script, Arabic, Spanish, etc., match user's language!
+  let lang = "english";
+  const isExplicitLanguage =
+    selectedLanguage && selectedLanguage !== "auto" && selectedLanguage !== "english";
+
+  if (isExplicitLanguage) {
+    lang = selectedLanguage;
+  } else if (detected && detected !== "english" && detected !== "other") {
+    lang = detected;
+  } else {
+    lang = "english";
+  }
   const q = query.toLowerCase();
   const curr = ctx.business.currency;
   const fmt = (val: number) => formatCurrency(val, curr);
@@ -565,11 +627,214 @@ export function generateLocalBusinessAnalysis(
   // 0. PLAN MODE RESTRICTION CHECK
   if (!isModeAllowedForPlan(mode, planId)) {
     if (planId === "free") {
-      return `🔒 **Model Restricted (Free Plan)**\n\nThe **${mode.toUpperCase()}** model is available on **Standard** (Operator) and **Premium** (Knowledge & Advisor) plans. On the Free Plan, you have full access to **Analyst** mode with monthly business intelligence.\n\n*Upgrade your subscription to unlock this specialized AI model.*`;
+      if (lang === "roman_urdu") {
+        return `🔒 **Model Restricted (Free Plan)**\n\n**${mode.toUpperCase()}** model sirf **Standard** aur **Premium** plans me dastiyab hai. Free plan par aap **Analyst** mode use kar sakte hain.\n\n*Agli barhi features ke liye apna plan upgrade kar sakte hain.*`;
+      }
+      return `🔒 **Model Restricted (Free Plan)**\n\nThe **${mode.toUpperCase()}** model is available on **Standard** and **Premium** plans. On the Free Plan, you have full access to **Analyst** mode with monthly business intelligence.\n\n*Upgrade your subscription to unlock this specialized AI model.*`;
     }
     if (planId === "standard" && (mode === "knowledge" || mode === "advisor")) {
-      return `🔒 **Model Restricted (Standard Plan)**\n\nThe **${mode.toUpperCase()}** model is exclusive to the **Premium Plan** with multi-branch predictive intelligence and strategic advisors. On the Standard Plan, you have full access to **Analyst** and **Operator** modes.\n\n*Upgrade to Premium in the Subscription tab to unlock this model.*`;
+      if (lang === "roman_urdu") {
+        return `🔒 **Model Restricted (Standard Plan)**\n\nYeh model **Premium Plan** par available hai. Standard plan par aap **Analyst** aur **Operator** use kar sakte hain.`;
+      }
+      return `🔒 **Model Restricted (Standard Plan)**\n\nThe **${mode.toUpperCase()}** model is exclusive to the **Premium Plan**. On the Standard Plan, you have full access to **Analyst** and **Operator** modes.`;
     }
+  }
+
+  // 0.5. SALES INCREASE / HOW TO GROW STORE QUERY
+  const isSalesIncreaseQuery =
+    /increase.*sale/i.test(q) ||
+    /boost.*sale/i.test(q) ||
+    /grow.*sale/i.test(q) ||
+    /grow.*business/i.test(q) ||
+    /sell.*more/i.test(q) ||
+    /sale.*increase/i.test(q) ||
+    /kesy.*sale/i.test(q) ||
+    /kaise.*sale/i.test(q) ||
+    /kese.*sale/i.test(q) ||
+    /sale.*barha/i.test(q) ||
+    /bikri.*barha/i.test(q) ||
+    /karobar.*barha/i.test(q) ||
+    /grahak.*barha/i.test(q) ||
+    /customers.*barha/i.test(q) ||
+    q.includes("zyada bikri") ||
+    q.includes("ziada bikri") ||
+    q.includes("سیل بڑھا") ||
+    q.includes("فروخت بڑھا") ||
+    q.includes("گاہک بڑھا");
+
+  if (isSalesIncreaseQuery) {
+    if (lang === "roman_urdu") {
+      return [
+        `### 📈 Salam! Dukan Ki Sale aur Bikri Barhanay ke 5 Asaan aur Kaamyaab Tareeqay`,
+        ``,
+        `Aap apni dukan ki sale (bikri) bohot asani se barha sakte hain. Yeh 5 practical aur aasan tareeqay follow karein:`,
+        ``,
+        `• **1. Fast-Moving (Top Selling) Items Hamesha Full Rakhein**:`,
+        `Jo cheezein aapki dukan par rozana sab se zyada bikti hain, unka stock kabhi khatam na hone dein. Jab customer ko hamesha uska man-pasand samaan milta hai to wo bar bar aata hai.`,
+        ``,
+        `• **2. Counter Display (Checkout / POS ke qareeb samaan)**:`,
+        `Choti aur zaroori cheezein (jaise toffees, accessories, snacks, sachets) counter par bilkul samnay rakhein. Bill banwate waqt customer 1–2 cheezein extra khareed leta hai jis se bill ka total barh jata hai.`,
+        ``,
+        `• **3. Combo Deals aur Bundle Offers Banao**:`,
+        `2 ya 3 milti-julti cheezon ka package bana kar halka sa discount dein (e.g., "Do khareedne par aik par 15% discount"). Customer aik cheez lene aata hai aur do le jata hai.`,
+        ``,
+        `• **4. Slow-Moving Stock par Chota Discount Dein**:`,
+        `Jo samaan dukan me kaafi arsay se para hai aur bik nahi raha, us par 5% se 10% discount laga kar cash free karein aur us paisay se tezi se bikne wala naya stock layein.`,
+        ``,
+        `• **5. Regular Customers se WhatsApp Rabta**:`,
+        `Apne purane grahakon ke numbers mehfooz karein aur jab bhi naya maal ya fresh stock aaye to unko WhatsApp par pyara sa message ya photo bhej kar itlaa dein.`,
+        ``,
+        `💡 **Aasan Mashwara**: GeFlow POS counter par item-level discount feature use karein taake regular grahak ko foran khush kar sakein!`
+      ].join("\n");
+    }
+
+    if (lang === "urdu") {
+      return [
+        `### 📈 السلام علیکم! دکان کی فروخت اور سیل بڑھانے کے 5 آسان اور بہترین طریقے`,
+        ``,
+        `آپ اپنی دکان کی فروخت اور آمدن درج ذیل 5 آسان طریقوں پر عمل کر کے تیزی سے بڑھا سکتے ہیں:`,
+        ``,
+        `• **1. زیادہ بکنے والے پراڈکٹس کا اسٹاک ہمیشہ پورا رکھیں**:`,
+        `جو اشیاء سب سے زیادہ فروخت ہوتی ہیں ان کا اسٹاک کبھی ختم نہ ہونے دیں۔ گاہک جب بھی آئے اسے اس کی مطلوبہ چیز ملنی چاہیے۔`,
+        ``,
+        `• **2. کاؤنٹر پر پرکشش اشیاء رکھیں (Impulse Items)**:`,
+        `کاؤنٹر کے بالکل سامنے چھوٹی اور روزمرہ کی اشیاء رکھیں تاکہ گاہک بل بنواتے وقت مزید ایک دو چیزیں خرید لے۔`,
+        ``,
+        `• **3. بنڈل ڈیلز اور خصوصی پیشکشیں**:`,
+        `دو یا تین ملتی جلتی اشیاء کا پیکج بنائیں اور تھوڑی رعایت دیں۔ اس سے گاہک ایک کے بجائے دو اشیاء خریدے گا۔`,
+        ``,
+        `• **4. سست رفتار مال پر چھوٹ دے کر کیش آزاد کریں**:`,
+        `جو سامان کافی عرصے سے نہیں بک رہا اس پر رعایت دے کر فروخت کریں اور اس رقم سے تیز بکنے والا نیا مال لائیں۔`,
+        ``,
+        `• **5. مستقل گاہکوں سے رابطہ**:`,
+        `اپنے پرانے گاہکوں کا فون نمبر محفوظ رکھیں اور نیا مال آنے پر انہیں واٹس ایپ پر مطلع کریں۔`,
+        ``,
+        `💡 **آسان مشورہ:** پی او ایس کاؤنٹر پر آئٹم ڈسکاؤنٹ کا فیچر استعمال کر کے اچھے گاہکوں کو رعایت دیں۔`
+      ].join("\n");
+    }
+
+    if (lang === "spanish") {
+      return [
+        `### 📈 ¡Hola! 5 Formas Prácticas de Aumentar las Ventas de su Tienda`,
+        ``,
+        `Aumentar las ventas diarias y el ticket promedio es sencillo con estas 5 estrategias comprobadas:`,
+        ``,
+        `• **1. Mantenga Siempre Stock de los Productos Más Vendidos**:`,
+        `Identifique sus artículos de mayor rotación y asegúrese de reponerlos antes de que se agoten.`,
+        ``,
+        `• **2. Productos de Impulso en el Mostrador de Pago**:`,
+        `Coloque artículos pequeños y de alto margen junto al terminal POS para compras espontáneas.`,
+        ``,
+        `• **3. Cree Paquetes y Ofertas Combinadas**:`,
+        `Empareje productos complementarios con un pequeño descuento para elevar el valor del pedido.`,
+        ``,
+        `• **4. Liquide el Inventario de Lento Movimiento**:`,
+        `Aplique descuentos moderados a artículos estancados para liberar capital y reinvertir en novedades.`,
+        ``,
+        `• **5. Fidelice Clientes por WhatsApp**:`,
+        `Envíe mensajes cordiales a sus clientes habituales cuando lleguen nuevos lotes o productos.`,
+        ``,
+        `💡 **Consejo Práctico**: ¡Use los descuentos por artículo en la pantalla POS para premiar a clientes fieles!`
+      ].join("\n");
+    }
+
+    if (lang === "arabic") {
+      return [
+        `### 📈 أهلاً بك! 5 طرق عملية لزيادة مبيعات وأرباح متجرك`,
+        ``,
+        `يمكنك زيادة مبيعاتك اليومية وحجم السلة بسهولة من خلال اتباع هذه الخطوات الـ 5 البسيطة:`,
+        ``,
+        `• **1. توفير المنتجات الأكثر مبيعاً دائماً**:`,
+        `احرص على ألا ينفد مخزون السلع الأكثر طلباً في متجرك لضمان تلبية طلبات الزبائن دائماً.`,
+        ``,
+        `• **2. عروض المنتجات بجانب كاونتر ونقاط البيع (POS)**:`,
+        `ضع السلع الصغيرة ذات الهامش الربحي المرتفع بجوار الكاشير لزيادة المبيعات التلقائية.`,
+        ``,
+        `• **3. عروض الحزم والخصومات المجمعة**:`,
+        `اصنع باقات تجمع بين منتجين معاً بتخفيض بسيط لتشجيع العميل على شراء أكثر من قطعة.`,
+        ``,
+        `• **4. تصريف البضائع بطيئة الحركة**:`,
+        `قدّم تخفيضات مناسبة على البضائع الراكدة لتحرير السيولة وإعادة استثمارها في بضائع سريعة.`,
+        ``,
+        `• **5. التواصل مع الزبائن الدائمين عبر واتساب**:`,
+        `أرسل تنبيهات لطيفة لزبائنك عند وصول بضائع جديدة أو عروض مميزة.`,
+        ``,
+        `💡 **نصيحة سريعة**: استخدم خاصية الخصم على مستوى الصنف في شاشة POS لمكافأة زبائنك الدائمين!`
+      ].join("\n");
+    }
+
+    if (lang === "french") {
+      return [
+        `### 📈 Bonjour ! 5 Stratégies Pratiques pour Augmenter les Ventes de Votre Magasin`,
+        ``,
+        `Développer vos ventes quotidiennes est accessible grâce à ces 5 méthodes simples et éprouvées :`,
+        ``,
+        `• **1. Gardez vos Meilleures Ventes Toujours en Stock**:`,
+        `Ne laissez jamais vos articles phares tomber en rupture pour satisfaire chaque client.`,
+        ``,
+        `• **2. Présentation d'Articles Coup de Cœur en Caisse**:`,
+        `Placez des accessoires ou petits articles à forte marge près du terminal POS.`,
+        ``,
+        `• **3. Offres Groupées et Packs Avantageux**:`,
+        `Associez deux produits complémentaires avec une légère réduction pour augmenter le panier moyen.`,
+        ``,
+        `• **4. Déstockez les Produits à Rotation Lente**:`,
+        `Appliquez une remise ciblée sur les articles dormants pour libérer de la trésorerie.`,
+        ``,
+        `• **5. Contactez vos Clients Réguliers via WhatsApp**:`,
+        `Prévenez vos fidèles clients dès la réception de nouveaux arrivages ou promotions.`,
+        ``,
+        `💡 **Astuce Pro**: Utilisez la remise par article directement sur le terminal POS pour fidéliser !`
+      ].join("\n");
+    }
+
+    if (lang === "german") {
+      return [
+        `### 📈 Hallo! 5 Praktische Tipps zur Steigerung Ihres Ladenumsatzes`,
+        ``,
+        `Steigern Sie Ihren täglichen Verkauf und Warenkorb mit diesen 5 bewährten Schritten:`,
+        ``,
+        `• **1. Bestseller Stets Vorrätig Halten**:`,
+        `Vermeiden Sie Lieferengpässe bei Ihren meistverkauften Artikeln.`,
+        ``,
+        `• **2. Spontankäufe am Kassenbereich Fördern**:`,
+        `Platzieren Sie margenstarke Kleinartikel direkt am POS-Terminal.`,
+        ``,
+        `• **3. Paketangebote und Bundles Schnüren**:`,
+        `Kombinieren Sie passende Produkte mit einem kleinen Rabatt für höhere Umsätze pro Kunde.`,
+        ``,
+        `• **4. Langsamdreher Gezielt Abverkaufen**:`,
+        `Geben Sie Rabatte auf Altbestände, um gebundenes Kapital für neue Schnelldreher freizusetzen.`,
+        ``,
+        `• **5. Stammkunden per WhatsApp Informieren**:`,
+        `Informieren Sie Stammkunden freundlich über neue Wareneingänge.`,
+        ``,
+        `💡 **Praxistipp**: Nutzen Sie Positionsrabatte direkt in der POS-Kasse für zufriedene Kunden!`
+      ].join("\n");
+    }
+
+    return [
+      `### 📈 5 Practical Ways to Increase Your Store Sales & Revenue`,
+      ``,
+      `Hello! Growing your daily retail sales and basket size is straightforward with these 5 proven, practical strategies:`,
+      ``,
+      `• **1. Keep Fast-Moving Items Consistently in Stock**:`,
+      `Identify your top 20% best-selling products and ensure they are reordered before stock runs low. Never turn away a ready buyer due to an out-of-stock item.`,
+      ``,
+      `• **2. Upsell at the Checkout Counter**:`,
+      `Place high-margin impulse items (accessories, pocket snacks, essentials) right by your POS counter so shoppers can easily add them to their basket during checkout.`,
+      ``,
+      `• **3. Create Bundle Offers & Combo Deals**:`,
+      `Pair complementary products together (e.g. "Buy Product A and get 15% off Product B"). Customers perceive high value and your Average Order Value (AOV) increases immediately.`,
+      ``,
+      `• **4. Clear Slow-Moving Inventory**:`,
+      `Run quick clearance discounts on dead or slow stock to recover tied-up capital, then reinvest the cash into fast-selling seasonal products.`,
+      ``,
+      `• **5. Engage Regular Shoppers via WhatsApp**:`,
+      `Keep a contact list of your frequent customers. Send brief, friendly alerts whenever fresh stock or new arrivals arrive at your store.`,
+      ``,
+      `💡 **Pro Tip**: Use GeFlow POS quick item discounts to reward loyal shoppers directly at checkout!`
+    ].join("\n");
   }
 
   const isFree = planId === "free";
@@ -585,29 +850,34 @@ export function generateLocalBusinessAnalysis(
   if (q.includes("profit") || q.includes("margin") || q.includes("munafa") || q.includes("kamai") || q.includes("faida") || q.includes("beneficio") || q.includes("ربح")) {
     // Plan restriction on Free Plan (Monthly only, not daily/weekly)
     if (isFree) {
-      const notice = (asksDaily || asksWeekly)
-        ? `📅 *Plan Notice: Daily and Weekly breakdowns are available on Standard & Premium plans. Showing your Monthly Profit Performance:*\n\n`
-        : "";
-
       if (lang === "roman_urdu") {
         return [
-          `${notice}**${ctx.business.name} ka Monthly Profit Analysis (${curr}):**`,
-          `• **Pichle 30 Din Ka Munafa:** ${fmt(ctx.sales.monthProfit)} (Total Sales: ${fmt(ctx.sales.monthRevenue)})`,
-          `• **Net Profit Margin:** ${ctx.sales.netProfitMargin.toFixed(1)}%`,
-          `• **Total Completed Orders (30 Days):** ${ctx.sales.monthTransactions} orders`,
+          `👋 **Salam! ${ctx.business.name} ka Monthly Munafa:**`,
+          `• **Pichle 30 Din Ka Saaf Munafa:** ${fmt(ctx.sales.monthProfit)} (Total Bikri: ${fmt(ctx.sales.monthRevenue)})`,
+          `• **Munafay Ki Sharah (Margin):** ${ctx.sales.netProfitMargin.toFixed(1)}%`,
+          `• **Grahak / Orders:** ${ctx.sales.monthTransactions} orders mukammal huay`,
           ``,
-          `💡 *Free Plan Info:* Daily aur Weekly profit reports Standard aur Premium plans par dastiyab hain.`
+          `💡 **Aasan Tip:** Rozana aur weekly hisab ke liye Standard ya Premium plan upgrade kar sakte hain.`
         ].join("\n");
       }
-
+      if (lang === "urdu") {
+        return [
+          `👋 **السلام علیکم! ${ctx.business.name} کا ماہانہ منافع:**`,
+          `• **پچھلے 30 دن کا خالص منافع:** ${fmt(ctx.sales.monthProfit)} (کل فروخت: ${fmt(ctx.sales.monthRevenue)})`,
+          `• **منافع کی شرح:** ${ctx.sales.netProfitMargin.toFixed(1)}%`,
+          `• **کل آرڈرز:** ${ctx.sales.monthTransactions} مکمل ہوئے`,
+          ``,
+          `💡 **آسان مشورہ:** زیادہ بکنے والی چیزوں کا اسٹاک ہمیشہ تیار رکھیں۔`
+        ].join("\n");
+      }
       return [
-        `${notice}### Monthly Profit & Margin Analysis: ${ctx.business.name}`,
-        `• **Last 30 Days Profit:** ${fmt(ctx.sales.monthProfit)} on ${fmt(ctx.sales.monthRevenue)} revenue`,
+        `👋 **Hello! Here is your 30-day profit summary for ${ctx.business.name}:**`,
+        `• **Last 30 Days Clear Profit:** ${fmt(ctx.sales.monthProfit)} from ${fmt(ctx.sales.monthRevenue)} in sales`,
         `• **Net Profit Margin:** ${ctx.sales.netProfitMargin.toFixed(1)}%`,
-        `• **Monthly Completed Orders:** ${ctx.sales.monthTransactions} transactions`,
-        `• **Average Order Value:** ${fmt(ctx.sales.averageOrderValue)}`,
+        `• **Total Orders Completed:** ${ctx.sales.monthTransactions} orders`,
+        `• **Average Order Value:** ${fmt(ctx.sales.averageOrderValue)} per customer`,
         ``,
-        `Upgrade to Standard or Premium to unlock real-time Daily and 7-Day Weekly profit trends.`
+        `💡 **Friendly Tip:** Keep popular items in stock to help sales grow easily.`
       ].join("\n");
     }
 

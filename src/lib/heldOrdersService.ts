@@ -6,6 +6,21 @@ const LOCAL_STORAGE_KEY_PREFIX = "geflow_held_orders_";
 export async function fetchHeldOrders(businessId: string): Promise<HeldOrderRecord[]> {
   if (!businessId) return [];
 
+  // 1. Primary: Fetch from backend API which reads from PostgreSQL held_orders table with service role
+  try {
+    const res = await fetch(`/api/sync/held-orders?businessId=${encodeURIComponent(businessId)}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && Array.isArray(json.heldOrders) && json.heldOrders.length > 0) {
+        localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}${businessId}`, JSON.stringify(json.heldOrders));
+        return json.heldOrders as HeldOrderRecord[];
+      }
+    }
+  } catch (err) {
+    console.warn("Notice fetching held_orders from sync server:", err);
+  }
+
+  // 2. Secondary: Query Supabase directly
   try {
     const { data, error } = await supabase
       .from("held_orders" as any)
@@ -13,20 +28,20 @@ export async function fetchHeldOrders(businessId: string): Promise<HeldOrderReco
       .eq("business_id", businessId)
       .order("created_at", { ascending: false });
 
-    if (!error && data) {
-      // Sync local storage copy for offline resilience
+    if (!error && Array.isArray(data) && data.length > 0) {
       localStorage.setItem(`${LOCAL_STORAGE_KEY_PREFIX}${businessId}`, JSON.stringify(data));
       return data as unknown as HeldOrderRecord[];
     }
   } catch (err) {
-    console.warn("Could not fetch held_orders from Supabase, checking local fallback:", err);
+    console.warn("Notice fetching held_orders from Supabase:", err);
   }
 
-  // Fallback to localStorage
+  // 3. Fallback to localStorage without overwriting it if server was temporarily empty
   try {
     const cached = localStorage.getItem(`${LOCAL_STORAGE_KEY_PREFIX}${businessId}`);
     if (cached) {
-      return JSON.parse(cached);
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch {
     // Ignore JSON errors
@@ -52,6 +67,25 @@ export async function saveHeldOrder(payload: {
     updated_at: new Date().toISOString(),
   };
 
+  // 1. Save to backend service-role API which writes to PostgreSQL held_orders table
+  try {
+    const res = await fetch("/api/sync/held-orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ businessId: payload.business_id, order: localRecord }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.heldOrder) {
+        syncLocalHeldOrder(data.heldOrder, payload.business_id);
+        return data.heldOrder;
+      }
+    }
+  } catch (err) {
+    console.warn("Notice saving held_order via sync server:", err);
+  }
+
+  // 2. Secondary: Insert to Supabase directly
   try {
     const { data, error } = await supabase
       .from("held_orders" as any)
@@ -74,7 +108,7 @@ export async function saveHeldOrder(payload: {
       return record;
     }
   } catch (err) {
-    console.warn("Could not insert held_order to Supabase, using local fallback:", err);
+    console.warn("Notice inserting held_order to Supabase:", err);
   }
 
   syncLocalHeldOrder(localRecord, payload.business_id);
@@ -82,13 +116,27 @@ export async function saveHeldOrder(payload: {
 }
 
 export async function deleteHeldOrder(orderId: string, businessId?: string): Promise<boolean> {
+  // 1. Delete on server API
+  if (businessId) {
+    try {
+      await fetch("/api/sync/held-orders", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId, orderId }),
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // 2. Delete on Supabase
   try {
     await supabase.from("held_orders" as any).delete().eq("id", orderId);
   } catch {
     // Ignore error
   }
 
-  // Clean from localStorage across keys
+  // 3. Clean from localStorage
   if (businessId) {
     try {
       const key = `${LOCAL_STORAGE_KEY_PREFIX}${businessId}`;
@@ -99,10 +147,9 @@ export async function deleteHeldOrder(orderId: string, businessId?: string): Pro
         localStorage.setItem(key, JSON.stringify(filtered));
       }
     } catch {
-      // Ignore
+      // Ignore errors
     }
   }
-
   return true;
 }
 

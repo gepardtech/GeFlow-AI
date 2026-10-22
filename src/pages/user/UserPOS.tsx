@@ -5,7 +5,7 @@ import {
   Banknote, CreditCard, Zap, Loader2, X, Sparkles, Scale, Pill, Droplets,
   Layers, ChevronRight, User, Phone, FileText, Barcode, Check, RotateCcw,
   FlaskConical, UserPlus, Globe, Clock, PauseCircle,
-  Smartphone, Building2, ArrowRightLeft,
+  Smartphone, Building2, ArrowRightLeft, Tag, Percent,
 } from "lucide-react";
 import { getBusinessPaymentMethods, BusinessPaymentMethod } from "@/lib/paymentMethods";
 import UserPanelGate from "@/components/UserPanelGate";
@@ -68,6 +68,10 @@ export interface CartLine extends POSProduct {
   stockUnitsDeducted: number; // Base units deducted per 1 unit of this line (e.g. 12 for 1 box, 1 for 1 tablet)
   displayUnitLabel: string;
   proportionalCost: number;
+  discountPct?: number; // per-item percent discount
+  discountAmount?: number; // per-item fixed discount
+  discountType?: "pct" | "fixed";
+  isEditingDiscount?: boolean;
 }
 
 const UserPOS = () => {
@@ -287,26 +291,21 @@ const UserPOS = () => {
     posConfig.enableTaxCalculation === "false" ||
     posConfig.taxEnabled === false ||
     posConfig.taxDisabled === true ||
+    posConfig.showTaxBreakdown === false ||
+    posConfig.showTaxBreakdown === "false" ||
     (posConfig.defaultTaxRate !== undefined && Number(posConfig.defaultTaxRate) === 0) ||
-    (!posConfig.defaultTaxRate && active?.default_tax === 0);
-
-  const isSettingsTaxEnabled =
-    !isSettingsTaxExplicitlyDisabled &&
-    posConfig.showTaxBreakdown !== false &&
-    posConfig.showTaxBreakdown !== "false";
-
-  // If user explicitly toggled tax on POS terminal, respect override; otherwise respect business settings
-  const isTaxEnabled = posTaxOverridden !== null
-    ? posTaxOverridden
-    : isSettingsTaxEnabled;
+    (!posConfig.defaultTaxRate && (active?.default_tax === 0 || active?.default_tax === null || active?.default_tax === undefined));
 
   const rawTaxRate = Number(
     posConfig.defaultTaxRate !== undefined
       ? posConfig.defaultTaxRate
       : (active?.default_tax ?? 0)
   );
-  // Guarantee: if user disabled tax, effective rate is strictly 0 regardless of items purchased
-  const effectiveTaxRate = isTaxEnabled && !isSettingsTaxExplicitlyDisabled ? rawTaxRate : 0;
+
+  // Bulletproof tax guarantee:
+  // If tax is disabled in settings, or 0% rate, or terminal disabled: tax MUST NEVER apply
+  const isTaxEnabled = !isSettingsTaxExplicitlyDisabled && rawTaxRate > 0 && posTaxOverridden !== false && (posTaxOverridden === true || posConfig.enableTaxCalculation === true);
+  const effectiveTaxRate = isTaxEnabled ? rawTaxRate : 0;
   const taxRate = effectiveTaxRate;
 
   const enableSecondaryTax = isTaxEnabled && Boolean(posConfig.enableSecondaryTax);
@@ -691,15 +690,59 @@ const UserPOS = () => {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const subtotal = cart.reduce((s, l) => s + l.unit * l.qty, 0);
-  const discountValue = Math.min(subtotal * (Number(discountPct) || 0) / 100, subtotal);
-  const taxed = subtotal - discountValue;
+  const getLineGross = useCallback((l: CartLine) => l.unit * l.qty, []);
+
+  const getLineDiscount = useCallback((l: CartLine) => {
+    const gross = l.unit * l.qty;
+    if (l.discountType === "fixed") {
+      return Math.min(gross, Math.max(0, Number(l.discountAmount || 0)));
+    }
+    const pct = Math.min(100, Math.max(0, Number(l.discountPct || 0)));
+    return Math.round(((gross * pct) / 100) * 100) / 100;
+  }, []);
+
+  const getLineTotal = useCallback((l: CartLine) => {
+    return Math.max(0, (l.unit * l.qty) - (l.discountType === "fixed" ? Math.min(l.unit * l.qty, Math.max(0, Number(l.discountAmount || 0))) : ((l.unit * l.qty * Math.min(100, Math.max(0, Number(l.discountPct || 0)))) / 100)));
+  }, []);
+
+  const setLineDiscount = useCallback((lineId: string, val: number, type: "pct" | "fixed" = "pct") => {
+    setCart((prev) =>
+      prev.map((l) =>
+        l.lineId === lineId
+          ? {
+              ...l,
+              discountType: type,
+              discountPct: type === "pct" ? val : undefined,
+              discountAmount: type === "fixed" ? val : undefined,
+              isEditingDiscount: false,
+            }
+          : l
+      )
+    );
+  }, []);
+
+  const toggleLineDiscountEdit = useCallback((lineId: string) => {
+    setCart((prev) =>
+      prev.map((l) => (l.lineId === lineId ? { ...l, isEditingDiscount: !l.isEditingDiscount } : l))
+    );
+  }, []);
+
+  const grossSubtotal = cart.reduce((s, l) => s + getLineGross(l), 0);
+  const itemDiscountsTotal = cart.reduce((s, l) => s + getLineDiscount(l), 0);
+  const afterItemDiscountSubtotal = Math.max(0, grossSubtotal - itemDiscountsTotal);
+
+  // Overall cart discount applies on top
+  const cartDiscountValue = Math.min(afterItemDiscountSubtotal * (Number(discountPct) || 0) / 100, afterItemDiscountSubtotal);
+  const subtotal = afterItemDiscountSubtotal;
+  const totalDiscount = Math.round((itemDiscountsTotal + cartDiscountValue) * 100) / 100;
+  const taxed = Math.max(0, afterItemDiscountSubtotal - cartDiscountValue);
 
   let gst = 0;
   let secondaryGst = 0;
   let grandTotal = taxed;
 
-  if (isTaxEnabled && (effectiveTaxRate > 0 || secondaryTaxRate > 0)) {
+  // Strict tax guarantee: if tax disabled, tax is strictly 0 regardless of how many products/items are in cart
+  if (isTaxEnabled && effectiveTaxRate > 0) {
     if (isTaxInclusive) {
       // Prices ALREADY include tax - total does NOT increase
       const combinedRate = effectiveTaxRate + secondaryTaxRate;
@@ -710,7 +753,7 @@ const UserPOS = () => {
     } else {
       // Tax Exclusive - added on top of taxed subtotal
       gst = Math.round((taxed * (effectiveTaxRate / 100)) * 100) / 100;
-      secondaryGst = Math.round((taxed * (secondaryTaxRate / 100)) * 100) / 100;
+      secondaryGst = secondaryTaxRate > 0 ? Math.round((taxed * (secondaryTaxRate / 100)) * 100) / 100 : 0;
       grandTotal = taxed + gst + secondaryGst;
     }
   } else {
@@ -753,7 +796,7 @@ const UserPOS = () => {
     }
 
     setProcessing(true);
-    const profit = cart.reduce((s, l) => s + (l.unit - Number(l.proportionalCost)) * l.qty, 0) - discountValue;
+    const profit = cart.reduce((s, l) => s + (getLineTotal(l) - Number(l.proportionalCost) * l.qty), 0) - cartDiscountValue;
     const professionalReceiptNo = generateProfessionalReceiptNo(active.business_name);
 
     const saleItems = cart.map((l) => ({
@@ -762,6 +805,8 @@ const UserPOS = () => {
       quantity: l.qty,
       unit_price: l.unit,
       unit_cost: Number(l.proportionalCost),
+      discount: getLineDiscount(l),
+      total: getLineTotal(l),
       deductionUnits: (l.stockUnitsDeducted || 1) * l.qty,
       barcode: l.barcode || null,
       batch_number: l.batch_number || null,
@@ -788,6 +833,58 @@ const UserPOS = () => {
     });
 
     const saleId = syncRes?.sale?.id || `sale_${Date.now()}`;
+
+    // If payment method was Store Credit / Udhar, record in Udhar Ledger
+    if (activeMethodObj?.type === "credit" || payMethod === "credit") {
+      try {
+        const custName = customerName.trim() || "Walk-in Customer";
+        const credRes = await fetch(`/api/sync/store-credits?businessId=${encodeURIComponent(active.id)}`);
+        if (credRes.ok) {
+          const credData = await credRes.json();
+          let matched = (credData.credits || []).find((c: any) =>
+            (c.customer_phone && fullCustomerPhone && c.customer_phone === fullCustomerPhone) ||
+            c.customer_name.toLowerCase() === custName.toLowerCase()
+          );
+          if (!matched) {
+            const createRes = await fetch("/api/sync/store-credits", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                businessId: active.id,
+                credit: {
+                  customer_name: custName,
+                  customer_phone: fullCustomerPhone,
+                  balance: 0,
+                  credit_limit: 1000,
+                  notes: `Auto-created from POS order ${professionalReceiptNo}`,
+                },
+              }),
+            });
+            if (createRes.ok) {
+              const created = await createRes.json();
+              matched = created.credit;
+            }
+          }
+          if (matched?.id) {
+            await fetch("/api/sync/store-credits/adjust", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                businessId: active.id,
+                creditId: matched.id,
+                amount: grandTotal,
+                type: "charge",
+                note: `POS Store Credit Purchase (${cart.length} items)`,
+                invoiceNo: professionalReceiptNo,
+                processedBy: cashierName || "Cashier",
+              }),
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("Notice updating store credit account:", e);
+      }
+    }
 
     // Group stock deductions in BASE UNITS per product to ensure accurate atomic updates
     const productDeductions: Record<string, { product: POSProduct; totalBaseUnitsDeducted: number; summaryLabels: string[] }> = {};
@@ -849,7 +946,7 @@ const UserPOS = () => {
 
     setProcessing(false);
 
-    // Build the printable receipt from finalized cart with professional receipt/invoice ID
+    // Build the printable receipt from finalized cart with registered business name
     const invoiceNo = professionalReceiptNo;
     setReceipt({
       invoiceNo,
@@ -858,7 +955,7 @@ const UserPOS = () => {
       businessAddress: posConfig.businessAddress || active.business_address || "",
       businessPhone: posConfig.businessPhone || "",
       logoUrl: posConfig.logoUrl || null,
-      receiptHeader: posConfig.receiptHeader || active.business_name,
+      receiptHeader: posConfig.receiptHeader?.trim() || active.business_name,
       receiptSubheader: posConfig.receiptSubheader || "Official Store Receipt & Fiscal Log",
       receiptFooter: posConfig.receiptFooter || "Thank you for choosing us! Returns accepted within 14 days.",
       cashierName: cashierName || "Cashier",
@@ -866,18 +963,19 @@ const UserPOS = () => {
       customerPhone: fullCustomerPhone,
       patientNote: customerNote.trim() || undefined,
       showLogoOnReceipt: posConfig.showLogoOnReceipt !== false,
-      showTaxBreakdown: posConfig.showTaxBreakdown !== false,
+      showTaxBreakdown: posConfig.showTaxBreakdown !== false && isTaxEnabled && effectiveTaxRate > 0,
       showCashierName: posConfig.showCashierName !== false,
       showBarcodeOnReceipt: posConfig.showBarcodeOnReceipt !== false,
       autoPrintReceipt: Boolean(posConfig.autoPrintReceipt),
+      receiptFont: posConfig.receiptFont || "poppins",
       lines: cart.map((l) => ({
         name: l.fractionOfPack !== 1 ? `${l.name} (${l.displayUnitLabel})` : l.name,
         qty: l.qty,
         unit: l.unit,
-        total: l.unit * l.qty,
+        total: getLineTotal(l),
       })),
       subtotal,
-      discount: discountValue,
+      discount: totalDiscount,
       taxRate: effectiveTaxRate,
       tax: gst,
       secondaryTax: secondaryGst,
@@ -1316,54 +1414,128 @@ const UserPOS = () => {
               </div>
             ) : (
               <ul className="p-3 space-y-2">
-                {cart.map((l) => (
-                  <li key={l.lineId} className="flex flex-col gap-2 rounded-xl border border-border p-2.5 bg-card hover:border-sky-500/30 transition">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold truncate leading-tight text-foreground">{l.name}</p>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                {cart.map((l) => {
+                  const gross = getLineGross(l);
+                  const lineDisc = getLineDiscount(l);
+                  const lineTotal = getLineTotal(l);
+                  const hasLineDisc = lineDisc > 0;
+
+                  return (
+                    <li key={l.lineId} className="flex flex-col gap-2 rounded-xl border border-border p-2.5 bg-card hover:border-sky-500/30 transition">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold truncate leading-tight text-foreground">{l.name}</p>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => openUOMCalculatorForCartLine(l)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 text-[10px] font-bold border border-sky-500/20 transition cursor-pointer"
+                              title="Edit sub-unit or dose"
+                            >
+                              <Sparkles className="w-2.5 h-2.5" />
+                              <span>{l.displayUnitLabel}</span>
+                            </button>
+                            <span className="text-[11px] text-muted-foreground">
+                              {fmt(l.unit)} each
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => removeLine(l.lineId)}
+                          className="h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-rose-500 shrink-0 cursor-pointer"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Quantity & Item Discount Controls */}
+                      <div className="flex items-center justify-between pt-1.5 border-t border-border/50 gap-2">
+                        <div className="flex items-center gap-1.5">
                           <button
-                            type="button"
-                            onClick={() => openUOMCalculatorForCartLine(l)}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 text-[10px] font-bold border border-sky-500/20 transition cursor-pointer"
-                            title="Edit sub-unit or dose"
+                            onClick={() => changeQty(l.lineId, -1)}
+                            className="h-6 w-6 rounded-md bg-muted hover:bg-muted/70 flex items-center justify-center cursor-pointer"
                           >
-                            <Sparkles className="w-2.5 h-2.5" />
-                            <span>{l.displayUnitLabel}</span>
+                            <Minus className="h-3 w-3" />
                           </button>
-                          <span className="text-[11px] text-muted-foreground">
-                            {fmt(l.unit)} each
-                          </span>
+                          <span className="w-6 text-center text-sm font-bold">{l.qty}</span>
+                          <button
+                            onClick={() => changeQty(l.lineId, 1)}
+                            className="h-6 w-6 rounded-md bg-muted hover:bg-muted/70 flex items-center justify-center cursor-pointer"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+
+                        {/* Item-level discount button / input */}
+                        <div className="flex items-center gap-1.5 ml-auto">
+                          {l.isEditingDiscount ? (
+                            <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border">
+                              <input
+                                type="number"
+                                min="0"
+                                max={l.discountType === "fixed" ? gross : 100}
+                                autoFocus
+                                defaultValue={l.discountType === "fixed" ? l.discountAmount || 0 : l.discountPct || 0}
+                                onBlur={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setLineDiscount(l.lineId, val, l.discountType || "pct");
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    const val = parseFloat((e.target as HTMLInputElement).value) || 0;
+                                    setLineDiscount(l.lineId, val, l.discountType || "pct");
+                                  }
+                                }}
+                                className="w-14 h-6 px-1 text-center bg-background border border-border rounded text-xs font-bold"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextType = l.discountType === "fixed" ? "pct" : "fixed";
+                                  setLineDiscount(l.lineId, l.discountType === "fixed" ? (l.discountPct || 0) : (l.discountAmount || 0), nextType);
+                                }}
+                                className="px-1.5 h-6 text-[10px] font-bold rounded bg-muted hover:bg-muted/80"
+                                title="Toggle % or $"
+                              >
+                                {l.discountType === "fixed" ? symbol : "%"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => toggleLineDiscountEdit(l.lineId)}
+                                className="px-1.5 h-6 text-[10px] font-bold text-sky-500 hover:text-sky-600 cursor-pointer"
+                              >
+                                Done
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => toggleLineDiscountEdit(l.lineId)}
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold transition cursor-pointer ${
+                                hasLineDisc
+                                  ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                              }`}
+                              title="Add item discount"
+                            >
+                              <Tag className="w-2.5 h-2.5" />
+                              <span>{hasLineDisc ? `-${fmt(lineDisc)}` : "Item Disc"}</span>
+                            </button>
+                          )}
+
+                          <div className="text-right pl-1 min-w-[60px]">
+                            {hasLineDisc && (
+                              <span className="line-through text-[10px] text-muted-foreground block -mb-0.5">
+                                {fmt(gross)}
+                              </span>
+                            )}
+                            <p className="text-sm font-bold text-sky-500">{fmt(lineTotal)}</p>
+                          </div>
                         </div>
                       </div>
-                      <button
-                        onClick={() => removeLine(l.lineId)}
-                        className="h-6 w-6 rounded-md hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-rose-500 shrink-0 cursor-pointer"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-1.5 border-t border-border/50">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => changeQty(l.lineId, -1)}
-                          className="h-6 w-6 rounded-md bg-muted hover:bg-muted/70 flex items-center justify-center cursor-pointer"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </button>
-                        <span className="w-6 text-center text-sm font-bold">{l.qty}</span>
-                        <button
-                          onClick={() => changeQty(l.lineId, 1)}
-                          className="h-6 w-6 rounded-md bg-muted hover:bg-muted/70 flex items-center justify-center cursor-pointer"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
-                      </div>
-                      <p className="text-right text-sm font-bold text-sky-500">{fmt(l.unit * l.qty)}</p>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -1372,38 +1544,22 @@ const UserPOS = () => {
           <div className="border-t border-border p-3.5 space-y-2.5 flex-shrink-0 bg-card shadow-2xl z-20 mt-auto">
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">Subtotal ({cart.length} items)</span>
-              <span className="font-bold">{fmt(subtotal)}</span>
+              <span className="font-bold">{fmt(grossSubtotal)}</span>
             </div>
-            {discountValue > 0 && (
+            {totalDiscount > 0 && (
               <div className="flex items-center justify-between text-xs text-emerald-600 dark:text-emerald-400">
-                <span className="font-medium">Discount ({discountPct}%)</span>
-                <span className="font-bold">−{fmt(discountValue)}</span>
+                <span className="font-medium">Total Discount {itemDiscountsTotal > 0 && cartDiscountValue > 0 ? "(Items + Order)" : itemDiscountsTotal > 0 ? "(Items)" : `(${discountPct}%)`}</span>
+                <span className="font-bold">−{fmt(totalDiscount)}</span>
               </div>
             )}
-            <div className="flex items-center justify-between text-xs py-0.5">
-              <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground font-medium">{posConfig.taxLabel || "Tax"}</span>
-                <button
-                  type="button"
-                  onClick={handleToggleTax}
-                  title="Click to toggle tax on/off for this terminal"
-                  className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md transition-colors cursor-pointer ${
-                    isTaxEnabled && effectiveTaxRate > 0
-                      ? "bg-sky-500/15 text-sky-600 dark:text-sky-400 hover:bg-sky-500/25 border border-sky-500/30"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80 border border-border"
-                  }`}
-                >
-                  {isTaxEnabled && effectiveTaxRate > 0 ? `${effectiveTaxRate}% (ACTIVE)` : "DISABLED (0%)"}
-                </button>
+            {isTaxEnabled && effectiveTaxRate > 0 && (
+              <div className="flex items-center justify-between text-xs py-0.5">
+                <span className="text-muted-foreground font-medium">{posConfig.taxLabel || "Tax"} ({effectiveTaxRate}%)</span>
+                <span className="font-bold">
+                  {isTaxInclusive ? "(incl. " : "+"}{fmt(gst)}{isTaxInclusive ? ")" : ""}
+                </span>
               </div>
-              <span className="font-bold">
-                {isTaxEnabled && effectiveTaxRate > 0 ? (
-                  `${isTaxInclusive ? "(incl. " : "+"}${fmt(gst)}${isTaxInclusive ? ")" : ""}`
-                ) : (
-                  fmt(0)
-                )}
-              </span>
-            </div>
+            )}
             {showTaxBreakdown && isTaxEnabled && enableSecondaryTax && secondaryTaxRate > 0 && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">

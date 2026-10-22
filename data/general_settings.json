@@ -1,108 +1,43 @@
 {
   "parent_company": "Gepard Techs",
-  "social_links": [
-    {
-      "url": "https://www.facebook.com/geflow.official",
-      "enabled": true,
-      "platform": "facebook"
-    },
-    {
-      "id": "soc_1790267852299_7aqr",
-      "url": "https://www.instagram.com/geflow.ai/",
-      "label": "",
-      "order": 2,
-      "enabled": true,
-      "platform": "instagram"
-    },
-    {
-      "id": "soc_1790267878129_9lbi",
-      "url": "https://www.pinterest.com/geflow.ai",
-      "label": "",
-      "order": 3,
-      "enabled": true,
-      "platform": "pinterest"
-    },
-    {
-      "id": "soc_1790267908545_9rkr",
-      "url": "mailto:support@geflowai.com",
-      "label": "",
-      "order": 4,
-      "enabled": true,
-      "platform": "email"
-    }
-  ],
+  "social_links": [],
   "footer_copyright": {
-    "text": "© 2026 GeFlow AI. All rights reserved. Powered by Gepard Techs.",
-    "wordUrls": [
-      {
-        "id": "w_geflow",
-        "url": "/",
-        "word": "GeFlow AI",
-        "openInNewTab": false
-      },
-      {
-        "id": "w_gepard",
-        "url": "https://www.instagram.com/gepardweb",
-        "word": "Gepard Techs",
-        "openInNewTab": true
-      }
-    ]
+    "text": "Copyright 2026",
+    "wordUrls": []
   },
   "about_members": [
     {
       "id": "mem_1",
-      "bio": "Founder of Gepard Tech — the parent ecosystem behind GeFlow — SG Bilal is a full-stack developer and applied AI specialist. He architected GeFlow's real-time POS, inventory, and analytics engine.",
+      "bio": "Founder of Gepard Tech & Creator of GeFlow ecosystem.",
       "name": "SG Bilal",
-      "role": "Chairman & Chief Technical Officer (CTO)",
+      "role": "Chairman & CEO",
       "order": 1,
       "enabled": true,
-      "imageUrl": "https://gvkvljxhufsrgyfsqrkc.supabase.co/storage/v1/object/public/about_members/member_mem_1_1790519733540.jpg",
-      "image_url": "https://gvkvljxhufsrgyfsqrkc.supabase.co/storage/v1/object/public/about_members/member_mem_1_1790519733540.jpg",
-      "socialLinks": {
-        "x": "",
-        "email": "support@geflowai.com",
-        "github": "",
-        "facebook": "https://www.facebook.com/geflow.official",
-        "linkedin": "",
-        "instagram": "https://www.instagram.com/geflow.ai/",
-        "pinterest": "https://www.pinterest.com/geflow.ai"
-      },
+      "imageUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
+      "image_url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
       "social_links": {
-        "x": "",
-        "email": "support@geflowai.com",
-        "github": "",
-        "facebook": "https://www.facebook.com/geflow.official",
-        "linkedin": "",
-        "instagram": "https://www.instagram.com/geflow.ai/",
-        "pinterest": "https://www.pinterest.com/geflow.ai"
+        "x": "https://x.com/gepardweb",
+        "email": "gepardwebs@gmail.com",
+        "github": "https://github.com/gepardweb",
+        "facebook": "https://web.facebook.com/gepardweb/",
+        "linkedin": "https://www.linkedin.com/company/gepardweb",
+        "instagram": "https://www.instagram.com/gepardweb/",
+        "pinterest": "https://www.pinterest.com/gepardwebs"
       }
     },
     {
-      "id": "mem_2",
-      "bio": "CEO of Gepard Tech, drives the company’s strategy, product vision, and growth, focused on building practical technology that creates lasting business value.",
-      "name": "Rana Anas Nazakat",
-      "role": "Chief Executive Officer (CEO)",
+      "id": "mem_sarah",
+      "name": "Sarah Jenkins",
+      "role": "Head of AI & Product Architecture",
+      "bio": "Pioneering intelligent inventory heuristics and machine learning algorithms for high-speed commerce.",
+      "image_url": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop&crop=faces",
+      "imageUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop&crop=faces",
       "order": 2,
       "enabled": true,
-      "imageUrl": "https://gvkvljxhufsrgyfsqrkc.supabase.co/storage/v1/object/public/about_members/member_mem_2_1790530118197.jpg",
-      "image_url": "https://gvkvljxhufsrgyfsqrkc.supabase.co/storage/v1/object/public/about_members/member_mem_2_1790530118197.jpg",
-      "socialLinks": {
-        "x": "",
-        "email": "support@geflowai.com",
-        "github": "",
-        "facebook": "",
-        "linkedin": "",
-        "instagram": "",
-        "pinterest": ""
-      },
       "social_links": {
-        "x": "",
-        "email": "support@geflowai.com",
-        "github": "",
-        "facebook": "",
-        "linkedin": "",
-        "instagram": "",
-        "pinterest": ""
+        "linkedin": "https://linkedin.com",
+        "x": "https://x.com",
+        "email": "sarah@geflow.com"
       }
     }
   ]

@@ -68,70 +68,86 @@ const StockUpdateDialog = ({ open, onOpenChange, product, onSaved }: Props) => {
     }
 
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
 
-    const updatePayload: { stock_units: number; description?: string } = {
-      stock_units: projectedBaseUnits,
-    };
-
-    if (product.description) {
-      let updatedDesc = product.description;
-      if (updatedDesc.includes("[PACK_QTY:")) {
-        updatedDesc = updatedDesc.replace(/\[PACK_QTY:\s*[^\]]+\]/i, `[PACK_QTY: ${projectedPacks}]`);
+      let updatedDesc: string | undefined = undefined;
+      if (product.description) {
+        updatedDesc = product.description;
+        if (updatedDesc.includes("[PACK_QTY:")) {
+          updatedDesc = updatedDesc.replace(/\[PACK_QTY:\s*[^\]]+\]/i, `[PACK_QTY: ${projectedPacks}]`);
+        }
+        if (updatedDesc.includes("[BASE_QTY:")) {
+          updatedDesc = updatedDesc.replace(/\[BASE_QTY:\s*[^\]]+\]/i, `[BASE_QTY: ${projectedBaseUnits}]`);
+        }
       }
-      if (updatedDesc.includes("[BASE_QTY:")) {
-        updatedDesc = updatedDesc.replace(/\[BASE_QTY:\s*[^\]]+\]/i, `[BASE_QTY: ${projectedBaseUnits}]`);
-      }
-      updatePayload.description = updatedDesc;
-    }
 
-    const movementQty = projectedBaseUnits - currentBaseUnits;
+      const formattedReason = reason || `Manual stock ${mode} (${unitType === "uom" ? `${rawQty} ${stockInfo.uomLabel}` : `${rawQty} ${stockInfo.subUnitName}`})`;
+      const formattedNote = `Updated from ${currentBaseUnits} to ${projectedBaseUnits} ${stockInfo.subUnitName.toLowerCase()}s`;
 
-    // Adjust in unified operational sync engine
-    if (movementQty !== 0) {
-      await adjustSyncedStock(
-        product.business_id,
-        product.id,
-        Math.abs(movementQty),
-        movementQty > 0 ? "in" : "out",
-        reason || `Manual stock ${mode} (${unitType === "uom" ? `${rawQty} ${stockInfo.uomLabel}` : `${rawQty} ${stockInfo.subUnitName}`})`,
-        `Updated from ${currentBaseUnits} to ${projectedBaseUnits} ${stockInfo.subUnitName.toLowerCase()}s`,
-        user?.id
-      );
-    }
-
-    const { error } = await supabase.from("products").update(updatePayload).eq("id", product.id);
-    
-    // If Supabase failed (e.g. employee RLS boundary), the sync server already adjusted it successfully
-    if (error && movementQty === 0) {
-      setSaving(false);
-      toast({ title: "Could not update stock", description: error.message, variant: "destructive" });
-      return;
-    }
-
-    // Record stock movement (in base units)
-    if (movementQty !== 0 && user?.id) {
-      await recordStockMovement({
-        business_id: product.business_id,
-        owner_user_id: user.id,
-        product_id: product.id,
-        quantity: movementQty,
-        type: "adjustment",
-        reason: reason || `Manual stock ${mode} (${unitType === "uom" ? `${rawQty} ${stockInfo.uomLabel}` : `${rawQty} ${stockInfo.subUnitName}`})`,
-        note: `Updated from ${currentBaseUnits} to ${projectedBaseUnits} ${stockInfo.subUnitName.toLowerCase()}s`,
-        reference_id: product.id,
-        reference_type: "manual_adjustment",
-        created_by: user.id,
+      // 1. Primary: Update PostgreSQL Database directly via server service-role API
+      const res = await fetch(`/api/user/products/${product.id}/stock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessId: product.business_id,
+          stock_units: projectedBaseUnits,
+          deltaQuantity: baseQtyDelta,
+          mode,
+          reason: formattedReason,
+          note: formattedNote,
+          userId: user?.id,
+          description: updatedDesc,
+        }),
       });
-    }
 
-    setSaving(false);
-    toast({
-      title: "Stock updated successfully",
-      description: `${product.name}: ${stockInfo.displayText} → ${projectedPacks} ${stockInfo.uomLabel}s (${projectedBaseUnits} ${stockInfo.subUnitName.toLowerCase()}s)`,
-    });
-    onSaved();
-    onOpenChange(false);
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || "Failed to update stock on database server.");
+      }
+
+      const resData = await res.json();
+      if (!resData.success) {
+        throw new Error(resData.error || "Database stock update failed.");
+      }
+
+      // 2. Client-side secondary update if permitted by session
+      try {
+        await supabase
+          .from("products")
+          .update({
+            stock_units: projectedBaseUnits,
+            ...(updatedDesc ? { description: updatedDesc } : {}),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", product.id);
+      } catch {
+        /* Handled via server-side service-role */
+      }
+
+      // 3. Dispatch events to refresh all panels (Inventory, Low Stock, POS, Reports)
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("geflow:stock-updated", { detail: { businessId: product.business_id, productId: product.id, newStock: projectedBaseUnits } }));
+        window.dispatchEvent(new CustomEvent("geflow:products-updated", { detail: { businessId: product.business_id } }));
+        window.dispatchEvent(new CustomEvent("panel:refresh"));
+      }
+
+      toast({
+        title: "Stock updated successfully",
+        description: `${product.name}: ${stockInfo.displayText} → ${projectedPacks} ${stockInfo.uomLabel}s (${projectedBaseUnits} ${stockInfo.subUnitName.toLowerCase()}s)`,
+      });
+
+      onSaved();
+      onOpenChange(false);
+    } catch (err: any) {
+      toast({
+        title: "Could not update stock",
+        description: err?.message || "Failed to persist stock update to database.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

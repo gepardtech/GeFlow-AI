@@ -70,6 +70,7 @@ import UserAnnouncements from "./pages/user/UserAnnouncements";
 import UserNotifications from "./pages/user/UserNotifications";
 import UserSupport from "./pages/user/UserSupport";
 import UserProfile from "./pages/user/UserProfile";
+import UserCustomerCredits from "./pages/user/UserCustomerCredits";
 import { useBusinessRealtimeSync } from "./hooks/useBusinessRealtimeSync";
 
 function BusinessSyncObserver() {
@@ -144,6 +145,9 @@ const App = () => (
           <Route path="/businesses" element={<AuthGuard><UserBusinesses /></AuthGuard>} />
           <Route path="/dashboard/out-of-stock" element={<AuthGuard><UserOutOfStock /></AuthGuard>} />
           <Route path="/dashboard/pos" element={<AuthGuard><UserPOS /></AuthGuard>} />
+          <Route path="/dashboard/customer-credits" element={<AuthGuard><UserCustomerCredits /></AuthGuard>} />
+          <Route path="/dashboard/udhar" element={<AuthGuard><UserCustomerCredits /></AuthGuard>} />
+          <Route path="/customer-credits" element={<AuthGuard><UserCustomerCredits /></AuthGuard>} />
           <Route path="/dashboard/returns" element={<AuthGuard><UserReturns /></AuthGuard>} />
           <Route path="/returns" element={<AuthGuard><UserReturns /></AuthGuard>} />
           <Route path="/dashboard/purchases" element={<AuthGuard><UserPurchases /></AuthGuard>} />

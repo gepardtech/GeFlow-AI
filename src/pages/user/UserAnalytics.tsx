@@ -145,14 +145,24 @@ export const UserAnalytics = () => {
       let currentProducts = productsData || [];
       let currentItems: any[] = [];
 
-      // Only fallback to sync engine if Supabase query failed completely
-      if (salesData === null && productsData === null) {
-        const synced = await fetchSyncedReportsData(active.id, active?.staff_role || "manager", Boolean(active?.is_staff));
-        if (synced.sales.length > 0 || synced.products.length > 0) {
-          currentSales = synced.sales;
-          currentPurchases = synced.purchases || [];
-          currentProducts = synced.products || [];
-          currentItems = synced.sale_items || [];
+      // Query local synced reports cache to ensure offline/recent sales aren't lost
+      const synced = await fetchSyncedReportsData(active.id, active?.staff_role || "manager", Boolean(active?.is_staff));
+      if (synced) {
+        if (synced.sales && synced.sales.length > 0) {
+          const existingIds = new Set(currentSales.map((s) => s.id));
+          const missing = synced.sales.filter((s) => !existingIds.has(s.id));
+          currentSales = [...currentSales, ...missing];
+        }
+        if (synced.products && synced.products.length > 0) {
+          const existingPIds = new Set(currentProducts.map((p) => p.id));
+          const missingP = synced.products.filter((p) => !existingPIds.has(p.id));
+          currentProducts = [...currentProducts, ...missingP];
+        }
+        if (synced.sale_items && synced.sale_items.length > 0) {
+          currentItems = synced.sale_items;
+        }
+        if (synced.purchases && synced.purchases.length > 0 && currentPurchases.length === 0) {
+          currentPurchases = synced.purchases;
         }
       }
 
@@ -182,6 +192,18 @@ export const UserAnalytics = () => {
   useEffect(() => {
     if (!bizLoading) loadData();
   }, [bizLoading, loadData]);
+
+  useEffect(() => {
+    const onUpdate = () => loadData();
+    window.addEventListener("geflow:sales-updated", onUpdate);
+    window.addEventListener("geflow:products-updated", onUpdate);
+    window.addEventListener("geflow:stock-updated", onUpdate);
+    return () => {
+      window.removeEventListener("geflow:sales-updated", onUpdate);
+      window.removeEventListener("geflow:products-updated", onUpdate);
+      window.removeEventListener("geflow:stock-updated", onUpdate);
+    };
+  }, [loadData]);
 
   // Compute Metrics and Visual Data strictly from this store's data
   const {
@@ -219,34 +241,146 @@ export const UserAnalytics = () => {
     const totalOrders = filteredSales.length;
     const avgMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
 
-    // 2. Revenue Velocity Chart Data (Mon - Sun or past 7 days)
-    const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    const velocityMap = new Map<string, { revenue: number; costs: number }>();
-    dayLabels.forEach((dl) => velocityMap.set(dl, { revenue: 0, costs: 0 }));
+    // 2. Revenue & Cost Velocity Chronological Timeline
+    let velocityData: RevenueVelocityPoint[] = [];
 
-    filteredSales.forEach((s) => {
-      const d = new Date(s.created_at);
-      const dayIdx = (d.getDay() + 6) % 7; // Mon=0 .. Sun=6
-      const label = dayLabels[dayIdx];
-      const ex = velocityMap.get(label) || { revenue: 0, costs: 0 };
-      ex.revenue += Number(s.total || 0);
-      velocityMap.set(label, ex);
-    });
+    if (dateRange === "today" || dateRange === "yesterday") {
+      const isYesterday = dateRange === "yesterday";
+      const targetDate = new Date(now);
+      if (isYesterday) targetDate.setDate(targetDate.getDate() - 1);
+      const targetDateStr = targetDate.toISOString().slice(0, 10);
 
-    filteredPurchases.forEach((p) => {
-      const d = new Date(p.created_at);
-      const dayIdx = (d.getDay() + 6) % 7;
-      const label = dayLabels[dayIdx];
-      const ex = velocityMap.get(label) || { revenue: 0, costs: 0 };
-      ex.costs += Number(p.total_amount || 0);
-      velocityMap.set(label, ex);
-    });
+      const hours = [8, 10, 12, 14, 16, 18, 20, 22];
+      const hourSlots = hours.map((h) => {
+        const label = h <= 12 ? `${h}am` : `${h - 12}pm`;
+        return { hour: h, label, revenue: 0, costs: 0 };
+      });
 
-    const velocityData: RevenueVelocityPoint[] = dayLabels.map((dl) => ({
-      day: dl,
-      revenue: velocityMap.get(dl)?.revenue || 0,
-      costs: velocityMap.get(dl)?.costs || 0,
-    }));
+      filteredSales.forEach((s) => {
+        const d = new Date(s.created_at);
+        if (d.toISOString().slice(0, 10) === targetDateStr) {
+          const h = d.getHours();
+          let bestIdx = 0;
+          let bestDiff = 999;
+          hours.forEach((slotH, idx) => {
+            const diff = Math.abs(h - slotH);
+            if (diff < bestDiff) {
+              bestDiff = diff;
+              bestIdx = idx;
+            }
+          });
+          hourSlots[bestIdx].revenue += Number(s.total || 0);
+        }
+      });
+
+      filteredPurchases.forEach((p) => {
+        const d = new Date(p.created_at);
+        if (d.toISOString().slice(0, 10) === targetDateStr) {
+          const h = d.getHours();
+          let bestIdx = 0;
+          let bestDiff = 999;
+          hours.forEach((slotH, idx) => {
+            const diff = Math.abs(h - slotH);
+            if (diff < bestDiff) {
+              bestDiff = diff;
+              bestIdx = idx;
+            }
+          });
+          hourSlots[bestIdx].costs += Number(p.total_amount || 0);
+        }
+      });
+
+      velocityData = hourSlots.map((slot) => ({
+        day: slot.label,
+        revenue: Math.round(slot.revenue * 100) / 100,
+        costs: Math.round(slot.costs * 100) / 100,
+      }));
+    } else if (dateRange === "7d") {
+      // Past 7 calendar days sequentially: Day -6 to Day 0 (today)
+      const daysList: { dateStr: string; label: string; revenue: number; costs: number }[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().slice(0, 10);
+        const label = i === 0 ? "Today" : d.toLocaleDateString(undefined, { weekday: "short", day: "numeric" });
+        daysList.push({ dateStr, label, revenue: 0, costs: 0 });
+      }
+
+      filteredSales.forEach((s) => {
+        const sDateStr = new Date(s.created_at).toISOString().slice(0, 10);
+        const slot = daysList.find((d) => d.dateStr === sDateStr);
+        if (slot) slot.revenue += Number(s.total || 0);
+      });
+
+      filteredPurchases.forEach((p) => {
+        const pDateStr = new Date(p.created_at).toISOString().slice(0, 10);
+        const slot = daysList.find((d) => d.dateStr === pDateStr);
+        if (slot) slot.costs += Number(p.total_amount || 0);
+      });
+
+      velocityData = daysList.map((d) => ({
+        day: d.label,
+        revenue: Math.round(d.revenue * 100) / 100,
+        costs: Math.round(d.costs * 100) / 100,
+      }));
+    } else if (dateRange === "30d" || dateRange === "month") {
+      // 4 chronological weekly periods
+      const weekSlots: { label: string; start: Date; end: Date; revenue: number; costs: number }[] = [];
+      for (let w = 3; w >= 0; w--) {
+        const end = new Date(now);
+        end.setDate(end.getDate() - w * 7);
+        const start = new Date(end);
+        start.setDate(start.getDate() - 6);
+        const label = w === 0 ? "This Week" : `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })} - ${end.toLocaleDateString(undefined, { day: "numeric" })}`;
+        weekSlots.push({ label, start, end, revenue: 0, costs: 0 });
+      }
+
+      filteredSales.forEach((s) => {
+        const t = new Date(s.created_at).getTime();
+        const slot = weekSlots.find((w) => t >= w.start.getTime() && t <= w.end.getTime() + 86400000);
+        if (slot) slot.revenue += Number(s.total || 0);
+      });
+
+      filteredPurchases.forEach((p) => {
+        const t = new Date(p.created_at).getTime();
+        const slot = weekSlots.find((w) => t >= w.start.getTime() && t <= w.end.getTime() + 86400000);
+        if (slot) slot.costs += Number(p.total_amount || 0);
+      });
+
+      velocityData = weekSlots.map((w) => ({
+        day: w.label,
+        revenue: Math.round(w.revenue * 100) / 100,
+        costs: Math.round(w.costs * 100) / 100,
+      }));
+    } else {
+      // 90d, year, all: Monthly chronological intervals
+      const monthCount = dateRange === "90d" ? 3 : 12;
+      const monthSlots: { key: string; label: string; revenue: number; costs: number }[] = [];
+      for (let m = monthCount - 1; m >= 0; m--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        const label = d.toLocaleDateString(undefined, { month: "short" });
+        monthSlots.push({ key, label, revenue: 0, costs: 0 });
+      }
+
+      filteredSales.forEach((s) => {
+        const key = new Date(s.created_at).toISOString().slice(0, 7);
+        const slot = monthSlots.find((m) => m.key === key);
+        if (slot) slot.revenue += Number(s.total || 0);
+      });
+
+      filteredPurchases.forEach((p) => {
+        const key = new Date(p.created_at).toISOString().slice(0, 7);
+        const slot = monthSlots.find((m) => m.key === key);
+        if (slot) slot.costs += Number(p.total_amount || 0);
+      });
+
+      velocityData = monthSlots.map((m) => ({
+        day: m.label,
+        revenue: Math.round(m.revenue * 100) / 100,
+        costs: Math.round(m.costs * 100) / 100,
+      }));
+    }
 
     // 3. Dynamic Category Mix based on this store's real catalog and sales
     const catMap = new Map<string, number>();
@@ -257,14 +391,12 @@ export const UserAnalytics = () => {
     };
 
     if (filteredSales.length > 0 && saleItems.length > 0) {
-      // Aggregate sales volume by category
       saleItems.forEach((it) => {
         const prod = products.find((p) => p.id === it.product_id);
         const cat = getCatName(prod?.category_id);
         catMap.set(cat, (catMap.get(cat) || 0) + Number(it.quantity || 1) * Number(it.unit_price || 0));
       });
     } else if (products.length > 0) {
-      // If no sales yet, break down inventory value by category
       products.forEach((p) => {
         const cat = getCatName(p.category_id);
         const val = Number(p.stock_units || 0) * Number(p.retail_price || 0);
@@ -298,7 +430,8 @@ export const UserAnalytics = () => {
         };
         const qty = Number(it.quantity || 1);
         const price = Number(it.unit_price || 0);
-        const cost = Number(it.unit_cost || price * 0.7);
+        const prod = products.find((p) => p.id === it.product_id);
+        const cost = Number(it.unit_cost || prod?.purchase_cost || price * 0.65);
         ex.units += qty;
         ex.rev += qty * price;
         ex.cost += qty * cost;
@@ -306,7 +439,7 @@ export const UserAnalytics = () => {
       });
 
       const sortedProds = Array.from(prodAgg.entries()).sort((a, b) => b[1].rev - a[1].rev);
-      sortedProds.slice(0, 4).forEach(([id, data], idx) => {
+      sortedProds.slice(0, 6).forEach(([id, data], idx) => {
         const margin = data.rev > 0 ? Math.round(((data.rev - data.cost) / data.rev) * 100) : 30;
         pulseList.push({
           id,
@@ -314,43 +447,65 @@ export const UserAnalytics = () => {
           name: data.name,
           unitsProcessed: data.units,
           marginPercent: Math.max(5, margin),
-          totalRevenue: data.rev,
+          totalRevenue: Math.round(data.rev * 100) / 100,
         });
       });
-    } else if (products.length > 0) {
-      // If no sales, show top registered inventory items for this store
-      products.slice(0, 4).forEach((p, idx) => {
+    }
+
+    // Backfill with registered products if fewer than 4 items
+    if (pulseList.length < 4 && products.length > 0) {
+      const existingNames = new Set(pulseList.map((p) => p.name.toLowerCase()));
+      const remainingProducts = products.filter((p) => !existingNames.has(p.name.toLowerCase()));
+      remainingProducts.slice(0, 4 - pulseList.length).forEach((p) => {
         const retail = Number(p.retail_price || 0);
         const cost = Number(p.purchase_cost || 0);
         const margin = retail > 0 ? Math.round(((retail - cost) / retail) * 100) : 25;
         pulseList.push({
           id: p.id,
-          rank: idx + 1,
+          rank: pulseList.length + 1,
           name: p.name,
           unitsProcessed: Number(p.stock_units || 0),
           marginPercent: Math.max(5, margin),
-          totalRevenue: retail * Math.max(1, Number(p.stock_units || 0)),
+          totalRevenue: Math.round(retail * Math.max(1, Number(p.stock_units || 0)) * 100) / 100,
         });
       });
     }
 
-    // 5. System Bottlenecks: Real stagnant or low stock items from this store
+    // 5. System Bottlenecks: Real low stock, out of stock, and stagnant inventory
     const bottleneckList: StagnantBottleneck[] = [];
     if (products.length > 0) {
-      // Check products with high stock units or 0 sales
-      const stagnantProds = products.filter((p) => Number(p.stock_units || 0) > 0);
-      stagnantProds.slice(0, 3).forEach((p, idx) => {
-        const daysOld = p.created_at
-          ? Math.max(1, Math.floor((now.getTime() - new Date(p.created_at).getTime()) / (1000 * 60 * 60 * 24)))
-          : 14 + idx * 7;
+      const lowOrZero = products.filter((p) => {
+        const units = Number(p.stock_units || 0);
+        const minAlert = Number(p.min_stock_alert || 5);
+        return units <= minAlert;
+      });
+
+      lowOrZero.slice(0, 3).forEach((p) => {
+        const units = Number(p.stock_units || 0);
         bottleneckList.push({
           id: p.id,
           name: p.name,
-          unitsStagnant: Number(p.stock_units || 0),
-          ageDays: daysOld,
-          action: Number(p.stock_units || 0) > 20 ? "PROMO BUNDLE SUGGESTED" : "MONITOR TURNOVER",
+          unitsStagnant: units,
+          ageDays: 1,
+          action: units === 0 ? "URGENT: OUT OF STOCK" : "REPLENISHMENT REQUIRED",
         });
       });
+
+      if (bottleneckList.length < 3) {
+        const excess = products.filter((p) => Number(p.stock_units || 0) > 30);
+        excess.slice(0, 3 - bottleneckList.length).forEach((p) => {
+          const daysOld = p.created_at
+            ? Math.max(1, Math.floor((now.getTime() - new Date(p.created_at).getTime()) / (1000 * 60 * 60 * 24)))
+            : 14;
+          bottleneckList.push({
+            id: p.id,
+            name: p.name,
+            unitsStagnant: Number(p.stock_units || 0),
+            ageDays: daysOld,
+            action: "PROMO BUNDLE SUGGESTED",
+          });
+        });
+      }
     }
 
     return {

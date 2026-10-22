@@ -128,11 +128,14 @@ const callAdmin = async (body: Record<string, unknown>) => {
       }
       if (plan) {
         try {
+          const cleanP = String(plan).toLowerCase();
           await supabase.from("subscriptions").insert({
             owner_user_id: user_id,
-            tier: String(plan).toLowerCase(),
-            cycle: "monthly",
+            tier: cleanP,
+            cycle: cleanP === "lifetime" ? "lifetime" : "monthly",
             status: "active",
+            source: "admin_manual",
+            payment_method: null,
             created_at: new Date().toISOString(),
           });
         } catch {

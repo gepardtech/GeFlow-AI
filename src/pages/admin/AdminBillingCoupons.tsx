@@ -17,8 +17,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Ticket, Plus, Loader2, Pencil, Trash2, Percent, DollarSign, Copy, CheckCircle2, XCircle,
+  Ticket, Plus, Loader2, Pencil, Trash2, Percent, DollarSign, Copy, CheckCircle2, XCircle, Check,
 } from "lucide-react";
+import { usePricingPlans } from "@/hooks/usePricingPlans";
 import {
   getLiveCoupons,
   saveLiveCoupon,
@@ -35,6 +36,7 @@ const emptyForm = {
 
 const AdminBillingCoupons = () => {
   const { toast } = useToast();
+  const { priceOf } = usePricingPlans();
   const [coupons, setCoupons] = useState<CouponItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -42,6 +44,52 @@ const AdminBillingCoupons = () => {
   const [form, setForm] = useState<any>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CouponItem | null>(null);
+
+  // Live dynamic plan pricing from admin settings
+  const stdMonthly = priceOf("standard", "monthly", 9.99);
+  const stdYearly = priceOf("standard", "yearly", 49.99);
+  const stdLifetime = priceOf("standard", "lifetime", 999.99);
+
+  const premMonthly = priceOf("premium", "monthly", 14.99);
+  const premYearly = priceOf("premium", "yearly", 74.99);
+  const premLifetime = priceOf("premium", "lifetime", 1699.99);
+
+  const availablePlanOptions = useMemo(() => [
+    { key: "all", label: "🌟 All Plans & Cycles" },
+    { key: "standard", label: "Standard (All Cycles)" },
+    { key: "standard_monthly", label: `Standard — Monthly ($${stdMonthly}/mo)` },
+    { key: "standard_yearly", label: `Standard — Yearly ($${stdYearly}/yr)` },
+    { key: "standard_lifetime", label: `Standard — Lifetime ($${stdLifetime})` },
+    { key: "premium", label: "Premium (All Cycles)" },
+    { key: "premium_monthly", label: `Premium — Monthly ($${premMonthly}/mo)` },
+    { key: "premium_yearly", label: `Premium — Yearly ($${premYearly}/yr)` },
+    { key: "premium_lifetime", label: `Premium — Lifetime ($${premLifetime})` },
+    { key: "free", label: "Free Plan ($0)" },
+  ], [stdMonthly, stdYearly, stdLifetime, premMonthly, premYearly, premLifetime]);
+
+  const selectedPlans: string[] = useMemo(() => {
+    if (!form.applies_to_plan || form.applies_to_plan === "all") return ["all"];
+    return form.applies_to_plan.split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean);
+  }, [form.applies_to_plan]);
+
+  const togglePlan = (key: string) => {
+    if (key === "all") {
+      set("applies_to_plan", "all");
+      return;
+    }
+    const current = selectedPlans.filter((k: string) => k !== "all");
+    let next: string[];
+    if (current.includes(key)) {
+      next = current.filter((k: string) => k !== key);
+    } else {
+      next = [...current, key];
+    }
+    if (next.length === 0) {
+      set("applies_to_plan", "all");
+    } else {
+      set("applies_to_plan", next.join(","));
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -262,31 +310,46 @@ const AdminBillingCoupons = () => {
                 <Input type="number" value={form.discount_value} onChange={(e) => set("discount_value", e.target.value)} />
               </Field>
             </div>
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                  APPLIES TO PLANS (SELECT ONE OR MULTIPLE)
+                </p>
+                <span className="text-[11px] font-semibold text-sky-600 dark:text-sky-400">
+                  {selectedPlans.includes("all") ? "All Plans" : `${selectedPlans.length} Selected`}
+                </span>
+              </div>
+              <div className="p-3 bg-muted/40 rounded-xl border border-border/70 space-y-2 max-h-56 overflow-y-auto">
+                <div className="flex flex-wrap gap-1.5">
+                  {availablePlanOptions.map((opt) => {
+                    const isSelected = selectedPlans.includes(opt.key);
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => togglePlan(opt.key)}
+                        className={`text-xs px-2.5 py-1.5 rounded-lg border font-medium flex items-center gap-1.5 transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-sky-500 text-white border-sky-600 shadow-xs"
+                            : "bg-card hover:bg-muted text-foreground border-border/80"
+                        }`}
+                      >
+                        {isSelected && <Check className="h-3 w-3" />}
+                        <span>{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Admin can select multiple plans or billing cycles for a single coupon with real updated plan prices.
+              </p>
+            </div>
             <div className="grid sm:grid-cols-2 gap-4">
-              <Field label="Applies To Specific Plan">
-                <Select value={form.applies_to_plan} onValueChange={(v) => set("applies_to_plan", v)}>
-                  <SelectTrigger><SelectValue placeholder="Select plan applicability" /></SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    <SelectItem value="all">🌟 All Plans & Cycles</SelectItem>
-                    <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted/50 rounded mt-1">Standard Plan</div>
-                    <SelectItem value="standard">Standard (All Cycles)</SelectItem>
-                    <SelectItem value="standard_monthly">Standard — Monthly ($29/mo)</SelectItem>
-                    <SelectItem value="standard_yearly">Standard — Yearly ($279/yr)</SelectItem>
-                    <SelectItem value="standard_lifetime">Standard — Lifetime ($499)</SelectItem>
-                    <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted/50 rounded mt-1">Premium Plan</div>
-                    <SelectItem value="premium">Premium (All Cycles)</SelectItem>
-                    <SelectItem value="premium_monthly">Premium — Monthly ($79/mo)</SelectItem>
-                    <SelectItem value="premium_yearly">Premium — Yearly ($759/yr)</SelectItem>
-                    <SelectItem value="premium_lifetime">Plan: Premium Lifetime ($999)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
               <Field label="Min Order ($)"><Input type="number" value={form.min_amount} onChange={(e) => set("min_amount", e.target.value)} /></Field>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-4">
               <Field label="Max Uses (blank = ∞)"><Input type="number" value={form.max_uses} onChange={(e) => set("max_uses", e.target.value)} placeholder="Unlimited" /></Field>
-              <Field label="Expiry Date"><Input type="date" value={form.expires_at} onChange={(e) => set("expires_at", e.target.value)} /></Field>
             </div>
+              <Field label="Expiry Date"><Input type="date" value={form.expires_at} onChange={(e) => set("expires_at", e.target.value)} /></Field>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>

@@ -16,8 +16,10 @@ import {
   AlertTriangle,
   Clock,
   TrendingUp,
+  Info,
 } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
+import DashboardCardModal, { DashboardModalType } from "@/components/dashboard/DashboardCardModal";
 
 interface DayPoint {
   day: string;
@@ -98,6 +100,11 @@ const Dashboard = () => {
   const [alerts, setAlerts] = useState<
     { title: string; sub: string; tone: "amber" | "rose" }[]
   >([]);
+  const [activeModalType, setActiveModalType] = useState<DashboardModalType>(null);
+  const [lowStockItemsList, setLowStockItemsList] = useState<any[]>([]);
+  const [outOfStockItemsList, setOutOfStockItemsList] = useState<any[]>([]);
+  const [todaySalesCount, setTodaySalesCount] = useState<number>(0);
+  const [monthSalesCount, setMonthSalesCount] = useState<number>(0);
 
   const { format: money } = useMoney();
 
@@ -184,16 +191,37 @@ const Dashboard = () => {
     );
     const totalRevenue = completed.reduce((a, s) => a + Number(s.total), 0);
     const defaultStockThreshold = Number(stockAlertLimit) || 10;
-    const lowStock = prods.filter((p) => {
+    const lowStockProds = prods.filter((p) => {
       const threshold = Number(p.min_stock_alert) > 0 ? Number(p.min_stock_alert) : defaultStockThreshold;
       return p.stock_units > 0 && p.stock_units <= threshold;
-    }).length;
+    });
+    const outOfStockProds = prods.filter((p) => p.stock_units <= 0);
+
+    setLowStockItemsList(
+      lowStockProds.map((p) => ({
+        id: p.id,
+        name: p.name,
+        stock_units: p.stock_units,
+        threshold: Number(p.min_stock_alert) > 0 ? Number(p.min_stock_alert) : defaultStockThreshold,
+        category: p.category,
+      }))
+    );
+    setOutOfStockItemsList(
+      outOfStockProds.map((p) => ({
+        id: p.id,
+        name: p.name,
+        category: p.category,
+      }))
+    );
+    setTodaySalesCount(todaySalesRows.length);
+    setMonthSalesCount(completed.length);
+
     setKpis({
       todaySales,
       todayProfit,
       totalRevenue,
       totalProducts: prods.length,
-      lowStock,
+      lowStock: lowStockProds.length,
     });
 
     // Chart — last 30 days
@@ -295,7 +323,9 @@ const Dashboard = () => {
   useEffect(() => {
     const hasStoredBusiness = Boolean(
       localStorage.getItem("geflow_active_business_id") ||
+      localStorage.getItem("geflow.activeBusinessId") ||
       (localStorage.getItem("geflow_owned_businesses") && localStorage.getItem("geflow_owned_businesses") !== "[]") ||
+      (localStorage.getItem("geflow_cached_owned_businesses") && localStorage.getItem("geflow_cached_owned_businesses") !== "[]") ||
       (localStorage.getItem("geflow_staff_businesses") && localStorage.getItem("geflow_staff_businesses") !== "[]")
     );
 
@@ -451,30 +481,28 @@ const Dashboard = () => {
             value={money(kpis.todaySales)}
             iconClass="bg-blue-500/15 text-blue-500"
             icon={ShoppingCart}
-            onClick={() => navigate("/dashboard/analytics")}
+            onClick={() => setActiveModalType("today_sales")}
           />
           <Stat
             label="TODAY PROFIT"
             value={money(kpis.todayProfit)}
             iconClass="bg-emerald-500/15 text-emerald-500"
             icon={TrendingUp}
-            onClick={() => navigate("/dashboard/analytics")}
+            onClick={() => setActiveModalType("today_profit")}
           />
           <Stat
             label="TOTAL REVENUE"
             value={money(kpis.totalRevenue)}
             iconClass="bg-purple-500/15 text-purple-500"
             icon={BarChart3}
-            onClick={() => navigate("/dashboard/analytics")}
+            onClick={() => setActiveModalType("total_revenue")}
           />
           <Stat
             label="TOTAL PRODUCTS"
             value={kpis.totalProducts.toLocaleString()}
             iconClass="bg-amber-500/15 text-amber-500"
             icon={Package}
-            onClick={() => {
-              if (!isCashier) navigate("/dashboard/inventory");
-            }}
+            onClick={() => setActiveModalType("total_products")}
           />
           <Stat
             label="LOW STOCK"
@@ -487,9 +515,7 @@ const Dashboard = () => {
             }
             iconClass="bg-rose-500/15 text-rose-500"
             icon={AlertTriangle}
-            onClick={() => {
-              if (!isCashier) navigate("/dashboard/low-stock");
-            }}
+            onClick={() => setActiveModalType("low_stock")}
           />
         </div>
 
@@ -498,12 +524,21 @@ const Dashboard = () => {
         {/* ========================================================================= */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 sm:gap-6 min-w-0">
           {/* Revenue Velocity Chart Card */}
-          <div className="bg-card border border-border/80 rounded-2xl p-4 sm:p-6 min-w-0 overflow-hidden flex flex-col justify-between shadow-xs">
+          <div
+            onClick={() => setActiveModalType("revenue_velocity")}
+            className="bg-card border border-border/80 rounded-2xl p-4 sm:p-6 min-w-0 overflow-hidden flex flex-col justify-between shadow-xs cursor-pointer hover:border-primary/40 transition-all group"
+            title="Click to view Revenue Velocity Breakdown"
+          >
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4 min-w-0">
               <div className="min-w-0 flex-1">
-                <h3 className="font-bold text-base sm:text-lg truncate text-foreground">
-                  Revenue Velocity
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-base sm:text-lg truncate text-foreground group-hover:text-primary transition-colors">
+                    Revenue Velocity
+                  </h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground flex items-center gap-1">
+                    <Info className="h-3 w-3" /> Insights
+                  </span>
+                </div>
                 <p className="text-xs text-muted-foreground truncate">
                   Visual correlation between total sales and net profit margins.
                 </p>
@@ -604,7 +639,10 @@ const Dashboard = () => {
           {/* Right Column: Geflow Intelligence + Alerts */}
           <div className="space-y-4 min-w-0">
             {/* Geflow Intelligence Banner */}
-            <div className="rounded-2xl p-4 sm:p-5 bg-gradient-to-br from-sky-400 via-cyan-400 to-violet-400 text-white shadow-xl shadow-primary/20 min-w-0 overflow-hidden flex flex-col justify-between">
+            <div
+              onClick={() => setActiveModalType("geflow_intelligence")}
+              className="rounded-2xl p-4 sm:p-5 bg-gradient-to-br from-sky-400 via-cyan-400 to-violet-400 text-white shadow-xl shadow-primary/20 min-w-0 overflow-hidden flex flex-col justify-between cursor-pointer hover:shadow-2xl transition-all"
+            >
               <div>
                 <div className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-widest bg-white/20 px-2.5 py-1 rounded-full whitespace-nowrap">
                   <Sparkles className="h-3 w-3 shrink-0" /> GEFLOW INTELLIGENCE
@@ -627,23 +665,24 @@ const Dashboard = () => {
                 </p>
               </div>
               <button
-                onClick={() =>
-                  navigate(
-                    kpis.totalProducts === 0
-                      ? "/dashboard/inventory"
-                      : "/dashboard/low-stock"
-                  )
-                }
-                className="w-full mt-4 h-10 rounded-xl bg-white text-primary text-xs font-bold tracking-wider hover:bg-white/90 transition shadow-xs shrink-0"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveModalType("geflow_intelligence");
+                }}
+                className="w-full mt-4 h-10 rounded-xl bg-white text-primary text-xs font-bold tracking-wider hover:bg-white/90 transition shadow-xs shrink-0 flex items-center justify-center gap-1.5"
               >
                 {kpis.totalProducts === 0
-                  ? "GO TO INVENTORY"
-                  : "REVIEW RECOMMENDATION"}
+                  ? "REVIEW INVENTORY RECOMMENDATIONS"
+                  : "REVIEW RECOMMENDATION & AI SUGGESTIONS"}
               </button>
             </div>
 
             {/* Critical Alerts Box */}
-            <div className="bg-card border border-border/80 rounded-2xl p-4 sm:p-5 min-w-0 overflow-hidden shadow-xs">
+            <div
+              onClick={() => setActiveModalType("critical_alerts")}
+              className="bg-card border border-border/80 rounded-2xl p-4 sm:p-5 min-w-0 overflow-hidden shadow-xs cursor-pointer hover:border-amber-500/40 transition-all"
+            >
               <h3 className="font-bold text-sm sm:text-base mb-3 inline-flex items-center gap-2 truncate text-foreground">
                 <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />{" "}
                 Critical Alerts
@@ -693,7 +732,8 @@ const Dashboard = () => {
                 </p>
               </div>
               <button
-                onClick={() => navigate("/dashboard/reports")}
+                type="button"
+                onClick={() => setActiveModalType("recent_operations")}
                 className="h-8 sm:h-9 px-3 sm:px-4 rounded-xl border border-border/80 text-xs font-bold hover:bg-muted shrink-0 whitespace-nowrap"
               >
                 VIEW LEDGER
@@ -809,7 +849,8 @@ const Dashboard = () => {
             </div>
             {!isCashier && (
               <button
-                onClick={() => navigate("/dashboard/inventory")}
+                type="button"
+                onClick={() => setActiveModalType("top_growth")}
                 className="w-full mt-4 h-9 sm:h-10 text-xs font-bold tracking-wider text-primary hover:underline truncate"
               >
                 FULL INVENTORY ANALYTICS →
@@ -819,6 +860,29 @@ const Dashboard = () => {
         </div>
         </>
         )}
+
+        <DashboardCardModal
+          data={
+            activeModalType
+              ? {
+                  type: activeModalType,
+                  businessName: active?.business_name || "Your Store",
+                  currency: active?.currency || "PKR",
+                  money,
+                  kpis,
+                  chart,
+                  operations,
+                  topItems,
+                  alerts,
+                  lowStockItems: lowStockItemsList,
+                  outOfStockItems: outOfStockItemsList,
+                  todayTransactionsCount: todaySalesCount,
+                  monthTransactionsCount: monthSalesCount,
+                }
+              : null
+          }
+          onClose={() => setActiveModalType(null)}
+        />
       </div>
     </UserPanelGate>
   );

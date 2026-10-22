@@ -244,6 +244,10 @@ class SettingsService {
     return this.cache;
   }
 
+  public getAllSettings(): PlatformGeneralSettings {
+    return this.getSettings();
+  }
+
   public async updateAllSettings(updates: Partial<PlatformGeneralSettings>): Promise<PlatformGeneralSettings> {
     const merged: PlatformGeneralSettings = {
       parent_company: updates.parent_company !== undefined ? updates.parent_company : this.cache.parent_company,

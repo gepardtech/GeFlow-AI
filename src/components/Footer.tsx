@@ -19,9 +19,11 @@ import { usePlatformSettings } from "@/components/PlatformSettingsProvider";
 import { supabase } from "@/integrations/supabase/client";
 import {
   getCachedGeneralSettings,
+  getCachedSettings,
   fetchGeneralSettings,
   SocialMediaLink,
   FooterCopyrightSettings,
+  STORAGE_KEY,
 } from "@/lib/generalSettingsService";
 import { subscribeToNewsletter } from "@/lib/newsletterClientService";
 import { useToast } from "@/hooks/use-toast";
@@ -75,13 +77,26 @@ const Footer = () => {
   const { settings } = usePlatformSettings();
   const { toast } = useToast();
 
-  const [socialLinks, setSocialLinks] = useState<SocialMediaLink[]>([]);
-  const [copyright, setCopyright] = useState<FooterCopyrightSettings>({
-    text: "© 2026 GeFlow AI. All rights reserved. Powered by Gepard Techs.",
-    wordUrls: [
-      { id: "w_geflow", word: "GeFlow AI", url: "/", openInNewTab: false },
-      { id: "w_gepard", word: "Gepard Techs", url: "https://gepardtechs.com", openInNewTab: true },
-    ],
+  const [socialLinks, setSocialLinks] = useState<SocialMediaLink[]>(() => {
+    const cached = getCachedSettings() || getCachedGeneralSettings();
+    if (cached && Array.isArray(cached.social_links)) {
+      return cached.social_links.filter((l) => l.enabled);
+    }
+    return [];
+  });
+
+  const [copyright, setCopyright] = useState<FooterCopyrightSettings>(() => {
+    const cached = getCachedSettings() || getCachedGeneralSettings();
+    if (cached?.footer_copyright && (cached.footer_copyright.text || (cached.footer_copyright.wordUrls && cached.footer_copyright.wordUrls.length > 0))) {
+      return cached.footer_copyright;
+    }
+    return {
+      text: "© 2026 GeFlow AI. All rights reserved. Powered by Gepard Techs.",
+      wordUrls: [
+        { id: "w_geflow", word: "GeFlow AI", url: "/", openInNewTab: false },
+        { id: "w_gepard", word: "Gepard Techs", url: "https://gepardtechs.com", openInNewTab: true },
+      ],
+    };
   });
 
   // Newsletter subscription
@@ -91,27 +106,46 @@ const Footer = () => {
 
   useEffect(() => {
     // Initial cached
-    const cached = getCachedGeneralSettings();
+    const cached = getCachedSettings() || getCachedGeneralSettings();
     if (cached) {
       if (Array.isArray(cached.social_links)) setSocialLinks(cached.social_links.filter((l) => l.enabled));
-      if (cached.footer_copyright) setCopyright(cached.footer_copyright);
+      if (cached.footer_copyright && cached.footer_copyright.text) setCopyright(cached.footer_copyright);
+    } else if (settings?.footer_copyright && settings.footer_copyright.text) {
+      setCopyright(settings.footer_copyright);
     }
 
     // Refresh from API / Supabase
     fetchGeneralSettings().then((fresh) => {
       if (fresh) {
         if (Array.isArray(fresh.social_links)) setSocialLinks(fresh.social_links.filter((l) => l.enabled));
-        if (fresh.footer_copyright) setCopyright(fresh.footer_copyright);
+        if (fresh.footer_copyright && fresh.footer_copyright.text) setCopyright(fresh.footer_copyright);
       }
     });
 
     // Event listener for live updates
     const handleUpdate = (e: any) => {
-      if (Array.isArray(e.detail?.social_links)) setSocialLinks(e.detail.social_links.filter((l: any) => l.enabled));
-      if (e.detail?.footer_copyright) setCopyright(e.detail.footer_copyright);
+      const data = e.detail || {};
+      if (Array.isArray(data.social_links)) setSocialLinks(data.social_links.filter((l: any) => l.enabled));
+      if (data.footer_copyright && (data.footer_copyright.text || data.footer_copyright.wordUrls)) {
+        setCopyright(data.footer_copyright);
+      }
+    };
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (parsed.footer_copyright) setCopyright(parsed.footer_copyright);
+          if (Array.isArray(parsed.social_links)) setSocialLinks(parsed.social_links.filter((l: any) => l.enabled));
+        } catch {
+          /* ignore */
+        }
+      }
     };
 
     window.addEventListener("geflow:settings-updated", handleUpdate);
+    window.addEventListener("geflow:general-settings-updated", handleUpdate);
+    window.addEventListener("storage", handleStorage);
 
     // Supabase Realtime channel for cross-tab / cross-device live footer sync
     const channel = supabase
@@ -120,24 +154,27 @@ const Footer = () => {
         "postgres_changes",
         { event: "*", schema: "public", table: "platform_settings" },
         (payload: any) => {
-          const gen = payload?.new?.alerts?.general_settings;
-          if (gen) {
-            if (Array.isArray(gen.social_links)) setSocialLinks(gen.social_links.filter((l: any) => l.enabled));
-            if (gen.footer_copyright) setCopyright(gen.footer_copyright);
-          } else {
-            fetchGeneralSettings().then((fresh) => {
-              if (fresh) {
-                if (Array.isArray(fresh.social_links)) setSocialLinks(fresh.social_links.filter((l) => l.enabled));
-                if (fresh.footer_copyright) setCopyright(fresh.footer_copyright);
-              }
-            });
-          }
+          const alerts = payload?.new?.alerts || {};
+          const gen = alerts.general_settings;
+          const copy = gen?.footer_copyright || alerts.footer_copyright;
+          const soc = gen?.social_links || alerts.social_links;
+          if (copy) setCopyright(copy);
+          if (Array.isArray(soc)) setSocialLinks(soc.filter((l: any) => l.enabled));
+
+          fetchGeneralSettings().then((fresh) => {
+            if (fresh) {
+              if (Array.isArray(fresh.social_links)) setSocialLinks(fresh.social_links.filter((l) => l.enabled));
+              if (fresh.footer_copyright && fresh.footer_copyright.text) setCopyright(fresh.footer_copyright);
+            }
+          });
         }
       )
       .subscribe();
 
     return () => {
       window.removeEventListener("geflow:settings-updated", handleUpdate);
+      window.removeEventListener("geflow:general-settings-updated", handleUpdate);
+      window.removeEventListener("storage", handleStorage);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -178,7 +215,7 @@ const Footer = () => {
   // Render clickable dynamic copyright text
   const renderCopyrightText = () => {
     const parentComp = settings?.parent_company || "Gepard Techs";
-    let fullText = copyright?.text || `© ${new Date().getFullYear()} GeFlow AI. All rights reserved. Powered by ${parentComp}.`;
+    let fullText = copyright?.text?.trim() || `© ${new Date().getFullYear()} GeFlow AI. All rights reserved. Built by ${parentComp}.`;
     if (fullText.includes("Gepard Webs")) {
       fullText = fullText.replace(/Gepard Webs/g, parentComp);
     }
@@ -194,12 +231,24 @@ const Footer = () => {
       return w;
     });
 
-    if (!wordUrls || wordUrls.length === 0) {
+    const effectiveWordUrls = [...wordUrls];
+    if (effectiveWordUrls.length === 0) {
+      if (/geflow\s*ai/i.test(fullText)) {
+        effectiveWordUrls.push({ id: "w_geflow_ai", word: "GeFlow AI", url: "/", openInNewTab: false });
+      } else if (/geflow/i.test(fullText)) {
+        effectiveWordUrls.push({ id: "w_geflow", word: "GeFlow", url: "/", openInNewTab: false });
+      }
+      if (parentComp && fullText.toLowerCase().includes(parentComp.toLowerCase())) {
+        effectiveWordUrls.push({ id: "w_gepard", word: parentComp, url: "https://gepardtechs.com", openInNewTab: true });
+      }
+    }
+
+    if (effectiveWordUrls.length === 0) {
       return <span>{fullText}</span>;
     }
 
-    // Sort wordUrls by word length descending so longer words match first
-    const sortedWords = [...wordUrls].sort((a, b) => b.word.length - a.word.length);
+    // Sort wordUrls by word length descending so longer phrases match first
+    const sortedWords = [...effectiveWordUrls].sort((a, b) => b.word.length - a.word.length);
     
     // Create regex pattern to split text safely
     const escapedWords = sortedWords
@@ -210,7 +259,7 @@ const Footer = () => {
       return <span>{fullText}</span>;
     }
 
-    const regex = new RegExp(`(${escapedWords.join("|")})`, "g");
+    const regex = new RegExp(`(${escapedWords.join("|")})`, "gi");
     const parts = fullText.split(regex);
 
     return parts.map((part, idx) => {

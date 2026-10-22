@@ -351,7 +351,7 @@ const AdminBillingInvoices = () => {
                   <Select value={form.payment_method} onValueChange={(v) => setForm((f) => ({ ...f, payment_method: v }))}>
                     <SelectTrigger className="h-10 bg-muted/40 border-0"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {["Stripe","PayPal","Credit Card","Bank Transfer","N/A"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                      {["Stripe","PayPal","Credit Card","Bank Transfer","Admin Manual Assignment","Manual","N/A"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </Field>

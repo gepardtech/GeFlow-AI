@@ -26,7 +26,7 @@ import {
   detectAnnouncementCoupon as detectCouponDetailed,
   setPendingCoupon,
 } from "@/lib/couponHelper";
-import { getLiveAnnouncements } from "@/lib/promotionsClient";
+import { getLiveAnnouncements, trackAnnouncementPopupOpen } from "@/lib/promotionsClient";
 
 export interface Announcement {
   id: string;
@@ -104,7 +104,14 @@ export const AnnouncementBar = ({ audience, position = "top" }: Props) => {
     const load = async () => {
       try {
         const live = await getLiveAnnouncements(true, audience, position);
-        setItems(live as Announcement[]);
+        const sorted = (live as Announcement[]).sort((a, b) => {
+          const orderA = a.priority_order != null && a.priority_order > 0 ? a.priority_order : 9999;
+          const orderB = b.priority_order != null && b.priority_order > 0 ? b.priority_order : 9999;
+          if (orderA !== orderB) return orderA - orderB;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+        setItems(sorted);
+        setIdx(0);
       } catch (err) {
         console.warn("Failed to load announcements:", err);
       }
@@ -140,6 +147,15 @@ export const AnnouncementBar = ({ audience, position = "top" }: Props) => {
   const handleCtaClick = () => {
     // Open announcement detail popup modal
     setSelectedAnnouncement(cur);
+    if (cur?.id) {
+      trackAnnouncementPopupOpen(cur.id);
+      try {
+        sessionStorage.setItem("geflow_announcement_id", cur.id);
+        sessionStorage.setItem("geflow_from_announcement_cta", "1");
+      } catch {
+        /* ignore */
+      }
+    }
   };
 
   const handleRedirect = (url: string, couponCode?: string | null) => {

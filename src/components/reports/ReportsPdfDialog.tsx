@@ -26,9 +26,15 @@ interface ReportsPdfDialogProps {
   reportLogic: string;
   dateRange: string;
   kpis: {
-    totalRevenue: number;
-    totalOrders: number;
-    avgOrderValue: number;
+    totalRevenue?: number;
+    totalOrders?: number;
+    avgOrderValue?: number;
+    kpi1Title?: string;
+    kpi1Value?: string;
+    kpi2Title?: string;
+    kpi2Value?: string;
+    kpi3Title?: string;
+    kpi3Value?: string;
   };
   categoryMix: {
     name: string;
@@ -102,16 +108,28 @@ export const ReportsPdfDialog = ({
           {/* KPI Summary Strip */}
           <div className="grid grid-cols-3 gap-4">
             <div className="p-3.5 rounded-xl border border-border bg-muted/30">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">TOTAL REVENUE</p>
-              <p className="text-xl font-bold text-foreground mt-0.5">{fmt(kpis.totalRevenue)}</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {kpis.kpi1Title || "TOTAL REVENUE"}
+              </p>
+              <p className="text-xl font-bold text-foreground mt-0.5 font-mono">
+                {kpis.kpi1Value || fmt(kpis.totalRevenue || 0)}
+              </p>
             </div>
             <div className="p-3.5 rounded-xl border border-border bg-muted/30">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">TOTAL ORDERS</p>
-              <p className="text-xl font-bold text-foreground mt-0.5">{kpis.totalOrders}</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {kpis.kpi2Title || "TOTAL ORDERS"}
+              </p>
+              <p className="text-xl font-bold text-foreground mt-0.5 font-mono">
+                {kpis.kpi2Value || `${kpis.totalOrders || 0}`}
+              </p>
             </div>
             <div className="p-3.5 rounded-xl border border-border bg-muted/30">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">AVG ORDER VALUE</p>
-              <p className="text-xl font-bold text-foreground mt-0.5">{fmt(kpis.avgOrderValue)}</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                {kpis.kpi3Title || "AVG ORDER VALUE"}
+              </p>
+              <p className="text-xl font-bold text-foreground mt-0.5 font-mono">
+                {kpis.kpi3Value || fmt(kpis.avgOrderValue || 0)}
+              </p>
             </div>
           </div>
 

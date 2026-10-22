@@ -4,6 +4,13 @@ import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
   ShieldCheck,
   Zap,
   Globe,
@@ -21,6 +28,8 @@ import {
   ShoppingBag,
   Store,
   HeartHandshake,
+  ExternalLink,
+  X,
 } from "lucide-react";
 import aboutStory from "@/assets/about-story.jpg";
 import sgBilal from "@/assets/sg-bilal.jpg";
@@ -59,7 +68,14 @@ const faqs = [
 ];
 
 const About = () => {
-  const [members, setMembers] = useState<AboutPageMember[]>([]);
+  const [members, setMembers] = useState<AboutPageMember[]>(() => {
+    const cached = getCachedGeneralSettings();
+    if (cached?.about_members && cached.about_members.length > 0) {
+      return cached.about_members.filter((m) => m.enabled !== false);
+    }
+    return [];
+  });
+  const [selectedMember, setSelectedMember] = useState<AboutPageMember | null>(null);
 
   useEffect(() => {
     const cached = getCachedGeneralSettings();
@@ -265,8 +281,12 @@ const About = () => {
                 const xLink = soc.x || soc.twitter;
 
                 return (
-                  <div key={member.id} className="premium-card p-8 w-full max-w-sm flex flex-col items-center">
-                    <div className="h-28 w-28 rounded-2xl overflow-hidden mb-5 ring-4 ring-primary/20 bg-muted flex items-center justify-center">
+                  <div
+                    key={member.id}
+                    onClick={() => setSelectedMember(member)}
+                    className="premium-card p-8 w-full max-w-sm flex flex-col items-center cursor-pointer hover:border-primary/50 hover:shadow-xl hover:shadow-primary/10 transition-all duration-300 group"
+                  >
+                    <div className="h-28 w-28 rounded-2xl overflow-hidden mb-5 ring-4 ring-primary/20 bg-muted flex items-center justify-center group-hover:scale-105 group-hover:ring-primary/40 transition-all duration-300">
                       <img
                         src={img}
                         alt={member.name}
@@ -277,12 +297,15 @@ const About = () => {
                         }}
                       />
                     </div>
-                    <h3 className="font-bold text-lg">{member.name}</h3>
-                    <p className="text-[10px] font-bold tracking-wider text-primary mb-4 uppercase">{member.role}</p>
-                    <p className="text-sm text-muted-foreground leading-relaxed mb-5 text-center">
+                    <h3 className="font-bold text-lg group-hover:text-primary transition-colors">{member.name}</h3>
+                    <p className="text-[10px] font-bold tracking-wider text-primary mb-3 uppercase">{member.role}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed mb-5 text-center line-clamp-3">
                       {member.bio}
                     </p>
-                    <div className="flex justify-center gap-2 mt-auto flex-wrap">
+                    <span className="text-[11px] font-semibold text-primary/80 group-hover:text-primary flex items-center gap-1 mb-4">
+                      View Profile &amp; Links <ExternalLink className="w-3 h-3" />
+                    </span>
+                    <div className="flex justify-center gap-2 mt-auto flex-wrap" onClick={(e) => e.stopPropagation()}>
                       {soc.facebook && (
                         <a href={soc.facebook} target="_blank" rel="noopener noreferrer" className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground hover:scale-110 transition-all">
                           <Facebook size={15} />
@@ -389,6 +412,85 @@ const About = () => {
           </div>
         </div>
       </section>
+      {/* Member Profile Dialog */}
+      <Dialog open={!!selectedMember} onOpenChange={(open) => !open && setSelectedMember(null)}>
+        <DialogContent className="max-w-md p-0 overflow-hidden rounded-3xl border border-border/80 bg-card shadow-2xl animate-in zoom-in-95 duration-200">
+          {selectedMember && (
+            <div>
+              <div className="relative h-48 bg-gradient-to-br from-primary/20 via-sky-500/10 to-muted flex items-center justify-center p-6 border-b border-border/60">
+                <div className="w-28 h-28 rounded-2xl overflow-hidden ring-4 ring-background shadow-xl bg-card">
+                  <img
+                    src={selectedMember.image_url || selectedMember.imageUrl || sgBilal}
+                    alt={selectedMember.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = sgBilal;
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="p-6 text-center space-y-3">
+                <div>
+                  <h3 className="text-xl font-black text-foreground">{selectedMember.name}</h3>
+                  <p className="text-xs font-bold text-primary tracking-wider uppercase mt-0.5">{selectedMember.role}</p>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed text-left bg-muted/30 p-3.5 rounded-xl border border-border/50">
+                  {selectedMember.bio || "Key leadership driving technical excellence and ecosystem innovation at Gepard Tech."}
+                </p>
+
+                <div className="pt-2 border-t border-border/60">
+                  <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase block mb-3">Connect &amp; Follow</span>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {(() => {
+                      const soc = selectedMember.social_links || selectedMember.socialLinks || {};
+                      const xLink = soc.x || soc.twitter;
+                      return (
+                        <>
+                          {soc.facebook && (
+                            <a href={soc.facebook} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-xl bg-muted hover:bg-primary hover:text-primary-foreground flex items-center gap-1.5 text-xs font-semibold transition-all">
+                              <Facebook size={14} /> Facebook
+                            </a>
+                          )}
+                          {soc.instagram && (
+                            <a href={soc.instagram} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-xl bg-muted hover:bg-primary hover:text-primary-foreground flex items-center gap-1.5 text-xs font-semibold transition-all">
+                              <Instagram size={14} /> Instagram
+                            </a>
+                          )}
+                          {xLink && (
+                            <a href={xLink} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-xl bg-muted hover:bg-primary hover:text-primary-foreground flex items-center gap-1.5 text-xs font-semibold transition-all">
+                              <XIcon size={13} /> X / Twitter
+                            </a>
+                          )}
+                          {soc.linkedin && (
+                            <a href={soc.linkedin} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-xl bg-muted hover:bg-primary hover:text-primary-foreground flex items-center gap-1.5 text-xs font-semibold transition-all">
+                              <Linkedin size={14} /> LinkedIn
+                            </a>
+                          )}
+                          {soc.github && (
+                            <a href={soc.github} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-xl bg-muted hover:bg-primary hover:text-primary-foreground flex items-center gap-1.5 text-xs font-semibold transition-all">
+                              <Github size={14} /> GitHub
+                            </a>
+                          )}
+                          {soc.pinterest && (
+                            <a href={soc.pinterest} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-xl bg-muted hover:bg-primary hover:text-primary-foreground flex items-center gap-1.5 text-xs font-semibold transition-all">
+                              <PinterestIcon size={14} /> Pinterest
+                            </a>
+                          )}
+                          {soc.email && (
+                            <a href={soc.email.startsWith("mailto:") ? soc.email : `mailto:${soc.email}`} className="px-3 py-1.5 rounded-xl bg-muted hover:bg-primary hover:text-primary-foreground flex items-center gap-1.5 text-xs font-semibold transition-all">
+                              <Mail size={14} /> Email
+                            </a>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 };

@@ -45,6 +45,7 @@ export interface ReceiptData {
   cashGiven: number;
   changeDue: number;
   symbol: string;
+  receiptFont?: "poppins" | "arial" | "mono";
 }
 
 interface Props {
@@ -121,34 +122,46 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
         </div>`
       : "";
 
+    const selectedFont = data.receiptFont === "arial" 
+      ? "'Arial', Helvetica, sans-serif" 
+      : data.receiptFont === "mono" 
+        ? "'Courier New', Courier, monospace" 
+        : "'Poppins', Arial, -apple-system, sans-serif";
+
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${data.invoiceNo}</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
       <style>
         @page { size: 80mm auto; margin: 0; }
-        * { font-family: 'Courier New', Courier, monospace; box-sizing: border-box; }
-        body { width: 72mm; margin: 0 auto; padding: 12px 6px; color: #111; font-size: 11px; line-height: 1.3; }
+        * { font-family: ${selectedFont}; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        body { width: 74mm; margin: 0 auto; padding: 14px 8px; color: #000; font-size: 11px; line-height: 1.35; background: #fff; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
         .center { text-align: center; }
-        .head { text-transform: uppercase; font-size: 13px; font-weight: 900; letter-spacing: 0.5px; margin: 0; }
-        .sub { font-size: 9px; color: #555; margin: 2px 0; }
-        .addr { font-size: 9px; color: #555; margin-bottom: 6px; }
-        .meta { font-size: 10px; color: #333; margin: 6px 0; }
+        .head { text-transform: uppercase; font-size: 14px; font-weight: 800; letter-spacing: 0.3px; margin: 0; line-height: 1.2; color: #000; }
+        .sub { font-size: 9.5px; color: #333; margin: 3px 0; font-weight: 500; }
+        .addr { font-size: 9.5px; color: #333; margin-bottom: 6px; font-weight: 400; }
+        .meta { font-size: 10px; color: #111; margin: 6px 0; font-weight: 500; }
         .meta-row { display: flex; justify-content: space-between; }
-        .dash { border-top: 1px dashed #777; margin: 6px 0; }
-        table { width: 100%; border-collapse: collapse; font-size: 10px; }
-        th { text-align: left; padding: 2px 0; font-size: 10px; }
-        th.qt { text-align: center; width: 30px; }
-        th.pr { text-align: right; width: 55px; }
-        td { padding: 2px 0; vertical-align: top; }
-        td.nm { max-width: 140px; word-break: break-word; }
-        td.qt { text-align: center; }
-        td.pr { text-align: right; }
-        .calc-row { display: flex; justify-content: space-between; font-size: 10px; padding: 1.5px 0; }
-        .calc-row.muted { color: #555; }
-        .total-due { display: flex; justify-content: space-between; font-size: 13px; font-weight: 900; border-top: 1px solid #111; padding-top: 4px; margin-top: 4px; }
-        .barcode-box { text-align: center; margin: 8px 0 4px; padding-top: 6px; border-top: 1px dashed #777; }
-        .bars { font-size: 10px; font-weight: 900; letter-spacing: 2px; background: #eee; padding: 3px 6px; display: inline-block; border-radius: 3px; }
-        .bar-num { font-size: 8px; color: #666; margin-top: 2px; }
-        .foot { text-align: center; font-size: 9px; color: #555; margin-top: 8px; line-height: 1.3; }
-        .powered { text-align: center; font-size: 8px; color: #888; margin-top: 4px; }
+        .dash { border-top: 1.5px dashed #000; margin: 7px 0; }
+        table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+        th { text-align: left; padding: 3px 0; font-size: 10.5px; font-weight: 700; color: #000; }
+        th.qt { text-align: center; width: 34px; }
+        th.pr { text-align: right; width: 62px; }
+        td { padding: 3px 0; vertical-align: top; color: #000; }
+        td.nm { max-width: 140px; word-break: break-word; font-weight: 500; }
+        td.qt { text-align: center; font-weight: 600; }
+        td.pr { text-align: right; font-weight: 600; }
+        .calc-row { display: flex; justify-content: space-between; font-size: 10.5px; padding: 2px 0; color: #111; }
+        .calc-row.muted { color: #333; }
+        .total-due { display: flex; justify-content: space-between; font-size: 14px; font-weight: 900; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 5px 0; margin: 6px 0; color: #000; }
+        .barcode-box { text-align: center; margin: 8px 0 4px; padding-top: 6px; border-top: 1.5px dashed #000; }
+        .bars { font-size: 11px; font-weight: 900; letter-spacing: 2px; background: #f3f4f6; padding: 3px 8px; display: inline-block; border-radius: 4px; color: #000; }
+        .bar-num { font-size: 8.5px; color: #444; margin-top: 3px; font-weight: 600; }
+        .foot { text-align: center; font-size: 9.5px; color: #222; margin-top: 9px; line-height: 1.35; font-weight: 500; }
+        .powered { text-align: center; font-size: 8px; color: #666; margin-top: 5px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.5px; }
+        @media print {
+          body { width: 100%; margin: 0; padding: 8px; }
+        }
       </style></head><body>
       ${logoHtml}
       <div class="center">
@@ -161,8 +174,8 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
         <div class="meta-row"><span>DATE: ${fmtDate(data.date)}</span><span>TIME: ${fmtTime(data.date)}</span></div>
         <div class="meta-row"><span>RECEIPT #: ${data.invoiceNo}</span>${showCashier && data.cashierName ? `<span>CASHIER: ${data.cashierName}</span>` : ""}</div>
         ${taxVatRow}
-        ${(data.customerName || data.customerPhone) ? `<div class="meta-row" style="margin-top:2px;font-weight:bold;"><span>CUSTOMER: ${data.customerName || "Walk-in"}</span>${data.customerPhone ? `<span>TEL: ${data.customerPhone}</span>` : ""}</div>` : ""}
-        ${data.patientNote ? `<div class="meta-row" style="margin-top:2px;font-size:9px;color:#444;"><span>RX / NOTE: ${data.patientNote}</span></div>` : ""}
+        ${(data.customerName || data.customerPhone) ? `<div class="meta-row" style="margin-top:2px;font-weight:700;"><span>CUSTOMER: ${data.customerName || "Walk-in"}</span>${data.customerPhone ? `<span>TEL: ${data.customerPhone}</span>` : ""}</div>` : ""}
+        ${data.patientNote ? `<div class="meta-row" style="margin-top:2px;font-size:9.5px;color:#333;"><span>NOTE: ${data.patientNote}</span></div>` : ""}
       </div>
       <div class="dash"></div>
       <table>
@@ -181,7 +194,7 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
       ${data.payMethod === "cash" ? `<div class="calc-row muted"><span>CHANGE</span><span>${money(sym, data.changeDue)}</span></div>` : ""}
       ${barcodeHtml}
       <div class="foot">${footerMsg}</div>
-      <div class="powered">Powered by GeFlow OS</div>
+      <div class="powered">Powered by GeFlow Retail OS</div>
       </body></html>`;
 
     const existing = document.getElementById("geflow-print-frame");
@@ -203,10 +216,10 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
     const run = () => {
       frame.contentWindow?.focus();
       frame.contentWindow?.print();
-      setTimeout(() => frame.remove(), 1000);
+      setTimeout(() => frame.remove(), 1200);
     };
-    if (frame.contentWindow?.document.readyState === "complete") setTimeout(run, 200);
-    else frame.onload = () => setTimeout(run, 200);
+    if (frame.contentWindow?.document.readyState === "complete") setTimeout(run, 250);
+    else frame.onload = () => setTimeout(run, 250);
   }, [data, sym, showLogo, showTax, showCashier, showBarcode, headerTitle, subheader, storeAddress, footerMsg, isTaxInclusive, showSecTax, taxName]);
 
   useEffect(() => {
@@ -289,7 +302,7 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
           </div>
 
           {/* EXACT THERMAL RECEIPT PREVIEW CARD */}
-          <div className="mt-4 p-5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono text-[11px] space-y-3 shadow-inner">
+          <div className={`mt-4 p-5 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-50 text-[11px] space-y-3 shadow-inner ${data.receiptFont === "mono" ? "font-mono" : "font-sans"}`} style={{ fontFamily: data.receiptFont === "arial" ? "Arial, sans-serif" : data.receiptFont === "mono" ? "monospace" : "'Poppins', Arial, sans-serif" }}>
             {/* Header / Branding */}
             {showLogo && (
               <div className="text-center pb-2 border-b border-dashed border-zinc-300 dark:border-zinc-700 space-y-1">

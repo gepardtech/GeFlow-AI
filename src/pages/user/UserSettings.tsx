@@ -78,6 +78,117 @@ interface TaxBracket {
   isDefault?: boolean;
 }
 
+export const ALARM_RINGTONES = [
+  { id: "single_bell", name: "Single Bell 🔔 (Standard Default)", icon: "🔔" },
+  { id: "double_chime", name: "Double Chime 🛎️ (Warm Retail)", icon: "🛎️" },
+  { id: "triple_ding", name: "Triple Ding 🔔 (High Urgency)", icon: "🔔" },
+  { id: "soft_sonar", name: "Soft Sonar 📡 (Subtle Echo)", icon: "📡" },
+  { id: "digital_pulse", name: "Digital Pulse ⚡ (Modern Tech)", icon: "⚡" },
+  { id: "cash_register", name: "Cash Register 💰 (Ka-Ching)", icon: "💰" },
+  { id: "marimba_pop", name: "Marimba Pop 🎶 (Pleasant Melodic)", icon: "🎶" },
+  { id: "crystal_glass", name: "Crystal Glass 🍷 (Clean Ting)", icon: "🍷" },
+  { id: "warning_beep", name: "Warning Beep ⚠️ (Attention)", icon: "⚠️" },
+  { id: "gentle_pluck", name: "Gentle Pluck 🎸 (Soft Harmonic)", icon: "🎸" },
+  { id: "airport_ding", name: "Airport Chime 🛫 (Two-Tone)", icon: "🛫" },
+  { id: "bubble_pop", name: "Bubble Pop 🫧 (Playful)", icon: "🫧" },
+  { id: "elevator_ping", name: "Elevator Ping 🛗 (Classic Ping)", icon: "🛗" },
+  { id: "brass_fanfare", name: "Brass Fanfare 🎺 (Bright Alert)", icon: "🎺" },
+  { id: "zen_bowl", name: "Tibetan Bowl 🧘 (Calm Resonant)", icon: "🧘" },
+  { id: "radar_sweep", name: "Radar Sweep 🛸 (Futuristic)", icon: "🛸" },
+  { id: "woodblock_tap", name: "Woodblock Tap 🪵 (Acoustic Percussion)", icon: "🪵" },
+  { id: "arcade_blip", name: "Arcade Blip 🕹️ (Retro 8-Bit)", icon: "🕹️" },
+];
+
+export function playAlarmSound(soundId: string) {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    switch (soundId) {
+      case "double_chime":
+        osc.frequency.setValueAtTime(659.25, now);
+        osc.frequency.setValueAtTime(880, now + 0.12);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        osc.start(now);
+        osc.stop(now + 0.6);
+        break;
+      case "triple_ding":
+        [0, 0.1, 0.2].forEach((offset, idx) => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.connect(g);
+          g.connect(ctx.destination);
+          o.frequency.setValueAtTime(800 + idx * 200, now + offset);
+          g.gain.setValueAtTime(0.25, now + offset);
+          g.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.25);
+          o.start(now + offset);
+          o.stop(now + offset + 0.25);
+        });
+        break;
+      case "cash_register":
+        osc.frequency.setValueAtTime(987.77, now);
+        osc.frequency.exponentialRampToValueAtTime(1318.51, now + 0.1);
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+        osc.start(now);
+        osc.stop(now + 0.45);
+        break;
+      case "warning_beep":
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.setValueAtTime(880, now + 0.15);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+        osc.start(now);
+        osc.stop(now + 0.4);
+        break;
+      case "airport_ding":
+        osc.frequency.setValueAtTime(587.33, now);
+        osc.frequency.setValueAtTime(880, now + 0.2);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+        osc.start(now);
+        osc.stop(now + 0.7);
+        break;
+      case "soft_sonar":
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(1200, now);
+        osc.frequency.exponentialRampToValueAtTime(600, now + 0.5);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        osc.start(now);
+        osc.stop(now + 0.5);
+        break;
+      case "arcade_blip":
+        osc.type = "square";
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.15);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+        osc.start(now);
+        osc.stop(now + 0.2);
+        break;
+      default: // single_bell
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, now);
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+        osc.start(now);
+        osc.stop(now + 0.8);
+        break;
+    }
+  } catch (e) {
+    console.debug("Audio synthesis notice:", e);
+  }
+}
+
 export const UserSettings = () => {
   const { theme, setTheme } = useTheme();
   const { active, activeBusiness, categorySettings, categoryName, refresh: refreshActiveBusiness } = useActiveBusiness();
@@ -105,9 +216,10 @@ export const UserSettings = () => {
   // ---------------------------------------------------------------------------
   // 2. POS TAB STATE
   // ---------------------------------------------------------------------------
-  const [receiptHeader, setReceiptHeader] = useState("GeFlow Smart Retail POS");
+  const [receiptHeader, setReceiptHeader] = useState("");
   const [receiptSubheader, setReceiptSubheader] = useState("Official Store Receipt & Fiscal Log");
   const [receiptFooter, setReceiptFooter] = useState("Thank you for choosing us! Returns accepted within 14 days.");
+  const [receiptFont, setReceiptFont] = useState<"poppins" | "arial" | "mono">("poppins");
   const [showLogoOnReceipt, setShowLogoOnReceipt] = useState(true);
   const [showTaxBreakdown, setShowTaxBreakdown] = useState(true);
   const [showCashierName, setShowCashierName] = useState(true);
@@ -118,11 +230,13 @@ export const UserSettings = () => {
   const [scannerMode, setScannerMode] = useState<"hardware" | "camera" | "keyboard">("hardware");
   const [quickAmounts, setQuickAmounts] = useState("10, 20, 50, 100");
   const [defaultCustomerType, setDefaultCustomerType] = useState<"walkin" | "member">("walkin");
+  const lastLoadedBizIdRef = useRef<string | null>(null);
 
   // ---------------------------------------------------------------------------
   // 3. ALERT TAB STATE
   // ---------------------------------------------------------------------------
   const [lowStockThreshold, setLowStockThreshold] = useState<number>(10);
+  const [alertRingtone, setAlertRingtone] = useState("single_bell");
   const [outOfStockNotify, setOutOfStockNotify] = useState(true);
   const [expiryWarningDays, setExpiryWarningDays] = useState<number>(30);
   const [highReturnAlert, setHighReturnAlert] = useState(true);
@@ -209,21 +323,33 @@ export const UserSettings = () => {
   };
 
   // Synchronize from activeBusiness & localStorage
-  const loadSettings = useCallback(() => {
+  const loadSettings = useCallback((force = false) => {
     const currentBiz = active || activeBusiness;
-    if (currentBiz) {
-      setBusinessName(currentBiz.business_name || "");
-      setBusinessAddress(currentBiz.business_address || "");
-      setCurrency(currentBiz.currency || currentBiz.base_currency || "USD");
-      setDefaultTaxRate(currentBiz.default_tax ?? 8.5);
-      setLowStockThreshold(currentBiz.stock_alert_limit ?? 10);
+    if (!currentBiz) return;
+
+    // Only auto-initialize state if changing business or forced, preventing typing resets!
+    if (!force && lastLoadedBizIdRef.current === currentBiz.id) {
+      return;
     }
+    lastLoadedBizIdRef.current = currentBiz.id;
+
+    const registeredName = currentBiz.business_name || "";
+    setBusinessName(registeredName);
+    setBusinessAddress(currentBiz.business_address || "");
+    setCurrency(currentBiz.currency || currentBiz.base_currency || "USD");
+    setDefaultTaxRate(currentBiz.default_tax ?? 8.5);
+    setLowStockThreshold(currentBiz.stock_alert_limit ?? 10);
+
+    // Default receipt header strictly to registered business name
+    setReceiptHeader(registeredName || "GeFlow Smart Retail POS");
 
     // Try loading persistent user-level workspace config
     try {
-      const saved = localStorage.getItem(`geflow_settings_${currentBiz?.id || "global"}`);
+      const saved = localStorage.getItem(`geflow_settings_${currentBiz.id || "global"}`);
       if (saved) {
         const parsed = JSON.parse(saved);
+        if (parsed.businessName) setBusinessName(parsed.businessName);
+        if (parsed.businessAddress) setBusinessAddress(parsed.businessAddress);
         if (parsed.businessTagline) setBusinessTagline(parsed.businessTagline);
         if (parsed.businessPhone) setBusinessPhone(parsed.businessPhone);
         if (parsed.businessEmail) setBusinessEmail(parsed.businessEmail);
@@ -231,10 +357,11 @@ export const UserSettings = () => {
         if (parsed.timezone) setTimezone(parsed.timezone);
         if (parsed.logoUrl) setLogoUrl(parsed.logoUrl);
 
-        // POS
+        // POS & Receipt
         if (parsed.receiptHeader) setReceiptHeader(parsed.receiptHeader);
         if (parsed.receiptSubheader) setReceiptSubheader(parsed.receiptSubheader);
         if (parsed.receiptFooter) setReceiptFooter(parsed.receiptFooter);
+        if (parsed.receiptFont) setReceiptFont(parsed.receiptFont);
         if (parsed.showLogoOnReceipt !== undefined) setShowLogoOnReceipt(parsed.showLogoOnReceipt);
         if (parsed.showTaxBreakdown !== undefined) setShowTaxBreakdown(parsed.showTaxBreakdown);
         if (parsed.showCashierName !== undefined) setShowCashierName(parsed.showCashierName);
@@ -246,7 +373,9 @@ export const UserSettings = () => {
         if (parsed.quickAmounts) setQuickAmounts(parsed.quickAmounts);
         if (parsed.defaultCustomerType) setDefaultCustomerType(parsed.defaultCustomerType);
 
-        // Alerts
+        // Alerts & Ringtone
+        if (parsed.lowStockThreshold !== undefined) setLowStockThreshold(parsed.lowStockThreshold);
+        if (parsed.alertRingtone) setAlertRingtone(parsed.alertRingtone);
         if (parsed.outOfStockNotify !== undefined) setOutOfStockNotify(parsed.outOfStockNotify);
         if (parsed.expiryWarningDays) setExpiryWarningDays(parsed.expiryWarningDays);
         if (parsed.highReturnAlert !== undefined) setHighReturnAlert(parsed.highReturnAlert);
@@ -269,6 +398,7 @@ export const UserSettings = () => {
 
         // Tax
         if (parsed.enableTaxCalculation !== undefined) setEnableTaxCalculation(parsed.enableTaxCalculation);
+        if (parsed.defaultTaxRate !== undefined) setDefaultTaxRate(parsed.defaultTaxRate);
         if (parsed.taxPricingMode) setTaxPricingMode(parsed.taxPricingMode);
         if (parsed.taxRegistrationNumber) setTaxRegistrationNumber(parsed.taxRegistrationNumber);
         if (parsed.taxLabel) setTaxLabel(parsed.taxLabel);
@@ -297,7 +427,7 @@ export const UserSettings = () => {
     } catch (e) {
       console.error("Error restoring settings:", e);
     }
-  }, [active, activeBusiness, theme]);
+  }, [active?.id, activeBusiness?.id]);
 
   useEffect(() => {
     loadSettings();
@@ -362,8 +492,24 @@ export const UserSettings = () => {
         theme: selectedTheme,
       });
 
-      // 2. Update Supabase businesses table if business exists
+      // 2. Update Supabase businesses table with direct server endpoint (service role) & supabase client
       if (currentBiz?.id) {
+        try {
+          await fetch(`/api/user/businesses/${currentBiz.id}/settings`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              business_name: businessName.trim() || currentBiz.business_name,
+              business_address: businessAddress.trim(),
+              currency: currency,
+              default_tax: effectiveDbTax,
+              stock_alert_limit: Number(lowStockThreshold) || 10,
+            }),
+          });
+        } catch (serverErr) {
+          console.warn("Notice updating business settings on server:", serverErr);
+        }
+
         const { error: updateError } = await supabase
           .from("businesses")
           .update({
@@ -400,7 +546,7 @@ export const UserSettings = () => {
         }
       }
 
-      // 3. Persist extended attributes to localStorage and Supabase auth
+      // 3. Persist extended attributes to localStorage, backend sync, and Supabase auth
       const payload = {
         businessName: businessName.trim(),
         businessAddress: businessAddress.trim(),
@@ -414,6 +560,7 @@ export const UserSettings = () => {
         receiptHeader,
         receiptSubheader,
         receiptFooter,
+        receiptFont,
         showLogoOnReceipt,
         showTaxBreakdown,
         showCashierName,
@@ -424,6 +571,8 @@ export const UserSettings = () => {
         scannerMode,
         quickAmounts,
         defaultCustomerType,
+        lowStockThreshold: Number(lowStockThreshold) || 10,
+        alertRingtone,
         outOfStockNotify,
         expiryWarningDays,
         highReturnAlert,
@@ -1129,6 +1278,25 @@ export const UserSettings = () => {
                       className="rounded-2xl text-xs font-medium resize-none"
                     />
                   </div>
+
+                  <div className="space-y-1.5 pt-1">
+                    <Label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Thermal Receipt Typography / Font Style
+                    </Label>
+                    <Select value={receiptFont} onValueChange={(val: any) => setReceiptFont(val)}>
+                      <SelectTrigger className="h-11 rounded-2xl text-xs font-medium">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="poppins">Poppins (Modern, High-Contrast & Thermal Printer Supportive - Default)</SelectItem>
+                        <SelectItem value="arial">Arial / Clean Sans (Standard Thermal ESC/POS)</SelectItem>
+                        <SelectItem value="mono">Monospace / Courier (Classic Dot-Matrix Slip)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-muted-foreground">
+                      Supports high-resolution vector print formatting on 58mm and 80mm thermal receipt printers without blurriness.
+                    </p>
+                  </div>
                 </div>
 
                 {/* Print Flags Switches */}
@@ -1269,7 +1437,15 @@ export const UserSettings = () => {
                 </div>
 
                 {/* The Visual Receipt Card */}
-                <div className="p-5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono text-[11px] space-y-3 shadow-inner">
+                <div
+                  className={`p-5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-[11px] space-y-3 shadow-inner ${
+                    receiptFont === "poppins"
+                      ? "font-sans font-['Poppins',sans-serif]"
+                      : receiptFont === "arial"
+                        ? "font-sans font-['Arial',sans-serif]"
+                        : "font-mono"
+                  }`}
+                >
                   {showLogoOnReceipt && (
                     <div className="text-center pb-2 border-b border-dashed border-zinc-300 dark:border-zinc-700 space-y-1">
                       {logoUrl && (
@@ -1478,6 +1654,49 @@ export const UserSettings = () => {
                       checked={highReturnAlert}
                       onCheckedChange={setHighReturnAlert}
                     />
+                  </div>
+
+                  {/* Stock Alert Alarm Ringtone */}
+                  <div className="p-4 rounded-2xl bg-muted/30 border border-border/70 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                          <Volume2 className="h-4 w-4 text-sky-500" />
+                          Stock Alert Warning Ringtone ({ALARM_RINGTONES.length} Choices)
+                        </Label>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          Audible sound played on low stock warning or zero-stock trigger (Default: Single Bell 🔔).
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => playAlarmSound(alertRingtone)}
+                        className="h-8 px-3 rounded-xl text-xs gap-1.5 font-bold text-sky-500 hover:text-sky-600 hover:bg-sky-500/10 border-sky-500/30"
+                      >
+                        <Volume2 className="h-3.5 w-3.5" /> Test Sound
+                      </Button>
+                    </div>
+
+                    <Select
+                      value={alertRingtone}
+                      onValueChange={(val) => {
+                        setAlertRingtone(val);
+                        playAlarmSound(val);
+                      }}
+                    >
+                      <SelectTrigger className="h-11 rounded-2xl text-xs font-medium">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {ALARM_RINGTONES.map((tone) => (
+                          <SelectItem key={tone.id} value={tone.id} className="text-xs">
+                            {tone.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 

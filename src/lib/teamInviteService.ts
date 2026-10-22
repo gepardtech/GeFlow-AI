@@ -44,8 +44,26 @@ export async function checkUserRegistered(email: string): Promise<ExistingUserCh
     return { isRegistered: false };
   }
 
+  // 1. Check via backend API (service role bypasses RLS and inspects auth.users directly)
   try {
-    // 1. Try checking profiles table
+    const res = await fetch(`/api/team/check-user?email=${encodeURIComponent(cleanEmail)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.isRegistered) {
+        return {
+          isRegistered: true,
+          userId: data.userId,
+          fullName: data.fullName,
+          email: data.email || cleanEmail,
+        };
+      }
+    }
+  } catch (apiErr) {
+    console.warn("Notice checking user registration via backend API:", apiErr);
+  }
+
+  // 2. Fallback: profiles table
+  try {
     const { data: profile } = await supabase
       .from("profiles")
       .select("user_id, email, full_name")
@@ -61,10 +79,10 @@ export async function checkUserRegistered(email: string): Promise<ExistingUserCh
       };
     }
   } catch (err) {
-    console.warn("Notice checking user registration:", err);
+    console.warn("Notice checking profiles table:", err);
   }
 
-  // 2. Fallback: check cached memberships/invitations
+  // 3. Fallback: check cached memberships/invitations
   try {
     const rawMembers = localStorage.getItem("geflow_team_members_cache");
     if (rawMembers) {
@@ -111,108 +129,13 @@ export async function inviteNewUser({
   currency?: string;
   ownerId: string;
   ownerName?: string;
-}): Promise<{ success: boolean; userId?: string; error?: string }> {
+}): Promise<{ success: boolean; userId?: string; error?: string; isExisting?: boolean; message?: string }> {
   const cleanEmail = email.trim().toLowerCase();
   const cleanName = fullName.trim() || cleanEmail.split("@")[0];
   const cleanPassword = (password || "").trim();
 
-  let targetUserId = "";
-
-  // 1. If password provided, attempt Supabase Auth signup
-  if (cleanPassword && cleanPassword.length >= 6) {
-    try {
-      const rawUrl = SUPABASE_URL;
-      const rawKey = SUPABASE_PUBLISHABLE_KEY;
-
-      const tempClient = createClient(rawUrl, rawKey, {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-          detectSessionInUrl: false,
-        },
-      });
-
-      const { data: signUpData, error: signUpError } = await tempClient.auth.signUp({
-        email: cleanEmail,
-        password: cleanPassword,
-        options: {
-          data: {
-            full_name: cleanName,
-            plan: "free",
-            role,
-            invited_by: ownerId,
-            business_id: businessId,
-            business_name: businessName,
-          },
-        },
-      });
-
-      if (signUpError) {
-        if (signUpError.message?.toLowerCase().includes("already registered") || signUpError.message?.toLowerCase().includes("exists")) {
-          // Switch to existing user invite
-          return inviteExistingUser({
-            userId: "",
-            email: cleanEmail,
-            role,
-            businessId,
-            businessName: businessName || "Store",
-            ownerId,
-            ownerName: ownerName || "Store Owner",
-          });
-        }
-      } else if (signUpData?.user?.id) {
-        targetUserId = signUpData.user.id;
-      }
-    } catch (authErr: any) {
-      console.warn("Auth signup error for new staff:", authErr);
-    }
-  }
-
-  // 2. Dispatch creation/invitation through team backend service
   try {
-    // If password was provided, register as an active direct member
-    if (cleanPassword && cleanPassword.length >= 6) {
-      const directRes = await fetch("/api/team/add-member", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ownerId,
-          ownerName: ownerName || "Store Owner",
-          businessId,
-          businessName: businessName || "Store",
-          businessAddress,
-          currency,
-          email: cleanEmail,
-          fullName: cleanName,
-          role,
-          userId: targetUserId || undefined,
-          status: "active",
-        }),
-      });
-
-      const directData = await directRes.json();
-      if (directRes.ok && directData.success) {
-        const effectiveId = targetUserId || directData.member?.id || directData.member?.userId || directData.member?.user_id || "u_" + Date.now();
-        await syncMemberToSupabase({
-          userId: effectiveId,
-          email: cleanEmail,
-          fullName: cleanName,
-          role,
-          businessId,
-          ownerId,
-          isActive: true,
-        });
-
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("geflow:team-updated", { detail: { email: cleanEmail } }));
-          window.dispatchEvent(new CustomEvent("geflow:business-changed", { detail: { businessId } }));
-        }
-        return { success: true, userId: effectiveId };
-      }
-    }
-
-    // Fallback or non-password invite
-    const res = await fetch("/api/team/invite", {
+    const res = await fetch("/api/team/add-or-invite-user", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -225,21 +148,26 @@ export async function inviteNewUser({
         email: cleanEmail,
         fullName: cleanName,
         role,
+        password: cleanPassword,
       }),
     });
 
     const data = await res.json();
     if (!res.ok || !data.success) {
-      return { success: false, error: data.error || "Failed to dispatch team invitation." };
+      return { success: false, error: data.error || "Failed to create or invite user." };
     }
 
-    // Also trigger local event so notifications update immediately
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("geflow:invitation-sent", { detail: { email: cleanEmail } }));
       window.dispatchEvent(new CustomEvent("geflow:team-updated", { detail: { email: cleanEmail } }));
+      window.dispatchEvent(new CustomEvent("geflow:business-changed", { detail: { businessId } }));
     }
 
-    return { success: true, userId: targetUserId || data.invitation?.id };
+    return {
+      success: true,
+      userId: data.userId,
+      isExisting: data.isExisting,
+      message: data.message,
+    };
   } catch (err: any) {
     console.error("Error creating new staff invite:", err);
     return { success: false, error: err.message || "Failed to dispatch invitation." };
@@ -248,7 +176,7 @@ export async function inviteNewUser({
 
 /**
  * Invite an ALREADY REGISTERED user.
- * Creates a pending team invitation with the Real Business Name and designated role.
+ * Appoints designated employee role directly to business workspace without creating new auth or profile.
  */
 export async function inviteExistingUser({
   userId,
@@ -270,12 +198,12 @@ export async function inviteExistingUser({
   currency?: string;
   ownerId: string;
   ownerName: string;
-}): Promise<{ success: boolean; membershipId?: string; error?: string }> {
+}): Promise<{ success: boolean; membershipId?: string; error?: string; isExisting?: boolean; message?: string }> {
   const cleanEmail = email.trim().toLowerCase();
   const cleanBizName = businessName?.trim() || "Store";
 
   try {
-    const res = await fetch("/api/team/invite", {
+    const res = await fetch("/api/team/add-or-invite-user", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -292,17 +220,24 @@ export async function inviteExistingUser({
 
     const data = await res.json();
     if (!res.ok || !data.success) {
-      return { success: false, error: data.error || "Failed to dispatch team invitation." };
+      return { success: false, error: data.error || "Failed to appoint employee role." };
     }
 
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("geflow:invitation-sent", { detail: { email: cleanEmail } }));
+      window.dispatchEvent(new CustomEvent("geflow:team-updated", { detail: { email: cleanEmail } }));
+      window.dispatchEvent(new CustomEvent("geflow:business-changed", { detail: { businessId } }));
     }
 
-    return { success: true, membershipId: data.invitation?.id };
+    return {
+      success: true,
+      membershipId: data.userId,
+      isExisting: true,
+      message: data.message,
+    };
   } catch (err: any) {
-    console.error("Error inviting existing user:", err);
-    return { success: false, error: err.message || "Failed to dispatch team invitation." };
+    console.error("Error inviting existing staff:", err);
+    return { success: false, error: err.message || "Failed to appoint employee role." };
   }
 }
 

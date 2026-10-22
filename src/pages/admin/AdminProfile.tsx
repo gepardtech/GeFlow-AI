@@ -32,6 +32,7 @@ import {
   Info,
   ChevronRight,
   ExternalLink,
+  X,
 } from "lucide-react";
 import PanelLayout from "@/components/PanelLayout";
 import { ADMIN_NAV, ADMIN_IDENTITY } from "@/lib/panelNav";
@@ -653,7 +654,18 @@ export default function AdminProfile() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {isEditing && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsEditing(false)}
+                className="gap-1.5 rounded-xl text-xs font-semibold h-9 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-3.5 h-3.5" />
+                Cancel
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -675,7 +687,11 @@ export default function AdminProfile() {
                 }
               }}
               disabled={saving}
-              className="gap-2 rounded-xl text-xs font-semibold h-9 shadow-sm"
+              className={`gap-2 rounded-xl text-xs font-bold h-9 shadow-xs transition-all ${
+                isEditing
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  : "bg-primary text-primary-foreground hover:bg-primary/90"
+              }`}
             >
               {saving ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -690,14 +706,14 @@ export default function AdminProfile() {
         </div>
 
         {/* 1. Profile Overview Card */}
-        <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-br from-card via-card to-card/90 p-6 sm:p-8 shadow-sm">
+        <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-br from-card via-card to-card/90 p-5 sm:p-7 md:p-8 shadow-sm">
           <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
 
-          <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
+          <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-5 md:gap-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5 min-w-0">
               {/* Avatar with upload badge */}
               <div className="relative group shrink-0">
-                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border-2 border-primary/20 bg-muted/60 shadow-md flex items-center justify-center text-foreground font-black text-3xl">
+                <div className="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-2xl overflow-hidden border-2 border-primary/20 bg-muted/60 shadow-md flex items-center justify-center text-foreground font-black text-2xl sm:text-3xl">
                   {profile.avatarUrl ? (
                     <img
                       src={profile.avatarUrl}
@@ -728,9 +744,9 @@ export default function AdminProfile() {
               </div>
 
               {/* Information */}
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <h2 className="text-xl sm:text-2xl font-black text-foreground">
+              <div className="space-y-1.5 min-w-0">
+                <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+                  <h2 className="text-xl sm:text-2xl font-black text-foreground truncate">
                     {profile.displayName}
                   </h2>
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
@@ -746,19 +762,19 @@ export default function AdminProfile() {
                   {profile.role}
                 </p>
 
-                <div className="flex items-center gap-4 text-xs text-muted-foreground pt-1 flex-wrap">
-                  <span className="flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-muted-foreground/70" />
-                    {profile.email}
+                <div className="flex items-center gap-3 sm:gap-4 text-xs text-muted-foreground pt-1 flex-wrap">
+                  <span className="flex items-center gap-1.5 truncate max-w-[240px] sm:max-w-none">
+                    <Mail className="w-3.5 h-3.5 text-muted-foreground/70 shrink-0" />
+                    <span className="truncate">{profile.email}</span>
                   </span>
                   <span className="hidden sm:inline">•</span>
                   <span className="flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-muted-foreground/70" />
+                    <Calendar className="w-3.5 h-3.5 text-muted-foreground/70 shrink-0" />
                     Joined: {profile.createdAt}
                   </span>
                   <span className="hidden sm:inline">•</span>
                   <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                     Verified Admin
                   </span>
                 </div>
@@ -766,55 +782,94 @@ export default function AdminProfile() {
             </div>
 
             {/* Quick Actions */}
-            <div className="flex items-center gap-2 self-start md:self-center shrink-0">
+            <div className="w-full md:w-auto pt-4 md:pt-0 border-t md:border-t-0 border-border/60 flex flex-wrap items-center gap-2.5 justify-start md:justify-end shrink-0">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setIsPasswordModalOpen(true)}
-                className="gap-2 rounded-xl text-xs font-semibold h-9"
+                className="gap-2 rounded-xl text-xs font-semibold h-9 border-border/80 hover:bg-muted"
               >
                 <Key className="w-3.5 h-3.5" />
                 Change Password
+              </Button>
+              {isEditing && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsEditing(false)}
+                  className="gap-1.5 rounded-xl text-xs font-semibold h-9 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Cancel
+                </Button>
+              )}
+              <Button
+                variant={isEditing ? "default" : "default"}
+                size="sm"
+                onClick={() => {
+                  if (isEditing) {
+                    handleSavePersonalInfo();
+                  } else {
+                    setIsEditing(true);
+                  }
+                }}
+                disabled={saving}
+                className={`gap-2 rounded-xl text-xs font-bold h-9 shadow-xs transition-all ${
+                  isEditing
+                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                    : "bg-sky-500 hover:bg-sky-600 text-white"
+                }`}
+              >
+                {saving ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : isEditing ? (
+                  <Save className="w-3.5 h-3.5" />
+                ) : (
+                  <User className="w-3.5 h-3.5" />
+                )}
+                {isEditing ? "Save Changes" : "Edit Profile"}
               </Button>
             </div>
           </div>
         </div>
 
         {/* Tabs for Profile Sections */}
-        <Tabs defaultValue="personal" className="w-full space-y-6">
-          <TabsList className="bg-muted/70 p-1 rounded-2xl w-full sm:w-auto flex flex-wrap gap-1 border border-border/60">
-            <TabsTrigger value="personal" className="rounded-xl text-xs font-semibold gap-2">
-              <User className="w-3.5 h-3.5" />
-              Personal Info
-            </TabsTrigger>
-            <TabsTrigger value="account" className="rounded-xl text-xs font-semibold gap-2">
-              <Shield className="w-3.5 h-3.5" />
-              Account Info
-            </TabsTrigger>
-            <TabsTrigger value="security" className="rounded-xl text-xs font-semibold gap-2">
-              <Lock className="w-3.5 h-3.5" />
-              Security & Sessions
-            </TabsTrigger>
-            <TabsTrigger value="notifications" className="rounded-xl text-xs font-semibold gap-2">
-              <Bell className="w-3.5 h-3.5" />
-              Notifications
-            </TabsTrigger>
-            <TabsTrigger value="preferences" className="rounded-xl text-xs font-semibold gap-2">
-              <Globe className="w-3.5 h-3.5" />
-              Preferences
-            </TabsTrigger>
-            <TabsTrigger value="activity" className="rounded-xl text-xs font-semibold gap-2">
-              <Clock className="w-3.5 h-3.5" />
-              Activity
-            </TabsTrigger>
-            <TabsTrigger
-              value="danger"
-              className="rounded-xl text-xs font-semibold gap-2 text-rose-500 hover:text-rose-600 data-[state=active]:text-rose-600"
-            >
-              <AlertTriangle className="w-3.5 h-3.5" />
-              Danger Zone
-            </TabsTrigger>
-          </TabsList>
+        <Tabs defaultValue="personal" className="w-full">
+          <div className="overflow-x-auto pb-2 scrollbar-none mb-6">
+            <TabsList className="bg-muted/70 p-1.5 rounded-2xl w-max min-w-full sm:w-auto min-h-12 h-auto flex flex-nowrap items-center gap-1.5 border border-border/70 shadow-xs">
+              <TabsTrigger value="personal" className="rounded-xl text-xs sm:text-sm font-semibold gap-2 py-2 px-3.5 h-9 sm:h-10 transition-all whitespace-nowrap shrink-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+                <User className="w-3.5 h-3.5" />
+                Personal Info
+              </TabsTrigger>
+              <TabsTrigger value="account" className="rounded-xl text-xs sm:text-sm font-semibold gap-2 py-2 px-3.5 h-9 sm:h-10 transition-all whitespace-nowrap shrink-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+                <Shield className="w-3.5 h-3.5" />
+                Account Info
+              </TabsTrigger>
+              <TabsTrigger value="security" className="rounded-xl text-xs sm:text-sm font-semibold gap-2 py-2 px-3.5 h-9 sm:h-10 transition-all whitespace-nowrap shrink-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+                <Lock className="w-3.5 h-3.5" />
+                Security &amp; Sessions
+              </TabsTrigger>
+              <TabsTrigger value="notifications" className="rounded-xl text-xs sm:text-sm font-semibold gap-2 py-2 px-3.5 h-9 sm:h-10 transition-all whitespace-nowrap shrink-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+                <Bell className="w-3.5 h-3.5" />
+                Notifications
+              </TabsTrigger>
+              <TabsTrigger value="preferences" className="rounded-xl text-xs sm:text-sm font-semibold gap-2 py-2 px-3.5 h-9 sm:h-10 transition-all whitespace-nowrap shrink-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+                <Globe className="w-3.5 h-3.5" />
+                Preferences
+              </TabsTrigger>
+              <TabsTrigger value="activity" className="rounded-xl text-xs sm:text-sm font-semibold gap-2 py-2 px-3.5 h-9 sm:h-10 transition-all whitespace-nowrap shrink-0 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs">
+                <Clock className="w-3.5 h-3.5" />
+                Activity
+              </TabsTrigger>
+              <TabsTrigger
+                value="danger"
+                className="rounded-xl text-xs sm:text-sm font-semibold gap-2 py-2 px-3.5 h-9 sm:h-10 transition-all whitespace-nowrap shrink-0 text-rose-500 hover:text-rose-600 data-[state=active]:text-rose-600 data-[state=active]:bg-background data-[state=active]:shadow-xs"
+              >
+                <AlertTriangle className="w-3.5 h-3.5" />
+                Danger Zone
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* 2. Personal Information Tab */}
           <TabsContent value="personal" className="space-y-6 mt-0">
