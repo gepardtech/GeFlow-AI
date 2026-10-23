@@ -834,17 +834,36 @@ const UserPOS = () => {
 
     const saleId = syncRes?.sale?.id || `sale_${Date.now()}`;
 
-    // If payment method was Store Credit / Udhar, record in Udhar Ledger
+    // If payment method was Store Credit / Udhar, record in verified Buyer Account Ledger
     if (activeMethodObj?.type === "credit" || payMethod === "credit") {
       try {
-        const custName = customerName.trim() || "Walk-in Customer";
+        const custName = customerName.trim() || "Walk-in Buyer";
         const credRes = await fetch(`/api/sync/store-credits?businessId=${encodeURIComponent(active.id)}`);
         if (credRes.ok) {
           const credData = await credRes.json();
-          let matched = (credData.credits || []).find((c: any) =>
-            (c.customer_phone && fullCustomerPhone && c.customer_phone === fullCustomerPhone) ||
-            c.customer_name.toLowerCase() === custName.toLowerCase()
-          );
+          const cleanPhone = (fullCustomerPhone || "").replace(/[^0-9]/g, "");
+          const cleanName = custName.toLowerCase();
+
+          // CRITICAL: Strict buyer identity verification.
+          // Prioritize exact Phone match or exact Buyer ID match. Never blindly assign by name alone if ambiguous.
+          let matched = (credData.credits || []).find((c: any) => {
+            const bPhone = (c.customerPhone || c.customer_phone || "").replace(/[^0-9]/g, "");
+            const bId = (c.buyerId || c.buyer_id || "").toLowerCase();
+            if (cleanPhone && bPhone && bPhone === cleanPhone) return true;
+            if (bId && (cleanName === bId || cleanName.includes(bId))) return true;
+            return false;
+          });
+
+          // Unambiguous name match only if exactly 1 buyer has this name and no phone was provided
+          if (!matched && !cleanPhone) {
+            const nameMatches = (credData.credits || []).filter(
+              (c: any) => (c.customerName || c.customer_name || "").toLowerCase() === cleanName
+            );
+            if (nameMatches.length === 1) {
+              matched = nameMatches[0];
+            }
+          }
+
           if (!matched) {
             const createRes = await fetch("/api/sync/store-credits", {
               method: "POST",
@@ -852,11 +871,12 @@ const UserPOS = () => {
               body: JSON.stringify({
                 businessId: active.id,
                 credit: {
-                  customer_name: custName,
-                  customer_phone: fullCustomerPhone,
-                  balance: 0,
-                  credit_limit: 1000,
-                  notes: `Auto-created from POS order ${professionalReceiptNo}`,
+                  customerName: custName,
+                  customerPhone: fullCustomerPhone || "",
+                  creditLimit: 50000,
+                  availableDeposit: 0,
+                  outstandingUdhar: 0,
+                  notes: `Auto-registered from POS order ${professionalReceiptNo}`,
                 },
               }),
             });
@@ -865,20 +885,43 @@ const UserPOS = () => {
               matched = created.credit;
             }
           }
+
           if (matched?.id) {
-            await fetch("/api/sync/store-credits/adjust", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                businessId: active.id,
-                creditId: matched.id,
-                amount: grandTotal,
-                type: "charge",
-                note: `POS Store Credit Purchase (${cart.length} items)`,
-                invoiceNo: professionalReceiptNo,
-                processedBy: cashierName || "Cashier",
-              }),
-            });
+            // Check if buyer has available deposit
+            const availableDep = Number(matched.availableDeposit ?? matched.available_deposit ?? 0);
+            if (availableDep >= grandTotal) {
+              // Deduct from deposit
+              await fetch("/api/sync/store-credits/adjust", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  businessId: active.id,
+                  creditId: matched.id,
+                  amount: grandTotal,
+                  type: "deposit_spend",
+                  paymentMethod: "Store Credit Deposit",
+                  note: `POS purchase covered by advance deposit (${cart.length} items)`,
+                  invoiceNo: professionalReceiptNo,
+                  processedBy: cashierName || "Cashier",
+                }),
+              });
+            } else {
+              // Record as Udhar Charge (unpaid debt, separate account)
+              await fetch("/api/sync/store-credits/adjust", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  businessId: active.id,
+                  creditId: matched.id,
+                  amount: grandTotal,
+                  type: "udhar_charge",
+                  paymentMethod: "Udhar Credit",
+                  note: `POS Store Credit Purchase (${cart.length} items)`,
+                  invoiceNo: professionalReceiptNo,
+                  processedBy: cashierName || "Cashier",
+                }),
+              });
+            }
           }
         }
       } catch (e) {

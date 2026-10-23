@@ -200,7 +200,7 @@ const UserInventory = () => {
     const targetName = deleteTarget.name;
     setDeleteTarget(null);
 
-    // 1. Optimistic removal from UI state immediately
+    // 1. Optimistic removal from UI state immediately - no page refresh required
     setProducts((prev) => {
       const next = prev.filter((p) => p.id !== targetId);
       productsCountRef.current = next.length;
@@ -225,20 +225,31 @@ const UserInventory = () => {
     }
 
     try {
-      // 3. Delete via backend service-role API (cascades child tables and updates counts)
+      // 3. Delete via backend service-role API (cascades products, inventory, and moves counters)
       const res = await fetch(`/api/user/products/${targetId}?businessId=${encodeURIComponent(activeId || "")}`, {
         method: "DELETE",
       });
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to remove product from server.");
+        let errMessage = "Failed to remove product from server.";
+        try {
+          const errData = await res.json();
+          if (errData?.error) errMessage = errData.error;
+        } catch {
+          /* ignore parse error */
+        }
+        throw new Error(errMessage);
       }
 
-      // 4. Client-side delete attempt as secondary
+      // 4. Secondary client delete on both products and inventory tables
       try {
         await supabase.from("products").delete().eq("id", targetId);
       } catch {
-        // Handled via server-side deletion API
+        // Handled via backend service-role API
+      }
+      try {
+        await supabase.from("inventory").delete().eq("id", targetId);
+      } catch {
+        // Handled via backend service-role API
       }
 
       toast({ title: "Product deleted", description: `${targetName} has been permanently deleted.` });
@@ -287,13 +298,24 @@ const UserInventory = () => {
         body: JSON.stringify({ ids: toDeleteIds, businessId: activeId }),
       });
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to delete selected products.");
+        let errMessage = "Failed to delete selected products.";
+        try {
+          const errData = await res.json();
+          if (errData?.error) errMessage = errData.error;
+        } catch {
+          /* ignore parse error */
+        }
+        throw new Error(errMessage);
       }
 
-      // 4. Secondary client delete
+      // 4. Secondary client delete on both products and inventory tables
       try {
         await supabase.from("products").delete().in("id", toDeleteIds);
+      } catch {
+        // Handled via server-side deletion API
+      }
+      try {
+        await supabase.from("inventory").delete().in("id", toDeleteIds);
       } catch {
         // Handled via server-side deletion API
       }

@@ -87,6 +87,46 @@ const CATEGORY_COLORS = [
   "#a78bfa", // Violet
 ];
 
+export const getReportLogicLabel = (key: string) => {
+  switch (key) {
+    case "sales_revenue":
+      return "Sales & Revenue";
+    case "inventory_audit":
+      return "Inventory Audit";
+    case "profit_margins":
+      return "Profit & Margins";
+    case "purchases_expenses":
+      return "Purchases & Procurement";
+    case "tax_ledger":
+      return "Tax & Ledger";
+    default:
+      return "Sales & Revenue";
+  }
+};
+
+export const getDateRangeLabel = (key: string) => {
+  switch (key) {
+    case "today":
+      return "Today";
+    case "yesterday":
+      return "Yesterday";
+    case "7d":
+      return "Last 7 Days";
+    case "30d":
+      return "Last 30 Days";
+    case "month":
+      return "This Month";
+    case "90d":
+      return "Last 3 Months";
+    case "year":
+      return "This Year";
+    case "all":
+      return "All Time";
+    default:
+      return "Last 7 Days";
+  }
+};
+
 export const UserReports = () => {
   const { active, loading: bizLoading } = useActiveBusiness();
   const { format: fmt } = useMoney();
@@ -350,56 +390,64 @@ export const UserReports = () => {
   // Compute KPI metrics, charts & Audit Ledger rows based on real database entries and selected date window
   const { kpis, trendData, categoryMix, auditLedger } = useMemo(() => {
     const now = new Date();
+    let startDate: Date;
+    let endDate: Date;
     let daysWindow = 7;
-    if (dateRange === "today") daysWindow = 1;
-    else if (dateRange === "yesterday") daysWindow = 2;
-    else if (dateRange === "7d") daysWindow = 7;
-    else if (dateRange === "30d") daysWindow = 30;
-    else if (dateRange === "month") daysWindow = 30;
-    else if (dateRange === "90d") daysWindow = 90;
-    else if (dateRange === "year") daysWindow = 365;
-    else if (dateRange === "all") daysWindow = 730;
 
-    const cutoff = new Date();
-    cutoff.setDate(now.getDate() - daysWindow);
-    cutoff.setHours(0, 0, 0, 0);
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-    // Filter sales within window
+    if (dateRange === "today") {
+      startDate = startOfToday;
+      endDate = endOfToday;
+      daysWindow = 1;
+    } else if (dateRange === "yesterday") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+      daysWindow = 1;
+    } else if (dateRange === "7d") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0, 0);
+      endDate = endOfToday;
+      daysWindow = 7;
+    } else if (dateRange === "30d") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29, 0, 0, 0, 0);
+      endDate = endOfToday;
+      daysWindow = 30;
+    } else if (dateRange === "month") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      endDate = endOfToday;
+      daysWindow = Math.max(1, now.getDate());
+    } else if (dateRange === "90d") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 89, 0, 0, 0, 0);
+      endDate = endOfToday;
+      daysWindow = 90;
+    } else if (dateRange === "year") {
+      startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      endDate = endOfToday;
+      daysWindow = 365;
+    } else {
+      // all
+      startDate = new Date(2000, 0, 1, 0, 0, 0, 0);
+      endDate = new Date(2099, 11, 31, 23, 59, 59, 999);
+      daysWindow = 30;
+    }
+
+    // Filter sales strictly within window
     const filteredSales = dbSales.filter((s) => {
       const d = new Date(s.created_at);
-      if (dateRange === "today") {
-        return d.toDateString() === now.toDateString();
-      }
-      if (dateRange === "yesterday") {
-        const y = new Date();
-        y.setDate(now.getDate() - 1);
-        return d.toDateString() === y.toDateString();
-      }
-      return d >= cutoff;
+      return d >= startDate && d <= endDate && s.status !== "cancelled";
     });
 
-    // Filter purchases within window
+    // Filter purchases strictly within window
     const filteredPurchases = dbPurchases.filter((p) => {
       const d = new Date(p.created_at || p.entry_date || "");
-      if (dateRange === "today") return d.toDateString() === now.toDateString();
-      if (dateRange === "yesterday") {
-        const y = new Date();
-        y.setDate(now.getDate() - 1);
-        return d.toDateString() === y.toDateString();
-      }
-      return d >= cutoff;
+      return d >= startDate && d <= endDate && p.status !== "cancelled";
     });
 
-    // Filter stock movements within window
+    // Filter stock movements strictly within window
     const filteredMovements = dbStockMovements.filter((m) => {
       const d = new Date(m.created_at);
-      if (dateRange === "today") return d.toDateString() === now.toDateString();
-      if (dateRange === "yesterday") {
-        const y = new Date();
-        y.setDate(now.getDate() - 1);
-        return d.toDateString() === y.toDateString();
-      }
-      return d >= cutoff;
+      return d >= startDate && d <= endDate;
     });
 
     // 1. Core Data Aggregations
@@ -732,8 +780,8 @@ export const UserReports = () => {
     let auditLedger: LedgerItemDetail[] = [];
 
     if (reportLogic === "inventory_audit") {
-      // Stock Movements
-      auditLedger = dbStockMovements.map((sm, idx) => {
+      // Stock Movements strictly within date window
+      auditLedger = filteredMovements.map((sm, idx) => {
         const product = productMap.get(sm.product_id);
         const catName = (product?.category_id && categoryMap.get(product.category_id)) || "Inventory Movement";
         const qty = Math.abs(Number(sm.quantity || 1));
@@ -766,8 +814,8 @@ export const UserReports = () => {
         };
       });
     } else if (reportLogic === "purchases_expenses") {
-      // Purchases Ledger
-      auditLedger = dbPurchases.map((p) => {
+      // Purchases Ledger strictly within date window
+      auditLedger = filteredPurchases.map((p) => {
         const items = purchaseItemsMap.get(p.id) || [];
         const totalQty = items.reduce((sum, it) => sum + Number(it.quantity || 1), 0) || 1;
         const totalNet = Number(p.total || 0);
@@ -921,45 +969,6 @@ export const UserReports = () => {
     });
   };
 
-  const getReportLogicLabel = (key: string) => {
-    switch (key) {
-      case "sales_revenue":
-        return "Sales & Revenue";
-      case "inventory_audit":
-        return "Inventory Audit";
-      case "profit_margins":
-        return "Profit & Margins";
-      case "purchases_expenses":
-        return "Purchases & Procurement";
-      case "tax_ledger":
-        return "Tax & Ledger";
-      default:
-        return "Sales & Revenue";
-    }
-  };
-
-  const getDateRangeLabel = (key: string) => {
-    switch (key) {
-      case "today":
-        return "Today";
-      case "yesterday":
-        return "Yesterday";
-      case "7d":
-        return "Last 7 Days";
-      case "30d":
-        return "Last 30 Days";
-      case "month":
-        return "This Month";
-      case "90d":
-        return "Last 3 Months";
-      case "year":
-        return "This Year";
-      case "all":
-        return "All Time";
-      default:
-        return "Last 7 Days";
-    }
-  };
 
   const handleAnalyzeRestock = async () => {
     if (!active?.id) return;

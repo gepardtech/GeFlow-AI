@@ -241,6 +241,7 @@ const AdminBillingPricing = () => {
       if (!res.ok || !json.success) {
         throw new Error(json.error || "Failed to save plan");
       }
+      window.dispatchEvent(new CustomEvent("geflow:pricing-updated"));
       toast({ title: editing ? "Plan updated" : "Plan created" });
       setOpen(false);
       load();
@@ -260,6 +261,7 @@ const AdminBillingPricing = () => {
       if (!res.ok || !json.success) {
         throw new Error(json.error || "Failed to delete plan");
       }
+      window.dispatchEvent(new CustomEvent("geflow:pricing-updated"));
       toast({ title: "Plan deleted" });
       setDel(null);
       load();

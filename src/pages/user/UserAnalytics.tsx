@@ -215,27 +215,52 @@ export const UserAnalytics = () => {
     topCategoryName,
   } = useMemo(() => {
     const now = new Date();
-    let days = 7;
-    if (dateRange === "today") days = 1;
-    else if (dateRange === "yesterday") days = 2;
-    else if (dateRange === "7d") days = 7;
-    else if (dateRange === "30d") days = 30;
-    else if (dateRange === "month") days = 30;
-    else if (dateRange === "90d") days = 90;
-    else if (dateRange === "year") days = 365;
-    else if (dateRange === "all") days = 730;
+    let startDate: Date;
+    let endDate: Date;
 
-    const cutoff = new Date();
-    cutoff.setDate(now.getDate() - days);
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-    const filteredSales = sales.filter(
-      (s) => new Date(s.created_at) >= cutoff && s.status !== "cancelled"
-    );
-    const filteredPurchases = purchases.filter(
-      (p) => new Date(p.created_at) >= cutoff && p.status !== "cancelled"
-    );
+    if (dateRange === "today") {
+      startDate = startOfToday;
+      endDate = endOfToday;
+    } else if (dateRange === "yesterday") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+    } else if (dateRange === "7d") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0, 0);
+      endDate = endOfToday;
+    } else if (dateRange === "30d") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29, 0, 0, 0, 0);
+      endDate = endOfToday;
+    } else if (dateRange === "month") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      endDate = endOfToday;
+    } else if (dateRange === "90d") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 89, 0, 0, 0, 0);
+      endDate = endOfToday;
+    } else if (dateRange === "year") {
+      startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      endDate = endOfToday;
+    } else {
+      // all
+      startDate = new Date(2000, 0, 1, 0, 0, 0, 0);
+      endDate = new Date(2099, 11, 31, 23, 59, 59, 999);
+    }
 
-    // 1. KPI Calculations (strictly real store numbers)
+    const filteredSales = sales.filter((s) => {
+      const d = new Date(s.created_at);
+      return d >= startDate && d <= endDate && s.status !== "cancelled";
+    });
+    const filteredPurchases = purchases.filter((p) => {
+      const d = new Date(p.created_at);
+      return d >= startDate && d <= endDate && p.status !== "cancelled";
+    });
+
+    const filteredSaleIds = new Set(filteredSales.map((s) => s.id));
+    const periodSaleItems = saleItems.filter((it) => filteredSaleIds.has(it.sale_id));
+
+    // 1. KPI Calculations (strictly real store numbers for the chosen period)
     const totalRevenue = filteredSales.reduce((acc, s) => acc + Number(s.total || 0), 0);
     const totalProfit = filteredSales.reduce((acc, s) => acc + Number(s.profit || 0), 0);
     const totalOrders = filteredSales.length;
@@ -245,49 +270,40 @@ export const UserAnalytics = () => {
     let velocityData: RevenueVelocityPoint[] = [];
 
     if (dateRange === "today" || dateRange === "yesterday") {
-      const isYesterday = dateRange === "yesterday";
-      const targetDate = new Date(now);
-      if (isYesterday) targetDate.setDate(targetDate.getDate() - 1);
-      const targetDateStr = targetDate.toISOString().slice(0, 10);
-
       const hours = [8, 10, 12, 14, 16, 18, 20, 22];
       const hourSlots = hours.map((h) => {
-        const label = h <= 12 ? `${h}am` : `${h - 12}pm`;
+        const label = h === 0 ? "12am" : h <= 12 ? `${h}am` : `${h - 12}pm`;
         return { hour: h, label, revenue: 0, costs: 0 };
       });
 
       filteredSales.forEach((s) => {
         const d = new Date(s.created_at);
-        if (d.toISOString().slice(0, 10) === targetDateStr) {
-          const h = d.getHours();
-          let bestIdx = 0;
-          let bestDiff = 999;
-          hours.forEach((slotH, idx) => {
-            const diff = Math.abs(h - slotH);
-            if (diff < bestDiff) {
-              bestDiff = diff;
-              bestIdx = idx;
-            }
-          });
-          hourSlots[bestIdx].revenue += Number(s.total || 0);
-        }
+        const h = d.getHours();
+        let bestIdx = 0;
+        let bestDiff = 999;
+        hours.forEach((slotH, idx) => {
+          const diff = Math.abs(h - slotH);
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            bestIdx = idx;
+          }
+        });
+        hourSlots[bestIdx].revenue += Number(s.total || 0);
       });
 
       filteredPurchases.forEach((p) => {
         const d = new Date(p.created_at);
-        if (d.toISOString().slice(0, 10) === targetDateStr) {
-          const h = d.getHours();
-          let bestIdx = 0;
-          let bestDiff = 999;
-          hours.forEach((slotH, idx) => {
-            const diff = Math.abs(h - slotH);
-            if (diff < bestDiff) {
-              bestDiff = diff;
-              bestIdx = idx;
-            }
-          });
-          hourSlots[bestIdx].costs += Number(p.total_amount || 0);
-        }
+        const h = d.getHours();
+        let bestIdx = 0;
+        let bestDiff = 999;
+        hours.forEach((slotH, idx) => {
+          const diff = Math.abs(h - slotH);
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            bestIdx = idx;
+          }
+        });
+        hourSlots[bestIdx].costs += Number(p.total_amount || 0);
       });
 
       velocityData = hourSlots.map((slot) => ({
@@ -297,24 +313,25 @@ export const UserAnalytics = () => {
       }));
     } else if (dateRange === "7d") {
       // Past 7 calendar days sequentially: Day -6 to Day 0 (today)
-      const daysList: { dateStr: string; label: string; revenue: number; costs: number }[] = [];
+      const daysList: { dateKey: string; label: string; revenue: number; costs: number }[] = [];
       for (let i = 6; i >= 0; i--) {
-        const d = new Date(now);
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().slice(0, 10);
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+        const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         const label = i === 0 ? "Today" : d.toLocaleDateString(undefined, { weekday: "short", day: "numeric" });
-        daysList.push({ dateStr, label, revenue: 0, costs: 0 });
+        daysList.push({ dateKey, label, revenue: 0, costs: 0 });
       }
 
       filteredSales.forEach((s) => {
-        const sDateStr = new Date(s.created_at).toISOString().slice(0, 10);
-        const slot = daysList.find((d) => d.dateStr === sDateStr);
+        const d = new Date(s.created_at);
+        const sKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        const slot = daysList.find((x) => x.dateKey === sKey);
         if (slot) slot.revenue += Number(s.total || 0);
       });
 
       filteredPurchases.forEach((p) => {
-        const pDateStr = new Date(p.created_at).toISOString().slice(0, 10);
-        const slot = daysList.find((d) => d.dateStr === pDateStr);
+        const d = new Date(p.created_at);
+        const pKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        const slot = daysList.find((x) => x.dateKey === pKey);
         if (slot) slot.costs += Number(p.total_amount || 0);
       });
 
@@ -364,13 +381,15 @@ export const UserAnalytics = () => {
       }
 
       filteredSales.forEach((s) => {
-        const key = new Date(s.created_at).toISOString().slice(0, 7);
+        const d = new Date(s.created_at);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
         const slot = monthSlots.find((m) => m.key === key);
         if (slot) slot.revenue += Number(s.total || 0);
       });
 
       filteredPurchases.forEach((p) => {
-        const key = new Date(p.created_at).toISOString().slice(0, 7);
+        const d = new Date(p.created_at);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
         const slot = monthSlots.find((m) => m.key === key);
         if (slot) slot.costs += Number(p.total_amount || 0);
       });
@@ -382,7 +401,7 @@ export const UserAnalytics = () => {
       }));
     }
 
-    // 3. Dynamic Category Mix based on this store's real catalog and sales
+    // 3. Dynamic Category Mix strictly based on sales in the selected period
     const catMap = new Map<string, number>();
     const getCatName = (catId?: string | null) => {
       if (!catId) return "General";
@@ -390,37 +409,36 @@ export const UserAnalytics = () => {
       return found?.name || "General";
     };
 
-    if (filteredSales.length > 0 && saleItems.length > 0) {
-      saleItems.forEach((it) => {
+    if (filteredSales.length > 0 && periodSaleItems.length > 0) {
+      periodSaleItems.forEach((it) => {
         const prod = products.find((p) => p.id === it.product_id);
         const cat = getCatName(prod?.category_id);
         catMap.set(cat, (catMap.get(cat) || 0) + Number(it.quantity || 1) * Number(it.unit_price || 0));
       });
-    } else if (products.length > 0) {
-      products.forEach((p) => {
-        const cat = getCatName(p.category_id);
-        const val = Number(p.stock_units || 0) * Number(p.retail_price || 0);
-        catMap.set(cat, (catMap.get(cat) || 0) + (val > 0 ? val : 1));
-      });
-    } else {
-      catMap.set(active?.business_name ? `${active.business_name} Catalog` : "General Store", 100);
     }
 
-    const totalCatVal = Array.from(catMap.values()).reduce((a, b) => a + b, 0) || 1;
-    const sortedCats = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]);
-    const topCategoryName = sortedCats[0]?.[0] || "General";
+    let categoryMixData: { name: string; value: number; color: string }[] = [];
+    let topCategoryName = "General";
+    if (catMap.size > 0) {
+      const totalCatVal = Array.from(catMap.values()).reduce((a, b) => a + b, 0) || 1;
+      const sortedCats = Array.from(catMap.entries()).sort((a, b) => b[1] - a[1]);
+      topCategoryName = sortedCats[0]?.[0] || "General";
+      categoryMixData = sortedCats.slice(0, 4).map(([name, val], idx) => ({
+        name: name.toUpperCase(),
+        value: Math.max(1, Math.round((val / totalCatVal) * 100)),
+        color: PALETTE[idx % PALETTE.length],
+      }));
+    } else {
+      categoryMixData = [
+        { name: "NO SALES IN PERIOD", value: 100, color: "#94a3b8" }
+      ];
+    }
 
-    const categoryMixData = sortedCats.slice(0, 4).map(([name, val], idx) => ({
-      name: name.toUpperCase(),
-      value: Math.max(1, Math.round((val / totalCatVal) * 100)),
-      color: PALETTE[idx % PALETTE.length],
-    }));
-
-    // 4. Operational Pulse: Top High-Yield SKUs from this store's real sales or inventory
+    // 4. Operational Pulse: Top High-Yield SKUs from this store's real sales in the selected period
     const pulseList: TopProductPulse[] = [];
-    if (saleItems.length > 0) {
+    if (periodSaleItems.length > 0) {
       const prodAgg = new Map<string, { name: string; units: number; rev: number; cost: number }>();
-      saleItems.forEach((it) => {
+      periodSaleItems.forEach((it) => {
         const pId = it.product_id || it.product_name || "item";
         const ex = prodAgg.get(pId) || {
           name: it.product_name || "Store Item",
@@ -448,25 +466,6 @@ export const UserAnalytics = () => {
           unitsProcessed: data.units,
           marginPercent: Math.max(5, margin),
           totalRevenue: Math.round(data.rev * 100) / 100,
-        });
-      });
-    }
-
-    // Backfill with registered products if fewer than 4 items
-    if (pulseList.length < 4 && products.length > 0) {
-      const existingNames = new Set(pulseList.map((p) => p.name.toLowerCase()));
-      const remainingProducts = products.filter((p) => !existingNames.has(p.name.toLowerCase()));
-      remainingProducts.slice(0, 4 - pulseList.length).forEach((p) => {
-        const retail = Number(p.retail_price || 0);
-        const cost = Number(p.purchase_cost || 0);
-        const margin = retail > 0 ? Math.round(((retail - cost) / retail) * 100) : 25;
-        pulseList.push({
-          id: p.id,
-          rank: pulseList.length + 1,
-          name: p.name,
-          unitsProcessed: Number(p.stock_units || 0),
-          marginPercent: Math.max(5, margin),
-          totalRevenue: Math.round(retail * Math.max(1, Number(p.stock_units || 0)) * 100) / 100,
         });
       });
     }

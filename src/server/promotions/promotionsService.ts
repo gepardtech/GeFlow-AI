@@ -349,9 +349,11 @@ class PromotionsService {
     return this.announcements.find((a) => a.id === id);
   }
 
-  public createAnnouncement(data: Partial<ServerAnnouncement>): ServerAnnouncement {
+  public async createAnnouncement(data: Partial<ServerAnnouncement> & { created_by_user_id?: string }): Promise<ServerAnnouncement> {
     const now = new Date().toISOString();
-    const newId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "ann_" + Math.random().toString(36).slice(2, 11);
+    const newId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : (await import("crypto")).randomUUID();
+    const adminUserId = data.created_by_user_id || "a375b057-debe-4239-9549-9f83b5557df2";
+
     const newAnn: ServerAnnouncement = {
       id: newId,
       title: data.title || "Announcement",
@@ -372,37 +374,45 @@ class PromotionsService {
       created_at: now,
       updated_at: now,
     };
+
     this.announcements.unshift(newAnn);
     this.saveAnnouncements();
 
-    // Async sync to Supabase with identical ID
-    serverSupabase
-      .from("announcements")
-      .insert({
-        id: newAnn.id,
-        title: newAnn.title,
-        body: newAnn.body,
-        audience: newAnn.audience,
-        position: newAnn.position,
-        variant: newAnn.variant,
-        link_url: newAnn.link_url,
-        link_label: newAnn.link_label,
-        starts_at: newAnn.starts_at,
-        ends_at: newAnn.ends_at,
-        is_active: newAnn.is_active,
-      })
-      .then((res) => {
-        if (res.data?.[0]?.id) {
-          newAnn.id = res.data[0].id;
-          this.saveAnnouncements();
-        }
-      })
-      .catch((err) => console.warn("Supabase announcement insert notice:", err));
+    // Persist to Supabase with valid created_by_user_id and select
+    try {
+      const { data: inserted, error } = await serverSupabase
+        .from("announcements")
+        .insert({
+          id: newAnn.id,
+          title: newAnn.title,
+          body: newAnn.body,
+          audience: newAnn.audience,
+          position: newAnn.position,
+          variant: newAnn.variant,
+          link_url: newAnn.link_url,
+          link_label: newAnn.link_label,
+          starts_at: newAnn.starts_at,
+          ends_at: newAnn.ends_at,
+          is_active: newAnn.is_active,
+          created_by_user_id: adminUserId,
+        })
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        console.warn("Supabase announcement insert warning:", error.message);
+      } else if (inserted?.id) {
+        newAnn.id = inserted.id;
+        this.saveAnnouncements();
+      }
+    } catch (err: any) {
+      console.warn("Supabase announcement insert notice:", err?.message || err);
+    }
 
     return newAnn;
   }
 
-  public updateAnnouncement(id: string, data: Partial<ServerAnnouncement>): ServerAnnouncement | null {
+  public async updateAnnouncement(id: string, data: Partial<ServerAnnouncement>): Promise<ServerAnnouncement | null> {
     let idx = this.announcements.findIndex((a) => a.id === id);
     if (idx === -1) {
       // Check if id matches partial or title fallback
@@ -419,29 +429,38 @@ class PromotionsService {
       popup_opens: data.popup_opens !== undefined ? Number(data.popup_opens) : this.announcements[idx].popup_opens,
       conversions: data.conversions !== undefined ? Number(data.conversions) : this.announcements[idx].conversions,
       earnings: data.earnings !== undefined ? Number(data.earnings) : this.announcements[idx].earnings,
+      ends_at: data.ends_at !== undefined ? (data.ends_at || null) : this.announcements[idx].ends_at,
       updated_at: new Date().toISOString(),
     };
     this.saveAnnouncements();
 
     const isUUID = (str?: string) => Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
     if (isUUID(id)) {
-      serverSupabase
-        .from("announcements")
-        .update({
-          ...(data.title !== undefined ? { title: data.title } : {}),
-          ...(data.body !== undefined ? { body: data.body } : {}),
-          ...(data.audience !== undefined ? { audience: data.audience } : {}),
-          ...(data.position !== undefined ? { position: data.position } : {}),
-          ...(data.variant !== undefined ? { variant: data.variant } : {}),
-          ...(data.link_url !== undefined ? { link_url: data.link_url } : {}),
-          ...(data.link_label !== undefined ? { link_label: data.link_label } : {}),
-          ...(data.starts_at !== undefined ? { starts_at: data.starts_at } : {}),
-          ...(data.ends_at !== undefined ? { ends_at: data.ends_at } : {}),
-          ...(data.is_active !== undefined ? { is_active: data.is_active } : {}),
-        })
-        .eq("id", id)
-        .then()
-        .catch((err) => console.warn("Supabase announcement update notice:", err));
+      try {
+        const updatePayload: any = {
+          updated_at: new Date().toISOString(),
+        };
+        if (data.title !== undefined) updatePayload.title = data.title;
+        if (data.body !== undefined) updatePayload.body = data.body;
+        if (data.audience !== undefined) updatePayload.audience = data.audience;
+        if (data.position !== undefined) updatePayload.position = data.position;
+        if (data.variant !== undefined) updatePayload.variant = data.variant;
+        if (data.link_url !== undefined) updatePayload.link_url = data.link_url;
+        if (data.link_label !== undefined) updatePayload.link_label = data.link_label;
+        if (data.starts_at !== undefined) updatePayload.starts_at = data.starts_at;
+        if (data.ends_at !== undefined) updatePayload.ends_at = data.ends_at || null;
+        if (data.is_active !== undefined) updatePayload.is_active = data.is_active;
+
+        const { error } = await serverSupabase
+          .from("announcements")
+          .update(updatePayload)
+          .eq("id", id);
+        if (error) {
+          console.warn("Supabase announcement update notice:", error.message);
+        }
+      } catch (err: any) {
+        console.warn("Supabase announcement update notice:", err?.message || err);
+      }
     }
 
     return this.announcements[idx];
@@ -493,19 +512,21 @@ class PromotionsService {
     };
   }
 
-  public deleteAnnouncement(id: string): boolean {
+  public async deleteAnnouncement(id: string): Promise<boolean> {
     const prevLen = this.announcements.length;
     this.announcements = this.announcements.filter((a) => a.id !== id);
     if (this.announcements.length !== prevLen) {
       this.saveAnnouncements();
       const isUUID = (str?: string) => Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
       if (isUUID(id)) {
-        serverSupabase
-          .from("announcements")
-          .delete()
-          .eq("id", id)
-          .then()
-          .catch((err) => console.warn("Supabase announcement delete notice:", err));
+        try {
+          await serverSupabase
+            .from("announcements")
+            .delete()
+            .eq("id", id);
+        } catch (err) {
+          console.warn("Supabase announcement delete notice:", err);
+        }
       }
       return true;
     }

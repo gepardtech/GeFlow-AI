@@ -1705,7 +1705,10 @@ app.delete("/api/user/products/:id", async (req: Request, res: Response) => {
       try { await serverSupabase.from("order_items").update({ product_id: null }).eq("product_id", id); } catch { /* ignore */ }
       try { await serverSupabase.from("stock_movements").delete().eq("product_id", id); } catch { /* ignore */ }
 
-      // 3. Delete physical product from PostgreSQL
+      // 3. Delete physical product from PostgreSQL products and inventory tables
+      try { await serverSupabase.from("inventory").delete().eq("id", id); } catch { /* ignore */ }
+      try { await serverSupabase.from("inventory").delete().eq("product_id", id); } catch { /* ignore */ }
+      try { await serverSupabase.from("inventory_items").delete().eq("product_id", id); } catch { /* ignore */ }
       const { error: delErr } = await serverSupabase.from("products").delete().eq("id", id);
       if (delErr) {
         console.error("serverSupabase product delete error:", delErr.message);
@@ -1763,7 +1766,10 @@ app.post("/api/user/products/bulk-delete", async (req: Request, res: Response) =
       try { await serverSupabase.from("order_items").update({ product_id: null }).in("product_id", uuidList); } catch { /* ignore */ }
       try { await serverSupabase.from("stock_movements").delete().in("product_id", uuidList); } catch { /* ignore */ }
 
-      // 2. Delete physical products
+      // 2. Delete physical products from products and inventory tables
+      try { await serverSupabase.from("inventory").delete().in("id", uuidList); } catch { /* ignore */ }
+      try { await serverSupabase.from("inventory").delete().in("product_id", uuidList); } catch { /* ignore */ }
+      try { await serverSupabase.from("inventory_items").delete().in("product_id", uuidList); } catch { /* ignore */ }
       const { error: delErr } = await serverSupabase.from("products").delete().in("id", uuidList);
       if (delErr) {
         console.error("serverSupabase bulk delete error:", delErr.message);
@@ -2118,19 +2124,32 @@ app.delete("/api/sync/held-orders", async (req: Request, res: Response) => {
 // Dedicated Store Credit / Udhar Ledger Endpoints
 const formatCreditForClient = (c: any) => ({
   ...c,
+  id: c.id,
+  buyerId: c.buyer_id || c.buyerId || "BUY-10001",
   businessId: c.business_id || c.businessId,
   customerName: c.customer_name || c.customerName || "Customer",
-  customerPhone: c.customer_phone || c.customerPhone,
-  customerEmail: c.customer_email || c.customerEmail,
+  customerPhone: c.customer_phone || c.customerPhone || "",
+  customerEmail: c.customer_email || c.customerEmail || "",
+  customerAddress: c.customer_address || c.customerAddress || "",
+  outstandingUdhar: Number(c.outstanding_udhar ?? c.balance ?? 0),
+  availableDeposit: Number(c.available_deposit ?? 0),
+  balance: Number(c.outstanding_udhar ?? c.balance ?? 0), // backward compatibility
   creditLimit: c.credit_limit !== undefined ? Number(c.credit_limit) : (c.creditLimit !== undefined ? Number(c.creditLimit) : 1000),
+  notes: c.notes || "",
   createdAt: c.created_at || c.createdAt,
   updatedAt: c.updated_at || c.updatedAt,
   transactions: (c.transactions || []).map((t: any) => ({
     ...t,
-    createdAt: t.createdAt || t.created_at || t.date || new Date().toISOString(),
-    balanceAfter: t.balanceAfter !== undefined ? Number(t.balanceAfter) : (t.balance_after !== undefined ? Number(t.balance_after) : (c.balance || 0)),
-    referenceId: t.referenceId || t.reference_id || t.invoice_no,
+    id: t.id || `txn_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    type: t.type || "adjustment",
+    amount: Number(t.amount || 0),
+    paymentMethod: t.payment_method || t.paymentMethod || "Cash",
+    depositBalanceAfter: Number(t.deposit_balance_after ?? t.depositBalanceAfter ?? 0),
+    udharBalanceAfter: Number(t.udhar_balance_after ?? t.udharBalanceAfter ?? 0),
+    balanceAfter: Number(t.balanceAfter ?? t.balance_after ?? t.udhar_balance_after ?? 0),
+    referenceId: t.referenceId || t.reference_id || t.invoice_no || "",
     recordedBy: t.recordedBy || t.recorded_by || t.processed_by || "Register",
+    createdAt: t.createdAt || t.created_at || t.date || new Date().toISOString(),
   })),
 });
 
@@ -2148,6 +2167,20 @@ app.get("/api/sync/store-credits", (req: Request, res: Response) => {
   }
 });
 
+app.get("/api/sync/store-credits/search", (req: Request, res: Response) => {
+  try {
+    const businessId = (req.query.businessId as string) || "";
+    const query = (req.query.q as string) || "";
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "businessId query parameter is required." });
+    }
+    const matched = storeCreditsStorage.findByIdentity(businessId, query);
+    res.json({ success: true, buyers: matched.map(formatCreditForClient) });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.post("/api/sync/store-credits", (req: Request, res: Response) => {
   try {
     const { businessId, credit } = req.body || {};
@@ -2158,11 +2191,15 @@ app.post("/api/sync/store-credits", (req: Request, res: Response) => {
     }
     const mappedPayload: any = {
       ...payload,
+      buyer_id: payload.buyerId || payload.buyer_id,
       customer_name: payload.customerName || payload.customer_name || "Customer",
       customer_phone: payload.customerPhone || payload.customer_phone,
       customer_email: payload.customerEmail || payload.customer_email,
+      customer_address: payload.customerAddress || payload.customer_address,
       credit_limit: payload.creditLimit !== undefined ? Number(payload.creditLimit) : Number(payload.credit_limit || 1000),
-      balance: payload.balance !== undefined ? Number(payload.balance) : 0,
+      outstanding_udhar: payload.outstandingUdhar !== undefined ? Number(payload.outstandingUdhar) : (payload.balance !== undefined ? Number(payload.balance) : 0),
+      available_deposit: payload.availableDeposit !== undefined ? Number(payload.availableDeposit) : 0,
+      balance: payload.outstandingUdhar !== undefined ? Number(payload.outstandingUdhar) : (payload.balance !== undefined ? Number(payload.balance) : 0),
       notes: payload.notes,
     };
     const saved = storeCreditsStorage.upsert(effectiveBizId, mappedPayload);
@@ -2174,11 +2211,20 @@ app.post("/api/sync/store-credits", (req: Request, res: Response) => {
 
 app.post("/api/sync/store-credits/adjust", (req: Request, res: Response) => {
   try {
-    const { businessId, creditId, amount, type, note, invoiceNo, processedBy } = req.body || {};
+    const { businessId, creditId, amount, type, note, invoiceNo, processedBy, paymentMethod } = req.body || {};
     if (!businessId || !creditId || amount === undefined || !type) {
       return res.status(400).json({ success: false, error: "businessId, creditId, amount, and type are required." });
     }
-    const adjusted = storeCreditsStorage.adjustBalance(businessId, creditId, Number(amount), type, note, invoiceNo, processedBy);
+    const adjusted = storeCreditsStorage.adjustBalance(
+      businessId,
+      creditId,
+      Number(amount),
+      type,
+      note,
+      invoiceNo,
+      processedBy,
+      paymentMethod
+    );
     if (!adjusted) {
       return res.status(404).json({ success: false, error: "Store credit record not found." });
     }
@@ -4528,6 +4574,7 @@ app.get("/api/admin/pricing-plans", async (_req: Request, res: Response) => {
     const alerts = (setRow?.alerts && typeof setRow.alerts === "object" ? setRow.alerts : {}) as any;
     const lifetimeLimits = alerts.lifetime_plan_limits || { standard: 25, premium: 25 };
     const lifetimeCustomizations = alerts.lifetime_customizations || {};
+    const planCustomizations = alerts.pricing_plan_customizations || {};
 
     const subs = subData || [];
     const counts = {
@@ -4535,9 +4582,18 @@ app.get("/api/admin/pricing-plans", async (_req: Request, res: Response) => {
       premium: subs.filter((s: any) => s.tier === "premium").length,
     };
 
+    const enrichedPlans = (data || []).map((p: any) => {
+      const planKey = (p.plan_key || "").toLowerCase();
+      const cta = planCustomizations[planKey]?.cta_button_text ?? lifetimeCustomizations[planKey]?.cta_button_text ?? null;
+      return {
+        ...p,
+        cta_button_text: cta,
+      };
+    });
+
     return res.json({
       success: true,
-      plans: data || [],
+      plans: enrichedPlans,
       lifetime_plan_limits: lifetimeLimits,
       lifetime_offer_counts: counts,
       lifetime_customizations: lifetimeCustomizations,
@@ -4631,8 +4687,9 @@ app.post("/api/admin/pricing-plans", async (req: Request, res: Response) => {
   try {
     const { id, plan_key, name, tagline, monthly_price, yearly_price, lifetime_price, features, is_active, is_popular, sort_order, badge_text, badge_position, badge_cycle, payment_method_synced, cta_button_text } = req.body || {};
     if (!name || !plan_key) return res.status(400).json({ success: false, error: "Name and plan_key required" });
+    const cleanKey = plan_key.toLowerCase().trim();
     const payload: any = {
-      plan_key: plan_key.toLowerCase().trim(),
+      plan_key: cleanKey,
       name: name.trim(),
       tagline: tagline || null,
       monthly_price: Number(monthly_price) || 0,
@@ -4646,7 +4703,6 @@ app.post("/api/admin/pricing-plans", async (req: Request, res: Response) => {
       badge_position: badge_position || "top",
       badge_cycle: badge_cycle || "all",
       payment_method_synced: payment_method_synced !== undefined ? Boolean(payment_method_synced) : true,
-      cta_button_text: cta_button_text ? String(cta_button_text).trim() : null,
       updated_at: new Date().toISOString(),
     };
     let savedPlan: any;
@@ -4669,7 +4725,28 @@ app.post("/api/admin/pricing-plans", async (req: Request, res: Response) => {
       }
       savedPlan = data;
     }
-    return res.json({ success: true, plan: savedPlan });
+
+    // Persist cta_button_text in platform_settings.alerts.pricing_plan_customizations
+    const cleanCta = cta_button_text !== undefined ? (cta_button_text ? String(cta_button_text).trim() : null) : null;
+    try {
+      const { data: row } = await serverSupabase.from("platform_settings").select("id, alerts").limit(1).maybeSingle();
+      const existingAlerts = row?.alerts && typeof row.alerts === "object" ? (row.alerts as any) : {};
+      const planCustomizations = existingAlerts.pricing_plan_customizations || {};
+      planCustomizations[cleanKey] = {
+        ...(planCustomizations[cleanKey] || {}),
+        cta_button_text: cleanCta,
+      };
+      const nextAlerts = { ...existingAlerts, pricing_plan_customizations: planCustomizations };
+      if (row?.id) {
+        await serverSupabase.from("platform_settings").update({ alerts: nextAlerts, updated_at: new Date().toISOString() }).eq("id", row.id);
+      } else {
+        await serverSupabase.from("platform_settings").insert({ singleton: true, alerts: nextAlerts, updated_at: new Date().toISOString() });
+      }
+    } catch (e) {
+      console.warn("Notice saving plan customization:", e);
+    }
+
+    return res.json({ success: true, plan: { ...savedPlan, cta_button_text: cleanCta } });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -6374,19 +6451,19 @@ app.get("/api/announcements", (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/announcements", (req: Request, res: Response) => {
+app.post("/api/announcements", async (req: Request, res: Response) => {
   try {
-    const created = promotionsService.createAnnouncement(req.body || {});
+    const created = await promotionsService.createAnnouncement(req.body || {});
     res.json({ success: true, announcement: created });
   } catch (err: any) {
     res.status(400).json({ success: false, error: err.message });
   }
 });
 
-app.patch("/api/announcements/:id", (req: Request, res: Response) => {
+app.patch("/api/announcements/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const updated = promotionsService.updateAnnouncement(id, req.body || {});
+    const updated = await promotionsService.updateAnnouncement(id, req.body || {});
     if (!updated) {
       return res.status(404).json({ success: false, error: "Announcement not found" });
     }
@@ -6396,10 +6473,10 @@ app.patch("/api/announcements/:id", (req: Request, res: Response) => {
   }
 });
 
-app.delete("/api/announcements/:id", (req: Request, res: Response) => {
+app.delete("/api/announcements/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const deleted = promotionsService.deleteAnnouncement(id);
+    const deleted = await promotionsService.deleteAnnouncement(id);
     res.json({ success: true, deleted });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
