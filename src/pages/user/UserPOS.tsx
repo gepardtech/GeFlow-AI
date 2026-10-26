@@ -5,8 +5,17 @@ import {
   Banknote, CreditCard, Zap, Loader2, X, Sparkles, Scale, Pill, Droplets,
   Layers, ChevronRight, User, Phone, FileText, Barcode, Check, RotateCcw,
   FlaskConical, UserPlus, Globe, Clock, PauseCircle,
-  Smartphone, Building2, ArrowRightLeft, Tag, Percent,
+  Smartphone, Building2, ArrowRightLeft, Tag, Percent, ShieldCheck, Wallet, AlertTriangle,
 } from "lucide-react";
+import {
+  POSBuyerSelectionModal,
+  POSBuyerAccount,
+} from "@/components/pos/POSBuyerSelectionModal";
+import {
+  POSVariantSelectionModal,
+  VariantSelectionResult,
+} from "@/components/pos/POSVariantSelectionModal";
+import type { ProductVariationsConfig } from "@/server/productVariationsStorage";
 import { getBusinessPaymentMethods, BusinessPaymentMethod } from "@/lib/paymentMethods";
 import UserPanelGate from "@/components/UserPanelGate";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
@@ -72,6 +81,13 @@ export interface CartLine extends POSProduct {
   discountAmount?: number; // per-item fixed discount
   discountType?: "pct" | "fixed";
   isEditingDiscount?: boolean;
+  variantId?: string;
+  variantSku?: string;
+  variantName?: string;
+  variantAttributes?: Record<string, string>;
+  selectedModifiers?: any[];
+  measuredQuantity?: number;
+  measuredUnit?: string;
 }
 
 const UserPOS = () => {
@@ -94,6 +110,11 @@ const UserPOS = () => {
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [cashierName, setCashierName] = useState("Cashier");
+
+  // Product Variations & Options (WooCommerce / Shopify style)
+  const [variationsMap, setVariationsMap] = useState<Record<string, ProductVariationsConfig>>({});
+  const [selectedProductForVariant, setSelectedProductForVariant] = useState<POSProduct | null>(null);
+  const [variantModalOpen, setVariantModalOpen] = useState(false);
 
   // Dynamic Country / Business Payment Methods & Split Pay
   const [paymentMethods, setPaymentMethods] = useState<BusinessPaymentMethod[]>([]);
@@ -158,6 +179,25 @@ const UserPOS = () => {
     const code = customerPhoneCode || detectedCountry.phoneCode || "+1";
     return `${code} ${p}`;
   }, [customerPhone, customerPhoneCode, detectedCountry]);
+
+  // Verified Buyer Account (Store Credit / Udhar balance management)
+  const [selectedBuyer, setSelectedBuyer] = useState<POSBuyerAccount | null>(null);
+  const [buyerModalOpen, setBuyerModalOpen] = useState(false);
+  const [buyerModalRequiredFor, setBuyerModalRequiredFor] = useState<"deposit" | "udhar" | null>(null);
+  const [partialCashOption, setPartialCashOption] = useState<"udhar" | "deposit">("udhar");
+  const [depositChangeToCredit, setDepositChangeToCredit] = useState(false);
+
+  const handleSelectBuyerAccount = (buyer: POSBuyerAccount) => {
+    setSelectedBuyer(buyer);
+    setCustomerName(buyer.customerName);
+    if (buyer.customerPhone) {
+      setCustomerPhone(buyer.customerPhone);
+    }
+  };
+
+  const handleClearBuyerAccount = () => {
+    setSelectedBuyer(null);
+  };
 
   // Barcode Test Simulator State
   const [showBarcodeSimulator, setShowBarcodeSimulator] = useState(false);
@@ -385,6 +425,23 @@ const UserPOS = () => {
 
       const cleanProducts = ((data as POSProduct[]) ?? []).filter((p) => !isDemoProduct(p));
       setProducts(cleanProducts);
+
+      // Fetch product variations configs
+      try {
+        const vRes = await fetch(`/api/sync/product-variations?business_id=${activeId}`);
+        if (vRes.ok) {
+          const vData = await vRes.json();
+          if (vData.configs && Array.isArray(vData.configs)) {
+            const vMap: Record<string, ProductVariationsConfig> = {};
+            vData.configs.forEach((c: ProductVariationsConfig) => {
+              vMap[c.product_id] = c;
+            });
+            setVariationsMap(vMap);
+          }
+        }
+      } catch (vErr) {
+        console.warn("Could not load product variations:", vErr);
+      }
     } catch (err) {
       console.warn("POS failed to fetch products:", err);
     } finally {
@@ -441,6 +498,21 @@ const UserPOS = () => {
   }, [products, search, catName]);
 
   const addToCart = (p: POSProduct) => {
+    // If product is variable, measured, or has custom modifiers, open POSVariantSelectionModal
+    const vConfig = variationsMap[p.id];
+    if (
+      vConfig &&
+      (vConfig.product_type === "variable" ||
+        vConfig.product_type === "measured" ||
+        vConfig.product_type === "addons" ||
+        (vConfig.attributes && vConfig.attributes.length > 0) ||
+        (vConfig.modifiers && vConfig.modifiers.length > 0))
+    ) {
+      setSelectedProductForVariant(p);
+      setVariantModalOpen(true);
+      return;
+    }
+
     const stockInfo = computeProductStock(p.stock_units, p.name, p.description, p.uom, p.units_per_uom, p.base_unit);
     if (stockInfo.totalSubUnits <= 0) {
       toast({ title: "Out of stock", description: p.name, variant: "destructive" });
@@ -500,6 +572,36 @@ const UserPOS = () => {
         },
       ];
     });
+  };
+
+  const handleConfirmVariantSelection = (result: VariantSelectionResult) => {
+    const p = result.product;
+    const price = result.effectivePrice;
+    setCart((prev) => [
+      ...prev,
+      {
+        ...p,
+        lineId: `${p.id}_var_${result.variant?.id || Date.now()}_${Date.now()}`,
+        name: result.displayName,
+        internal_sku: result.sku,
+        unit: price,
+        retail_price: price,
+        qty: 1,
+        fractionOfPack: 1,
+        stockUnitsDeducted: 1,
+        displayUnitLabel: result.measuredQuantity
+          ? `${result.measuredQuantity}${result.measuredUnit || "g"}`
+          : (result.variant?.name || "Variant"),
+        proportionalCost: Number(result.variant?.purchase_cost ?? p.purchase_cost) || 0,
+        variantId: result.variant?.id,
+        variantSku: result.sku,
+        variantName: result.displayName,
+        variantAttributes: result.selectedAttributes,
+        selectedModifiers: result.selectedModifiers,
+        measuredQuantity: result.measuredQuantity,
+        measuredUnit: result.measuredUnit,
+      },
+    ]);
   };
 
   const openUOMCalculatorForProduct = (p: POSProduct, e?: React.MouseEvent) => {
@@ -624,6 +726,7 @@ const UserPOS = () => {
     setCustomerPhone("");
     setCustomerPhoneCode(detectedCountry.phoneCode);
     setCustomerNote("");
+    setSelectedBuyer(null);
   };
 
   const handleSimulateScan = (codeToScan: string) => {
@@ -770,8 +873,30 @@ const UserPOS = () => {
   const completeTransaction = async () => {
     if (!active || !userId || cart.length === 0) return;
 
-    let finalPayMethodName = activeMethodObj?.name || (payMethod === "card" ? "Card / POS" : "Cash");
-    let tenderAmount = isCashLike ? cashNum : grandTotal;
+    // Financial rules: identify Store Credit Deposit and Udhar usage
+    const isPayingDeposit = !isSplitPayment && payMethod === "credit_deposit";
+    const isPayingUdhar = !isSplitPayment && (payMethod === "credit_udhar" || payMethod === "credit" || activeMethodObj?.type === "credit");
+    const isSplitDeposit = isSplitPayment && (splitMethod1 === "credit_deposit" || splitMethod2 === "credit_deposit");
+    const isSplitUdhar = isSplitPayment && (splitMethod1 === "credit_udhar" || splitMethod1 === "credit" || splitMethod2 === "credit_udhar" || splitMethod2 === "credit");
+
+    const requiresBuyer = isPayingDeposit || isPayingUdhar || isSplitDeposit || isSplitUdhar;
+
+    // Rule: Never apply credit to a buyer based only on a matching name or without explicit verified profile
+    if (requiresBuyer && !selectedBuyer) {
+      toast({
+        title: "Verified Buyer Required",
+        description: "Financial rules require selecting or registering a verified Buyer Account before using Store Credit or adding to Udhar.",
+        variant: "destructive",
+      });
+      setBuyerModalRequiredFor(isPayingDeposit || isSplitDeposit ? "deposit" : "udhar");
+      setBuyerModalOpen(true);
+      return;
+    }
+
+    let depositToSpend = 0;
+    let udharToCharge = 0;
+    let finalPayMethodName = "";
+    let tenderAmount = 0;
 
     if (isSplitPayment) {
       const s1 = Number(splitAmount1) || 0;
@@ -784,13 +909,90 @@ const UserPOS = () => {
         });
         return;
       }
-      const m1Name = paymentMethods.find((m) => m.id === splitMethod1)?.name || splitMethod1;
-      const m2Name = paymentMethods.find((m) => m.id === splitMethod2)?.name || splitMethod2;
-      finalPayMethodName = `Split: ${m1Name} (${fmt(s1)}) + ${m2Name} (${fmt(s2)})`;
+
+      if (splitMethod1 === "credit_deposit") depositToSpend += s1;
+      else if (splitMethod1 === "credit_udhar" || splitMethod1 === "credit") udharToCharge += s1;
+
+      if (splitMethod2 === "credit_deposit") depositToSpend += s2;
+      else if (splitMethod2 === "credit_udhar" || splitMethod2 === "credit") udharToCharge += s2;
+
+      const getMethodLabel = (id: string) => {
+        if (id === "credit_deposit") return "Store Credit Deposit";
+        if (id === "credit_udhar" || id === "credit") return "Udhar Debt";
+        return paymentMethods.find((m) => m.id === id)?.name || id;
+      };
+
+      finalPayMethodName = `Split: ${getMethodLabel(splitMethod1)} (${fmt(s1)}) + ${getMethodLabel(splitMethod2)} (${fmt(s2)})`;
       tenderAmount = s1 + s2;
     } else {
-      if (isCashLike && cashNum < grandTotal) {
-        toast({ title: "Insufficient cash", description: "Amount paid is less than the grand total.", variant: "destructive" });
+      if (isPayingDeposit) {
+        depositToSpend = grandTotal;
+        finalPayMethodName = "Store Credit Deposit";
+        tenderAmount = grandTotal;
+      } else if (isPayingUdhar) {
+        udharToCharge = grandTotal;
+        finalPayMethodName = "Udhar Credit (Khata)";
+        tenderAmount = grandTotal;
+      } else {
+        if (isCashLike && cashNum < grandTotal) {
+          const remainingUnpaid = Math.round((grandTotal - cashNum) * 100) / 100;
+          if (remainingUnpaid > 0) {
+            // Partial cash or full credit balance tendered: e.g. Paid $75 on $100 -> automatically add remaining $25 to buyer's Udhar or Store Credit
+            if (!selectedBuyer) {
+              toast({
+                title: "Buyer Account Required for Remaining Balance",
+                description: cashNum > 0
+                  ? `Cash received (${fmt(cashNum)}) is less than total (${fmt(grandTotal)}). Please select a Buyer Account to record the remaining ${fmt(remainingUnpaid)} in store credit / udhar.`
+                  : "Amount paid is less than the grand total. Please enter cash received or select a Buyer Account to record to Udhar.",
+                variant: "destructive",
+              });
+              setBuyerModalRequiredFor(partialCashOption === "deposit" ? "deposit" : "udhar");
+              setBuyerModalOpen(true);
+              return;
+            }
+
+            if (partialCashOption === "deposit") {
+              depositToSpend = remainingUnpaid;
+              finalPayMethodName = cashNum > 0 ? `Cash (${fmt(cashNum)}) + Deposit (${fmt(remainingUnpaid)})` : `Store Credit Deposit`;
+              tenderAmount = cashNum;
+            } else {
+              udharToCharge = remainingUnpaid;
+              finalPayMethodName = cashNum > 0 ? `Cash (${fmt(cashNum)}) + Udhar (${fmt(remainingUnpaid)})` : `Udhar Credit (Khata)`;
+              tenderAmount = cashNum;
+            }
+          }
+        } else {
+          finalPayMethodName = activeMethodObj?.name || (payMethod === "card" ? "Card / POS" : "Cash");
+          tenderAmount = isCashLike ? cashNum : grandTotal;
+        }
+      }
+    }
+
+    // Financial rule: Store credit can only be deducted up to the validated available balance
+    if (depositToSpend > 0) {
+      if (!selectedBuyer || (selectedBuyer.availableDeposit < depositToSpend)) {
+        toast({
+          title: "Insufficient Store Credit Deposit",
+          description: `Buyer ${selectedBuyer?.customerName || "Customer"} only has ${fmt(selectedBuyer?.availableDeposit || 0)} available in advance deposits. Cannot deduct ${fmt(depositToSpend)}.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    // Financial rule: Outstanding udhar increases only by the unpaid portion of an eligible sale up to credit limit
+    if (udharToCharge > 0) {
+      if (!selectedBuyer) {
+        toast({ title: "Buyer Account Missing", description: "Cannot add to Udhar without a verified buyer profile.", variant: "destructive" });
+        return;
+      }
+      const newTotalUdhar = selectedBuyer.outstandingUdhar + udharToCharge;
+      if (newTotalUdhar > selectedBuyer.creditLimit) {
+        toast({
+          title: "Credit Limit Exceeded",
+          description: `Buyer credit limit is ${fmt(selectedBuyer.creditLimit)}. Current debt is ${fmt(selectedBuyer.outstandingUdhar)}. Adding ${fmt(udharToCharge)} exceeds limit.`,
+          variant: "destructive",
+        });
         return;
       }
     }
@@ -818,8 +1020,8 @@ const UserPOS = () => {
       sale: {
         invoice_no: professionalReceiptNo,
         receipt_no: professionalReceiptNo,
-        customer_name: customerName.trim() || undefined,
-        customer_phone: fullCustomerPhone || undefined,
+        customer_name: selectedBuyer ? `${selectedBuyer.customerName} [${selectedBuyer.buyerId}]` : (customerName.trim() || undefined),
+        customer_phone: selectedBuyer?.customerPhone || fullCustomerPhone || undefined,
         total: grandTotal,
         profit,
         status: "completed",
@@ -834,98 +1036,92 @@ const UserPOS = () => {
 
     const saleId = syncRes?.sale?.id || `sale_${Date.now()}`;
 
-    // If payment method was Store Credit / Udhar, record in verified Buyer Account Ledger
-    if (activeMethodObj?.type === "credit" || payMethod === "credit") {
+    const depositToAdd = (changeDue > 0 && depositChangeToCredit && selectedBuyer) ? changeDue : 0;
+
+    // Atomically execute ledger adjustments for Store Credit Deposit or Udhar
+    if (selectedBuyer && (depositToSpend > 0 || udharToCharge > 0 || depositToAdd > 0)) {
       try {
-        const custName = customerName.trim() || "Walk-in Buyer";
-        const credRes = await fetch(`/api/sync/store-credits?businessId=${encodeURIComponent(active.id)}`);
-        if (credRes.ok) {
-          const credData = await credRes.json();
-          const cleanPhone = (fullCustomerPhone || "").replace(/[^0-9]/g, "");
-          const cleanName = custName.toLowerCase();
+        const updatedBuyerState = { ...selectedBuyer };
 
-          // CRITICAL: Strict buyer identity verification.
-          // Prioritize exact Phone match or exact Buyer ID match. Never blindly assign by name alone if ambiguous.
-          let matched = (credData.credits || []).find((c: any) => {
-            const bPhone = (c.customerPhone || c.customer_phone || "").replace(/[^0-9]/g, "");
-            const bId = (c.buyerId || c.buyer_id || "").toLowerCase();
-            if (cleanPhone && bPhone && bPhone === cleanPhone) return true;
-            if (bId && (cleanName === bId || cleanName.includes(bId))) return true;
-            return false;
+        // 1. Deduct from advance deposit
+        if (depositToSpend > 0) {
+          const adjRes = await fetch("/api/sync/store-credits/adjust", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              businessId: active.id,
+              creditId: selectedBuyer.id,
+              amount: depositToSpend,
+              type: "deposit_spend",
+              paymentMethod: "Store Credit Deposit",
+              note: `POS purchase covered by advance deposit (${cart.length} items)`,
+              invoiceNo: professionalReceiptNo,
+              processedBy: cashierName || "Cashier",
+            }),
           });
-
-          // Unambiguous name match only if exactly 1 buyer has this name and no phone was provided
-          if (!matched && !cleanPhone) {
-            const nameMatches = (credData.credits || []).filter(
-              (c: any) => (c.customerName || c.customer_name || "").toLowerCase() === cleanName
-            );
-            if (nameMatches.length === 1) {
-              matched = nameMatches[0];
-            }
-          }
-
-          if (!matched) {
-            const createRes = await fetch("/api/sync/store-credits", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                businessId: active.id,
-                credit: {
-                  customerName: custName,
-                  customerPhone: fullCustomerPhone || "",
-                  creditLimit: 50000,
-                  availableDeposit: 0,
-                  outstandingUdhar: 0,
-                  notes: `Auto-registered from POS order ${professionalReceiptNo}`,
-                },
-              }),
-            });
-            if (createRes.ok) {
-              const created = await createRes.json();
-              matched = created.credit;
-            }
-          }
-
-          if (matched?.id) {
-            // Check if buyer has available deposit
-            const availableDep = Number(matched.availableDeposit ?? matched.available_deposit ?? 0);
-            if (availableDep >= grandTotal) {
-              // Deduct from deposit
-              await fetch("/api/sync/store-credits/adjust", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  businessId: active.id,
-                  creditId: matched.id,
-                  amount: grandTotal,
-                  type: "deposit_spend",
-                  paymentMethod: "Store Credit Deposit",
-                  note: `POS purchase covered by advance deposit (${cart.length} items)`,
-                  invoiceNo: professionalReceiptNo,
-                  processedBy: cashierName || "Cashier",
-                }),
-              });
-            } else {
-              // Record as Udhar Charge (unpaid debt, separate account)
-              await fetch("/api/sync/store-credits/adjust", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  businessId: active.id,
-                  creditId: matched.id,
-                  amount: grandTotal,
-                  type: "udhar_charge",
-                  paymentMethod: "Udhar Credit",
-                  note: `POS Store Credit Purchase (${cart.length} items)`,
-                  invoiceNo: professionalReceiptNo,
-                  processedBy: cashierName || "Cashier",
-                }),
-              });
+          if (adjRes.ok) {
+            const data = await adjRes.json();
+            if (data.credit) {
+              updatedBuyerState.availableDeposit = Number(data.credit.availableDeposit ?? data.credit.available_deposit ?? 0);
+              updatedBuyerState.outstandingUdhar = Number(data.credit.outstandingUdhar ?? data.credit.outstanding_udhar ?? 0);
             }
           }
         }
+
+        // 2. Add unpaid balance to Udhar
+        if (udharToCharge > 0) {
+          const adjRes = await fetch("/api/sync/store-credits/adjust", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              businessId: active.id,
+              creditId: selectedBuyer.id,
+              amount: udharToCharge,
+              type: "udhar_charge",
+              paymentMethod: "Udhar Credit",
+              note: `POS Store Credit Purchase (${cart.length} items)`,
+              invoiceNo: professionalReceiptNo,
+              processedBy: cashierName || "Cashier",
+            }),
+          });
+          if (adjRes.ok) {
+            const data = await adjRes.json();
+            if (data.credit) {
+              updatedBuyerState.availableDeposit = Number(data.credit.availableDeposit ?? data.credit.available_deposit ?? 0);
+              updatedBuyerState.outstandingUdhar = Number(data.credit.outstandingUdhar ?? data.credit.outstanding_udhar ?? 0);
+            }
+          }
+        }
+
+        // 3. Save change as Store Credit advance deposit if requested
+        if (depositToAdd > 0) {
+          const adjRes = await fetch("/api/sync/store-credits/adjust", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              businessId: active.id,
+              creditId: selectedBuyer.id,
+              amount: depositToAdd,
+              type: "deposit_add",
+              paymentMethod: "Cash Change Saved",
+              note: `Change from POS purchase ${professionalReceiptNo} added to deposit`,
+              invoiceNo: professionalReceiptNo,
+              processedBy: cashierName || "Cashier",
+            }),
+          });
+          if (adjRes.ok) {
+            const data = await adjRes.json();
+            if (data.credit) {
+              updatedBuyerState.availableDeposit = Number(data.credit.availableDeposit ?? data.credit.available_deposit ?? 0);
+              updatedBuyerState.outstandingUdhar = Number(data.credit.outstandingUdhar ?? data.credit.outstanding_udhar ?? 0);
+            }
+          }
+        }
+
+        setSelectedBuyer(updatedBuyerState);
+        window.dispatchEvent(new CustomEvent("geflow:store-credits-updated"));
       } catch (e) {
-        console.warn("Notice updating store credit account:", e);
+        console.warn("Notice updating verified buyer ledger:", e);
       }
     }
 
@@ -977,6 +1173,25 @@ const UserPOS = () => {
         });
       } catch {
         /* ignore supabase errors */
+      }
+    }
+
+    // Deduct stock for specific product variants if purchased
+    for (const l of cart) {
+      if (l.variantId && l.id) {
+        try {
+          await fetch("/api/sync/product-variations/adjust-stock", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              productId: l.id,
+              variantId: l.variantId,
+              deltaQuantity: -l.qty,
+            }),
+          });
+        } catch (err) {
+          console.warn("Notice adjusting variant stock in POS:", err);
+        }
       }
     }
 
@@ -1234,6 +1449,11 @@ const UserPOS = () => {
 
                           {/* UOM & Stock Badges */}
                           <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                            {variationsMap[p.id] && (variationsMap[p.id].product_type === "variable" || variationsMap[p.id].product_type === "measured" || variationsMap[p.id].product_type === "addons" || (variationsMap[p.id].variants && variationsMap[p.id].variants.length > 0)) && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 uppercase">
+                                {variationsMap[p.id].product_type === "variable" ? `${variationsMap[p.id].variants?.length || 0} Variants` : variationsMap[p.id].product_type === "measured" ? "Scale / Wt" : "Options"}
+                              </span>
+                            )}
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-muted text-foreground border border-border uppercase">
                               {parsed.packSize > 1 ? `${parsed.packSize} ${parsed.subUnitName}s/${parsed.uomLabel}` : parsed.uomLabel}
                             </span>
@@ -1360,89 +1580,164 @@ const UserPOS = () => {
             </div>
           )}
 
-          {/* Customer / Patient Quick Details Header */}
-          <div className="p-3 border-b border-border bg-muted/20 flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="h-7 w-7 rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
-                  <User className="h-3.5 w-3.5" />
+          {/* Customer / Buyer Account Quick Details Header */}
+          <div className={`p-3 border-b border-border flex-shrink-0 ${selectedBuyer ? "bg-emerald-500/5" : "bg-muted/20"}`}>
+            {selectedBuyer ? (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="h-7 w-7 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                      <ShieldCheck className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-xs font-bold truncate text-foreground">{selectedBuyer.customerName}</p>
+                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-mono text-[9px] font-extrabold">
+                          {selectedBuyer.buyerId}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground font-mono truncate">
+                        {selectedBuyer.customerPhone ? `Tel: ${selectedBuyer.customerPhone}` : "No phone registered"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBuyerModalRequiredFor(null);
+                        setBuyerModalOpen(true);
+                      }}
+                      className="text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:underline px-1.5 py-0.5 rounded hover:bg-sky-500/10 transition cursor-pointer"
+                    >
+                      Change
+                    </button>
+                    <span className="text-muted-foreground text-[10px]">&bull;</span>
+                    <button
+                      type="button"
+                      onClick={handleClearBuyerAccount}
+                      className="text-[11px] font-bold text-rose-500 hover:underline px-1.5 py-0.5 rounded hover:bg-rose-500/10 transition cursor-pointer"
+                    >
+                      Detach
+                    </button>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-bold truncate text-foreground">
-                    {customerName ? customerName : "Walk-in Customer"}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground font-mono truncate">
-                    {fullCustomerPhone ? `Tel: ${fullCustomerPhone}` : "No phone number added"}
-                  </p>
+
+                {/* Separate Balances Badges: Available Deposit vs Outstanding Udhar */}
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-border/60">
+                  <div className="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-between">
+                    <span className="text-[9px] font-bold text-emerald-800 dark:text-emerald-200 uppercase">Available Deposit</span>
+                    <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
+                      {fmt(selectedBuyer.availableDeposit)}
+                    </span>
+                  </div>
+                  <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-between">
+                    <span className="text-[9px] font-bold text-amber-800 dark:text-amber-200 uppercase">Current Udhar</span>
+                    <span className="text-xs font-extrabold text-amber-600 dark:text-amber-400 font-mono">
+                      {fmt(selectedBuyer.outstandingUdhar)}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowCustomerForm((v) => !v)}
-                className="text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:underline px-2 py-1 rounded-md hover:bg-sky-500/10 transition cursor-pointer"
-              >
-                {showCustomerForm ? "Done" : customerName || customerPhone ? "Edit Details" : "+ Add Buyer / Rx"}
-              </button>
-            </div>
-
-            {showCustomerForm && (
-              <div className="mt-2.5 pt-2.5 border-t border-border/60 space-y-2 text-xs">
-                <div>
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase block mb-1">
-                    Buyer / Patient Name
-                  </label>
-                  <input
-                    type="text"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="e.g. Alex Morgan / Sarah Jenkins"
-                    className="w-full h-8 px-2.5 rounded-lg bg-background border border-border text-xs focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase">
-                        Phone / WhatsApp
-                      </label>
-                      <span className="text-[9px] text-sky-600 dark:text-sky-400 font-semibold">
-                        {detectedCountry.flag} {detectedCountry.name}
-                      </span>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="h-7 w-7 rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                      <User className="h-3.5 w-3.5" />
                     </div>
-                    <div className="flex gap-1.5">
-                      <select
-                        value={customerPhoneCode || detectedCountry.phoneCode}
-                        onChange={(e) => setCustomerPhoneCode(e.target.value)}
-                        className="h-8 px-1.5 rounded-lg bg-background border border-border text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-sky-500 shrink-0 w-[94px] cursor-pointer"
-                      >
-                        {COUNTRIES.map((c) => (
-                          <option key={c.code} value={c.phoneCode}>
-                            {c.flag} {c.phoneCode}
-                          </option>
-                        ))}
-                      </select>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold truncate text-foreground">
+                        {customerName ? customerName : "Walk-in Customer"}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground font-mono truncate">
+                        {fullCustomerPhone ? `Tel: ${fullCustomerPhone}` : "No phone number added"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBuyerModalRequiredFor(null);
+                        setBuyerModalOpen(true);
+                      }}
+                      className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-md transition cursor-pointer flex items-center gap-1 border border-emerald-500/25"
+                      title="Link confirmed Buyer ID or registered phone for Store Credit / Udhar"
+                    >
+                      <ShieldCheck className="w-3 h-3" />
+                      <span>Link Buyer</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomerForm((v) => !v)}
+                      className="text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:underline px-2 py-1 rounded-md hover:bg-sky-500/10 transition cursor-pointer"
+                    >
+                      {showCustomerForm ? "Done" : customerName || customerPhone ? "Edit" : "+ Rx"}
+                    </button>
+                  </div>
+                </div>
+
+                {showCustomerForm && (
+                  <div className="mt-2.5 pt-2.5 border-t border-border/60 space-y-2 text-xs">
+                    <div>
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase block mb-1">
+                        Buyer / Patient Name
+                      </label>
                       <input
-                        type="tel"
-                        value={customerPhone}
-                        onChange={(e) => setCustomerPhone(e.target.value)}
-                        placeholder="Phone number"
-                        className="w-full h-8 px-2.5 rounded-lg bg-background border border-border text-xs font-mono focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        type="text"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="e.g. Alex Morgan / Sarah Jenkins"
+                        className="w-full h-8 px-2.5 rounded-lg bg-background border border-border text-xs focus:outline-none focus:ring-1 focus:ring-sky-500"
                       />
                     </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase">
+                            Phone / WhatsApp
+                          </label>
+                          <span className="text-[9px] text-sky-600 dark:text-sky-400 font-semibold">
+                            {detectedCountry.flag} {detectedCountry.name}
+                          </span>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <select
+                            value={customerPhoneCode || detectedCountry.phoneCode}
+                            onChange={(e) => setCustomerPhoneCode(e.target.value)}
+                            className="h-8 px-1.5 rounded-lg bg-background border border-border text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-sky-500 shrink-0 w-[94px] cursor-pointer"
+                          >
+                            {COUNTRIES.map((c) => (
+                              <option key={c.code} value={c.phoneCode}>
+                                {c.flag} {c.phoneCode}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="tel"
+                            value={customerPhone}
+                            onChange={(e) => setCustomerPhone(e.target.value)}
+                            placeholder="Phone number"
+                            className="w-full h-8 px-2.5 rounded-lg bg-background border border-border text-xs font-mono focus:outline-none focus:ring-1 focus:ring-sky-500"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase block mb-1">
+                          Rx / Doctor Note
+                        </label>
+                        <input
+                          type="text"
+                          value={customerNote}
+                          onChange={(e) => setCustomerNote(e.target.value)}
+                          placeholder="e.g. Dr. Roberts / Rx #8402"
+                          className="w-full h-8 px-2.5 rounded-lg bg-background border border-border text-xs focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-muted-foreground uppercase block mb-1">
-                      Rx / Doctor Note
-                    </label>
-                    <input
-                      type="text"
-                      value={customerNote}
-                      onChange={(e) => setCustomerNote(e.target.value)}
-                      placeholder="e.g. Dr. Roberts / Rx #8402"
-                      className="w-full h-8 px-2.5 rounded-lg bg-background border border-border text-xs focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    />
-                  </div>
-                </div>
+                )}
               </div>
             )}
           </div>
@@ -1651,30 +1946,171 @@ const UserPOS = () => {
               {!isSplitPayment ? (
                 <>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                    {paymentMethods.map((pm) => (
-                      <button
-                        key={pm.id}
-                        type="button"
-                        onClick={() => setPayMethod(pm.id)}
-                        className={`h-9 px-2 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 transition cursor-pointer truncate ${
-                          payMethod === pm.id
-                            ? "bg-foreground text-background shadow-xs"
-                            : "bg-muted/60 text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        {pm.type === "cash" ? (
-                          <Banknote className="h-3.5 w-3.5 shrink-0" />
-                        ) : pm.type === "card" ? (
-                          <CreditCard className="h-3.5 w-3.5 shrink-0" />
-                        ) : pm.type === "wallet" || pm.type === "digital" ? (
-                          <Smartphone className="h-3.5 w-3.5 shrink-0" />
-                        ) : (
-                          <Building2 className="h-3.5 w-3.5 shrink-0" />
-                        )}
-                        <span className="truncate">{pm.name}</span>
-                      </button>
-                    ))}
+                    {paymentMethods
+                      .filter((pm) => pm.id !== "credit" && pm.type !== "credit")
+                      .map((pm) => (
+                        <button
+                          key={pm.id}
+                          type="button"
+                          onClick={() => setPayMethod(pm.id)}
+                          className={`h-9 px-2 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 transition cursor-pointer truncate ${
+                            payMethod === pm.id
+                              ? "bg-foreground text-background shadow-xs"
+                              : "bg-muted/60 text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {pm.type === "cash" ? (
+                            <Banknote className="h-3.5 w-3.5 shrink-0" />
+                          ) : pm.type === "card" ? (
+                            <CreditCard className="h-3.5 w-3.5 shrink-0" />
+                          ) : pm.type === "wallet" || pm.type === "digital" ? (
+                            <Smartphone className="h-3.5 w-3.5 shrink-0" />
+                          ) : (
+                            <Building2 className="h-3.5 w-3.5 shrink-0" />
+                          )}
+                          <span className="truncate">{pm.name}</span>
+                        </button>
+                      ))}
                   </div>
+
+                  {/* Dedicated Store Credit / Udhar Balance Payment Options */}
+                  <div className="grid grid-cols-2 gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPayMethod("credit_deposit");
+                        if (!selectedBuyer) {
+                          setBuyerModalRequiredFor("deposit");
+                          setBuyerModalOpen(true);
+                        }
+                      }}
+                      className={`h-9 px-2 rounded-xl text-xs font-bold inline-flex items-center justify-between gap-1 transition cursor-pointer border ${
+                        payMethod === "credit_deposit"
+                          ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                          : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/20"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <Wallet className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">Use Store Credit</span>
+                      </div>
+                      {selectedBuyer ? (
+                        <span className="text-[10px] font-mono px-1 rounded bg-black/20 shrink-0">
+                          {fmt(selectedBuyer.availableDeposit)}
+                        </span>
+                      ) : (
+                        <span className="text-[9px] px-1 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-300">
+                          Link
+                        </span>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPayMethod("credit_udhar");
+                        if (!selectedBuyer) {
+                          setBuyerModalRequiredFor("udhar");
+                          setBuyerModalOpen(true);
+                        }
+                      }}
+                      className={`h-9 px-2 rounded-xl text-xs font-bold inline-flex items-center justify-between gap-1 transition cursor-pointer border ${
+                        payMethod === "credit_udhar"
+                          ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                          : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/25 hover:bg-amber-500/20"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <FileText className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">Add to Udhar</span>
+                      </div>
+                      {selectedBuyer ? (
+                        <span className="text-[10px] font-mono px-1 rounded bg-black/20 shrink-0">
+                          {fmt(selectedBuyer.outstandingUdhar)}
+                        </span>
+                      ) : (
+                        <span className="text-[9px] px-1 rounded bg-amber-500/20 text-amber-600 dark:text-amber-300">
+                          Link
+                        </span>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Feedback Banner for Store Credit Deposit */}
+                  {payMethod === "credit_deposit" && (
+                    <div className="pt-0.5">
+                      {!selectedBuyer ? (
+                        <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-800 dark:text-amber-200 text-xs flex items-center justify-between">
+                          <span className="text-[11px] font-medium">Link buyer to spend advance deposit</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBuyerModalRequiredFor("deposit");
+                              setBuyerModalOpen(true);
+                            }}
+                            className="font-bold underline text-amber-700 dark:text-amber-300 cursor-pointer"
+                          >
+                            Link Now
+                          </button>
+                        </div>
+                      ) : selectedBuyer.availableDeposit < grandTotal ? (
+                        <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-700 dark:text-rose-300 text-xs space-y-1">
+                          <div className="flex items-center justify-between font-bold text-[11px]">
+                            <span>Insufficient Store Credit Deposit</span>
+                            <span>{fmt(selectedBuyer.availableDeposit)} avail</span>
+                          </div>
+                          <p className="text-[10px] leading-tight">
+                            Total is {fmt(grandTotal)}. Switch to Split Pay to spend {fmt(selectedBuyer.availableDeposit)} deposit + remainder via Cash, Card, or Udhar.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-800 dark:text-emerald-200 text-xs">
+                          <div className="flex items-center justify-between font-bold text-[11px]">
+                            <span>Deposit Coverage Verified</span>
+                            <span className="font-mono">Balance After: {fmt(selectedBuyer.availableDeposit - grandTotal)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Feedback Banner for Add to Udhar */}
+                  {payMethod === "credit_udhar" && (
+                    <div className="pt-0.5">
+                      {!selectedBuyer ? (
+                        <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-800 dark:text-amber-200 text-xs flex items-center justify-between">
+                          <span className="text-[11px] font-medium">Link buyer to record Udhar debt</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBuyerModalRequiredFor("udhar");
+                              setBuyerModalOpen(true);
+                            }}
+                            className="font-bold underline text-amber-700 dark:text-amber-300 cursor-pointer"
+                          >
+                            Link Now
+                          </button>
+                        </div>
+                      ) : selectedBuyer.outstandingUdhar + grandTotal > selectedBuyer.creditLimit ? (
+                        <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-700 dark:text-rose-300 text-xs space-y-1">
+                          <div className="flex items-center justify-between font-bold text-[11px]">
+                            <span>Credit Limit Exceeded</span>
+                            <span>Limit: {fmt(selectedBuyer.creditLimit)}</span>
+                          </div>
+                          <p className="text-[10px] leading-tight">
+                            Current Udhar is {fmt(selectedBuyer.outstandingUdhar)}. Adding {fmt(grandTotal)} would reach {fmt(selectedBuyer.outstandingUdhar + grandTotal)}.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-800 dark:text-amber-200 text-xs">
+                          <div className="flex items-center justify-between font-bold text-[11px]">
+                            <span>Udhar Credit Approved</span>
+                            <span className="font-mono">New Debt: {fmt(selectedBuyer.outstandingUdhar + grandTotal)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {isCashLike && (
                     <div className="space-y-1.5 pt-1">
@@ -1692,6 +2128,96 @@ const UserPOS = () => {
                         placeholder="Enter cash received..."
                         className="w-full h-8 px-2.5 bg-muted/50 border border-border rounded-xl text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-sky-500"
                       />
+
+                      {/* 1-Click Partial Cash Allocation (e.g. Paid $75 on $100 -> Put remaining $25 on Udhar or Deposit) */}
+                      {cashNum > 0 && cashNum < grandTotal && (
+                        <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/30 space-y-2 mt-1.5 animate-in fade-in">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-foreground">
+                            <span>Partial Cash Tendered:</span>
+                            <span className="text-amber-600 dark:text-amber-400 font-mono font-extrabold">
+                              Remaining Balance: {fmt(grandTotal - cashNum)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                            <span>Allocate remaining balance on checkout:</span>
+                            {selectedBuyer && (
+                              <span className="font-semibold text-foreground font-mono">{selectedBuyer.buyerId}</span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPartialCashOption("udhar");
+                                if (!selectedBuyer) {
+                                  setBuyerModalRequiredFor("udhar");
+                                  setBuyerModalOpen(true);
+                                }
+                              }}
+                              className={`h-9 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer border ${
+                                partialCashOption === "udhar"
+                                  ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                                  : "bg-card text-foreground border-border hover:bg-muted"
+                              }`}
+                            >
+                              <FileText className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate">Add {fmt(grandTotal - cashNum)} to Udhar</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPartialCashOption("deposit");
+                                if (!selectedBuyer) {
+                                  setBuyerModalRequiredFor("deposit");
+                                  setBuyerModalOpen(true);
+                                }
+                              }}
+                              className={`h-9 px-2 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer border ${
+                                partialCashOption === "deposit"
+                                  ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                  : "bg-card text-foreground border-border hover:bg-muted"
+                              }`}
+                            >
+                              <Wallet className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate">Use {fmt(grandTotal - cashNum)} Deposit</span>
+                            </button>
+                          </div>
+                          {!selectedBuyer && (
+                            <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-700 dark:text-amber-300 font-medium flex items-center justify-between">
+                              <span>No buyer linked yet</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBuyerModalRequiredFor("udhar");
+                                  setBuyerModalOpen(true);
+                                }}
+                                className="font-bold underline cursor-pointer"
+                              >
+                                Select Buyer Account →
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Option to Save Change to Store Credit Deposit */}
+                      {changeDue > 0 && selectedBuyer && (
+                        <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs mt-1.5 flex items-center justify-between">
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={depositChangeToCredit}
+                              onChange={(e) => setDepositChangeToCredit(e.target.checked)}
+                              className="w-4 h-4 rounded border-border text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                            />
+                            <span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">
+                              Save change of {fmt(changeDue)} to {selectedBuyer.customerName}'s Store Credit Deposit
+                            </span>
+                          </label>
+                        </div>
+                      )}
+
                       {quickCashOptions.length > 0 && (
                         <div className="flex items-center gap-1 flex-wrap pt-0.5">
                           <button
@@ -1720,21 +2246,83 @@ const UserPOS = () => {
                 <div className="p-2.5 rounded-xl bg-muted/40 border border-border space-y-2">
                   <div className="text-[11px] font-bold text-foreground flex items-center justify-between">
                     <span>Split Tender</span>
-                    <span className="text-[10px] text-muted-foreground">Total: {fmt(grandTotal)}</span>
+                    <span className="text-[10px] text-muted-foreground font-mono">Total: {fmt(grandTotal)}</span>
+                  </div>
+
+                  {/* Quick Preset Buttons for Split Tender */}
+                  <div className="flex items-center gap-1.5 flex-wrap pb-1 border-b border-border/60">
+                    <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-wider">Presets:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSplitMethod1("cash");
+                        setSplitMethod2("credit_udhar");
+                        if (!selectedBuyer) {
+                          setBuyerModalRequiredFor("udhar");
+                          setBuyerModalOpen(true);
+                        }
+                      }}
+                      className="px-2 py-0.5 rounded-md bg-card border border-border text-[10px] font-bold hover:bg-muted text-foreground transition cursor-pointer"
+                    >
+                      Cash + Udhar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSplitMethod1("cash");
+                        setSplitMethod2("credit_deposit");
+                        if (!selectedBuyer) {
+                          setBuyerModalRequiredFor("deposit");
+                          setBuyerModalOpen(true);
+                        }
+                      }}
+                      className="px-2 py-0.5 rounded-md bg-card border border-border text-[10px] font-bold hover:bg-muted text-foreground transition cursor-pointer"
+                    >
+                      Cash + Deposit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSplitMethod1("card");
+                        setSplitMethod2("credit_udhar");
+                        if (!selectedBuyer) {
+                          setBuyerModalRequiredFor("udhar");
+                          setBuyerModalOpen(true);
+                        }
+                      }}
+                      className="px-2 py-0.5 rounded-md bg-card border border-border text-[10px] font-bold hover:bg-muted text-foreground transition cursor-pointer"
+                    >
+                      Card + Udhar
+                    </button>
                   </div>
 
                   {/* Split Line 1 */}
                   <div className="grid grid-cols-2 gap-2">
                     <select
                       value={splitMethod1}
-                      onChange={(e) => setSplitMethod1(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSplitMethod1(val);
+                        if ((val === "credit_deposit" || val === "credit_udhar") && !selectedBuyer) {
+                          setBuyerModalRequiredFor(val === "credit_deposit" ? "deposit" : "udhar");
+                          setBuyerModalOpen(true);
+                        }
+                      }}
                       className="h-8 px-2 rounded-lg bg-card border border-border text-xs font-bold text-foreground focus:outline-none"
                     >
-                      {paymentMethods.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                        </option>
-                      ))}
+                      {paymentMethods
+                        .filter((m) => m.id !== "credit" && m.type !== "credit")
+                        .map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                          </option>
+                        ))}
+                      <option value="credit_deposit">
+                        Store Credit Deposit {selectedBuyer ? `(${fmt(selectedBuyer.availableDeposit)})` : "(Link Buyer)"}
+                      </option>
+                      <option value="credit_udhar">
+                        Add to Udhar {selectedBuyer ? `(${fmt(selectedBuyer.outstandingUdhar)})` : "(Link Buyer)"}
+                      </option>
                     </select>
                     <input
                       type="number"
@@ -1756,14 +2344,29 @@ const UserPOS = () => {
                   <div className="grid grid-cols-2 gap-2">
                     <select
                       value={splitMethod2}
-                      onChange={(e) => setSplitMethod2(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSplitMethod2(val);
+                        if ((val === "credit_deposit" || val === "credit_udhar") && !selectedBuyer) {
+                          setBuyerModalRequiredFor(val === "credit_deposit" ? "deposit" : "udhar");
+                          setBuyerModalOpen(true);
+                        }
+                      }}
                       className="h-8 px-2 rounded-lg bg-card border border-border text-xs font-bold text-foreground focus:outline-none"
                     >
-                      {paymentMethods.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name}
-                        </option>
-                      ))}
+                      {paymentMethods
+                        .filter((m) => m.id !== "credit" && m.type !== "credit")
+                        .map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                          </option>
+                        ))}
+                      <option value="credit_deposit">
+                        Store Credit Deposit {selectedBuyer ? `(${fmt(selectedBuyer.availableDeposit)})` : "(Link Buyer)"}
+                      </option>
+                      <option value="credit_udhar">
+                        Add to Udhar {selectedBuyer ? `(${fmt(selectedBuyer.outstandingUdhar)})` : "(Link Buyer)"}
+                      </option>
                     </select>
                     <input
                       type="number"
@@ -1833,6 +2436,26 @@ const UserPOS = () => {
         onOpenChange={setReceiptOpen}
         data={receipt}
         onNewCustomer={() => setReceiptOpen(false)}
+      />
+
+      {/* Verified Buyer Selection Modal for Store Credit / Udhar */}
+      <POSBuyerSelectionModal
+        open={buyerModalOpen}
+        onOpenChange={setBuyerModalOpen}
+        businessId={active?.id || ""}
+        selectedBuyer={selectedBuyer}
+        onSelectBuyer={handleSelectBuyerAccount}
+        requiredForPayment={buyerModalRequiredFor}
+      />
+
+      {/* Product Variations, Attribute Combos & Modifiers Selection Modal */}
+      <POSVariantSelectionModal
+        open={variantModalOpen}
+        onOpenChange={setVariantModalOpen}
+        product={selectedProductForVariant}
+        variationConfig={selectedProductForVariant ? variationsMap[selectedProductForVariant.id] : undefined}
+        onConfirm={handleConfirmVariantSelection}
+        formatMoney={fmt}
       />
     </UserPanelGate>
   );

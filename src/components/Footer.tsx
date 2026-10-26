@@ -381,14 +381,21 @@ const Footer = () => {
                 <Input
                   type="email"
                   placeholder="Enter your email"
+                  aria-label="Email address for newsletter"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   disabled={submitting}
                   className="text-sm h-9 rounded-xl border-border bg-background"
                 />
-                <Button size="sm" type="submit" disabled={submitting} className="h-9 px-3 rounded-xl bg-primary text-primary-foreground">
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight size={16} />}
+                <Button
+                  size="sm"
+                  type="submit"
+                  disabled={submitting}
+                  aria-label="Subscribe to newsletter"
+                  className="h-9 px-3 rounded-xl bg-primary text-primary-foreground focus:ring-2 focus:ring-primary"
+                >
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <ArrowRight size={16} aria-hidden="true" />}
                 </Button>
               </form>
             )}

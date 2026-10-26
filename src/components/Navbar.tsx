@@ -119,8 +119,13 @@ const Navbar = () => {
               <Moon size={12} className={`transition-opacity duration-300 ${dark ? "opacity-100 text-primary-foreground" : "opacity-40"}`} />
             </span>
           </button>
-          <button className="text-foreground p-1" onClick={() => setOpen(!open)}>
-            {open ? <X size={24} /> : <Menu size={24} />}
+          <button
+            className="text-foreground p-1 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+            onClick={() => setOpen(!open)}
+            aria-label={open ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={open}
+          >
+            {open ? <X size={24} aria-hidden="true" /> : <Menu size={24} aria-hidden="true" />}
           </button>
         </div>
       </div>

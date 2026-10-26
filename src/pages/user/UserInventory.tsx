@@ -3,7 +3,7 @@ import {
   Package, Plus, Lock, Search, MoreVertical, Eye, ArrowRightLeft, Boxes as BoxesIcon,
   Pencil, Trash2, DollarSign, AlertTriangle, XCircle, ChevronDown, Download, Upload,
   ScanLine, Barcode, PackagePlus, TriangleAlert, CheckCircle2, FileText, Clock, History,
-  Sparkles, LayoutGrid, List, SlidersHorizontal,
+  Sparkles, LayoutGrid, List, SlidersHorizontal, Layers,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import UserPanelGate from "@/components/UserPanelGate";
@@ -34,6 +34,7 @@ import BulkImportDialog from "@/components/inventory/BulkImportDialog";
 import BarcodeLookupDialog from "@/components/inventory/BarcodeLookupDialog";
 import RestockWorkflowDialog from "@/components/inventory/RestockWorkflowDialog";
 import { StockLedgerModal } from "@/components/inventory/StockLedgerModal";
+import { BusinessCategorySetupWizard } from "@/components/inventory/BusinessCategorySetupWizard";
 import { useMoney } from "@/lib/currency";
 import { parseProductUOM, computeProductStock } from "@/lib/uomRegistry";
 
@@ -58,7 +59,8 @@ const UserInventory = () => {
   const [bulkStatusModalOpen, setBulkStatusModalOpen] = useState(false);
   const [targetBulkStatus, setTargetBulkStatus] = useState<string>("active");
   const [bulkUpdatingStatus, setBulkUpdatingStatus] = useState(false);
-  const [userId, setUserId] = useState<string>("");
+  const [categoryWizardOpen, setCategoryWizardOpen] = useState(false);
+  const [userId, setUserId] = useState<string>(active?.owner_user_id || "default_user");
 
   const productsCountRef = useRef(0);
   productsCountRef.current = products.length;
@@ -78,6 +80,19 @@ const UserInventory = () => {
 
   const activeId = active?.id;
   const ownerUserId = active?.owner_user_id;
+  const effectiveUserId = userId || ownerUserId || "default_user";
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user?.id) {
+        setUserId(data.user.id);
+      } else if (ownerUserId) {
+        setUserId(ownerUserId);
+      }
+    }).catch(() => {
+      if (ownerUserId) setUserId(ownerUserId);
+    });
+  }, [ownerUserId]);
 
   const load = useCallback(async (isSilent = false) => {
     if (!activeId) {
@@ -439,7 +454,7 @@ const UserInventory = () => {
 
   return (
     <UserPanelGate pageTitle="Inventory" module="inventory">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 min-w-0">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 min-w-0">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-1 truncate text-foreground">Inventory</h1>
@@ -459,61 +474,80 @@ const UserInventory = () => {
             All products, batches and stock levels for {active?.business_name ?? "your workspace"}.
           </p>
         </div>
-        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-2.5 flex-wrap shrink-0 w-full sm:w-auto">
-          <Button
-            variant="outline"
-            onClick={() => setStockLedgerOpen(true)}
-            className="h-9 sm:h-10 px-2.5 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold border-sky-500/30 text-sky-600 dark:text-sky-400 bg-sky-500/5 hover:bg-sky-500/15 justify-center"
-          >
-            <History className="h-4 w-4 mr-1.5 shrink-0" />
-            <span className="truncate">Stock Ledger</span>
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setExportOpen(true)}
-            className="h-9 sm:h-10 px-2.5 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold justify-center"
-          >
-            <Download className="h-4 w-4 mr-1.5 shrink-0" />
-            <span className="truncate">Export</span>
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              if (exceeded) {
-                toast({
-                  title: "Product limit reached",
-                  description: `Your ${plan.label} plan allows ${productLimit} products. Upgrade to import more products.`,
-                  variant: "destructive",
-                });
-                return;
-              }
-              setImportOpen(true);
-            }}
-            className="h-9 sm:h-10 px-2.5 sm:px-4 rounded-xl text-xs sm:text-sm font-semibold justify-center"
-          >
-            <Upload className="h-4 w-4 mr-1.5 shrink-0" />
-            <span className="truncate">Bulk Import</span>
-          </Button>
+
+        {/* Responsive Toolbar */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto">
+          {/* Secondary tools (2x2 on mobile, flex row on tablet & desktop) */}
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              onClick={() => setStockLedgerOpen(true)}
+              className="h-9 sm:h-10 px-2.5 sm:px-3.5 rounded-xl text-xs sm:text-sm font-semibold border-sky-500/30 text-sky-600 dark:text-sky-400 bg-sky-500/5 hover:bg-sky-500/15 justify-center"
+            >
+              <History className="h-4 w-4 mr-1.5 shrink-0" />
+              <span className="truncate">Stock Ledger</span>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setExportOpen(true)}
+              className="h-9 sm:h-10 px-2.5 sm:px-3.5 rounded-xl text-xs sm:text-sm font-semibold justify-center"
+            >
+              <Download className="h-4 w-4 mr-1.5 shrink-0" />
+              <span className="truncate">Export</span>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (exceeded) {
+                  toast({
+                    title: "Product limit reached",
+                    description: `Your ${plan.label} plan allows ${productLimit} products. Upgrade to import more products.`,
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                setImportOpen(true);
+              }}
+              className="h-9 sm:h-10 px-2.5 sm:px-3.5 rounded-xl text-xs sm:text-sm font-semibold justify-center"
+            >
+              <Upload className="h-4 w-4 mr-1.5 shrink-0" />
+              <span className="truncate">Bulk Import</span>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setCategoryWizardOpen(true)}
+              className="h-9 sm:h-10 px-2.5 sm:px-3.5 rounded-xl text-xs sm:text-sm font-semibold justify-center border-sky-500/30 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10"
+            >
+              <Sparkles className="h-4 w-4 mr-1.5 shrink-0 text-sky-500" />
+              <span className="truncate">Category AI</span>
+            </Button>
+          </div>
+
+          {/* New Product CTA: Full-width on mobile, auto on tablet & desktop */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button disabled={exceeded} className="h-9 sm:h-10 px-3 sm:px-4 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs sm:text-sm font-bold disabled:opacity-60 justify-center shadow-xs">
+              <Button
+                disabled={exceeded}
+                className="h-9 sm:h-10 px-4 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs sm:text-sm font-bold disabled:opacity-60 justify-center shadow-sm w-full sm:w-auto shrink-0"
+              >
                 {exceeded ? <Lock className="h-4 w-4 mr-1.5 shrink-0" /> : <Plus className="h-4 w-4 mr-1.5 shrink-0" />}
                 <span className="truncate">New Product</span>
-                <ChevronDown className="h-4 w-4 ml-1 shrink-0" />
+                <ChevronDown className="h-4 w-4 ml-1.5 shrink-0 opacity-80" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={() => openAdd({ _triggerAI: "true" })} className="text-sky-600 dark:text-sky-400 font-semibold cursor-pointer">
-                <Sparkles className="h-4 w-4 mr-2 text-sky-500" /> ✨ Add with AI
+            <DropdownMenuContent align="end" className="w-56 z-50 shadow-lg border border-border/80">
+              <DropdownMenuItem onClick={() => openAdd({ _triggerAI: "true" })} className="text-sky-600 dark:text-sky-400 font-semibold cursor-pointer py-2.5">
+                <Sparkles className="h-4 w-4 mr-2 text-sky-500 shrink-0" /> ✨ Add with AI
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openAdd()} className="cursor-pointer">
-                <PackagePlus className="h-4 w-4 mr-2" /> Add Manual
+              <DropdownMenuItem onClick={() => openAdd()} className="cursor-pointer py-2.5">
+                <PackagePlus className="h-4 w-4 mr-2 shrink-0" /> Add Manual
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setBarcode("scanner")} className="cursor-pointer">
-                <ScanLine className="h-4 w-4 mr-2" /> Scan Barcode
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setBarcode("scanner")} className="cursor-pointer py-2.5">
+                <ScanLine className="h-4 w-4 mr-2 shrink-0" /> Scan Barcode
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setBarcode("manual")} className="cursor-pointer">
-                <Barcode className="h-4 w-4 mr-2" /> Direct Barcode Entry
+              <DropdownMenuItem onClick={() => setBarcode("manual")} className="cursor-pointer py-2.5">
+                <Barcode className="h-4 w-4 mr-2 shrink-0" /> Direct Barcode Entry
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -895,6 +929,7 @@ const UserInventory = () => {
                               <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4" /></Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-52">
+                              <DropdownMenuItem onClick={() => openEdit(p)}><Layers className="h-4 w-4 mr-2 text-purple-500" /> Variations &amp; Options</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => setViewTarget(p)}><Eye className="h-4 w-4 mr-2" /> View Identity</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => setTransferTarget(p)}><ArrowRightLeft className="h-4 w-4 mr-2" /> Bulk Transfer</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => setStockTarget(p)}><BoxesIcon className="h-4 w-4 mr-2" /> Update Stock</DropdownMenuItem>
@@ -993,6 +1028,7 @@ const UserInventory = () => {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem onClick={() => openEdit(p)}><Layers className="h-4 w-4 mr-2 text-purple-500" /> Variations &amp; Options</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => setViewTarget(p)}><Eye className="h-4 w-4 mr-2" /> View Details</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => setTransferTarget(p)}><ArrowRightLeft className="h-4 w-4 mr-2" /> Bulk Transfer</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => setStockTarget(p)}><BoxesIcon className="h-4 w-4 mr-2" /> Update Stock</DropdownMenuItem>
@@ -1144,14 +1180,30 @@ const UserInventory = () => {
         </DialogContent>
       </Dialog>
 
-      {active && userId && (
-        <ProductDialog open={dialogOpen} onOpenChange={setDialogOpen} businessId={active.id} ownerUserId={userId} product={editing} prefill={prefill} onSaved={load} />
+      {active && (
+        <ProductDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          businessId={active.id}
+          ownerUserId={effectiveUserId}
+          product={editing}
+          prefill={prefill}
+          onSaved={load}
+        />
       )}
 
       <ProductViewDialog open={!!viewTarget} onOpenChange={(v) => { if (!v) setViewTarget(null); }} product={viewTarget} categoryName={catName(viewTarget?.category_id ?? null)} />
       <StockUpdateDialog open={!!stockTarget} onOpenChange={(v) => { if (!v) setStockTarget(null); }} product={stockTarget} onSaved={load} />
-      {active && userId && (
-        <BulkTransferDialog open={!!transferTarget} onOpenChange={(v) => { if (!v) setTransferTarget(null); }} product={transferTarget} sourceBusinessId={active.id} ownerUserId={userId} businesses={businesses} onSaved={load} />
+      {active && (
+        <BulkTransferDialog
+          open={!!transferTarget}
+          onOpenChange={(v) => { if (!v) setTransferTarget(null); }}
+          product={transferTarget}
+          sourceBusinessId={active.id}
+          ownerUserId={effectiveUserId}
+          businesses={businesses}
+          onSaved={load}
+        />
       )}
       {active && (
         <ExportLedgerDialog open={exportOpen} onOpenChange={setExportOpen} products={products} categoryName={catName} businessName={active.business_name} />
@@ -1168,11 +1220,39 @@ const UserInventory = () => {
           }))}
         />
       )}
-      {active && userId && (
-        <BulkImportDialog open={importOpen} onOpenChange={setImportOpen} businessId={active.id} ownerUserId={userId} categories={allCategories} onSaved={load} />
+      {active && (
+        <BulkImportDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          businessId={active.id}
+          ownerUserId={effectiveUserId}
+          categories={allCategories}
+          onSaved={load}
+        />
       )}
-      <BarcodeLookupDialog open={!!barcode} onOpenChange={(v) => { if (!v) setBarcode(null); }} mode={barcode ?? "manual"} onResolved={(pre) => openAdd(pre)} />
       <RestockWorkflowDialog open={restockOpen} onOpenChange={setRestockOpen} products={products} onFix={(p) => { setRestockOpen(false); openEdit(p); }} />
+
+      <BarcodeLookupDialog
+        open={!!barcode}
+        onOpenChange={(open) => { if (!open) setBarcode(null); }}
+        mode={barcode || "manual"}
+        onResolved={(prefillData) => {
+          setBarcode(null);
+          openAdd(prefillData);
+        }}
+      />
+
+      {active && (
+        <BusinessCategorySetupWizard
+          open={categoryWizardOpen}
+          onOpenChange={setCategoryWizardOpen}
+          businessId={active.id}
+          currentIndustry={industryType || categoryName}
+          onApplyTemplate={(tpl) => {
+            openAdd();
+          }}
+        />
+      )}
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
         <AlertDialogContent>

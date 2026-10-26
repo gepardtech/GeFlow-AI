@@ -290,10 +290,12 @@ const Index = () => {
               Simple, transparent pricing for every business stage.
             </p>
 
-            <div className="inline-flex items-center bg-card border border-border rounded-full p-1 gap-1">
+            <div className="inline-flex items-center bg-card border border-border rounded-full p-1 gap-1" role="group" aria-label="Billing frequency selection">
               <button
+                type="button"
+                aria-pressed={billingPeriod === "monthly"}
                 onClick={() => setBillingPeriod("monthly")}
-                className={`px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all ${
+                className={`px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-primary ${
                   billingPeriod === "monthly"
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
@@ -302,8 +304,10 @@ const Index = () => {
                 Monthly
               </button>
               <button
+                type="button"
+                aria-pressed={billingPeriod === "yearly"}
                 onClick={() => setBillingPeriod("yearly")}
-                className={`px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all ${
+                className={`px-4 sm:px-5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-primary ${
                   billingPeriod === "yearly"
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"

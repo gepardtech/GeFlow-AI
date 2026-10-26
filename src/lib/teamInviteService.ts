@@ -105,6 +105,17 @@ export async function checkUserRegistered(email: string): Promise<ExistingUserCh
 }
 
 /**
+ * User directory is private. Team invites use private single-email lookup (checkUserRegistered).
+ */
+export async function getRegisteredUsers(
+  _excludeOwnerId?: string,
+  _query?: string
+): Promise<Array<{ userId: string; email: string; fullName: string }>> {
+  // Never expose platform registered users publicly
+  return [];
+}
+
+/**
  * Invite a NEW user (email does not exist in the system).
  */
 export async function inviteNewUser({

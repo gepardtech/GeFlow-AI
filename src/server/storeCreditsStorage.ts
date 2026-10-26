@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { serverSupabase } from "./supabase";
 
 export type CreditTransactionType =
   | "deposit_add"
@@ -65,6 +66,7 @@ class StoreCreditsStorage {
 
   constructor() {
     this.load();
+    this.syncFromSupabase();
   }
 
   private load() {
@@ -96,6 +98,32 @@ class StoreCreditsStorage {
     }
   }
 
+  private async syncFromSupabase() {
+    try {
+      const { data: row } = await serverSupabase
+        .from("platform_settings")
+        .select("id, alerts")
+        .limit(1)
+        .maybeSingle();
+      if (row?.alerts && typeof row.alerts === "object") {
+        const dbCredits = (row.alerts as any).business_store_credits;
+        if (dbCredits && typeof dbCredits === "object") {
+          // Merge with priority
+          this.cache = { ...this.cache, ...dbCredits };
+          try {
+            const dir = path.dirname(DATA_FILE);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(DATA_FILE, JSON.stringify(this.cache, null, 2), "utf-8");
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Notice syncing store credits from Supabase:", e);
+    }
+  }
+
   private persist() {
     try {
       const dir = path.dirname(DATA_FILE);
@@ -103,6 +131,20 @@ class StoreCreditsStorage {
         fs.mkdirSync(dir, { recursive: true });
       }
       fs.writeFileSync(DATA_FILE, JSON.stringify(this.cache, null, 2), "utf-8");
+
+      // Save to Supabase platform_settings alerts
+      (async () => {
+        try {
+          const { data: row } = await serverSupabase.from("platform_settings").select("id, alerts").limit(1).maybeSingle();
+          if (row?.id) {
+            const alerts = row.alerts && typeof row.alerts === "object" ? { ...(row.alerts as any) } : {};
+            alerts.business_store_credits = this.cache;
+            await serverSupabase.from("platform_settings").update({ alerts, updated_at: new Date().toISOString() }).eq("id", row.id);
+          }
+        } catch (dbErr) {
+          console.warn("Notice saving store credits to Supabase:", dbErr);
+        }
+      })();
     } catch (e) {
       console.warn("Failed to persist store credits data:", e);
     }
@@ -275,6 +317,54 @@ class StoreCreditsStorage {
 
     this.persist();
     return record;
+  }
+
+  public bulkAdjust(
+    businessId: string,
+    adjustments: Array<{
+      creditId: string;
+      amount?: number;
+      clearFullUdhar?: boolean;
+      type: CreditTransactionType;
+      note?: string;
+      invoiceNo?: string;
+      processedBy?: string;
+      paymentMethod?: string;
+    }>
+  ): StoreCreditRecord[] {
+    const updated: StoreCreditRecord[] = [];
+    for (const item of adjustments) {
+      const rec = this.getById(businessId, item.creditId);
+      if (!rec) continue;
+      const amt = item.clearFullUdhar ? rec.outstanding_udhar : (item.amount || 0);
+      if (amt <= 0 && !item.clearFullUdhar) continue;
+      const res = this.adjustBalance(
+        businessId,
+        item.creditId,
+        amt,
+        item.type,
+        item.note,
+        item.invoiceNo,
+        item.processedBy,
+        item.paymentMethod
+      );
+      if (res) updated.push(res);
+    }
+    return updated;
+  }
+
+  public bulkDelete(businessId: string, creditIds: string[]): number {
+    if (!this.cache[businessId]) return 0;
+    const initialLen = this.cache[businessId].length;
+    const toRemove = new Set(creditIds);
+    this.cache[businessId] = this.cache[businessId].filter(
+      (c) => !toRemove.has(c.id) && !toRemove.has(c.buyer_id)
+    );
+    const deletedCount = initialLen - this.cache[businessId].length;
+    if (deletedCount > 0) {
+      this.persist();
+    }
+    return deletedCount;
   }
 
   public delete(businessId: string, creditId: string): boolean {

@@ -41,6 +41,8 @@ import { AIProductIntelligenceAssistant, AIProductIntelligenceAssistantRef } fro
 import { ProductSuggestion, FieldConfidenceDetail, ConfidenceLevel, FieldSource } from "@/types/aiProductIntelligence";
 import { UOMSelect } from "./UOMSelect";
 import { AIFieldStatusBadge, AIFieldStatus } from "./AIFieldStatusBadge";
+import { ProductVariationsEditor } from "./ProductVariationsEditor";
+import type { ProductVariationsConfig } from "@/server/productVariationsStorage";
 import { formatStockWithUOM, formatUomPlural, getDefaultBaseUnit } from "@/lib/uomRegistry";
 import { saveSyncedProduct } from "@/lib/businessSync";
 
@@ -241,6 +243,20 @@ const ProductDialog = ({
   // Field-level AI status & confidence detail state (Phase 10)
   const [fieldAIStatuses, setFieldAIStatuses] = useState<Record<string, FieldAIStatusInfo>>({});
 
+  // Product Architecture & Variations (WooCommerce / Shopify style)
+  const [variationsConfig, setVariationsConfig] = useState<ProductVariationsConfig>({
+    product_id: product?.id || "",
+    business_id: businessId,
+    product_type: "simple",
+    attributes: [],
+    variants: [],
+    modifiers: [],
+    weight_unit: "g",
+    price_per_base_unit: 0,
+    quick_presets: [250, 500, 750, 1000],
+    updated_at: new Date().toISOString(),
+  });
+
   const fileRef = useRef<HTMLInputElement>(null);
   const isEdit = !!product;
 
@@ -405,7 +421,32 @@ const ProductDialog = ({
         setShowAIAssistant(true);
       }
     }
-  }, [open, product, prefill, defaultMinAlert, industryType, categoryName]);
+
+    // Load variations configuration from server
+    if (open && product?.id) {
+      fetch(`/api/sync/product-variations?product_id=${product.id}&business_id=${businessId}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.config) {
+            setVariationsConfig(data.config);
+          }
+        })
+        .catch(() => {});
+    } else if (open && !product) {
+      setVariationsConfig({
+        product_id: "",
+        business_id: businessId,
+        product_type: "simple",
+        attributes: [],
+        variants: [],
+        modifiers: [],
+        weight_unit: "g",
+        price_per_base_unit: 0,
+        quick_presets: [250, 500, 750, 1000],
+        updated_at: new Date().toISOString(),
+      });
+    }
+  }, [open, product, prefill, defaultMinAlert, industryType, categoryName, businessId]);
 
   const set = (k: keyof typeof emptyForm, v: string) => {
     setForm((f) => {
@@ -830,6 +871,13 @@ const ProductDialog = ({
 
       const finalSku = form.internal_sku.trim() || generateAutoSku(form.name);
 
+      const variantTotalStock = variationsConfig.variants
+        ?.filter((v) => v.active)
+        ?.reduce((acc, v) => acc + (Number(v.stock_units) || 0), 0) || 0;
+      const finalStockUnits = variationsConfig.product_type === "variable" && variationsConfig.variants.length > 0
+        ? variantTotalStock
+        : totalBaseUnits;
+
       const payloadWithColumns: Record<string, any> = {
         id: targetProductId,
         business_id: businessId,
@@ -842,7 +890,7 @@ const ProductDialog = ({
         purchase_cost: Number(form.purchase_cost) || 0,
         retail_price: Number(form.retail_price) || 0,
         discount_price: form.discount_price ? Number(form.discount_price) : null,
-        stock_units: totalBaseUnits, // ALWAYS in Base Unit (e.g. 120 tablets for 10 boxes of 12)
+        stock_units: finalStockUnits, // Calculated from variant matrix or base units
         uom: resolvedUom,
         units_per_uom: unitsPerUom,
         base_unit: resolvedBaseUnit,
@@ -970,6 +1018,23 @@ const ProductDialog = ({
         }
       } catch (syncErr) {
         console.warn("Product count sync notice:", syncErr);
+      }
+
+      // Persist product variations & attributes config
+      try {
+        await fetch("/api/sync/product-variations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...variationsConfig,
+            product_id: targetProductId,
+            business_id: businessId,
+            price_per_base_unit: variationsConfig.price_per_base_unit || Number(form.retail_price) || 0,
+            updated_at: new Date().toISOString(),
+          }),
+        });
+      } catch (varSaveErr) {
+        console.warn("Product variation config sync notice:", varSaveErr);
       }
 
       toast({
@@ -1301,6 +1366,26 @@ const ProductDialog = ({
                     : "Filtered by primary category"}
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* SECTION 2: Product Architecture & Variations (WooCommerce / Shopify Engine) */}
+          <div className="space-y-4 pt-1 sm:pt-2">
+            <SectionHeader
+              number={2}
+              title="Product Architecture &amp; Variations"
+              description="Simple, Variable, Add-ons / Modifiers, or Weight-based measurement rules"
+              icon={Layers}
+            />
+            <div className="p-4 rounded-2xl bg-card border border-border">
+              <ProductVariationsEditor
+                config={variationsConfig}
+                onChange={setVariationsConfig}
+                basePrice={Number(form.retail_price) || 0}
+                baseCost={Number(form.purchase_cost) || 0}
+                baseSku={form.internal_sku || generateAutoSku(form.name)}
+                industryType={industryType || categoryName}
+              />
             </div>
           </div>
 

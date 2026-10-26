@@ -107,7 +107,31 @@ export default function UserCustomerCredits() {
   const [credits, setCredits] = useState<CustomerStoreCredit[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "with_udhar" | "with_deposit" | "over_limit">("all");
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "with_udhar" | "with_deposit" | "both_active" | "over_limit" | "cleared_zero" | "high_debt"
+  >("all");
+
+  // Bulk Selection State
+  const [selectedBuyerIds, setSelectedBuyerIds] = useState<string[]>([]);
+
+  // Bulk Deposit Modal State
+  const [bulkDepositModalOpen, setBulkDepositModalOpen] = useState(false);
+  const [bulkDepositAmount, setBulkDepositAmount] = useState("");
+  const [bulkDepositMethod, setBulkDepositMethod] = useState("Cash");
+  const [bulkDepositNote, setBulkDepositNote] = useState("");
+  const [submittingBulkDeposit, setSubmittingBulkDeposit] = useState(false);
+
+  // Bulk Pay / Clear Udhar Modal State
+  const [bulkPayModalOpen, setBulkPayModalOpen] = useState(false);
+  const [bulkPayMode, setBulkPayMode] = useState<"clear_full" | "fixed_amount">("clear_full");
+  const [bulkPayFixedAmount, setBulkPayFixedAmount] = useState("");
+  const [bulkPayMethod, setBulkPayMethod] = useState("Cash");
+  const [bulkPayNote, setBulkPayNote] = useState("");
+  const [submittingBulkPay, setSubmittingBulkPay] = useState(false);
+
+  // Bulk Delete Modal State
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+  const [submittingBulkDelete, setSubmittingBulkDelete] = useState(false);
 
   // Add / Edit Buyer Modal
   const [buyerModalOpen, setBuyerModalOpen] = useState(false);
@@ -164,14 +188,43 @@ export default function UserCustomerCredits() {
     udharBalanceAfter: number;
   } | null>(null);
 
-  // Minimum deposit guidance based on active currency
+  // Configurable currency-specific minimum deposit settings
+  const [minDepositModalOpen, setMinDepositModalOpen] = useState(false);
+  const [currencyMinDeposits, setCurrencyMinDeposits] = useState<Record<string, number>>(() => {
+    try {
+      const stored = localStorage.getItem(`geflow_min_deposits_${activeId || "global"}`);
+      if (stored) return JSON.parse(stored);
+    } catch (_e) {
+      /* ignore storage read error */
+    }
+    return { PKR: 10000, INR: 10000, EUR: 100, GBP: 100, USD: 100, AED: 500, SAR: 500 };
+  });
+
+  const activeCurrencyCode = (currency || active?.currency || "USD").toUpperCase();
   const minDepositGuidance = useMemo(() => {
-    const c = (currency || active?.currency || "USD").toUpperCase();
-    if (c === "PKR") return 10000;
-    if (c === "INR") return 10000;
-    if (c === "EUR" || c === "GBP") return 100;
-    return 100; // USD / default
-  }, [currency, active?.currency]);
+    return currencyMinDeposits[activeCurrencyCode] ?? 100;
+  }, [currencyMinDeposits, activeCurrencyCode]);
+
+  const [customMinInput, setCustomMinInput] = useState<string>("");
+
+  useEffect(() => {
+    setCustomMinInput(String(minDepositGuidance));
+  }, [minDepositGuidance]);
+
+  const handleSaveMinDepositSetting = (amount: number) => {
+    const next = { ...currencyMinDeposits, [activeCurrencyCode]: Math.max(0, amount) };
+    setCurrencyMinDeposits(next);
+    try {
+      localStorage.setItem(`geflow_min_deposits_${activeId || "global"}`, JSON.stringify(next));
+    } catch (_e) {
+      /* ignore storage write error */
+    }
+    toast({
+      title: "Minimum Deposit Setting Saved",
+      description: `Minimum deposit requirement for ${activeCurrencyCode} set to ${fmt(amount)}.`,
+    });
+    setMinDepositModalOpen(false);
+  };
 
   // Safe normalizer
   const normalizeCredit = useCallback((raw: any): CustomerStoreCredit => {
@@ -235,6 +288,9 @@ export default function UserCustomerCredits() {
 
   useEffect(() => {
     loadCredits();
+    const handleUpdate = () => loadCredits();
+    window.addEventListener("geflow:store-credits-updated", handleUpdate);
+    return () => window.removeEventListener("geflow:store-credits-updated", handleUpdate);
   }, [loadCredits]);
 
   // Overall Financial Statistics
@@ -277,12 +333,226 @@ export default function UserCustomerCredits() {
       result = result.filter((c) => (c.outstandingUdhar || 0) > 0);
     } else if (statusFilter === "with_deposit") {
       result = result.filter((c) => (c.availableDeposit || 0) > 0);
+    } else if (statusFilter === "both_active") {
+      result = result.filter((c) => (c.outstandingUdhar || 0) > 0 && (c.availableDeposit || 0) > 0);
     } else if (statusFilter === "over_limit") {
       result = result.filter((c) => (c.outstandingUdhar || 0) > (c.creditLimit || 0));
+    } else if (statusFilter === "cleared_zero") {
+      result = result.filter((c) => (c.outstandingUdhar || 0) === 0 && (c.availableDeposit || 0) === 0);
+    } else if (statusFilter === "high_debt") {
+      result = result.filter((c) => (c.outstandingUdhar || 0) >= 500);
     }
 
     return result;
   }, [credits, searchQuery, statusFilter]);
+
+  // Bulk Selection Helpers
+  const isAllSelected = useMemo(() => {
+    if (filteredCredits.length === 0) return false;
+    return filteredCredits.every((c) => selectedBuyerIds.includes(c.id));
+  }, [filteredCredits, selectedBuyerIds]);
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedBuyerIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedBuyerIds((prev) =>
+        prev.filter((id) => !filteredCredits.some((c) => c.id === id))
+      );
+    } else {
+      const visibleIds = filteredCredits.map((c) => c.id);
+      setSelectedBuyerIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedBuyerIds([]);
+  };
+
+  // Bulk Deposit Execution
+  const handleOpenBulkDeposit = () => {
+    if (selectedBuyerIds.length === 0) {
+      toast({ title: "No Buyers Selected", description: "Select at least one buyer to perform bulk deposit.", variant: "destructive" });
+      return;
+    }
+    setBulkDepositAmount("");
+    setBulkDepositMethod("Cash");
+    setBulkDepositNote("");
+    setBulkDepositModalOpen(true);
+  };
+
+  const handleSubmitBulkDeposit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeId || selectedBuyerIds.length === 0) return;
+    const amt = Number(bulkDepositAmount);
+    if (isNaN(amt) || amt <= 0) {
+      toast({ title: "Invalid Deposit Amount", description: "Please enter a valid amount per buyer.", variant: "destructive" });
+      return;
+    }
+
+    setSubmittingBulkDeposit(true);
+    try {
+      const adjustments = selectedBuyerIds.map((creditId) => ({
+        creditId,
+        amount: amt,
+        type: "deposit_add" as const,
+        paymentMethod: bulkDepositMethod,
+        note: bulkDepositNote.trim() || `Bulk advance deposit of ${fmt(amt)} added`,
+        invoiceNo: `BLK-DEP-${Date.now().toString().slice(-6)}`,
+        processedBy: active?.business_name || "Store Counter",
+      }));
+
+      const res = await fetch("/api/sync/store-credits/bulk-adjust", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: activeId, adjustments }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to process bulk deposits.");
+      }
+
+      const data = await res.json();
+      if (data.success && Array.isArray(data.credits)) {
+        const updatedNormalized = data.credits.map(normalizeCredit);
+        setCredits((prev) => {
+          const map = new Map(prev.map((c) => [c.id, c]));
+          updatedNormalized.forEach((u: CustomerStoreCredit) => map.set(u.id, u));
+          return Array.from(map.values());
+        });
+
+        toast({
+          title: "Bulk Deposits Recorded",
+          description: `Successfully added ${fmt(amt)} store credit deposit to ${selectedBuyerIds.length} buyers.`,
+        });
+        setBulkDepositModalOpen(false);
+        setSelectedBuyerIds([]);
+      }
+    } catch (err: any) {
+      toast({ title: "Bulk Deposit Error", description: err.message, variant: "destructive" });
+    } finally {
+      setSubmittingBulkDeposit(false);
+    }
+  };
+
+  // Bulk Pay / Clear Udhar Execution
+  const handleOpenBulkPay = () => {
+    if (selectedBuyerIds.length === 0) {
+      toast({ title: "No Buyers Selected", description: "Select at least one buyer to clear debts in bulk.", variant: "destructive" });
+      return;
+    }
+    setBulkPayMode("clear_full");
+    setBulkPayFixedAmount("");
+    setBulkPayMethod("Cash");
+    setBulkPayNote("");
+    setBulkPayModalOpen(true);
+  };
+
+  const handleSubmitBulkPay = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeId || selectedBuyerIds.length === 0) return;
+
+    if (bulkPayMode === "fixed_amount") {
+      const fixedAmt = Number(bulkPayFixedAmount);
+      if (isNaN(fixedAmt) || fixedAmt <= 0) {
+        toast({ title: "Invalid Payment Amount", description: "Please enter a valid payment amount.", variant: "destructive" });
+        return;
+      }
+    }
+
+    setSubmittingBulkPay(true);
+    try {
+      const adjustments = selectedBuyerIds.map((creditId) => ({
+        creditId,
+        amount: bulkPayMode === "fixed_amount" ? Number(bulkPayFixedAmount) : 0,
+        clearFullUdhar: bulkPayMode === "clear_full",
+        type: "udhar_repayment" as const,
+        paymentMethod: bulkPayMethod,
+        note: bulkPayNote.trim() || (bulkPayMode === "clear_full" ? "Bulk full udhar settlement" : `Bulk partial payment received`),
+        invoiceNo: `BLK-PAY-${Date.now().toString().slice(-6)}`,
+        processedBy: active?.business_name || "Store Counter",
+      }));
+
+      const res = await fetch("/api/sync/store-credits/bulk-adjust", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: activeId, adjustments }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to process bulk payments.");
+      }
+
+      const data = await res.json();
+      if (data.success && Array.isArray(data.credits)) {
+        const updatedNormalized = data.credits.map(normalizeCredit);
+        setCredits((prev) => {
+          const map = new Map(prev.map((c) => [c.id, c]));
+          updatedNormalized.forEach((u: CustomerStoreCredit) => map.set(u.id, u));
+          return Array.from(map.values());
+        });
+
+        toast({
+          title: "Bulk Payments Processed",
+          description: `Successfully processed debt repayments for ${selectedBuyerIds.length} buyers.`,
+        });
+        setBulkPayModalOpen(false);
+        setSelectedBuyerIds([]);
+      }
+    } catch (err: any) {
+      toast({ title: "Bulk Pay Error", description: err.message, variant: "destructive" });
+    } finally {
+      setSubmittingBulkPay(false);
+    }
+  };
+
+  // Bulk Delete Execution
+  const handleOpenBulkDelete = () => {
+    if (selectedBuyerIds.length === 0) {
+      toast({ title: "No Buyers Selected", description: "Select at least one buyer to delete.", variant: "destructive" });
+      return;
+    }
+    setBulkDeleteModalOpen(true);
+  };
+
+  const handleSubmitBulkDelete = async () => {
+    if (!activeId || selectedBuyerIds.length === 0) return;
+
+    setSubmittingBulkDelete(true);
+    try {
+      const res = await fetch("/api/sync/store-credits/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: activeId, creditIds: selectedBuyerIds }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to delete buyers.");
+      }
+
+      const data = await res.json();
+      if (data.success && Array.isArray(data.credits)) {
+        setCredits(data.credits.map(normalizeCredit));
+        toast({
+          title: "Buyers Deleted",
+          description: `Removed ${data.deletedCount || selectedBuyerIds.length} buyer profiles successfully.`,
+        });
+        setBulkDeleteModalOpen(false);
+        setSelectedBuyerIds([]);
+      }
+    } catch (err: any) {
+      toast({ title: "Bulk Delete Error", description: err.message, variant: "destructive" });
+    } finally {
+      setSubmittingBulkDelete(false);
+    }
+  };
 
   // All chronological transactions for the Transaction Ledger tab
   const allTransactions = useMemo(() => {
@@ -843,7 +1113,18 @@ export default function UserCustomerCredits() {
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Udhar debt and advance deposits are preserved as separate balances and never auto-deducted silently.
                   Minimum recommended advance deposit:{" "}
-                  <strong className="text-emerald-600 font-mono">{fmt(minDepositGuidance)}</strong>.
+                  <strong className="text-emerald-600 font-mono">{fmt(minDepositGuidance)}</strong>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomMinInput(String(minDepositGuidance));
+                      setMinDepositModalOpen(true);
+                    }}
+                    className="text-[11px] font-bold text-sky-600 dark:text-sky-400 hover:underline ml-2 inline-flex items-center gap-0.5 cursor-pointer"
+                  >
+                    (Configure Rule)
+                  </button>
+                  .
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -1137,7 +1418,7 @@ export default function UserCustomerCredits() {
 
               <div className="flex items-center gap-2 flex-wrap">
                 <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v)}>
-                  <SelectTrigger className="w-44 h-10 rounded-xl bg-card border-border text-xs font-semibold">
+                  <SelectTrigger className="w-52 h-10 rounded-xl bg-card border-border text-xs font-semibold">
                     <Filter className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
                     <SelectValue />
                   </SelectTrigger>
@@ -1145,7 +1426,10 @@ export default function UserCustomerCredits() {
                     <SelectItem value="all">All Buyers ({credits.length})</SelectItem>
                     <SelectItem value="with_udhar">With Udhar Debt ({stats.buyersWithUdhar})</SelectItem>
                     <SelectItem value="with_deposit">With Deposits ({stats.buyersWithDeposits})</SelectItem>
+                    <SelectItem value="both_active">Both Active ({credits.filter((c) => (c.outstandingUdhar || 0) > 0 && (c.availableDeposit || 0) > 0).length})</SelectItem>
                     <SelectItem value="over_limit">Over Limit ({stats.buyersOverLimit})</SelectItem>
+                    <SelectItem value="cleared_zero">Zero Balances / Settled ({credits.filter((c) => (c.outstandingUdhar || 0) === 0 && (c.availableDeposit || 0) === 0).length})</SelectItem>
+                    <SelectItem value="high_debt">High Debt (≥ $500) ({credits.filter((c) => (c.outstandingUdhar || 0) >= 500).length})</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -1159,12 +1443,70 @@ export default function UserCustomerCredits() {
               </div>
             </div>
 
+            {/* Bulk Actions Floating Bar */}
+            {selectedBuyerIds.length > 0 && (
+              <div className="p-3.5 rounded-2xl bg-sky-500/10 border border-sky-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-6 h-6 rounded-full bg-sky-500 text-white flex items-center justify-center font-mono font-bold text-xs shadow-xs">
+                    {selectedBuyerIds.length}
+                  </span>
+                  <span className="text-xs font-bold text-foreground">
+                    {selectedBuyerIds.length} {selectedBuyerIds.length === 1 ? "buyer" : "buyers"} selected
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearSelection}
+                    className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                  >
+                    Clear Selection
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    size="sm"
+                    onClick={handleOpenBulkDeposit}
+                    className="h-8 px-3 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                  >
+                    <ArrowDownLeft className="w-3.5 h-3.5 mr-1.5" />
+                    Bulk Deposit
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleOpenBulkPay}
+                    className="h-8 px-3 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs"
+                  >
+                    <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
+                    Bulk Pay / Clear Udhar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleOpenBulkDelete}
+                    className="h-8 px-3 rounded-xl text-xs font-bold shadow-xs"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                    Bulk Delete
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Buyers Table */}
             <div className="rounded-2xl bg-card border border-border shadow-xs overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-muted/50 border-b border-border text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                     <tr>
+                      <th className="py-3 px-3 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isAllSelected}
+                          onChange={handleSelectAll}
+                          className="w-4 h-4 rounded border-border text-sky-600 focus:ring-sky-500 cursor-pointer"
+                          title="Select All Buyers"
+                        />
+                      </th>
                       <th className="py-3 px-4">Buyer ID</th>
                       <th className="py-3 px-4">Buyer Identity</th>
                       <th className="py-3 px-4 text-right">Outstanding Udhar</th>
@@ -1177,7 +1519,7 @@ export default function UserCustomerCredits() {
                   <tbody className="divide-y divide-border">
                     {filteredCredits.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-12 text-center text-muted-foreground">
+                        <td colSpan={8} className="py-12 text-center text-muted-foreground">
                           No buyer accounts found matching your query.
                         </td>
                       </tr>
@@ -1188,7 +1530,17 @@ export default function UserCustomerCredits() {
                         const hasUdhar = (c.outstandingUdhar || 0) > 0;
 
                         return (
-                          <tr key={c.id} className="hover:bg-muted/30 transition-colors">
+                          <tr key={c.id} className={`hover:bg-muted/30 transition-colors ${selectedBuyerIds.includes(c.id) ? "bg-sky-500/5" : ""}`}>
+                            {/* Checkbox */}
+                            <td className="py-3.5 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedBuyerIds.includes(c.id)}
+                                onChange={() => handleToggleSelect(c.id)}
+                                className="w-4 h-4 rounded border-border text-sky-600 focus:ring-sky-500 cursor-pointer"
+                              />
+                            </td>
+
                             {/* Buyer ID */}
                             <td className="py-3.5 px-4 font-mono font-bold text-foreground">
                               <span className="px-2 py-1 rounded-md bg-muted border border-border">
@@ -2283,6 +2635,348 @@ export default function UserCustomerCredits() {
                 className="rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
               >
                 <Share2 className="w-3.5 h-3.5" /> Share WhatsApp Slip
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Configure Minimum Deposit Settings Modal */}
+        <Dialog open={minDepositModalOpen} onOpenChange={setMinDepositModalOpen}>
+          <DialogContent className="max-w-md rounded-2xl bg-card border-border">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-sky-500" />
+                Configure Minimum Deposit Setting
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Set the recommended minimum deposit threshold for <span className="font-bold text-foreground">{activeCurrencyCode}</span> ({symbol}). Advances below this amount will display a friendly soft warning.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div>
+                <Label className="text-xs font-bold text-foreground">
+                  Minimum Deposit Amount ({activeCurrencyCode})
+                </Label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-mono text-sm">
+                    {symbol}
+                  </span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={customMinInput}
+                    onChange={(e) => setCustomMinInput(e.target.value)}
+                    placeholder="Enter minimum deposit"
+                    className="pl-8 text-sm font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-muted/40 border border-border text-xs space-y-1.5">
+                <p className="font-semibold text-foreground">Standard Regional Recommendations:</p>
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
+                  <button
+                    type="button"
+                    onClick={() => setCustomMinInput("100")}
+                    className="p-1.5 rounded-lg border border-border bg-card hover:border-sky-500 text-left transition"
+                  >
+                    USD / EUR / GBP: <span className="font-bold text-foreground">100</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomMinInput("500")}
+                    className="p-1.5 rounded-lg border border-border bg-card hover:border-sky-500 text-left transition"
+                  >
+                    AED / SAR: <span className="font-bold text-foreground">500</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomMinInput("10000")}
+                    className="p-1.5 rounded-lg border border-border bg-card hover:border-sky-500 text-left transition"
+                  >
+                    PKR / INR: <span className="font-bold text-foreground">10,000</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomMinInput("5000")}
+                    className="p-1.5 rounded-lg border border-border bg-card hover:border-sky-500 text-left transition"
+                  >
+                    Alternative: <span className="font-bold text-foreground">5,000</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="flex justify-between items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setMinDepositModalOpen(false)}
+                className="rounded-xl text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => handleSaveMinDepositSetting(Number(customMinInput) || 0)}
+                className="rounded-xl text-xs font-bold bg-sky-500 hover:bg-sky-600 text-white"
+              >
+                Save Setting
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ========================================================================= */}
+        {/* MODAL 7: BULK DEPOSIT MODAL                                               */}
+        {/* ========================================================================= */}
+        <Dialog open={bulkDepositModalOpen} onOpenChange={setBulkDepositModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2">
+                <ArrowDownLeft className="w-5 h-5 text-emerald-500" />
+                Bulk Store Credit Deposit
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Crediting advance deposit for <strong className="text-foreground">{selectedBuyerIds.length}</strong> selected buyer accounts simultaneously.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleSubmitBulkDeposit} className="space-y-4 py-2">
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Target Recipients:</span>
+                  <span className="font-bold text-foreground font-mono">{selectedBuyerIds.length} Buyers</span>
+                </div>
+                {Number(bulkDepositAmount) > 0 && (
+                  <div className="flex justify-between border-t border-emerald-500/20 pt-1 mt-1">
+                    <span className="font-semibold text-emerald-800 dark:text-emerald-300">Total Capital Credited:</span>
+                    <span className="font-extrabold text-emerald-600 dark:text-emerald-400 font-mono text-sm">
+                      {fmt(Number(bulkDepositAmount) * selectedBuyerIds.length)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Deposit Amount Per Buyer ({symbol}) *</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  step="any"
+                  value={bulkDepositAmount}
+                  onChange={(e) => setBulkDepositAmount(e.target.value)}
+                  placeholder="e.g. 100"
+                  required
+                  autoFocus
+                  className="h-10 rounded-xl text-base font-bold font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Payment Method</Label>
+                <Select value={bulkDepositMethod} onValueChange={setBulkDepositMethod}>
+                  <SelectTrigger className="h-10 rounded-xl text-xs font-semibold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="text-xs">
+                    <SelectItem value="Cash">Cash</SelectItem>
+                    <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="Cheque">Cheque</SelectItem>
+                    <SelectItem value="Card">Card</SelectItem>
+                    <SelectItem value="Online Payment">Online Payment</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Batch Note / Purpose</Label>
+                <Input
+                  value={bulkDepositNote}
+                  onChange={(e) => setBulkDepositNote(e.target.value)}
+                  placeholder="e.g. Festival advance deposit / Wholesale voucher"
+                  className="h-10 rounded-xl text-xs"
+                />
+              </div>
+
+              <DialogFooter className="border-t border-border pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setBulkDepositModalOpen(false)}
+                  className="rounded-xl text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={submittingBulkDeposit}
+                  className="rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  {submittingBulkDeposit ? "Processing..." : `Deposit to ${selectedBuyerIds.length} Accounts`}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* ========================================================================= */}
+        {/* MODAL 8: BULK PAY / CLEAR UDHAR MODAL                                     */}
+        {/* ========================================================================= */}
+        <Dialog open={bulkPayModalOpen} onOpenChange={setBulkPayModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2">
+                <ArrowUpRight className="w-5 h-5 text-rose-500" />
+                Bulk Udhar Settlement & Payment
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Clear or reduce unpaid udhar debts for <strong className="text-foreground">{selectedBuyerIds.length}</strong> selected buyers.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleSubmitBulkPay} className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label className="text-xs font-semibold">Settlement Mode</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBulkPayMode("clear_full")}
+                    className={`p-3 rounded-xl border text-left text-xs transition-all ${
+                      bulkPayMode === "clear_full"
+                        ? "border-rose-500 bg-rose-500/10 text-foreground font-bold shadow-xs"
+                        : "border-border bg-card text-muted-foreground hover:border-border/80"
+                    }`}
+                  >
+                    <p className="font-bold text-foreground">Clear Full Udhar</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Sets each buyer's individual debt balance to $0
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setBulkPayMode("fixed_amount")}
+                    className={`p-3 rounded-xl border text-left text-xs transition-all ${
+                      bulkPayMode === "fixed_amount"
+                        ? "border-rose-500 bg-rose-500/10 text-foreground font-bold shadow-xs"
+                        : "border-border bg-card text-muted-foreground hover:border-border/80"
+                    }`}
+                  >
+                    <p className="font-bold text-foreground">Fixed Payment</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Deducts a fixed amount from each buyer's debt
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              {bulkPayMode === "fixed_amount" && (
+                <div className="space-y-1.5 animate-in fade-in">
+                  <Label className="text-xs font-semibold">Payment Amount Per Buyer ({symbol}) *</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    step="any"
+                    value={bulkPayFixedAmount}
+                    onChange={(e) => setBulkPayFixedAmount(e.target.value)}
+                    placeholder="e.g. 50"
+                    required
+                    autoFocus
+                    className="h-10 rounded-xl text-base font-bold font-mono"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Payment Method</Label>
+                <Select value={bulkPayMethod} onValueChange={setBulkPayMethod}>
+                  <SelectTrigger className="h-10 rounded-xl text-xs font-semibold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="text-xs">
+                    <SelectItem value="Cash">Cash</SelectItem>
+                    <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="Cheque">Cheque</SelectItem>
+                    <SelectItem value="Card">Card</SelectItem>
+                    <SelectItem value="Online Payment">Online Payment</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Batch Settlement Note</Label>
+                <Input
+                  value={bulkPayNote}
+                  onChange={(e) => setBulkPayNote(e.target.value)}
+                  placeholder="e.g. Month-end batch clearance"
+                  className="h-10 rounded-xl text-xs"
+                />
+              </div>
+
+              <DialogFooter className="border-t border-border pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setBulkPayModalOpen(false)}
+                  className="rounded-xl text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={submittingBulkPay}
+                  className="rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white"
+                >
+                  {submittingBulkPay ? "Processing..." : `Process for ${selectedBuyerIds.length} Buyers`}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* ========================================================================= */}
+        {/* MODAL 9: BULK DELETE CONFIRMATION                                         */}
+        {/* ========================================================================= */}
+        <Dialog open={bulkDeleteModalOpen} onOpenChange={setBulkDeleteModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold flex items-center gap-2 text-rose-600">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+                Delete {selectedBuyerIds.length} Selected Buyers?
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                This action will delete {selectedBuyerIds.length} buyer profiles and archive their local records.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs space-y-2 text-rose-700 dark:text-rose-300">
+              <p className="font-semibold flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                Permanent Profile Removal
+              </p>
+              <p className="text-[11px] leading-relaxed">
+                Selected accounts will be permanently detached from the active buyer list. Any current positive store credit or active udhar will no longer be tracked under these accounts.
+              </p>
+            </div>
+
+            <DialogFooter className="border-t border-border pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setBulkDeleteModalOpen(false)}
+                className="rounded-xl text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={submittingBulkDelete}
+                onClick={handleSubmitBulkDelete}
+                className="rounded-xl text-xs font-bold"
+              >
+                {submittingBulkDelete ? "Deleting..." : `Delete ${selectedBuyerIds.length} Accounts`}
               </Button>
             </DialogFooter>
           </DialogContent>

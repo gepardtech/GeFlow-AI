@@ -408,6 +408,18 @@ export async function toggleLiveAnnouncementActive(
 
 export async function deleteLiveAnnouncement(id: string): Promise<{ success: boolean; error?: string }> {
   try {
+    const cached = localStorage.getItem("geflow_cached_announcements");
+    if (cached) {
+      const list = JSON.parse(cached);
+      if (Array.isArray(list)) {
+        localStorage.setItem("geflow_cached_announcements", JSON.stringify(list.filter((a: any) => a.id !== id)));
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
     await fetch(`/api/announcements/${id}`, { method: "DELETE" });
   } catch (err) {
     console.warn("API delete notice:", err);

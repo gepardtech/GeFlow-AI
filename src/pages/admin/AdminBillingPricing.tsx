@@ -299,12 +299,12 @@ const AdminBillingPricing = () => {
       )}
 
       {/* Lifetime Registration Offer Configuration Banner */}
-      <div className="bg-card border border-amber-500/30 rounded-2xl p-5 mb-6 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-base font-bold text-foreground">🎁 Exclusive Lifetime Plan Registration Offers</span>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold">
+      <div className="bg-card border border-amber-500/30 rounded-2xl p-4 sm:p-5 mb-6 shadow-xs">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm sm:text-base font-bold text-foreground">🎁 Exclusive Lifetime Plan Registration Offers</span>
+              <span className="text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold shrink-0">
                 LIMITED OFFER
               </span>
             </div>
@@ -312,33 +312,33 @@ const AdminBillingPricing = () => {
               Configure maximum lifetime plan registrations allowed for users (e.g. 25-25 registration offers). Once filled, users cannot register for lifetime tier.
             </p>
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2 bg-muted/40 px-3 py-1.5 rounded-xl border border-border">
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2.5 sm:gap-3 flex-wrap">
+            <div className="flex items-center gap-2 bg-muted/40 px-2.5 sm:px-3 py-1.5 rounded-xl border border-border">
               <span className="text-xs font-bold text-muted-foreground">Standard:</span>
               <input
                 type="number"
                 min="0"
                 value={lifetimeLimits.standard}
                 onChange={(e) => setLifetimeLimits((l) => ({ ...l, standard: Number(e.target.value) }))}
-                className="w-16 h-8 text-center text-sm font-bold bg-background rounded-lg border border-border"
+                className="w-14 sm:w-16 h-8 text-center text-sm font-bold bg-background rounded-lg border border-border"
               />
               <span className="text-[11px] text-muted-foreground">limit</span>
             </div>
-            <div className="flex items-center gap-2 bg-muted/40 px-3 py-1.5 rounded-xl border border-border">
+            <div className="flex items-center gap-2 bg-muted/40 px-2.5 sm:px-3 py-1.5 rounded-xl border border-border">
               <span className="text-xs font-bold text-muted-foreground">Premium:</span>
               <input
                 type="number"
                 min="0"
                 value={lifetimeLimits.premium}
                 onChange={(e) => setLifetimeLimits((l) => ({ ...l, premium: Number(e.target.value) }))}
-                className="w-16 h-8 text-center text-sm font-bold bg-background rounded-lg border border-border"
+                className="w-14 sm:w-16 h-8 text-center text-sm font-bold bg-background rounded-lg border border-border"
               />
               <span className="text-[11px] text-muted-foreground">limit</span>
             </div>
             <Button
               onClick={saveLifetimeLimits}
               disabled={savingLimits}
-              className="h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs"
+              className="col-span-2 sm:col-span-1 h-9 sm:h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs"
             >
               {savingLimits ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Limits"}
             </Button>
@@ -397,104 +397,194 @@ const AdminBillingPricing = () => {
         );})}
       </div>
 
-      {/* 2. DEDICATED LIFETIME PLANS SECTION & TABLE */}
-      <div className="mt-10 mb-8 pt-8 border-t border-border">
+      {/* 2. DEDICATED LIFETIME PLANS SECTION (RESPONSIVE TABLE + MOBILE/TABLET CARDS) */}
+      <div className="mt-10 mb-8 pt-8 border-t border-border min-w-0">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold">Exclusive Lifetime Plans</h2>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-lg sm:text-xl font-bold">Exclusive Lifetime Plans</h2>
+              <span className="text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold shrink-0">
                 SEPARATE OFFER &amp; BADGES
               </span>
             </div>
-            <p className="text-sm text-muted-foreground mt-0.5">
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
               Manage lifetime pricing, registration limits, and badges independently from monthly/yearly subscriptions.
             </p>
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-xs">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/30 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                <th className="p-4">Plan Name</th>
-                <th className="p-4">Lifetime Price</th>
-                <th className="p-4">Registration Offer Limit</th>
-                <th className="p-4">Independent Lifetime Badge</th>
-                <th className="p-4">Custom CTA Text</th>
-                <th className="p-4">Popular On Lifetime</th>
-                <th className="p-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {["standard", "premium"].map((key) => {
-                const r = rows.find((p) => p.plan_key.toLowerCase() === key);
-                const customs = lifetimeCustoms[key] || {};
-                const priceVal = customs.lifetime_price !== undefined ? customs.lifetime_price : (r?.lifetime_price || 0);
-                const badgeText = customs.badge_text !== undefined ? customs.badge_text : (r?.badge_cycle === "lifetime" ? r.badge_text : null);
-                const isPop = customs.is_popular !== undefined ? customs.is_popular : Boolean(r?.is_popular);
-                const limit = key === "standard" ? lifetimeLimits.standard : lifetimeLimits.premium;
-                const claimed = key === "standard" ? lifetimeCounts.standard : lifetimeCounts.premium;
-                const ctaText = customs.cta_button_text !== undefined ? customs.cta_button_text : (r?.cta_button_text || "");
+        {/* Mobile & Tablet Card Layout (screens below lg) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:hidden">
+          {["standard", "premium"].map((key) => {
+            const r = rows.find((p) => p.plan_key.toLowerCase() === key);
+            const customs = lifetimeCustoms[key] || {};
+            const priceVal = customs.lifetime_price !== undefined ? customs.lifetime_price : (r?.lifetime_price || 0);
+            const badgeText = customs.badge_text !== undefined ? customs.badge_text : (r?.badge_cycle === "lifetime" ? r.badge_text : null);
+            const isPop = customs.is_popular !== undefined ? customs.is_popular : Boolean(r?.is_popular);
+            const limit = key === "standard" ? lifetimeLimits.standard : lifetimeLimits.premium;
+            const claimed = key === "standard" ? lifetimeCounts.standard : lifetimeCounts.premium;
+            const ctaText = customs.cta_button_text !== undefined ? customs.cta_button_text : (r?.cta_button_text || "");
 
-                return (
-                  <tr key={key} className="hover:bg-muted/30 transition-colors">
-                    <td className="p-4">
-                      <p className="font-bold text-foreground text-sm">{r?.name || key.toUpperCase()} Lifetime</p>
-                      <span className="text-[10px] font-mono text-muted-foreground uppercase">{key}</span>
-                    </td>
-                    <td className="p-4">
-                      <span className="font-extrabold text-foreground text-base">${priceVal}</span>
-                      <span className="text-xs text-muted-foreground ml-1">one-time</span>
-                    </td>
-                    <td className="p-4">
-                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs">
-                        <span className="font-bold text-amber-600 dark:text-amber-400">{limit} spots</span>
-                        <span className="text-[10px] text-muted-foreground">({claimed} claimed)</span>
+            return (
+              <div
+                key={`mobile_card_${key}`}
+                className="bg-card border border-border/90 rounded-2xl p-4 sm:p-5 shadow-xs relative flex flex-col justify-between gap-4 min-w-0"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-foreground text-base sm:text-lg">
+                          {r?.name || key.toUpperCase()} Lifetime
+                        </h3>
+                        <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-md bg-muted text-muted-foreground font-bold">
+                          {key}
+                        </span>
                       </div>
-                    </td>
-                    <td className="p-4">
+                      <p className="text-xs text-muted-foreground mt-0.5">One-time purchase · Lifetime access</p>
+                    </div>
+
+                    {isPop && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-500 bg-sky-500/10 px-2.5 py-0.5 rounded-full shrink-0">
+                        <Star className="h-3 w-3" /> Popular
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Pricing & Spots Grid */}
+                  <div className="grid grid-cols-2 gap-2.5 my-3">
+                    <div className="bg-muted/40 border border-border/60 rounded-xl p-3 text-center">
+                      <p className="text-[9px] font-bold tracking-wider text-muted-foreground uppercase">Lifetime Price</p>
+                      <p className="text-xl font-extrabold text-foreground mt-0.5">${priceVal}</p>
+                      <span className="text-[10px] text-muted-foreground">one-time payment</span>
+                    </div>
+
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center">
+                      <p className="text-[9px] font-bold tracking-wider text-amber-700 dark:text-amber-300 uppercase">Offer Spots</p>
+                      <p className="text-xl font-extrabold text-amber-600 dark:text-amber-400 mt-0.5">{limit}</p>
+                      <span className="text-[10px] text-muted-foreground font-mono">{claimed} claimed</span>
+                    </div>
+                  </div>
+
+                  {/* Metadata Chips: Badge & CTA */}
+                  <div className="space-y-2 pt-2 border-t border-border/60 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold text-muted-foreground uppercase">Lifetime Badge:</span>
                       {badgeText ? (
-                        <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                        <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
                           {badgeText}
                         </span>
                       ) : (
-                        <span className="text-xs text-muted-foreground italic">None configured</span>
+                        <span className="text-[11px] text-muted-foreground italic">None configured</span>
                       )}
-                    </td>
-                    <td className="p-4">
-                      {ctaText ? (
-                        <span className="inline-block px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/20 font-mono">
-                          "{ctaText}"
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground italic">UNLOCK LIFETIME</span>
-                      )}
-                    </td>
-                    <td className="p-4">
-                      {isPop ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-bold text-sky-500 bg-sky-500/10 px-2.5 py-0.5 rounded-full">
-                          <Star className="h-3 w-3" /> Popular
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">No</span>
-                      )}
-                    </td>
-                    <td className="p-4 text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openLifetimeEdit(key)}
-                        className="rounded-xl font-bold text-xs hover:bg-muted"
-                      >
-                        <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit Lifetime
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold text-muted-foreground uppercase">Custom CTA:</span>
+                      <span className="inline-block px-2 py-0.5 rounded-md text-[11px] font-mono font-semibold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 truncate max-w-[180px]">
+                        "{ctaText || 'UNLOCK LIFETIME'}"
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={() => openLifetimeEdit(key)}
+                  className="w-full h-10 rounded-xl font-bold text-xs bg-muted hover:bg-muted/80 text-foreground border border-border transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <Pencil className="h-3.5 w-3.5 text-sky-500" />
+                  <span>Edit {r?.name || key.toUpperCase()} Lifetime Details</span>
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Desktop Table Layout (screens lg and above) with Horizontal Scroll Safety */}
+        <div className="hidden lg:block bg-card border border-border rounded-2xl overflow-hidden shadow-xs">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm min-w-[720px]">
+              <thead>
+                <tr className="border-b border-border bg-muted/30 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+                  <th className="p-4">Plan Name</th>
+                  <th className="p-4">Lifetime Price</th>
+                  <th className="p-4">Registration Offer Limit</th>
+                  <th className="p-4">Independent Lifetime Badge</th>
+                  <th className="p-4">Custom CTA Text</th>
+                  <th className="p-4">Popular On Lifetime</th>
+                  <th className="p-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {["standard", "premium"].map((key) => {
+                  const r = rows.find((p) => p.plan_key.toLowerCase() === key);
+                  const customs = lifetimeCustoms[key] || {};
+                  const priceVal = customs.lifetime_price !== undefined ? customs.lifetime_price : (r?.lifetime_price || 0);
+                  const badgeText = customs.badge_text !== undefined ? customs.badge_text : (r?.badge_cycle === "lifetime" ? r.badge_text : null);
+                  const isPop = customs.is_popular !== undefined ? customs.is_popular : Boolean(r?.is_popular);
+                  const limit = key === "standard" ? lifetimeLimits.standard : lifetimeLimits.premium;
+                  const claimed = key === "standard" ? lifetimeCounts.standard : lifetimeCounts.premium;
+                  const ctaText = customs.cta_button_text !== undefined ? customs.cta_button_text : (r?.cta_button_text || "");
+
+                  return (
+                    <tr key={key} className="hover:bg-muted/30 transition-colors">
+                      <td className="p-4">
+                        <p className="font-bold text-foreground text-sm">{r?.name || key.toUpperCase()} Lifetime</p>
+                        <span className="text-[10px] font-mono text-muted-foreground uppercase">{key}</span>
+                      </td>
+                      <td className="p-4">
+                        <span className="font-extrabold text-foreground text-base">${priceVal}</span>
+                        <span className="text-xs text-muted-foreground ml-1">one-time</span>
+                      </td>
+                      <td className="p-4">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs">
+                          <span className="font-bold text-amber-600 dark:text-amber-400">{limit} spots</span>
+                          <span className="text-[10px] text-muted-foreground">({claimed} claimed)</span>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        {badgeText ? (
+                          <span className="inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                            {badgeText}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">None configured</span>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        {ctaText ? (
+                          <span className="inline-block px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/20 font-mono">
+                            "{ctaText}"
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">UNLOCK LIFETIME</span>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        {isPop ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-sky-500 bg-sky-500/10 px-2.5 py-0.5 rounded-full">
+                            <Star className="h-3 w-3" /> Popular
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No</span>
+                        )}
+                      </td>
+                      <td className="p-4 text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openLifetimeEdit(key)}
+                          className="rounded-xl font-bold text-xs hover:bg-muted"
+                        >
+                          <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit Lifetime
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

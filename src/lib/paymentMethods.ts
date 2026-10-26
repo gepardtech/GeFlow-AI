@@ -181,8 +181,14 @@ export async function saveBusinessPaymentMethods(
     }
   }
 
-  // 2. Synchronize to node sync server
+// 2. Synchronize to dedicated server payment-methods endpoint & sync server
   try {
+    fetch(`/api/businesses/${businessId}/payment-methods`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ methods }),
+    }).catch(() => {});
+
     fetch("/api/sync/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -209,3 +215,25 @@ export async function saveBusinessPaymentMethods(
     console.warn("Supabase businesses.payment_methods update warning:", err);
   }
 }
+
+export async function fetchServerPaymentMethods(
+  businessId: string
+): Promise<BusinessPaymentMethod[] | null> {
+  if (!businessId) return null;
+  try {
+    const res = await fetch(`/api/businesses/${businessId}/payment-methods`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.methods) && data.methods.length > 0) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`${STORAGE_PREFIX}${businessId}`, JSON.stringify(data.methods));
+        }
+        return data.methods;
+      }
+    }
+  } catch (e) {
+    console.debug("Failed fetching server payment methods:", e);
+  }
+  return null;
+}
+

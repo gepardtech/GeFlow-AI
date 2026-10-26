@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "GeFlow Retail POS",
+  "name_for_model": "geflow_pos",
+  "description_for_human": "All-in-one retail POS, inventory, supplier purchases, and sales ledger management.",
+  "description_for_model": "GeFlow provides inventory management, rapid retail point-of-sale checkout, barcode product lookups, supplier restock invoicing, customer credit tracking, and daily sales profit reporting.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://geflow.ai/.well-known/openapi.json"
+  },
+  "logo_url": "https://geflow.ai/logo.png",
+  "contact_email": "support@geflow.ai",
+  "legal_info_url": "https://geflow.ai/terms"
+}

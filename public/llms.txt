@@ -1,21 +1,23 @@
 # GeFlow
 
-> GeFlow is an all-in-one cloud-native Retail POS and Inventory Management platform designed for small-to-enterprise businesses, supermarkets, pharmacies, retail stores, and warehouses.
+> GeFlow is a modern, fast, and humanized retail POS and inventory management platform. Built for pharmacies, supermarkets, grocery stores, fashion boutiques, and warehouses.
+
+## Overview
+GeFlow helps retail shop owners, store managers, cashiers, and warehouse operators track inventory, process rapid checkout sales, issue clean thermal receipts (80mm & 58mm), manage supplier purchases, record customer credits (Udhar / Khata), and audit profits in real time.
 
 ## Core Capabilities
-- Point of Sale (POS): Fast transaction barcode scanning, item-level discounts, custom tax toggle, and split payment methods.
-- Thermal Receipt Printing: Crisp monochrome ESC/POS compatible thermal receipts supporting 80mm & 58mm formats.
-- Inventory Management: Real-time stock counts, automated low stock & out-of-stock alerts, bulk replenishment, and SKU cataloging.
-- Customer Khata / Udhar Ledger: Credit accounts management with additions, repayments, and statement balance logs.
-- Reporting & Audits: Verified sales ledgers, procurement cost audits, profit margins, and tax tracking.
-- Team Access Control (RBAC): Owner, Manager, Cashier, and Inventory Clerk role privileges.
+- Point of Sale Terminal (POS): Instant barcode lookup, customizable payment methods (Cash, Card, Digital Wallets, Udhar Store Credit), tax calculation toggles, discount controls, and automatic inventory subtraction.
+- Thermal Receipt Printing: High-speed, printer-compatible receipts supporting Poppins, monospace, and receipt-optimized thermal fonts with customizable store header, contact information, and footer greetings.
+- Inventory & Stock Management: Complete catalog with product variants, SKU tracking, category filtering, unit of measures (UoM), low-stock warning triggers, and out-of-stock management.
+- Customer Khata & Store Credit (Udhar): Full customer credit ledger with balance tracking, credit limit warnings, instant payment collection, and history statements.
+- Purchases & Supplier Restocking: Purchase orders, invoice recording, cost price tracking, and automatic inventory restocking.
+- Returns & Replacements: Customer returns processing with automatic inventory restock and financial adjustment.
+- Financial Reports & Analytics: Net profit calculation, cost-of-goods-sold (COGS), gross margin analysis, sales velocity, and tax ledgers.
+- Team Access Control (RBAC): Multi-user permissions for store owners, managers, cashiers, and stock clerks with isolated workspace access.
 
-## Primary Routes
-- `/login`: User authentication and sign-in.
-- `/dashboard`: Business performance overview and quick action shortcuts.
-- `/pos`: Active sales counter terminal.
-- `/inventory`: Product inventory tracking and stock adjustments.
-- `/reports`: Financial compliance ledger and exportable CSV/PDF statements.
-- `/analytics`: Daily/weekly sales velocity trends and margin performance.
-- `/team`: Staff member invites, credentials management, and access roles.
-- `/settings`: Store profile, tax rates, thermal receipt templates, and alert ringtones.
+## Human & Developer Support
+- Documentation & Guides: https://geflow.ai/how-it-works
+- System Features: https://geflow.ai/features
+- Flexible Pricing: https://geflow.ai/pricing
+- Contact & Support: https://geflow.ai/contact
+- Privacy & Terms: https://geflow.ai/privacy | https://geflow.ai/terms

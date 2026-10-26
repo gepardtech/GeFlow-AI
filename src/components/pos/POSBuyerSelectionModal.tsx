@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -63,7 +63,7 @@ export const POSBuyerSelectionModal: React.FC<POSBuyerSelectionModalProps> = ({
   const [creating, setCreating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const fetchBuyers = async (query: string = "") => {
+  const fetchBuyers = useCallback(async (query: string = "") => {
     if (!businessId) return;
     setLoading(true);
     setErrorMsg(null);
@@ -100,13 +100,13 @@ export const POSBuyerSelectionModal: React.FC<POSBuyerSelectionModalProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [businessId]);
 
   useEffect(() => {
     if (open) {
       fetchBuyers(searchQuery);
     }
-  }, [open, businessId]);
+  }, [open, searchQuery, fetchBuyers]);
 
   const handleSearchChange = (val: string) => {
     setSearchQuery(val);

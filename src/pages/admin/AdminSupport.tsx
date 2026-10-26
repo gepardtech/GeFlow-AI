@@ -764,10 +764,11 @@ const AnnouncementDialog = ({ open, onOpenChange, onSaved, edit }: any) => {
       toast({ title: "Title & body required", variant: "destructive" });
       return;
     }
-    let userId = "admin_sg_bilal";
+    let userId = "a375b057-debe-4239-9549-9f83b5557df2";
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user?.id) userId = user.id;
+      const isUUID = (str?: string) => Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
+      if (user?.id && isUUID(user.id)) userId = user.id;
     } catch {
       /* ignore */
     }

@@ -45,7 +45,7 @@ export interface ReceiptData {
   cashGiven: number;
   changeDue: number;
   symbol: string;
-  receiptFont?: "poppins" | "arial" | "mono";
+  receiptFont?: "poppins" | "courier" | "inter" | "roboto" | "space_mono" | "arial" | string;
 }
 
 interface Props {
@@ -122,16 +122,30 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
         </div>`
       : "";
 
-    const selectedFont = data.receiptFont === "arial" 
-      ? "'Arial', Helvetica, sans-serif" 
-      : data.receiptFont === "mono" 
-        ? "'Courier New', Courier, monospace" 
-        : "'Poppins', Arial, -apple-system, sans-serif";
+    const getFontFamily = (f?: string) => {
+      switch (f) {
+        case "courier":
+        case "mono":
+          return "'Courier New', Courier, monospace";
+        case "inter":
+          return "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
+        case "roboto":
+          return "'Roboto', Arial, sans-serif";
+        case "space_mono":
+          return "'Space Mono', monospace";
+        case "arial":
+          return "Arial, Helvetica, sans-serif";
+        case "poppins":
+        default:
+          return "'Poppins', Arial, -apple-system, sans-serif";
+      }
+    };
+    const selectedFont = getFontFamily(data.receiptFont);
 
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${data.invoiceNo}</title>
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-      <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Poppins:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
       <style>
         @page { size: 80mm auto; margin: 0; }
         * { font-family: ${selectedFont}; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -302,7 +316,7 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
           </div>
 
           {/* EXACT THERMAL RECEIPT PREVIEW CARD */}
-          <div className={`mt-4 p-5 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-50 text-[11px] space-y-3 shadow-inner ${data.receiptFont === "mono" ? "font-mono" : "font-sans"}`} style={{ fontFamily: data.receiptFont === "arial" ? "Arial, sans-serif" : data.receiptFont === "mono" ? "monospace" : "'Poppins', Arial, sans-serif" }}>
+          <div className="mt-4 p-5 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-50 text-[11px] space-y-3 shadow-inner" style={{ fontFamily: getFontFamily(data.receiptFont) }}>
             {/* Header / Branding */}
             {showLogo && (
               <div className="text-center pb-2 border-b border-dashed border-zinc-300 dark:border-zinc-700 space-y-1">

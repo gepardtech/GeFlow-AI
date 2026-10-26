@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
   MoreVertical,
   UserPlus,
+  UserCheck,
   Mail,
   CheckCircle2,
   XCircle,
@@ -143,7 +144,7 @@ export const UserTeam = () => {
   const [formStatus, setFormStatus] = useState<StaffStatus>("active");
   const [submitting, setSubmitting] = useState(false);
 
-  // Existing User Detection State
+  // Existing User Detection State (Private check per typed email)
   const [isExistingUser, setIsExistingUser] = useState(false);
   const [checkingEmail, setCheckingEmail] = useState(false);
   const [existingUserId, setExistingUserId] = useState<string | null>(null);
@@ -160,7 +161,7 @@ export const UserTeam = () => {
 
   const [currentUser, setCurrentUser] = useState<any>(null);
 
-  // Auto-detect if entered email belongs to an already registered GeFlow user
+  // Privately check if entered email belongs to an already registered GeFlow user
   useEffect(() => {
     const emailClean = formEmail.trim().toLowerCase();
     if (!emailClean || !emailClean.includes("@") || emailClean.length < 5) {
@@ -189,7 +190,7 @@ export const UserTeam = () => {
       } finally {
         setCheckingEmail(false);
       }
-    }, 350);
+    }, 250);
 
     return () => clearTimeout(timer);
   }, [formEmail]);
@@ -567,31 +568,56 @@ export const UserTeam = () => {
       const ownerId = storeOwnerId || currentUser?.id || "owner";
       const ownerName = currentUser?.user_metadata?.full_name || bizName || "Store Owner";
 
+      // 1. Double-check verification in database & auth before creating anything
+      let isVerified = isExistingUser;
+      let finalUserId = existingUserId;
+
+      if (!isVerified) {
+        const check = await checkUserRegistered(emailClean);
+        if (check.isRegistered && check.userId) {
+          isVerified = true;
+          finalUserId = check.userId;
+          setIsExistingUser(true);
+          setExistingUserId(check.userId);
+          if (check.fullName && !nameClean) {
+            setFormName(check.fullName);
+          }
+        }
+      }
+
       // Case B: Inviting an ALREADY REGISTERED user
-      if (isExistingUser && existingUserId) {
+      // DO NOT create new auth or profile. Appoint employee role directly!
+      if (isVerified && finalUserId) {
         const res = await inviteExistingUser({
-          userId: existingUserId,
+          userId: finalUserId,
           email: emailClean,
           role: formRole,
           businessId: bizId,
           businessName: bizName,
+          businessAddress: activeBusiness?.business_address || undefined,
+          currency: activeBusiness?.currency || "USD",
           ownerId,
           ownerName,
         });
 
         if (!res.success) {
           toast({
-            title: "Invitation Notice",
-            description: res.error || "Could not dispatch team invitation.",
+            title: "Appointment Notice",
+            description: res.error || "Could not appoint employee role.",
             variant: "destructive",
           });
           return;
         }
 
         toast({
-          title: "Team Invitation Sent! ✉️",
-          description: `An in-app invitation has been dispatched to ${emailClean}. Once they accept, they will gain active employee access to "${bizName}".`,
+          title: "Employee Role Appointed! 🧑‍💼",
+          description: `${nameClean || emailClean} has been appointed as ${formRole.toUpperCase()}. They can access "${bizName}" from the top business switcher under Employee Access.`,
         });
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("geflow:business-changed", { detail: { businessId: bizId } }));
+          window.dispatchEvent(new CustomEvent("geflow:team-updated", { detail: { email: emailClean } }));
+        }
 
         setRegisterOpen(false);
         await loadRealTeam();
@@ -599,18 +625,12 @@ export const UserTeam = () => {
       }
 
       // Case A: Inviting a NEW user (email does not exist in system)
-      if (!pwdClean || pwdClean.length < 6) {
-        toast({
-          title: "Password Required",
-          description: "Please set an initial password of at least 6 characters for this new user.",
-          variant: "destructive",
-        });
-        return;
-      }
+      // 1st add user as new user in auth and database with appointed role
+      const initialPassword = pwdClean || `Geflow@${Math.floor(1000 + Math.random() * 9000)}`;
 
       const res = await inviteNewUser({
         email: emailClean,
-        password: pwdClean,
+        password: initialPassword,
         fullName: nameClean || emailClean.split("@")[0],
         role: formRole,
         businessId: bizId,
@@ -622,17 +642,19 @@ export const UserTeam = () => {
       });
 
       if (!res.success) {
-        // If error indicates user is actually registered, switch to existing user mode
-        if (res.error?.toLowerCase().includes("already registered") || res.error?.toLowerCase().includes("exists")) {
+        // If server detected that user already exists in auth or database:
+        if (res.isExisting || res.error?.toLowerCase().includes("already registered") || res.error?.toLowerCase().includes("exists")) {
           setIsExistingUser(true);
           const check = await checkUserRegistered(emailClean);
           if (check.userId) {
             setExistingUserId(check.userId);
           }
           toast({
-            title: "Existing User Detected",
-            description: "This email is already registered on GeFlow. Password is not needed — click 'Send Team Invitation' to dispatch an in-app invite.",
+            title: "User Already Registered",
+            description: "User is already registered on GeFlow. Successfully appointed as employee role.",
           });
+          setRegisterOpen(false);
+          await loadRealTeam();
           return;
         }
 
@@ -650,14 +672,19 @@ export const UserTeam = () => {
         name: nameClean || emailClean.split("@")[0],
         email: emailClean,
         role: formRole,
-        password: pwdClean,
+        password: initialPassword,
         loginUrl,
       });
 
       toast({
         title: "Team Member Added! 🎉",
-        description: `Account created for ${nameClean || emailClean} with ${formRole.toUpperCase()} permissions and Free plan. Direct credentials ready.`,
+        description: `Account created for ${nameClean || emailClean} in Auth & Database with ${formRole.toUpperCase()} permissions and Free plan. Direct credentials ready.`,
       });
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("geflow:business-changed", { detail: { businessId: bizId } }));
+        window.dispatchEvent(new CustomEvent("geflow:team-updated", { detail: { email: emailClean } }));
+      }
 
       setRegisterOpen(false);
       setInviteModalOpen(true);
@@ -1595,41 +1622,48 @@ export const UserTeam = () => {
       </div>
 
       {/* ========================================================================= */}
-      {/* REGISTER / INVITE STAFF MODAL (Syncs with Auth and Database)              */}
+      {/* REGISTER / INVITE STAFF MODAL (Private Verification & Fully Responsive)   */}
       {/* ========================================================================= */}
       <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
-        <DialogContent className="max-w-md p-6 sm:p-7 rounded-3xl bg-card border-border shadow-2xl">
-          <DialogHeader>
+        <DialogContent className="w-[calc(100vw-24px)] sm:w-full max-w-lg p-0 rounded-3xl bg-card border-border shadow-2xl overflow-hidden max-h-[90dvh] flex flex-col">
+          {/* Responsive Header */}
+          <div className="p-4 sm:p-6 pb-3.5 border-b border-border/70 shrink-0 bg-muted/20">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0">
-                <UserPlus className="w-6 h-6 stroke-[2.2]" />
+              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0">
+                <UserPlus className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" />
               </div>
-              <div>
-                <DialogTitle className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-lg sm:text-xl font-bold tracking-tight text-foreground truncate">
                   Invite Team Member
                 </DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                  Set user credentials, assign role permissions, and dispatch automated invite.
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5 truncate">
+                  Appoint a staff member to {activeBusiness?.business_name || "this store"}.
                 </DialogDescription>
               </div>
             </div>
-          </DialogHeader>
+          </div>
 
-          <form onSubmit={handleRegisterSubmit} className="space-y-4 pt-3">
+          {/* Scrollable Form Body - Responsive across all phone & tablet heights */}
+          <form onSubmit={handleRegisterSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
             {/* EMAIL */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
                 <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block">
                   WORK EMAIL ADDRESS
                 </label>
                 {checkingEmail && (
                   <span className="text-[10px] text-sky-500 flex items-center gap-1 font-semibold">
-                    <Loader2 className="w-3 h-3 animate-spin" /> Checking user...
+                    <Loader2 className="w-3 h-3 animate-spin" /> Verifying in database...
                   </span>
                 )}
                 {!checkingEmail && isExistingUser && (
-                  <span className="text-[10px] font-extrabold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
-                    Existing GeFlow User
+                  <span className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> Registered Account Verified
+                  </span>
+                )}
+                {!checkingEmail && !isExistingUser && formEmail.includes("@") && (
+                  <span className="text-[10px] font-extrabold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-full border border-sky-500/20">
+                    + New User Account
                   </span>
                 )}
               </div>
@@ -1637,8 +1671,8 @@ export const UserTeam = () => {
                 type="email"
                 value={formEmail}
                 onChange={(e) => setFormEmail(e.target.value)}
-                placeholder="sarah@company.com"
-                className="h-12 rounded-2xl bg-card border-border text-xs sm:text-sm focus-visible:ring-1 focus-visible:ring-sky-500"
+                placeholder="name@company.com"
+                className="h-11 sm:h-12 rounded-2xl bg-card border-border text-xs sm:text-sm focus-visible:ring-1 focus-visible:ring-sky-500"
                 required
               />
             </div>
@@ -1652,58 +1686,62 @@ export const UserTeam = () => {
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 placeholder="e.g. Sarah Ahmed"
-                className="h-12 rounded-2xl bg-card border-border text-xs sm:text-sm focus-visible:ring-1 focus-visible:ring-sky-500"
+                className="h-11 sm:h-12 rounded-2xl bg-card border-border text-xs sm:text-sm focus-visible:ring-1 focus-visible:ring-sky-500"
                 required
               />
             </div>
 
             {/* CONDITIONAL NOTICE FOR EXISTING USER */}
             {isExistingUser && (
-              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-xs flex items-start gap-2.5">
-                <Sparkles className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+              <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-xs flex items-start gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-bold text-amber-500">Already Registered on GeFlow</p>
+                  <p className="font-bold text-emerald-600 dark:text-emerald-400">User Registered in Database &amp; Auth</p>
                   <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
-                    This user already has a GeFlow account. Password is not required. Clicking invite will deliver a real-time in-app invitation with an "Accept" button to their Notifications page.
+                    This user is already registered on GeFlow. No new account or password is created. Submitting will appoint their {formRole.toUpperCase()} employee role, and this store will appear under their Employee Access in the top store switcher.
                   </p>
                 </div>
               </div>
             )}
 
-            {/* PASSWORD (Set by Business Owner for NEW users only) */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block">
-                  {isExistingUser ? "ACCOUNT AUTHENTICATION" : "INITIAL PASSWORD (SET BY OWNER)"}
-                </label>
-                {!isExistingUser && (
+            {/* PASSWORD (Only required when creating a NEW user) */}
+            {!isExistingUser ? (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block">
+                    INITIAL PASSWORD (FOR NEW USER)
+                  </label>
                   <button
                     type="button"
                     onClick={() => setFormPassword(`Geflow@${Math.floor(1000 + Math.random() * 9000)}`)}
-                    className="text-[10px] font-bold text-sky-500 hover:underline"
+                    className="text-[10px] font-bold text-sky-500 hover:underline cursor-pointer"
                   >
                     Generate Password
                   </button>
-                )}
+                </div>
+                <Input
+                  type="text"
+                  value={formPassword}
+                  onChange={(e) => setFormPassword(e.target.value)}
+                  placeholder="Enter password (min 6 characters)"
+                  className="h-11 sm:h-12 rounded-2xl bg-card border-border text-xs sm:text-sm focus-visible:ring-1 focus-visible:ring-sky-500 font-mono"
+                  required
+                  minLength={6}
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  A new account will be created in Auth and Database with Free plan. You can share these credentials with the user.
+                </p>
               </div>
-              <Input
-                type="text"
-                value={isExistingUser ? "Existing user password (maintained by user)" : formPassword}
-                onChange={(e) => setFormPassword(e.target.value)}
-                placeholder="Enter password (min 6 characters)"
-                disabled={isExistingUser}
-                className={`h-12 rounded-2xl bg-card border-border text-xs sm:text-sm focus-visible:ring-1 focus-visible:ring-sky-500 font-mono ${
-                  isExistingUser ? "opacity-60 cursor-not-allowed bg-muted/40" : ""
-                }`}
-                required={!isExistingUser}
-                minLength={isExistingUser ? undefined : 6}
-              />
-              <p className="text-[10px] text-muted-foreground mt-1">
-                {isExistingUser
-                  ? "Since this user is already registered, they will use their existing credentials to sign in."
-                  : "Owner sets initial credentials. Plan is automatically assigned as Free."}
-              </p>
-            </div>
+            ) : (
+              <div className="p-3 rounded-2xl bg-muted/40 border border-border/80 text-xs">
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
+                  AUTHENTICATION CREDENTIALS
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  User retains their existing login password. They can sign in normally and switch to this store.
+                </p>
+              </div>
+            )}
 
             {/* OPERATIONAL ROLE (Strictly 3 roles: Cashier, Manager, Inventory Clerk) */}
             <div>
@@ -1714,7 +1752,7 @@ export const UserTeam = () => {
                 value={formRole}
                 onValueChange={(val: "manager" | "cashier" | "inventory") => setFormRole(val)}
               >
-                <SelectTrigger className="h-12 rounded-2xl bg-card border-border text-xs sm:text-sm">
+                <SelectTrigger className="h-11 sm:h-12 rounded-2xl bg-card border-border text-xs sm:text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="text-xs sm:text-sm">
@@ -1758,22 +1796,22 @@ export const UserTeam = () => {
             <Button
               type="submit"
               disabled={submitting}
-              className="w-full h-12 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm shadow-md transition-all active:scale-[0.99] border-0 flex items-center justify-center gap-2"
+              className="w-full h-12 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm shadow-md transition-all active:scale-[0.99] border-0 flex items-center justify-center gap-2 cursor-pointer mt-2"
             >
               {submitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Processing Invitation...</span>
+                  <span>Processing Appointment...</span>
                 </>
               ) : isExistingUser ? (
                 <>
-                  <Mail className="w-4 h-4" />
-                  <span>Dispatch In-App Invitation</span>
+                  <UserCheck className="w-4 h-4" />
+                  <span>Appoint as {formRole.toUpperCase()} &amp; Grant Access</span>
                 </>
               ) : (
                 <>
                   <UserPlus className="w-4 h-4" />
-                  <span>Register &amp; Add Member</span>
+                  <span>Register in Auth &amp; Appoint Member</span>
                 </>
               )}
             </Button>
@@ -1785,25 +1823,25 @@ export const UserTeam = () => {
       {/* INVITATION DISPATCHED & CREDENTIALS SUCCESS DIALOG                       */}
       {/* ========================================================================= */}
       <Dialog open={inviteModalOpen} onOpenChange={setInviteModalOpen}>
-        <DialogContent className="max-w-md p-6 sm:p-7 rounded-3xl bg-card border-border shadow-2xl">
-          <DialogHeader>
+        <DialogContent className="w-[calc(100vw-24px)] sm:w-full max-w-lg p-0 rounded-3xl bg-card border-border shadow-2xl overflow-hidden max-h-[90dvh] flex flex-col">
+          <div className="p-4 sm:p-6 pb-3.5 border-b border-border/70 shrink-0 bg-muted/20">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
-                <CheckCircle2 className="w-7 h-7" />
+              <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-6 h-6 sm:w-7 sm:h-7" />
               </div>
-              <div>
-                <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-lg sm:text-xl font-bold tracking-tight text-foreground truncate">
                   Invitation Dispatched!
                 </DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5 truncate">
                   The team member is saved in auth &amp; database with role <span className="font-bold text-foreground">{inviteDetails?.role.toUpperCase()}</span>.
                 </DialogDescription>
               </div>
             </div>
-          </DialogHeader>
+          </div>
 
           {inviteDetails && (
-            <div className="space-y-4 pt-2">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
               <div className="p-4 rounded-2xl bg-muted/40 border border-border space-y-2.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground font-semibold">Invitee:</span>
@@ -1882,17 +1920,17 @@ export const UserTeam = () => {
       {/* EDIT PERMISSIONS / ROLE MODAL (No Admin Role)                             */}
       {/* ========================================================================= */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-md p-6 sm:p-7 rounded-3xl bg-card border-border shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
+        <DialogContent className="w-[calc(100vw-24px)] sm:w-full max-w-lg p-0 rounded-3xl bg-card border-border shadow-2xl overflow-hidden max-h-[90dvh] flex flex-col">
+          <div className="p-4 sm:p-6 pb-3.5 border-b border-border/70 shrink-0 bg-muted/20">
+            <DialogTitle className="text-lg sm:text-xl font-bold tracking-tight text-foreground truncate">
               Edit Staff Permissions
             </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+            <DialogDescription className="text-xs text-muted-foreground mt-0.5 truncate">
               Modify operational role and database permissions for {selectedMember?.full_name}.
             </DialogDescription>
-          </DialogHeader>
+          </div>
 
-          <form onSubmit={handleEditSubmit} className="space-y-4 pt-3 text-xs">
+          <form onSubmit={handleEditSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
             <div>
               <label className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground block mb-1.5">
                 FULL NAME

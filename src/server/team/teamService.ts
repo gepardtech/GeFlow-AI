@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { serverSupabase } from "../supabase";
 
 export interface TeamInvitation {
@@ -58,6 +60,8 @@ interface TeamDataStore {
   notifications: TeamNotification[];
 }
 
+const TEAM_STORE_FILE = path.join(process.cwd(), "data", "team_store.json");
+
 export class TeamService {
   private store: TeamDataStore = {
     invitations: [],
@@ -70,68 +74,174 @@ export class TeamService {
     this.syncFromSupabase();
   }
 
+  public persist(): void {
+    try {
+      const dir = path.dirname(TEAM_STORE_FILE);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(TEAM_STORE_FILE, JSON.stringify(this.store, null, 2), "utf-8");
+
+      (async () => {
+        try {
+          const { data: row } = await serverSupabase
+            .from("platform_settings")
+            .select("id, alerts")
+            .limit(1)
+            .maybeSingle();
+
+          if (row?.id) {
+            const alerts = row.alerts && typeof row.alerts === "object" ? { ...(row.alerts as any) } : {};
+            alerts.team_store = this.store;
+            await serverSupabase
+              .from("platform_settings")
+              .update({ alerts, updated_at: new Date().toISOString() })
+              .eq("id", row.id);
+          }
+        } catch (dbErr) {
+          console.warn("Notice saving team store to Supabase platform_settings:", dbErr);
+        }
+      })();
+    } catch (e) {
+      console.warn("Failed to persist team data:", e);
+    }
+  }
+
   private async syncFromSupabase(): Promise<void> {
     try {
-      const { data: staffList, error } = await serverSupabase
-        .from("business_staff")
-        .select("*, businesses(id, business_name, business_address, currency, owner_user_id)");
-
-      if (!error && Array.isArray(staffList)) {
-        staffList.forEach((s: any) => {
-          const biz = s.businesses || {};
-          const bizId = s.business_id;
-          const bizName = biz.business_name || "Store";
-          const ownerId = biz.owner_user_id || s.invited_by || "";
-          const role = (s.role || "cashier") as "cashier" | "manager" | "inventory";
-          const perms = Array.isArray(s.permissions) ? s.permissions : ["pos"];
-
-          if (s.status === "pending") {
-            const exists = this.store.invitations.some(
-              (i) => i.businessId === bizId && i.inviteeEmail.toLowerCase() === s.invited_email.toLowerCase()
-            );
-            if (!exists) {
-              this.store.invitations.push({
-                id: s.id,
-                businessId: bizId,
-                businessName: bizName,
-                businessAddress: biz.business_address || undefined,
-                currency: biz.currency || "USD",
-                role,
-                permissions: perms,
-                ownerId,
-                ownerName: "Store Owner",
-                inviteeEmail: s.invited_email,
-                inviteeUserId: s.user_id || undefined,
-                status: "pending",
-                createdAt: s.created_at || new Date().toISOString(),
-                updatedAt: s.updated_at || new Date().toISOString(),
-              });
-            }
-          } else {
-            const exists = this.store.memberships.some(
-              (m) => m.businessId === bizId && (m.userEmail.toLowerCase() === s.invited_email.toLowerCase() || (s.user_id && m.userId === s.user_id))
-            );
-            if (!exists) {
-              this.store.memberships.push({
-                id: s.id,
-                businessId: bizId,
-                businessName: bizName,
-                businessAddress: biz.business_address || undefined,
-                currency: biz.currency || "USD",
-                userId: s.user_id || s.id,
-                userEmail: s.invited_email,
-                userName: s.invited_email.split("@")[0],
-                ownerId,
-                role,
-                permissions: perms,
-                isActive: s.status === "active",
-                createdAt: s.created_at || new Date().toISOString(),
-                updatedAt: s.updated_at || new Date().toISOString(),
-              });
-            }
+      // 1. Load from local backup file
+      if (fs.existsSync(TEAM_STORE_FILE)) {
+        try {
+          const raw = fs.readFileSync(TEAM_STORE_FILE, "utf-8");
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === "object") {
+            if (Array.isArray(parsed.invitations)) this.store.invitations = parsed.invitations;
+            if (Array.isArray(parsed.memberships)) this.store.memberships = parsed.memberships;
+            if (Array.isArray(parsed.notifications)) this.store.notifications = parsed.notifications;
           }
-        });
+        } catch (_err) {
+          // Ignore local backup parse error
+        }
       }
+
+      // 2. Load from Supabase platform_settings
+      try {
+        const { data: row } = await serverSupabase
+          .from("platform_settings")
+          .select("id, alerts")
+          .limit(1)
+          .maybeSingle();
+
+        const alerts = row?.alerts && typeof row.alerts === "object" ? (row.alerts as any) : {};
+        if (alerts.team_store && typeof alerts.team_store === "object") {
+          const cloudStore = alerts.team_store;
+          if (Array.isArray(cloudStore.memberships)) {
+            cloudStore.memberships.forEach((cm: TeamMembership) => {
+              const idx = this.store.memberships.findIndex(
+                (m) =>
+                  m.id === cm.id ||
+                  (m.businessId === cm.businessId &&
+                    (m.userId === cm.userId || m.userEmail.toLowerCase() === cm.userEmail.toLowerCase()))
+              );
+              if (idx >= 0) {
+                this.store.memberships[idx] = { ...this.store.memberships[idx], ...cm };
+              } else {
+                this.store.memberships.push(cm);
+              }
+            });
+          }
+          if (Array.isArray(cloudStore.invitations)) {
+            cloudStore.invitations.forEach((ci: TeamInvitation) => {
+              if (!this.store.invitations.some((i) => i.id === ci.id)) {
+                this.store.invitations.push(ci);
+              }
+            });
+          }
+          if (Array.isArray(cloudStore.notifications)) {
+            cloudStore.notifications.forEach((cn: TeamNotification) => {
+              if (!this.store.notifications.some((n) => n.id === cn.id)) {
+                this.store.notifications.push(cn);
+              }
+            });
+          }
+        }
+      } catch (cloudErr) {
+        console.warn("Notice loading team store from platform_settings:", cloudErr);
+      }
+
+      // 3. Sync from support_team_members table
+      try {
+        const { data: suppList } = await serverSupabase
+          .from("support_team_members")
+          .select("id, user_id, role, appointed_by_user_id, is_active, created_at, updated_at");
+
+        if (Array.isArray(suppList) && suppList.length > 0) {
+          const userIds = Array.from(new Set(suppList.map((s) => s.user_id).filter(Boolean)));
+          const { data: profs } = await serverSupabase
+            .from("profiles")
+            .select("user_id, email, full_name")
+            .in("user_id", userIds);
+          const profMap = new Map((profs || []).map((p) => [p.user_id, p]));
+
+          const { data: bizList } = await serverSupabase
+            .from("businesses")
+            .select("id, business_name, business_address, currency, owner_user_id");
+          const bizMap = new Map((bizList || []).map((b) => [b.id, b]));
+
+          suppList.forEach((s) => {
+            let roleStr = "cashier";
+            let bId = "";
+            if (s.role && s.role.includes("::")) {
+              const [r, bid] = s.role.split("::");
+              roleStr = r;
+              bId = bid;
+            } else if (s.role) {
+              roleStr = s.role;
+            }
+
+            const biz = bId ? bizMap.get(bId) : null;
+            const prof = profMap.get(s.user_id);
+            const userEmail = prof?.email || `user_${s.user_id.slice(0, 8)}@geflowai.com`;
+            const userName = prof?.full_name || userEmail.split("@")[0];
+
+            if (bId) {
+              const existingIdx = this.store.memberships.findIndex(
+                (m) => m.businessId === bId && m.userId === s.user_id
+              );
+              const memData: TeamMembership = {
+                id: s.id,
+                businessId: bId,
+                businessName: biz?.business_name || "Store",
+                businessAddress: biz?.business_address || undefined,
+                currency: biz?.currency || "USD",
+                userId: s.user_id,
+                userEmail,
+                userName,
+                ownerId: s.appointed_by_user_id || biz?.owner_user_id || "",
+                role: (roleStr as any) || "cashier",
+                permissions:
+                  roleStr === "cashier"
+                    ? ["pos", "inventory"]
+                    : roleStr === "inventory"
+                    ? ["inventory", "purchases"]
+                    : ["full"],
+                isActive: s.is_active !== false,
+                createdAt: s.created_at || new Date().toISOString(),
+                updatedAt: s.updated_at || new Date().toISOString(),
+              };
+
+              if (existingIdx >= 0) {
+                this.store.memberships[existingIdx] = { ...this.store.memberships[existingIdx], ...memData };
+              } else {
+                this.store.memberships.push(memData);
+              }
+            }
+          });
+        }
+      } catch (suppErr) {
+        console.warn("Notice syncing support_team_members:", suppErr);
+      }
+
       this.isInitialized = true;
     } catch (err) {
       console.warn("Supabase staff sync notice:", err);
@@ -643,19 +753,19 @@ export class TeamService {
       this.store.memberships.push(member);
     }
 
-    if (params.businessId && params.businessId.length >= 32) {
+    this.persist();
+
+    // Mirror to Supabase support_team_members
+    if (params.businessId && member.userId && member.userId.length >= 32) {
       serverSupabase
-        .from("business_staff")
+        .from("support_team_members")
         .upsert({
-          business_id: params.businessId,
-          invited_email: cleanEmail,
-          role: cleanRole,
-          permissions: member.permissions,
-          status: member.isActive ? "active" : "pending",
-          invited_by: params.ownerId,
-          user_id: member.userId.length >= 32 ? member.userId : null,
+          user_id: member.userId,
+          role: `${cleanRole}::${params.businessId}`,
+          appointed_by_user_id: params.ownerId && params.ownerId.length >= 32 ? params.ownerId : member.userId,
+          is_active: member.isActive,
           updated_at: now,
-        })
+        }, { onConflict: "user_id" })
         .then();
     }
 
@@ -684,6 +794,8 @@ export class TeamService {
   public removeMember(businessId: string, memberId: string, ownerId?: string): { success: boolean } {
     this.refresh();
     const cleanMemId = memberId?.trim().toLowerCase();
+    const removedUserId = this.store.memberships.find(m => m.id === memberId || m.userId === memberId)?.userId;
+
     this.store.memberships = this.store.memberships.filter((m) => {
       const bizMatch = !businessId || m.businessId === businessId || (ownerId && m.ownerId === ownerId) || (businessId && (m.businessId.includes(businessId) || businessId.includes(m.businessId)));
       const idMatch = m.id === memberId || m.userId === memberId || (cleanMemId && m.userEmail.toLowerCase() === cleanMemId);
@@ -695,12 +807,13 @@ export class TeamService {
       return !(bizMatch && idMatch);
     });
 
-    if (businessId && businessId.length >= 32) {
+    this.persist();
+
+    if (removedUserId && removedUserId.length >= 32) {
       serverSupabase
-        .from("business_staff")
+        .from("support_team_members")
         .delete()
-        .eq("business_id", businessId)
-        .or(`id.eq.${memberId},invited_email.eq.${cleanMemId}`)
+        .eq("user_id", removedUserId)
         .then();
     }
 
@@ -718,15 +831,15 @@ export class TeamService {
     if (mem) {
       mem.isActive = isActive;
       mem.updatedAt = new Date().toISOString();
-    }
+      this.persist();
 
-    if (businessId && businessId.length >= 32) {
-      serverSupabase
-        .from("business_staff")
-        .update({ status: isActive ? "active" : "inactive", updated_at: new Date().toISOString() })
-        .eq("business_id", businessId)
-        .or(`id.eq.${memberId},invited_email.eq.${cleanMemId}`)
-        .then();
+      if (mem.userId && mem.userId.length >= 32) {
+        serverSupabase
+          .from("support_team_members")
+          .update({ is_active: isActive, updated_at: new Date().toISOString() })
+          .eq("user_id", mem.userId)
+          .then();
+      }
     }
 
     return { success: true };
@@ -743,6 +856,15 @@ export class TeamService {
     if (mem) {
       mem.role = role;
       mem.updatedAt = new Date().toISOString();
+      this.persist();
+
+      if (mem.userId && mem.userId.length >= 32) {
+        serverSupabase
+          .from("support_team_members")
+          .update({ role: `${role}::${mem.businessId}`, updated_at: new Date().toISOString() })
+          .eq("user_id", mem.userId)
+          .then();
+      }
     }
     const inv = this.store.invitations.find(
       (i) =>
@@ -752,15 +874,7 @@ export class TeamService {
     if (inv) {
       inv.role = role;
       inv.updatedAt = new Date().toISOString();
-    }
-
-    if (businessId && businessId.length >= 32) {
-      serverSupabase
-        .from("business_staff")
-        .update({ role, updated_at: new Date().toISOString() })
-        .eq("business_id", businessId)
-        .or(`id.eq.${memberId},invited_email.eq.${cleanMemId}`)
-        .then();
+      this.persist();
     }
 
     return { success: true };

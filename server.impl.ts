@@ -34,6 +34,7 @@ import {
 import { GoogleGenAI } from "@google/genai";
 import fs from "fs";
 import { storeCreditsStorage } from "./src/server/storeCreditsStorage";
+import { productVariationsStorage, CATEGORY_TEMPLATES } from "./src/server/productVariationsStorage";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -681,6 +682,67 @@ app.get("/api/ai/traces", (req: Request, res: Response) => {
 // Team Invitation & Workspace Membership APIs
 // ==========================================
 
+// List registered users for auto-selecting / autocomplete in Team Hub invite modal
+app.get("/api/team/registered-users", async (req: Request, res: Response) => {
+  try {
+    const q = ((req.query.q || req.query.query || "") as string).trim().toLowerCase();
+    const excludeOwnerId = ((req.query.excludeOwnerId || "") as string).trim();
+
+    const usersMap = new Map<string, { userId: string; email: string; fullName: string }>();
+
+    // 1. Fetch from profiles
+    let profQuery = serverSupabase
+      .from("profiles")
+      .select("user_id, email, full_name")
+      .not("email", "is", null);
+
+    if (excludeOwnerId && excludeOwnerId.length >= 32) {
+      profQuery = profQuery.neq("user_id", excludeOwnerId);
+    }
+
+    const { data: profs } = await profQuery;
+    (profs || []).forEach((p) => {
+      if (p.email && p.user_id) {
+        usersMap.set(p.email.toLowerCase(), {
+          userId: p.user_id,
+          email: p.email.toLowerCase(),
+          fullName: p.full_name || p.email.split("@")[0],
+        });
+      }
+    });
+
+    // 2. Fetch from auth.admin
+    try {
+      const { data: authUsers } = await serverSupabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      (authUsers?.users || []).forEach((u) => {
+        if (u.email && u.id && u.id !== excludeOwnerId) {
+          const em = u.email.toLowerCase();
+          if (!usersMap.has(em)) {
+            usersMap.set(em, {
+              userId: u.id,
+              email: em,
+              fullName: u.user_metadata?.full_name || u.email.split("@")[0],
+            });
+          }
+        }
+      });
+    } catch (authErr) {
+      console.warn("Notice listing auth users for registered-users endpoint:", authErr);
+    }
+
+    let result = Array.from(usersMap.values());
+    if (q) {
+      result = result.filter(
+        (u) => u.email.includes(q) || u.fullName.toLowerCase().includes(q)
+      );
+    }
+
+    return res.json({ success: true, users: result });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Check if user is registered in Database or Auth
 app.get("/api/team/check-user", async (req: Request, res: Response) => {
   try {
@@ -747,12 +809,53 @@ app.post("/api/team/add-or-invite-user", async (req: Request, res: Response) => 
 
     const cleanEmail = (email || "").trim().toLowerCase();
     const cleanRole = role || "cashier";
-    const cleanBizId = businessId || (ownerId ? `biz_${ownerId}` : "default_biz");
-    const cleanBizName = businessName || "Store";
     const cleanFullName = (fullName || cleanEmail.split("@")[0]).trim();
 
     if (!cleanEmail || !cleanEmail.includes("@")) {
       return res.status(400).json({ success: false, error: "Valid email is required." });
+    }
+
+    // Resolve valid UUID for realOwnerId and realBizId
+    let realOwnerId = (ownerId && ownerId.length >= 32 && /^[0-9a-f-]+$/i.test(ownerId)) ? ownerId : null;
+    let realBizId = businessId || "";
+    let realBizName = businessName || "Store";
+    let realBizAddress = businessAddress || "";
+    let realCurrency = currency || "USD";
+
+    if (businessId && businessId.length >= 32 && /^[0-9a-f-]+$/i.test(businessId)) {
+      const { data: bRow } = await serverSupabase
+        .from("businesses")
+        .select("id, business_name, owner_user_id, business_address, currency")
+        .eq("id", businessId)
+        .maybeSingle();
+
+      if (bRow) {
+        realBizId = bRow.id;
+        realBizName = bRow.business_name || realBizName;
+        realBizAddress = bRow.business_address || realBizAddress;
+        realCurrency = bRow.currency || realCurrency;
+        if (!realOwnerId && bRow.owner_user_id) {
+          realOwnerId = bRow.owner_user_id;
+        }
+      }
+    }
+
+    if (!realOwnerId) {
+      const { data: anyBiz } = await serverSupabase
+        .from("businesses")
+        .select("id, business_name, owner_user_id, business_address, currency")
+        .limit(1)
+        .maybeSingle();
+
+      if (anyBiz?.owner_user_id) {
+        realOwnerId = anyBiz.owner_user_id;
+        if (!realBizId) {
+          realBizId = anyBiz.id;
+          realBizName = anyBiz.business_name || realBizName;
+          realBizAddress = anyBiz.business_address || realBizAddress;
+          realCurrency = anyBiz.currency || realCurrency;
+        }
+      }
     }
 
     // 1. Verify if user is registered in Database or Auth
@@ -792,13 +895,13 @@ app.post("/api/team/add-or-invite-user", async (req: Request, res: Response) => 
     // DO NOT create new auth or profile. Only appoint employee role!
     // -------------------------------------------------------------
     if (existingUserId) {
-      // 1. Add to teamService memory & local invitations/memberships
+      // 1. Add to teamService memory & local store
       teamService.addDirectMember({
-        businessId: cleanBizId,
-        businessName: cleanBizName,
-        businessAddress,
-        currency,
-        ownerId: ownerId || "owner",
+        businessId: realBizId,
+        businessName: realBizName,
+        businessAddress: realBizAddress,
+        currency: realCurrency,
+        ownerId: realOwnerId || "owner",
         ownerName: ownerName || "Store Owner",
         email: cleanEmail,
         fullName: existingFullName || cleanFullName,
@@ -807,35 +910,27 @@ app.post("/api/team/add-or-invite-user", async (req: Request, res: Response) => 
         status: "active",
       });
 
-      // 2. Persist to business_staff table
-      if (cleanBizId.length >= 32) {
-        await serverSupabase.from("business_staff").upsert({
-          business_id: cleanBizId,
-          invited_email: cleanEmail,
+      // 2. Persist to support_team_members with valid UUIDs
+      try {
+        await serverSupabase.from("support_team_members").upsert({
           user_id: existingUserId,
-          role: cleanRole,
-          status: "active",
-          invited_by: ownerId,
+          role: `${cleanRole}::${realBizId}`,
+          appointed_by_user_id: realOwnerId || existingUserId,
+          is_active: true,
           updated_at: now,
-        }, { onConflict: "business_id,invited_email" });
+        }, { onConflict: "user_id" });
+      } catch (suppErr) {
+        console.warn("Notice updating support_team_members for existing user:", suppErr);
       }
-
-      // 3. Persist to support_team_members
-      await serverSupabase.from("support_team_members").upsert({
-        user_id: existingUserId,
-        role: `${cleanRole}::${cleanBizId}`,
-        appointed_by_user_id: ownerId || existingUserId,
-        is_active: true,
-        updated_at: now,
-      }, { onConflict: "user_id" });
 
       return res.json({
         success: true,
         isExisting: true,
         userId: existingUserId,
+        fullName: existingFullName || cleanFullName,
         role: cleanRole,
-        businessName: cleanBizName,
-        message: `User is already registered on GeFlow. Successfully appointed as ${cleanRole.toUpperCase()}. They can switch to "${cleanBizName}" from the top business dropdown under Employee Access.`,
+        businessName: realBizName,
+        message: `User is already registered on GeFlow. Successfully appointed as ${cleanRole.toUpperCase()}. They can access "${realBizName}" immediately from the top left business switcher under Employee Access.`,
       });
     }
 
@@ -855,9 +950,9 @@ app.post("/api/team/add-or-invite-user", async (req: Request, res: Response) => 
           full_name: cleanFullName,
           plan: "free",
           role: cleanRole,
-          business_id: cleanBizId,
-          business_name: cleanBizName,
-          invited_by: ownerId,
+          business_id: realBizId,
+          business_name: realBizName,
+          invited_by: realOwnerId,
         },
       });
 
@@ -869,11 +964,11 @@ app.post("/api/team/add-or-invite-user", async (req: Request, res: Response) => 
           const match = (authList?.users || []).find((u) => u.email?.toLowerCase() === cleanEmail);
           const foundId = match?.id || "u_" + Date.now();
           teamService.addDirectMember({
-            businessId: cleanBizId,
-            businessName: cleanBizName,
-            businessAddress,
-            currency,
-            ownerId: ownerId || "owner",
+            businessId: realBizId,
+            businessName: realBizName,
+            businessAddress: realBizAddress,
+            currency: realCurrency,
+            ownerId: realOwnerId || "owner",
             ownerName: ownerName || "Store Owner",
             email: cleanEmail,
             fullName: cleanFullName,
@@ -886,7 +981,7 @@ app.post("/api/team/add-or-invite-user", async (req: Request, res: Response) => 
             isExisting: true,
             userId: foundId,
             role: cleanRole,
-            businessName: cleanBizName,
+            businessName: realBizName,
             message: "User was already registered. Appointed employee role successfully.",
           });
         }
@@ -917,11 +1012,11 @@ app.post("/api/team/add-or-invite-user", async (req: Request, res: Response) => 
 
     // Appoint in teamService
     teamService.addDirectMember({
-      businessId: cleanBizId,
-      businessName: cleanBizName,
-      businessAddress,
-      currency,
-      ownerId: ownerId || "owner",
+      businessId: realBizId,
+      businessName: realBizName,
+      businessAddress: realBizAddress,
+      currency: realCurrency,
+      ownerId: realOwnerId || "owner",
       ownerName: ownerName || "Store Owner",
       email: cleanEmail,
       fullName: cleanFullName,
@@ -930,40 +1025,31 @@ app.post("/api/team/add-or-invite-user", async (req: Request, res: Response) => 
       status: "active",
     });
 
-    // Mirror to business_staff
-    if (cleanBizId.length >= 32) {
-      await serverSupabase.from("business_staff").upsert({
-        business_id: cleanBizId,
-        invited_email: cleanEmail,
+    // Mirror to support_team_members with valid UUIDs
+    try {
+      await serverSupabase.from("support_team_members").upsert({
         user_id: newUserId,
-        role: cleanRole,
-        status: "active",
-        invited_by: ownerId,
+        role: `${cleanRole}::${realBizId}`,
+        appointed_by_user_id: realOwnerId || newUserId,
+        is_active: true,
         updated_at: now,
-      }, { onConflict: "business_id,invited_email" });
+      }, { onConflict: "user_id" });
+    } catch (suppErr) {
+      console.warn("Notice updating support_team_members for new user:", suppErr);
     }
-
-    // Mirror to support_team_members
-    await serverSupabase.from("support_team_members").upsert({
-      user_id: newUserId,
-      role: `${cleanRole}::${cleanBizId}`,
-      appointed_by_user_id: ownerId || newUserId,
-      is_active: true,
-      updated_at: now,
-    }, { onConflict: "user_id" });
 
     return res.json({
       success: true,
       isExisting: false,
       userId: newUserId,
       role: cleanRole,
-      businessName: cleanBizName,
+      businessName: realBizName,
       credentials: {
         email: cleanEmail,
         password: initialPassword,
         fullName: cleanFullName,
       },
-      message: `Account created for ${cleanFullName}. They can log in and access "${cleanBizName}" as ${cleanRole.toUpperCase()}, and can also create their own business from the top bar.`,
+      message: `Account created for ${cleanFullName}. They can log in and access "${realBizName}" as ${cleanRole.toUpperCase()}, and can also create their own business from the top bar.`,
     });
   } catch (err: any) {
     console.error("Error in add-or-invite-user:", err);
@@ -2234,6 +2320,32 @@ app.post("/api/sync/store-credits/adjust", (req: Request, res: Response) => {
   }
 });
 
+app.post("/api/sync/store-credits/bulk-adjust", (req: Request, res: Response) => {
+  try {
+    const { businessId, adjustments } = req.body || {};
+    if (!businessId || !Array.isArray(adjustments)) {
+      return res.status(400).json({ success: false, error: "businessId and adjustments array are required." });
+    }
+    const updated = storeCreditsStorage.bulkAdjust(businessId, adjustments);
+    res.json({ success: true, count: updated.length, credits: updated.map(formatCreditForClient) });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/sync/store-credits/bulk-delete", (req: Request, res: Response) => {
+  try {
+    const { businessId, creditIds } = req.body || {};
+    if (!businessId || !Array.isArray(creditIds)) {
+      return res.status(400).json({ success: false, error: "businessId and creditIds array are required." });
+    }
+    const deletedCount = storeCreditsStorage.bulkDelete(businessId, creditIds);
+    res.json({ success: true, deletedCount });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.delete("/api/sync/store-credits/:id", (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -2245,6 +2357,125 @@ app.delete("/api/sync/store-credits/:id", (req: Request, res: Response) => {
     res.json({ success: ok });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================================
+// PRODUCT VARIATIONS, ATTRIBUTES & CATEGORY SETUP ENGINE
+// ============================================================
+app.get("/api/sync/product-variations", (req: Request, res: Response) => {
+  try {
+    const productId = req.query.productId as string | undefined;
+    const businessId = req.query.businessId as string | undefined;
+
+    if (productId) {
+      const config = productVariationsStorage.getByProduct(productId);
+      return res.json({ success: true, config });
+    }
+    if (businessId) {
+      const configs = productVariationsStorage.getByBusiness(businessId);
+      return res.json({ success: true, configs });
+    }
+    return res.status(400).json({ success: false, error: "productId or businessId is required." });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/sync/product-variations", (req: Request, res: Response) => {
+  try {
+    const config = req.body?.config || req.body;
+    if (!config || !config.product_id || !config.business_id) {
+      return res.status(400).json({ success: false, error: "Valid configuration with product_id and business_id is required." });
+    }
+    const saved = productVariationsStorage.saveConfig(config);
+    return res.json({ success: true, config: saved });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/sync/product-variations/adjust-stock", (req: Request, res: Response) => {
+  try {
+    const { productId, variantId, deltaQuantity } = req.body || {};
+    if (!productId || !variantId || deltaQuantity === undefined) {
+      return res.status(400).json({ success: false, error: "productId, variantId, and deltaQuantity are required." });
+    }
+    const updatedVariant = productVariationsStorage.adjustVariantStock(productId, variantId, Number(deltaQuantity));
+    if (!updatedVariant) {
+      return res.status(404).json({ success: false, error: "Variant or product not found." });
+    }
+    return res.json({ success: true, variant: updatedVariant });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/sync/category-templates", (_req: Request, res: Response) => {
+  try {
+    return res.json({ success: true, templates: CATEGORY_TEMPLATES });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/sync/category-templates/:industry", (req: Request, res: Response) => {
+  try {
+    const template = productVariationsStorage.getTemplateForIndustry(req.params.industry);
+    return res.json({ success: true, template });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/ai/category-recommendations", async (req: Request, res: Response) => {
+  try {
+    const { industry, businessName, businessType } = req.body || {};
+    const template = productVariationsStorage.getTemplateForIndustry(industry || businessType || "");
+
+    const client = getGeminiClient();
+    if (client) {
+      try {
+        const prompt = `You are a retail product configuration expert for GeFlow AI POS and Inventory.
+Business Name: ${businessName || "Our Business"}
+Category/Industry: ${industry || businessType || "Retail"}
+
+Provide a clean JSON configuration with:
+1. "recommended_product_type": "variable" | "simple" | "measured" | "addons" | "bundle"
+2. "attributes": array of { "name": string, "values": string[], "inputType": "pills" | "dropdown" | "color" }
+3. "pos_controls": array of strings (e.g. "Size Buttons", "Crust Selection", "Topping Add-ons", "Weight Scale Presets")
+4. "uom_recommendation": string (e.g. "piece", "kg", "metre", "strip")
+5. "guidance_summary": 2-3 sentence clear advice for this store owner.
+
+Respond with strict JSON ONLY without markdown backticks.`;
+
+        const response = await client.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: prompt,
+        });
+
+        const text = response.text || "";
+        const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        const parsed = JSON.parse(cleanJson);
+        return res.json({ success: true, recommendation: parsed });
+      } catch (aiErr) {
+        console.warn("AI recommendation fallback:", aiErr);
+      }
+    }
+
+    // Deterministic fallback using comprehensive category templates
+    return res.json({
+      success: true,
+      recommendation: {
+        recommended_product_type: template.recommended_product_type,
+        attributes: template.sample_attributes,
+        pos_controls: template.pos_features,
+        uom_recommendation: template.suggested_uom,
+        guidance_summary: `Tailored configuration for ${template.display_name}. Products can be set up with ${template.sample_attributes.map((a) => a.name).join(" and ")} attributes with instant POS selection and stock tracking.`
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -2402,6 +2633,119 @@ app.post("/api/businesses/:id/extended-settings", async (req: Request, res: Resp
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// Dedicated Business Payment Methods persistence (guarantees enabled/disabled states survive reloads)
+app.get("/api/businesses/:id/payment-methods", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ success: false, error: "business id is required" });
+
+    // 1. Try PostgreSQL platform_settings
+    try {
+      const { data: row } = await serverSupabase
+        .from("platform_settings")
+        .select("alerts")
+        .limit(1)
+        .maybeSingle();
+
+      if (row?.alerts && typeof row.alerts === "object") {
+        const pmMap = (row.alerts as any).business_payment_methods;
+        if (pmMap && Array.isArray(pmMap[id]) && pmMap[id].length > 0) {
+          return res.json({ success: true, methods: pmMap[id] });
+        }
+      }
+    } catch (e) {
+      console.warn("Notice fetching payment methods from Supabase:", e);
+    }
+
+    // 2. Try disk backup file
+    const filePath = path.join(process.cwd(), "data", `payment_methods_${id}.json`);
+    if (fs.existsSync(filePath)) {
+      try {
+        const raw = fs.readFileSync(filePath, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return res.json({ success: true, methods: parsed });
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    // 3. Try businessDataSyncService
+    const syncData = businessDataSyncService.getSettings(id);
+    if (syncData?.payment_methods && Array.isArray(syncData.payment_methods) && syncData.payment_methods.length > 0) {
+      return res.json({ success: true, methods: syncData.payment_methods });
+    }
+
+    return res.json({ success: true, methods: null });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/businesses/:id/payment-methods", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { methods } = req.body || {};
+    if (!id || !Array.isArray(methods)) {
+      return res.status(400).json({ success: false, error: "id and methods array are required" });
+    }
+
+    // 1. Save disk backup
+    try {
+      const dir = path.join(process.cwd(), "data");
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, `payment_methods_${id}.json`), JSON.stringify(methods, null, 2), "utf-8");
+    } catch (e) {
+      console.warn("Notice saving payment methods to file:", e);
+    }
+
+    // 2. Persist in PostgreSQL platform_settings alerts
+    try {
+      const { data: row } = await serverSupabase
+        .from("platform_settings")
+        .select("id, alerts")
+        .limit(1)
+        .maybeSingle();
+
+      const existingAlerts = row?.alerts && typeof row.alerts === "object" ? { ...(row.alerts as any) } : {};
+      if (!existingAlerts.business_payment_methods) {
+        existingAlerts.business_payment_methods = {};
+      }
+      existingAlerts.business_payment_methods[id] = methods;
+
+      if (row?.id) {
+        await serverSupabase
+          .from("platform_settings")
+          .update({ alerts: existingAlerts, updated_at: new Date().toISOString() })
+          .eq("id", row.id);
+      } else {
+        await serverSupabase
+          .from("platform_settings")
+          .upsert(
+            { singleton: true, alerts: existingAlerts, updated_at: new Date().toISOString() },
+            { onConflict: "singleton" }
+          );
+      }
+    } catch (e) {
+      console.warn("Notice saving payment methods to Supabase:", e);
+    }
+
+    // 3. Mirror in sync service and extended storage
+    try {
+      businessDataSyncService.saveSettings(id, { payment_methods: methods });
+      businessExtendedStorage.saveSettings(id, { pos: { paymentMethods: methods } as any }).catch(() => {});
+    } catch {
+      /* ignore */
+    }
+
+    return res.json({ success: true, methods });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 // ==========================================
 // Platform General Settings
@@ -4726,7 +5070,7 @@ app.post("/api/admin/pricing-plans", async (req: Request, res: Response) => {
       savedPlan = data;
     }
 
-    // Persist cta_button_text in platform_settings.alerts.pricing_plan_customizations
+    // Persist cta_button_text, lifetime_price sync, and plan customizations in platform_settings.alerts
     const cleanCta = cta_button_text !== undefined ? (cta_button_text ? String(cta_button_text).trim() : null) : null;
     try {
       const { data: row } = await serverSupabase.from("platform_settings").select("id, alerts").limit(1).maybeSingle();
@@ -4736,7 +5080,29 @@ app.post("/api/admin/pricing-plans", async (req: Request, res: Response) => {
         ...(planCustomizations[cleanKey] || {}),
         cta_button_text: cleanCta,
       };
-      const nextAlerts = { ...existingAlerts, pricing_plan_customizations: planCustomizations };
+
+      // Keep lifetime_customizations in perfect sync with the saved plan
+      const lifetimeCustoms = existingAlerts.lifetime_customizations || {};
+      if (lifetime_price !== undefined) {
+        lifetimeCustoms[cleanKey] = {
+          ...(lifetimeCustoms[cleanKey] || {}),
+          lifetime_price: Number(lifetime_price) || 0,
+          badge_text: badge_text || lifetimeCustoms[cleanKey]?.badge_text || null,
+          badge_position: badge_position || lifetimeCustoms[cleanKey]?.badge_position || "top",
+          is_popular: Boolean(is_popular),
+          features: Array.isArray(features) ? features : (typeof features === "string" ? features.split("\n").map((s: string) => s.trim()).filter(Boolean) : lifetimeCustoms[cleanKey]?.features || []),
+        };
+      }
+
+      // Snapshot all plans for permanent resilience
+      const { data: allPlans } = await serverSupabase.from("pricing_plans").select("*").order("sort_order");
+
+      const nextAlerts = {
+        ...existingAlerts,
+        pricing_plan_customizations: planCustomizations,
+        lifetime_customizations: lifetimeCustoms,
+        pricing_plans_backup: allPlans || [],
+      };
       if (row?.id) {
         await serverSupabase.from("platform_settings").update({ alerts: nextAlerts, updated_at: new Date().toISOString() }).eq("id", row.id);
       } else {
@@ -4757,6 +5123,22 @@ app.delete("/api/admin/pricing-plans/:id", async (req: Request, res: Response) =
     const { id } = req.params;
     const { error } = await serverSupabase.from("pricing_plans").delete().eq("id", id);
     if (error) return res.status(500).json({ success: false, error: error.message });
+
+    // Update backup snapshot in platform_settings
+    try {
+      const [{ data: row }, { data: allPlans }] = await Promise.all([
+        serverSupabase.from("platform_settings").select("id, alerts").limit(1).maybeSingle(),
+        serverSupabase.from("pricing_plans").select("*").order("sort_order"),
+      ]);
+      if (row?.id) {
+        const alerts = row.alerts && typeof row.alerts === "object" ? { ...(row.alerts as any) } : {};
+        alerts.pricing_plans_backup = allPlans || [];
+        await serverSupabase.from("platform_settings").update({ alerts, updated_at: new Date().toISOString() }).eq("id", row.id);
+      }
+    } catch (_e) {
+      /* ignore */
+    }
+
     return res.json({ success: true, id });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });

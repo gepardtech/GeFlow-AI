@@ -1,0 +1,43 @@
+{
+  "invitations": [],
+  "memberships": [
+    {
+      "id": "53f7b426-c63a-4e96-a437-48dc1fe377fb",
+      "businessId": "test_biz",
+      "businessName": "Store",
+      "currency": "USD",
+      "userId": "04b1a821-0262-4300-9312-6de01caa2855",
+      "userEmail": "testemployee@geflowai.com",
+      "userName": "Test Employee",
+      "ownerId": "a375b057-debe-4239-9549-9f83b5557df2",
+      "role": "cashier",
+      "permissions": [
+        "pos",
+        "inventory"
+      ],
+      "isActive": true,
+      "createdAt": "2026-10-25T19:15:33.616524+00:00",
+      "updatedAt": "2026-10-25T19:15:33.236+00:00"
+    },
+    {
+      "id": "mem_1793026615508_qzud9eh",
+      "businessId": "09cbccf4-0f16-4397-b4fc-bee0cc48a855",
+      "businessName": "Gepard Testing",
+      "businessAddress": "5331 Rexford Court, Montgomery. AL. 36116. USA",
+      "currency": "USD",
+      "userId": "03540023-8f99-4e61-9c18-2206048e3b56",
+      "userEmail": "sgbilal69@gmail.com",
+      "userName": "Standard",
+      "ownerId": "a375b057-debe-4239-9549-9f83b5557df2",
+      "role": "cashier",
+      "permissions": [
+        "pos",
+        "inventory"
+      ],
+      "isActive": true,
+      "createdAt": "2026-10-26T14:56:55.508Z",
+      "updatedAt": "2026-10-26T14:56:55.508Z"
+    }
+  ],
+  "notifications": []
+}
