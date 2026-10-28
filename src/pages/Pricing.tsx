@@ -203,13 +203,11 @@ const Pricing = () => {
               <span>Promo Code {activePromoCode} Active — Discount applied at checkout</span>
             </div>
           )}
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 leading-tight">
-            Choose the Right <span className="text-gradient">Plan</span>
-            <br />
-            for <span className="text-secondary">You</span>
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4 leading-tight">
+            Simple, Fair Pricing for <span className="text-gradient">Every Shop</span>
           </h1>
-          <p className="text-muted-foreground max-w-xl mx-auto mb-8">
-            Flexible pricing for every business stage — from startup to enterprise.
+          <p className="text-muted-foreground text-sm sm:text-base max-w-xl mx-auto mb-8">
+            Start free with basic counter checkout and live stock. Upgrade only when your product catalog grows, or own it forever with lifetime access.
           </p>
 
           <div className="inline-flex items-center bg-card border border-border rounded-full p-1 gap-1 justify-center shadow-xs">
@@ -359,7 +357,7 @@ const Pricing = () => {
             <p className="text-muted-foreground">Pay once, own the system forever.</p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 md:gap-8 max-w-4xl mx-auto">
             {/* Standard Lifetime */}
             {(() => {
               const badge = badgeOf("standard", "lifetime");
@@ -368,7 +366,7 @@ const Pricing = () => {
               const claimed = lifetimeCounts.standard || 0;
               const remaining = Math.max(0, limit - claimed);
               return (
-                <div className={`premium-card p-7 flex flex-col ${pop ? "ring-2 ring-primary shadow-2xl shadow-primary/20" : ""}`}>
+                <div className={`premium-card p-5 sm:p-7 flex flex-col min-w-0 ${pop ? "ring-2 ring-primary shadow-2xl shadow-primary/20" : ""}`}>
                   <div className="flex items-center justify-between mb-4">
                     <span className="inline-block text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/15 px-3 py-1 rounded-full tracking-wider">
                       {badge || `ONLY ${limit} OFFERS AVAILABLE`}
@@ -406,7 +404,7 @@ const Pricing = () => {
               const claimed = lifetimeCounts.premium || 0;
               const remaining = Math.max(0, limit - claimed);
               return (
-                <div className={`premium-card p-7 flex flex-col ${pop ? "ring-2 ring-secondary shadow-2xl shadow-secondary/20" : ""}`}>
+                <div className={`premium-card p-5 sm:p-7 flex flex-col min-w-0 ${pop ? "ring-2 ring-secondary shadow-2xl shadow-secondary/20" : ""}`}>
                   <div className="flex items-center justify-between mb-4">
                     <span className="inline-block text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/15 px-3 py-1 rounded-full tracking-wider">
                       {badge || `ONLY ${limit} OFFERS AVAILABLE`}

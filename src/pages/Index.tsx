@@ -27,60 +27,60 @@ const workflowSteps = [
   {
     icon: Clipboard,
     num: "01",
-    title: "Create Workspace",
-    desc: "System initializes your business environment instantly.",
+    title: "Set Up Your Store",
+    desc: "Enter your business name, address, and local currency in two minutes.",
   },
   {
     icon: Package,
     num: "02",
-    title: "Add Inventory",
-    desc: "Add items with stock, price, and SKU codes.",
+    title: "Scan & List Products",
+    desc: "Add items with barcodes, purchase costs, sale prices, and low-stock alerts.",
   },
   {
     icon: ShoppingCart,
     num: "03",
-    title: "Start Sales (POS)",
-    desc: "Fast billing with automatic stock deduction.",
+    title: "Fast Counter Checkout",
+    desc: "Scan barcodes and hand customers printed thermal receipts in seconds.",
   },
   {
     icon: Truck,
     num: "04",
-    title: "Manage Purchases",
-    desc: "Stock increases automatically from suppliers.",
+    title: "Log Supplier Deliveries",
+    desc: "Record incoming supplier bills to update stock counts and costs automatically.",
   },
   {
     icon: Activity,
     num: "05",
-    title: "Track Performance",
-    desc: "Profit, reports, and analytics in real time.",
+    title: "See Today's Profit",
+    desc: "Check exact cash in hand, net margins, and top sellers at the end of the day.",
   },
 ];
 
 const features = [
   {
     icon: Package,
-    title: "Inventory Management",
-    desc: "Real-time stock tracking with SKU system and stock ledger history.",
+    title: "Real-Time Stock Alerts",
+    desc: "Keep shelves stocked with live inventory counts and sound alerts before items sell out.",
   },
   {
     icon: ShoppingCart,
-    title: "POS System",
-    desc: "Fast billing engine with barcode support and instant invoice generation.",
+    title: "Fast Counter POS & Billing",
+    desc: "Lightning-quick checkout with barcode scanning, custom discounts, and thermal printing.",
   },
   {
     icon: TrendingUp,
-    title: "Finance System",
-    desc: "Profit tracking, expense management, and financial summaries.",
+    title: "Store Credit & Udhar Ledger",
+    desc: "Track buyer credit balances, record partial payments, and manage trusted customers cleanly.",
   },
   {
     icon: BarChart3,
-    title: "Reports & Analytics",
-    desc: "Sales reports, stock reports, and profit analytics dashboards.",
+    title: "Daily Profit & Cash Summaries",
+    desc: "Know exactly what your store earned today after product costs and store expenses.",
   },
   {
     icon: Users,
-    title: "User Management",
-    desc: "Role-based access control with multi-user system.",
+    title: "Staff & Cashier Roles",
+    desc: "Let staff ring up sales while keeping cost prices, financial books, and reports private.",
   },
 ];
 
@@ -119,12 +119,11 @@ const Index = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
             <div className="min-w-0">
               <h1 className="text-3xl sm:text-4xl lg:text-[2.75rem] font-display font-bold leading-tight mb-4 sm:mb-5 text-foreground">
-                Manage your entire business in one{" "}
-                <span className="text-gradient">intelligent</span> system
+                Run your retail store smoothly with{" "}
+                <span className="text-gradient">smart stock &amp; billing</span>
               </h1>
               <p className="text-muted-foreground text-sm sm:text-base mb-2 leading-relaxed max-w-lg">
-                Inventory, sales, purchases, and profit — all in real time.
-                Designed for pharmacies, retail stores & warehouses.
+                Say goodbye to missing stock and manual paper registers. Ring up sales in seconds, print thermal receipts, and see today&apos;s exact profit before you close shop.
               </p>
               <div className="flex flex-col sm:flex-row flex-wrap gap-3 mt-6 sm:mt-7">
                 <Button
@@ -150,9 +149,14 @@ const Index = () => {
               <div className="w-full max-w-md md:max-w-none rounded-2xl overflow-hidden shadow-2xl border border-border/60 animate-float cursor-pointer transition-transform duration-300 hover:shadow-3xl">
                 <img
                   src={heroLaptop}
-                  alt="GeFlow Dashboard"
+                  srcSet={`${heroLaptop} 800w, ${heroLaptop} 1200w`}
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  alt="GeFlow retail counter software displaying POS terminal and live stock inventory"
                   width={800}
                   height={600}
+                  // @ts-expect-error React 18 DOM types attribute
+                  fetchpriority="high"
+                  decoding="async"
                   className="w-full h-auto object-cover"
                 />
               </div>
@@ -170,10 +174,10 @@ const Index = () => {
         <div className="container mx-auto px-4 sm:px-6">
           <div className="text-center mb-10 sm:mb-14 max-w-2xl mx-auto">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold mb-3 text-foreground">
-              Workflow built for speed
+              Simple 5-Step Daily Routine
             </h2>
             <p className="text-xs sm:text-sm md:text-base text-muted-foreground">
-              Scale your business in 5 simple steps with our automated architecture.
+              Built for busy shop owners — quick to learn, fast to use, and zero complicated setup.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5 min-w-0">
@@ -205,10 +209,10 @@ const Index = () => {
         <div className="container mx-auto px-4 sm:px-6">
           <div className="text-center mb-10 sm:mb-14 max-w-2xl mx-auto">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold mb-3 text-foreground">
-              Powerful Features
+              Tools Every Shopkeeper Needs
             </h2>
             <p className="text-xs sm:text-sm md:text-base text-muted-foreground">
-              Everything you need to run your modern retail, grouped for clarity.
+              Everything you need to run your store smoothly and prevent stock mistakes.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 max-w-5xl mx-auto min-w-0">
@@ -239,30 +243,31 @@ const Index = () => {
             <div className="rounded-2xl overflow-hidden shadow-lg border border-border/50 animate-float cursor-pointer transition-transform duration-300 hover:shadow-2xl min-w-0">
               <img
                 src={aboutOffice}
-                alt="GeFlow business dashboard"
+                srcSet={`${aboutOffice} 800w, ${aboutOffice} 1200w`}
+                sizes="(max-width: 768px) 100vw, 50vw"
+                alt="Shop owner managing inventory and customer receipts with GeFlow"
                 width={800}
                 height={600}
                 loading="lazy"
+                decoding="async"
                 className="w-full h-auto object-cover"
               />
             </div>
             <div className="min-w-0">
               <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold mb-3 sm:mb-4 text-foreground">
-                What is GeFlow?
+                Built for Real Retail Counters
               </h2>
               <p className="text-sm sm:text-base text-muted-foreground leading-relaxed mb-3 sm:mb-4">
-                GeFlow is a modern business operating system designed to manage
-                inventory, sales, purchases, and profit tracking in real time.
+                GeFlow was made for store owners who want quick sales without the headache of complicated enterprise systems.
               </p>
               <p className="text-sm sm:text-base text-muted-foreground leading-relaxed mb-5 sm:mb-6">
-                It replaces manual systems like Excel and registers with a fully
-                digital and automated solution.
+                Whether you run a pharmacy, grocery, boutique, or corner store, you get barcode scanning, thermal printing, customer credit logs (udhar), and instant profit calculations in one simple place.
               </p>
               <ul className="space-y-2.5 sm:space-y-3">
                 {[
-                  { icon: Activity, text: "Real-time business control" },
-                  { icon: Smartphone, text: "Multi-device access" },
-                  { icon: Expand, text: "Scalable for all business sizes" },
+                  { icon: Activity, text: "Instant stock deduction on every sale" },
+                  { icon: Smartphone, text: "Works on desktop, tablet, and mobile" },
+                  { icon: Expand, text: "Grows with your store from 1 to multiple branches" },
                 ].map((item) => (
                   <li key={item.text} className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">

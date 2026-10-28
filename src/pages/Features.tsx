@@ -39,98 +39,110 @@ const planColor: Record<Plan, string> = {
 
 const groups: Group[] = [
   {
-    title: "Core Business Operations",
+    title: "Counter Billing & Checkout",
     features: [
       {
-        title: "Inventory Control",
-        desc: "Track every item movement with automated SKU generation and history.",
-        icon: Package,
-        plans: ["Free", "Standard", "Premium"],
-      },
-      {
-        title: "Fast POS Terminal",
-        desc: "Lightning-fast billing interface optimized for high-traffic retail environments.",
+        title: "Fast POS Billing",
+        desc: "Ring up customer sales in seconds with swift cart calculations and instant change return.",
         icon: ShoppingCart,
         plans: ["Free", "Standard", "Premium"],
       },
       {
-        title: "Barcode Support",
-        desc: "Native integration with scanning hardware for error-free stock management.",
+        title: "Barcode Scanner Support",
+        desc: "Plug in any standard USB or wireless handheld barcode scanner for error-free checkout.",
         icon: ScanLine,
-        plans: ["Standard", "Premium"],
-      },
-      {
-        title: "AI Store Assistant (Basic Level)",
-        desc: "Interactive retail assistant for quick inventory lookups, low stock triage, and daily sales summaries.",
-        icon: Sparkles,
         plans: ["Free", "Standard", "Premium"],
       },
-    ],
-  },
-  {
-    title: "Advanced Financial Logic",
-    features: [
       {
-        title: "Profit Engine",
-        desc: "Real-time gross and net profit calculations based on weighted average costing.",
-        icon: TrendingUp,
-        plans: ["Standard", "Premium"],
-      },
-      {
-        title: "Expense Tracking",
-        desc: "Manage overhead costs like rent, utilities, and wages in one dashboard.",
+        title: "Thermal Receipt Printing",
+        desc: "Print clean 58mm or 80mm receipts with your store name, contact number, and tax details.",
         icon: FileText,
         plans: ["Standard", "Premium"],
       },
       {
-        title: "Supplier Portal",
-        desc: "Automate purchase orders and track vendor payments seamlessly.",
+        title: "Store Credit & Udhar Book",
+        desc: "Track loyal regular customer credit balances, add credit notes, and record partial repayments.",
+        icon: Users,
+        plans: ["Standard", "Premium"],
+      },
+    ],
+  },
+  {
+    title: "Stock & Shelf Management",
+    features: [
+      {
+        title: "Live Stock Tracking",
+        desc: "Every item billed or restocked instantly updates your available inventory count.",
+        icon: Package,
+        plans: ["Free", "Standard", "Premium"],
+      },
+      {
+        title: "Low Stock Alert Ringtones",
+        desc: "Choose from 18 audible alert chimes to warn your staff before bestsellers sell out.",
+        icon: AlertTriangle,
+        plans: ["Free", "Standard", "Premium"],
+      },
+      {
+        title: "Batch & Expiry Dates",
+        desc: "Essential for pharmacies and grocery shops. Sell oldest batches first and stop expired sales.",
+        icon: CalendarClock,
+        plans: ["Premium"],
+      },
+      {
+        title: "Supplier Restock Logs",
+        desc: "Record incoming distributor shipments with purchase costs to keep margins 100% accurate.",
         icon: Truck,
         plans: ["Standard", "Premium"],
       },
     ],
   },
   {
-    title: "Automation & Alerts",
+    title: "Daily Profits & Cash Flow",
     features: [
       {
-        title: "Expiry System",
-        desc: "Automated alerts for near-expiry products to minimize business waste.",
-        icon: CalendarClock,
-        plans: ["Premium"],
+        title: "Live Profit Margins",
+        desc: "See your actual gross and net profit based on your real wholesale purchase costs.",
+        icon: TrendingUp,
+        plans: ["Standard", "Premium"],
       },
       {
-        title: "Low Stock Alerts",
-        desc: "Never run out of bestsellers with intelligent reorder notifications.",
-        icon: AlertTriangle,
-        plans: ["Premium"],
-      },
-      {
-        title: "Automated Costing",
-        desc: "Live average cost recalculation as soon as new stock is added.",
+        title: "Daily Store Expense Log",
+        desc: "Track daily shop overheads like rent, tea, utility bills, and packaging supplies in one spot.",
         icon: Zap,
         plans: ["Standard", "Premium"],
+      },
+      {
+        title: "Simple Returns & Restocking",
+        desc: "Process customer product returns smoothly with automatic restock adjustments.",
+        icon: Package,
+        plans: ["Standard", "Premium"],
+      },
+      {
+        title: "End-of-Day Cash Summary",
+        desc: "Match your drawer cash against card payments and store credit before locking up.",
+        icon: BarChart3,
+        plans: ["Premium"],
       },
     ],
   },
   {
-    title: "Enterprise Governance",
+    title: "Staff & Business Control",
     features: [
       {
-        title: "Role-based Access",
-        desc: "Secure permissions for every employee, from cashier to manager.",
+        title: "Staff & Cashier Permissions",
+        desc: "Cashiers ring up sales while your purchase costs, financial books, and profits stay private.",
         icon: Users,
         plans: ["Standard", "Premium"],
       },
       {
-        title: "Multi-branch Architecture",
-        desc: "Connect multiple store locations to a single cloud-based HQ.",
+        title: "Multi-Store Branches",
+        desc: "Check stock and sales across different shop branches or warehouses from one screen.",
         icon: Layers,
         plans: ["Premium"],
       },
       {
-        title: "Deep Analytics",
-        desc: "Visual charts and downloadable reports for every business metric.",
+        title: "Downloadable PDF & Excel Reports",
+        desc: "Export sales ledgers, inventory counts, and tax reports whenever your accountant needs them.",
         icon: BarChart3,
         plans: ["Premium"],
       },
@@ -167,10 +179,10 @@ const Features = () => (
     <section className="pt-20 pb-12">
       <div className="container mx-auto px-4 text-center">
         <h1 className="text-4xl md:text-5xl font-bold mb-4">
-          <span className="text-gradient">GeFlow</span> Features
+          Features Built for <span className="text-gradient">Everyday Retailers</span>
         </h1>
         <p className="text-muted-foreground max-w-xl mx-auto">
-          Everything you need to manage your business faster, smarter, and with total accuracy.
+          Every button, screen, and calculation is tailored to real shop counters — fast checkout, zero missing stock, and clear daily profits.
         </p>
       </div>
     </section>
@@ -194,10 +206,10 @@ const Features = () => (
       <div className="container mx-auto px-4">
         <div className="relative overflow-hidden rounded-3xl p-12 md:p-16 text-center max-w-5xl mx-auto border border-primary/20 bg-gradient-to-br from-primary/15 via-secondary/15 to-primary/10 dark:from-primary/10 dark:via-secondary/10 dark:to-card dark:border-border/80 shadow-xl">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Ready to Unlock More Features?
+            Ready to Take Control of Your Store?
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto mb-8 text-base">
-            Explore our tiered plans to find the perfect fit for your needs and get access to our most advanced tools.
+            Start with our Free tier today or choose an affordable plan with thermal printing, udhar ledgers, and staff cashier roles.
           </p>
           <Button
             size="lg"

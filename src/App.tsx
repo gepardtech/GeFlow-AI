@@ -22,6 +22,20 @@ const Pricing = lazy(() => import("./pages/Pricing"));
 const HowItWorks = lazy(() => import("./pages/HowItWorks"));
 const Contact = lazy(() => import("./pages/Contact"));
 const Login = lazy(() => import("./pages/login"));
+
+// Preload critical public navigation routes during idle time to boost perceived performance
+if (typeof window !== "undefined") {
+  const preloadCriticalRoutes = () => {
+    import("./pages/Features");
+    import("./pages/Pricing");
+    import("./pages/login");
+  };
+  if ("requestIdleCallback" in window) {
+    (window as any).requestIdleCallback(preloadCriticalRoutes);
+  } else {
+    setTimeout(preloadCriticalRoutes, 1800);
+  }
+}
 const Signup = lazy(() => import("./pages/Signup"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));

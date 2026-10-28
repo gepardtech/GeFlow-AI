@@ -1,5 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -240,8 +250,12 @@ const ProductDialog = ({
     return groups;
   }, [categoryUoms]);
 
-  // Field-level AI status & confidence detail state (Phase 10)
   const [fieldAIStatuses, setFieldAIStatuses] = useState<Record<string, FieldAIStatusInfo>>({});
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const initialSnapshotRef = useRef<{
+    form: typeof emptyForm;
+    images: string[];
+  } | null>(null);
 
   // Product Architecture & Variations (WooCommerce / Shopify style)
   const [variationsConfig, setVariationsConfig] = useState<ProductVariationsConfig>({
@@ -345,7 +359,11 @@ const ProductDialog = ({
   };
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setShowDiscardConfirm(false);
+      initialSnapshotRef.current = null;
+      return;
+    }
     setErrors({});
     setTouched({});
     setFieldAIStatuses({});
@@ -374,7 +392,7 @@ const ProductDialog = ({
         initialBoxes = rawStock;
       }
 
-      setForm({
+      const initialFormState = {
         name: product.name ?? "",
         internal_sku: product.internal_sku ?? "",
         description: cleanDesc,
@@ -395,8 +413,14 @@ const ProductDialog = ({
         expiry_date: product.expiry_date ?? "",
         barcode: product.barcode ?? "",
         status: product.status ?? "active",
-      });
-      setImages(product.images ?? []);
+      };
+      setForm(initialFormState);
+      const initialImgs = product.images ?? [];
+      setImages(initialImgs);
+      initialSnapshotRef.current = {
+        form: { ...initialFormState },
+        images: [...initialImgs],
+      };
     } else {
       const isRest = (industryType || "").toLowerCase().includes("restaurant") || (categoryName || "").toLowerCase().includes("restaurant");
       const isPharm = (industryType || "").toLowerCase().includes("pharm") || (categoryName || "").toLowerCase().includes("medical");
@@ -404,7 +428,7 @@ const ProductDialog = ({
       const initScale = isRest ? "4" : isPharm ? "12" : "1";
       const initBase = isPharm ? "tablet" : "piece";
 
-      setForm({
+      const initialFormState = {
         ...emptyForm,
         min_stock_alert: defaultMinAlert,
         uom: initUom,
@@ -415,8 +439,13 @@ const ProductDialog = ({
         pack_qty: "0",
         stock_units: "0",
         ...(prefill ?? {}),
-      });
+      };
+      setForm(initialFormState);
       setImages([]);
+      initialSnapshotRef.current = {
+        form: { ...initialFormState },
+        images: [],
+      };
       if (prefill?._triggerAI === "true") {
         setShowAIAssistant(true);
       }
@@ -447,6 +476,59 @@ const ProductDialog = ({
       });
     }
   }, [open, product, prefill, defaultMinAlert, industryType, categoryName, businessId]);
+
+  // Check whether user has entered or modified product information (Shopify / WordPress style)
+  const isFormDirty = useMemo(() => {
+    if (!open) return false;
+    if (!initialSnapshotRef.current) {
+      return (
+        form.name.trim() !== "" ||
+        form.retail_price.trim() !== "" ||
+        form.purchase_cost.trim() !== "" ||
+        form.barcode.trim() !== "" ||
+        form.description.trim() !== "" ||
+        images.length > 0
+      );
+    }
+
+    const snap = initialSnapshotRef.current;
+    const formChanged =
+      form.name.trim() !== snap.form.name.trim() ||
+      form.internal_sku.trim() !== snap.form.internal_sku.trim() ||
+      form.description.trim() !== snap.form.description.trim() ||
+      form.category_id !== snap.form.category_id ||
+      form.subcategory_id !== snap.form.subcategory_id ||
+      form.retail_price.trim() !== snap.form.retail_price.trim() ||
+      form.purchase_cost.trim() !== snap.form.purchase_cost.trim() ||
+      form.discount_price.trim() !== snap.form.discount_price.trim() ||
+      form.opening_stock_boxes.trim() !== snap.form.opening_stock_boxes.trim() ||
+      form.stock_units.trim() !== snap.form.stock_units.trim() ||
+      form.min_stock_alert.trim() !== snap.form.min_stock_alert.trim() ||
+      form.batch_number.trim() !== snap.form.batch_number.trim() ||
+      form.expiry_date.trim() !== snap.form.expiry_date.trim() ||
+      form.barcode.trim() !== snap.form.barcode.trim() ||
+      form.uom !== snap.form.uom;
+
+    const imagesChanged =
+      images.length !== snap.images.length ||
+      images.some((img, idx) => img !== snap.images[idx]);
+
+    return formChanged || imagesChanged;
+  }, [open, form, images]);
+
+  const handleAttemptClose = () => {
+    if (saving) return;
+    if (isFormDirty) {
+      setShowDiscardConfirm(true);
+    } else {
+      onOpenChange(false);
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardConfirm(false);
+    onOpenChange(false);
+  };
 
   const set = (k: keyof typeof emptyForm, v: string) => {
     setForm((f) => {
@@ -1066,8 +1148,26 @@ const ProductDialog = ({
   }, [form.purchase_cost, form.retail_price]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] sm:w-full max-w-3xl max-h-[92vh] sm:max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col bg-background text-foreground border-border shadow-2xl rounded-2xl sm:rounded-3xl">
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            handleAttemptClose();
+          }
+        }}
+      >
+        <DialogContent
+          onPointerDownOutside={(e) => {
+            // Popup only closes when user clicks cancel or cross icon
+            e.preventDefault();
+          }}
+          onEscapeKeyDown={(e) => {
+            e.preventDefault();
+            handleAttemptClose();
+          }}
+          className="w-[96vw] sm:w-full max-w-3xl max-h-[92vh] sm:max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col bg-background text-foreground border-border shadow-2xl rounded-2xl sm:rounded-3xl"
+        >
         {/* Header */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-border bg-card/60 shrink-0 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
@@ -1963,7 +2063,7 @@ const ProductDialog = ({
           <Button
             type="button"
             variant="ghost"
-            onClick={() => onOpenChange(false)}
+            onClick={handleAttemptClose}
             disabled={saving}
             className="text-xs font-semibold h-10 sm:h-11 px-3 sm:px-4"
           >
@@ -1991,6 +2091,40 @@ const ProductDialog = ({
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Discard Unsaved Changes Confirmation Dialog (Shopify / WordPress style) */}
+    <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
+      <AlertDialogContent className="max-w-md rounded-2xl p-5 sm:p-6 border-border shadow-2xl">
+        <AlertDialogHeader className="space-y-3">
+          <div className="h-11 w-11 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+            <AlertCircle className="h-6 w-6" />
+          </div>
+          <div>
+            <AlertDialogTitle className="text-base sm:text-lg font-bold">
+              Discard unsaved changes?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs sm:text-sm text-muted-foreground mt-1.5 leading-relaxed">
+              You have unsaved changes in this product. If you discard now, any details, prices, or inventory entries you entered will be lost.
+            </AlertDialogDescription>
+          </div>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="mt-5 flex-col-reverse sm:flex-row gap-2">
+          <AlertDialogCancel
+            onClick={() => setShowDiscardConfirm(false)}
+            className="h-10 px-4 rounded-xl text-xs sm:text-sm font-semibold"
+          >
+            Keep Editing
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleConfirmDiscard}
+            className="h-10 px-4 rounded-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground text-xs sm:text-sm font-bold shadow-sm"
+          >
+            Discard Changes
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>
   );
 };
 
