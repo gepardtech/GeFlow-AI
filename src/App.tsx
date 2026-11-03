@@ -16,24 +16,46 @@ import { useBusinessRealtimeSync } from "./hooks/useBusinessRealtimeSync";
 // Eagerly load primary public landing
 import Index from "./pages/Index";
 
-// Lazy-loaded pages for optimized FCP/LCP and 90%+ performance score
-const Features = lazy(() => import("./pages/Features"));
-const Pricing = lazy(() => import("./pages/Pricing"));
-const HowItWorks = lazy(() => import("./pages/HowItWorks"));
-const Contact = lazy(() => import("./pages/Contact"));
-const Login = lazy(() => import("./pages/login"));
+// Helper to make dynamic module imports resilient against transient network drops or server restarts
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T }>
+) {
+  return lazy(async () => {
+    try {
+      return await factory();
+    } catch {
+      // Retry once after brief pause
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      return await factory().catch((e) => {
+        // If still failing and not previously reloaded, fallback to reload once
+        if (typeof window !== "undefined" && !sessionStorage.getItem("route_reload_flag")) {
+          sessionStorage.setItem("route_reload_flag", "1");
+          window.location.reload();
+        }
+        throw e;
+      });
+    }
+  });
+}
 
-// Preload critical public navigation routes during idle time to boost perceived performance
+// Lazy-loaded pages for optimized FCP/LCP and 90%+ performance score
+const Features = lazyWithRetry(() => import("./pages/Features"));
+const Pricing = lazyWithRetry(() => import("./pages/Pricing"));
+const HowItWorks = lazyWithRetry(() => import("./pages/HowItWorks"));
+const Contact = lazyWithRetry(() => import("./pages/Contact"));
+const Login = lazyWithRetry(() => import("./pages/login"));
+
+// Preload critical public navigation routes safely during idle time
 if (typeof window !== "undefined") {
   const preloadCriticalRoutes = () => {
-    import("./pages/Features");
-    import("./pages/Pricing");
-    import("./pages/login");
+    import("./pages/Features").catch(() => {});
+    import("./pages/Pricing").catch(() => {});
+    import("./pages/login").catch(() => {});
   };
   if ("requestIdleCallback" in window) {
     (window as any).requestIdleCallback(preloadCriticalRoutes);
   } else {
-    setTimeout(preloadCriticalRoutes, 1800);
+    setTimeout(preloadCriticalRoutes, 2500);
   }
 }
 const Signup = lazy(() => import("./pages/Signup"));

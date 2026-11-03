@@ -784,10 +784,11 @@ export const UserSettings = () => {
         }).catch((e) => console.debug("Server sync settings notice:", e));
       }
 
+      // Only sync light user identity preferences to user metadata so auth JWT never exceeds header limits
       supabase.auth.updateUser({
         data: {
-          geflow_settings: payload,
-          [`geflow_settings_${currentBiz?.id || "default"}`]: payload,
+          user_currency: currency,
+          user_default_tax: Number(defaultTaxRate) || 0,
         },
       }).catch((e) => console.debug("Supabase user metadata sync error:", e));
 

@@ -46,28 +46,30 @@ const AdminGuard = ({ children }: Props) => {
 
     (async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const session = (await supabase.auth.getSession()).data?.session;
         let user = session?.user;
+        if (!user) {
+          // Wait briefly in case session is being initialized from local storage
+          await new Promise((r) => setTimeout(r, 400));
+          user = (await supabase.auth.getSession()).data?.session?.user;
+        }
         if (!user) {
           const res = await supabase.auth.getUser();
           user = res.data?.user;
         }
 
-        if (!user) {
-          if (cachedAdminUserId && cachedIsAdmin) {
-            // Keep active session during transient network hiccup
-            return;
-          }
-          // Check local storage for persistent admin state
-          const isStoredAdmin = localStorage.getItem("geflow_is_admin") === "true" || localStorage.getItem("geflow_admin_auth") === "true";
-          if (isStoredAdmin) {
-            cachedIsAdmin = true;
-            if (active) setAllowed(true);
-            return;
-          }
+        const isSuperAdminEmail =
+          user?.email?.toLowerCase() === "gepardwebs@gmail.com" ||
+          localStorage.getItem("geflow.user_email") === "gepardwebs@gmail.com" ||
+          localStorage.getItem("geflow_is_admin") === "true";
+
+        if (!user && !isSuperAdminEmail) {
           cachedAdminUserId = null;
           cachedIsAdmin = false;
-          if (active) navigate("/login", { replace: true });
+          if (active) {
+            setAllowed(false);
+            navigate("/login?redirect=/admin", { replace: true });
+          }
           return;
         }
 
@@ -83,11 +85,7 @@ const AdminGuard = ({ children }: Props) => {
           user.user_metadata?.role === "admin" ||
           user.app_metadata?.role === "admin" ||
           user.user_metadata?.is_admin === true;
-        let hasAdmin =
-          isAdminEmail ||
-          cachedIsAdmin ||
-          localStorage.getItem("geflow_is_admin") === "true" ||
-          localStorage.getItem("geflow_admin_auth") === "true";
+        let hasAdmin = isAdminEmail || cachedIsAdmin;
 
         if (!hasAdmin) {
           const [{ data: roles }, { data: profile }] = await Promise.all([
@@ -114,13 +112,14 @@ const AdminGuard = ({ children }: Props) => {
         if (!active) return;
 
         if (!hasAdmin) {
-          // If already in admin view or authenticated in session, do not kick out
-          if (cachedIsAdmin || localStorage.getItem("geflow_is_admin") === "true") {
-            setAllowed(true);
-            return;
-          }
           cachedAdminUserId = user.id;
           cachedIsAdmin = false;
+          try {
+            localStorage.removeItem("geflow_is_admin");
+            localStorage.removeItem("geflow_admin_auth");
+          } catch {
+            /* ignore */
+          }
           toast({ title: "Access denied", description: "You are not an admin.", variant: "destructive" });
           navigate("/dashboard", { replace: true });
           return;
@@ -136,8 +135,8 @@ const AdminGuard = ({ children }: Props) => {
         setAllowed(true);
       } catch (err) {
         console.warn("Notice in admin verification:", err);
-        if (cachedIsAdmin || localStorage.getItem("geflow_is_admin") === "true") {
-          setAllowed(true);
+        if (active) {
+          navigate("/login?redirect=/admin", { replace: true });
         }
       }
     })();

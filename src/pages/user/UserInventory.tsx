@@ -59,8 +59,8 @@ const UserInventory = () => {
   const [bulkStatusModalOpen, setBulkStatusModalOpen] = useState(false);
   const [targetBulkStatus, setTargetBulkStatus] = useState<string>("active");
   const [bulkUpdatingStatus, setBulkUpdatingStatus] = useState(false);
-  const [categoryWizardOpen, setCategoryWizardOpen] = useState(false);
   const [userId, setUserId] = useState<string>(active?.owner_user_id || "default_user");
+  const [variationsMap, setVariationsMap] = useState<Record<string, any>>({});
 
   const productsCountRef = useRef(0);
   productsCountRef.current = products.length;
@@ -77,6 +77,7 @@ const UserInventory = () => {
   const [barcode, setBarcode] = useState<"manual" | "scanner" | null>(null);
   const [restockOpen, setRestockOpen] = useState(false);
   const [stockLedgerOpen, setStockLedgerOpen] = useState(false);
+  const [categoryWizardOpen, setCategoryWizardOpen] = useState(false);
 
   const activeId = active?.id;
   const ownerUserId = active?.owner_user_id;
@@ -140,7 +141,43 @@ const UserInventory = () => {
 
       setProducts(cleanProducts);
       productsCountRef.current = cleanProducts.length;
-    } catch (err) {
+
+      // Extract variations configuration directly from product descriptions for immediate display
+      const initialVMap: Record<string, any> = {};
+      cleanProducts.forEach((p) => {
+        if (p.description && p.description.includes("[VARIATIONS_DATA:")) {
+          try {
+            const m = p.description.match(/\[VARIATIONS_DATA:\s*([^\]]+)\]/);
+            if (m && m[1]) {
+              const parsed = JSON.parse(decodeURIComponent(m[1].trim()));
+              if (parsed) initialVMap[p.id] = parsed;
+            }
+          } catch (_err) {
+            void _err;
+          }
+        }
+      });
+      if (Object.keys(initialVMap).length > 0) {
+        setVariationsMap((prev) => ({ ...prev, ...initialVMap }));
+      }
+
+      // Fetch variations configuration for all products in this business
+      try {
+        const vRes = await fetch(`/api/sync/product-variations?businessId=${encodeURIComponent(activeId)}`);
+        if (vRes.ok) {
+          const vData = await vRes.json();
+          if (vData?.configs && Array.isArray(vData.configs)) {
+            const vMap: Record<string, any> = { ...initialVMap };
+            vData.configs.forEach((c: any) => {
+              if (c.product_id) vMap[c.product_id] = c;
+            });
+            setVariationsMap(vMap);
+          }
+        }
+      } catch (vErr) {
+        console.debug("Could not load variations in inventory:", vErr);
+      }
+    } catch (err: any) {
       console.warn("Failed to fetch inventory products:", err);
     } finally {
       setLoading(false);
@@ -181,19 +218,42 @@ const UserInventory = () => {
 
   const catName = (id: string | null) => allCategories.find((c) => c.id === id)?.name ?? "—";
 
+  const getProductVariations = useCallback(
+    (p: ProductRecord | { id: string; description?: string | null }): any => {
+      if (variationsMap[p.id]) return variationsMap[p.id];
+      if (p.description && p.description.includes("[VARIATIONS_DATA:")) {
+        try {
+          const match = p.description.match(/\[VARIATIONS_DATA:\s*([^\]]+)\]/);
+          if (match && match[1]) {
+            return JSON.parse(decodeURIComponent(match[1].trim()));
+          }
+        } catch (_err) {
+          void _err;
+        }
+      }
+      return null;
+    },
+    [variationsMap]
+  );
+
   const productLimit = getLimit("products");
   const used = products.length;
   const exceeded = isExceeded("products", used);
 
-  const defaultMinAlert = active?.stock_alert_limit ?? 10;
   const totalStockValue = products.reduce((s, p) => s + p.stock_units * Number(p.purchase_cost), 0);
   const lowStock = products.filter((p) => {
+    const s = computeProductStock(p.stock_units, p.name, p.description, p.uom, p.units_per_uom, p.base_unit);
+    if (s.isMadeOnOrder) return false;
     const threshold = (p.min_stock_alert !== null && p.min_stock_alert !== undefined && p.min_stock_alert > 0)
       ? p.min_stock_alert
       : defaultMinAlert;
     return p.stock_units > 0 && p.stock_units <= threshold;
   }).length;
-  const outOfStock = products.filter((p) => p.stock_units <= 0).length;
+  const outOfStock = products.filter((p) => {
+    const s = computeProductStock(p.stock_units, p.name, p.description, p.uom, p.units_per_uom, p.base_unit);
+    if (s.isMadeOnOrder) return false;
+    return p.stock_units <= 0;
+  }).length;
   const draftCount = products.filter((p) => p.status !== "active").length;
   const issueCount = lowStock + outOfStock + draftCount;
 
@@ -388,9 +448,10 @@ const UserInventory = () => {
         ? p.min_stock_alert
         : defaultMinAlert;
 
-    if (statusFilter === "in_stock") return p.stock_units > threshold;
-    if (statusFilter === "low_stock") return p.stock_units > 0 && p.stock_units <= threshold;
-    if (statusFilter === "out_of_stock") return p.stock_units <= 0;
+    const stockInfo = computeProductStock(p.stock_units, p.name, p.description, p.uom, p.units_per_uom, p.base_unit);
+    if (statusFilter === "in_stock") return stockInfo.isMadeOnOrder || p.stock_units > threshold;
+    if (statusFilter === "low_stock") return !stockInfo.isMadeOnOrder && p.stock_units > 0 && p.stock_units <= threshold;
+    if (statusFilter === "out_of_stock") return !stockInfo.isMadeOnOrder && p.stock_units <= 0;
     if (statusFilter === "active") return p.status === "active";
     if (statusFilter === "draft") return p.status !== "active";
     if (statusFilter === "expiring_30") {
@@ -873,6 +934,22 @@ const UserInventory = () => {
                                 {p.internal_sku || p.barcode || "—"}
                                 {p.batch_number ? ` · Batch: ${p.batch_number}` : ""}
                               </p>
+                              {/* Variety Label & Variants List */}
+                              {(() => {
+                                const vConfig = getProductVariations(p);
+                                if (!vConfig?.variants || vConfig.variants.length === 0) return null;
+                                return (
+                                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/25 inline-flex items-center gap-1">
+                                      <Layers className="w-3 h-3" />
+                                      {vConfig.variants.length} Varieties
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground truncate max-w-[260px]" title={vConfig.variants.map((v: any) => `${v.name} (${fmt(Number(v.retail_price) || 0)})`).join(", ")}>
+                                      ({vConfig.variants.map((v: any) => `${v.name}: ${fmt(Number(v.retail_price) || 0)}`).join(", ")})
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         </td>
@@ -882,13 +959,19 @@ const UserInventory = () => {
                             const parsed = parseProductUOM(p.name, p.description || "", p.uom, p.units_per_uom, p.base_unit);
                             const isScaled = parsed.packSize > 1;
                             const retail = Number(p.discount_price ?? p.retail_price);
+                            const vConfig = getProductVariations(p);
+                            const variantPrices = vConfig?.variants?.map((v: any) => Number(v.retail_price) || 0).filter((pr: number) => pr > 0) || [];
+                            const minPrice = variantPrices.length > 0 ? Math.min(...variantPrices) : retail;
+                            const maxPrice = variantPrices.length > 0 ? Math.max(...variantPrices) : retail;
+                            const hasPriceRange = minPrice !== maxPrice && variantPrices.length > 1;
+
                             return (
                               <div>
                                 <p className="font-bold text-sm">
-                                  {fmt(retail)}
+                                  {hasPriceRange ? `${fmt(minPrice)} – ${fmt(maxPrice)}` : fmt(retail)}
                                   <span className="text-xs font-normal text-muted-foreground ml-1">/{parsed.uomLabel}</span>
                                 </p>
-                                {isScaled && (
+                                {isScaled && !hasPriceRange && (
                                   <p className="text-[10px] text-muted-foreground">
                                     ~{fmt(retail / parsed.packSize)}/{parsed.subUnitName}
                                   </p>
@@ -903,6 +986,19 @@ const UserInventory = () => {
                         <td className="px-4 py-4">
                           {(() => {
                             const isScaled = stockInfo.packSize > 1;
+                            if (stockInfo.isMadeOnOrder) {
+                              return (
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                    🍳 Made on Order
+                                  </span>
+                                  <span className="text-[10px] font-semibold text-muted-foreground">
+                                    Live Kitchen Preparation
+                                  </span>
+                                </div>
+                              );
+                            }
+
                             return (
                               <div className="flex flex-col">
                                 <span className={`text-base font-extrabold ${out ? "text-rose-500" : low ? "text-amber-500" : "text-foreground"}`}>
@@ -919,9 +1015,15 @@ const UserInventory = () => {
                           })()}
                         </td>
                         <td className="px-4 py-4">
-                          <span className={`text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full ${out ? "bg-rose-500/15 text-rose-500" : low ? "bg-amber-500/15 text-amber-500" : p.status !== "active" ? "bg-muted text-muted-foreground" : "bg-emerald-500/15 text-emerald-500"}`}>
-                            {p.status !== "active" ? p.status.toUpperCase() : out ? "OUT OF STOCK" : low ? "LOW STOCK" : "IN STOCK"}
-                          </span>
+                          {stockInfo.isMadeOnOrder ? (
+                            <span className="text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+                              PREPARED FRESH
+                            </span>
+                          ) : (
+                            <span className={`text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full ${out ? "bg-rose-500/15 text-rose-500" : low ? "bg-amber-500/15 text-amber-500" : p.status !== "active" ? "bg-muted text-muted-foreground" : "bg-emerald-500/15 text-emerald-500"}`}>
+                              {p.status !== "active" ? p.status.toUpperCase() : out ? "OUT OF STOCK" : low ? "LOW STOCK" : "IN STOCK"}
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-right">
                           <DropdownMenu>
@@ -1013,14 +1115,36 @@ const UserInventory = () => {
                             <p className="text-[11px] text-muted-foreground truncate">
                               {catName(p.category_id)} · SKU: {p.internal_sku || p.barcode || "—"}
                             </p>
+                            {/* Variety Badge in Mobile Card */}
+                            {(() => {
+                              const vConfig = getProductVariations(p);
+                              if (!vConfig?.variants || vConfig.variants.length === 0) return null;
+                              return (
+                                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/25 inline-flex items-center gap-1">
+                                    <Layers className="w-3 h-3" />
+                                    {vConfig.variants.length} Varieties
+                                  </span>
+                                  <span className="text-[9px] text-muted-foreground truncate max-w-[150px]" title={vConfig.variants.map((v: any) => `${v.name} (${fmt(Number(v.retail_price) || 0)})`).join(", ")}>
+                                    ({vConfig.variants.map((v: any) => `${v.name}: ${fmt(Number(v.retail_price) || 0)}`).join(", ")})
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
 
                         {/* Status badge & Menu */}
                         <div className="flex items-center gap-1 shrink-0">
-                          <span className={`text-[9px] font-bold tracking-wider px-2 py-0.5 rounded-full ${out ? "bg-rose-500/15 text-rose-600 dark:text-rose-400" : low ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : p.status !== "active" ? "bg-muted text-muted-foreground" : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"}`}>
-                            {out ? "OUT" : low ? "LOW" : p.status !== "active" ? "DRAFT" : "IN STOCK"}
-                          </span>
+                          {stockInfo.isMadeOnOrder ? (
+                            <span className="text-[9px] font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+                              PREPARED FRESH
+                            </span>
+                          ) : (
+                            <span className={`text-[9px] font-bold tracking-wider px-2 py-0.5 rounded-full ${out ? "bg-rose-500/15 text-rose-600 dark:text-rose-400" : low ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : p.status !== "active" ? "bg-muted text-muted-foreground" : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"}`}>
+                              {out ? "OUT" : low ? "LOW" : p.status !== "active" ? "DRAFT" : "IN STOCK"}
+                            </span>
+                          )}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
@@ -1056,28 +1180,51 @@ const UserInventory = () => {
                       )}
 
                       {/* Stats 2-column info */}
-                      <div className="grid grid-cols-2 gap-2 bg-muted/30 border border-border/50 rounded-xl p-2.5 mb-3 text-xs">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Price & Margin</p>
-                          <p className="font-bold text-sm mt-0.5 text-foreground">
-                            {fmt(retail)}
-                            <span className="text-[11px] font-normal text-muted-foreground">/{parsed.uomLabel}</span>
-                          </p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">
-                            Cost {fmt(Number(p.purchase_cost))} · <span className={margin >= 0 ? "text-emerald-500 font-bold" : "text-rose-500 font-bold"}>{margin}%</span>
-                          </p>
-                        </div>
+                      {(() => {
+                        const vConfig = getProductVariations(p);
+                        const variantPrices = vConfig?.variants?.map((v: any) => Number(v.retail_price) || 0).filter((pr: number) => pr > 0) || [];
+                        const minPrice = variantPrices.length > 0 ? Math.min(...variantPrices) : retail;
+                        const maxPrice = variantPrices.length > 0 ? Math.max(...variantPrices) : retail;
+                        const hasPriceRange = minPrice !== maxPrice && variantPrices.length > 1;
 
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Stock Level</p>
-                          <p className={`font-extrabold text-sm mt-0.5 ${out ? "text-rose-500" : low ? "text-amber-500" : "text-foreground"}`}>
-                            {stockInfo.displayText}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">
-                            Alert at ≤ {threshold} {parsed.uomLabel}
-                          </p>
-                        </div>
-                      </div>
+                        return (
+                          <div className="grid grid-cols-2 gap-2 bg-muted/30 border border-border/50 rounded-xl p-2.5 mb-3 text-xs">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Price & Margin</p>
+                              <p className="font-bold text-sm mt-0.5 text-foreground">
+                                {hasPriceRange ? `${fmt(minPrice)} – ${fmt(maxPrice)}` : fmt(retail)}
+                                <span className="text-[11px] font-normal text-muted-foreground">/{parsed.uomLabel}</span>
+                              </p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                Cost {fmt(Number(p.purchase_cost))} · <span className={margin >= 0 ? "text-emerald-500 font-bold" : "text-rose-500 font-bold"}>{margin}%</span>
+                              </p>
+                            </div>
+
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Stock Level</p>
+                              {stockInfo.isMadeOnOrder ? (
+                                <div>
+                                  <p className="font-extrabold text-sm mt-0.5 text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                    🍳 Made on Order
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    Live Kitchen Dish
+                                  </p>
+                                </div>
+                              ) : (
+                                <div>
+                                  <p className={`font-extrabold text-sm mt-0.5 ${out ? "text-rose-500" : low ? "text-amber-500" : "text-foreground"}`}>
+                                    {stockInfo.displayText}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    Alert at ≤ {threshold} {parsed.uomLabel}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Quick Action Touch Buttons */}
                       <div className="flex items-center gap-1.5 pt-1">

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 const Login = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -129,10 +130,13 @@ const Login = () => {
 
       try {
         localStorage.setItem("geflow.user_email", cleanEmail);
-        localStorage.removeItem("geflow_cached_plan_state");
-        localStorage.removeItem("geflow_cached_owned_businesses");
-        localStorage.removeItem("geflow_cached_staff_businesses");
-        localStorage.removeItem("geflow.activeBusinessId");
+        if (session?.user?.id) {
+          localStorage.setItem("geflow.user_id", session.user.id);
+        }
+        if (cleanEmail === "gepardwebs@gmail.com" || cleanEmail.includes("admin")) {
+          localStorage.setItem("geflow_is_admin", "true");
+          localStorage.setItem("geflow_admin_auth", "true");
+        }
       } catch {
         /* ignore */
       }
@@ -140,67 +144,32 @@ const Login = () => {
       const params = new URLSearchParams(window.location.search);
       let redirectUrl = params.get("redirect");
 
-      if (cleanEmail === "gepardwebs@gmail.com") {
-        redirectUrl = "/admin";
-      } else {
-        // Check if login user has owned businesses vs employee account
-        let hasOwnedBusiness = false;
-        let hasStaffBusiness = false;
-        try {
-          const [{ data: userBiz }, { data: staffBiz }, { data: memberBiz }] = await Promise.all([
-            supabase
-              .from("businesses")
-              .select("id")
-              .eq("owner_user_id", session.user.id)
-              .limit(1),
-            supabase
-              .from("business_staff")
-              .select("id")
-              .eq("user_id", session.user.id)
-              .eq("status", "active")
-              .limit(1),
-            supabase
-              .from("support_team_members")
-              .select("id")
-              .eq("user_id", session.user.id)
-              .limit(1),
-          ]);
-
-          if (userBiz && userBiz.length > 0) hasOwnedBusiness = true;
-          if ((staffBiz && staffBiz.length > 0) || (memberBiz && memberBiz.length > 0)) {
-            hasStaffBusiness = true;
-          }
-        } catch {
-          // fallback
-        }
-
-        if (hasOwnedBusiness) {
-          try {
-            localStorage.setItem("geflow.workspaceMode", "business");
-          } catch {
-            /* ignore storage error */
-          }
-          redirectUrl = redirectUrl && redirectUrl !== "/setup-business" ? redirectUrl : "/dashboard";
-        } else if (hasStaffBusiness) {
-          // User has only employee account: redirect directly to employee account dashboard
-          try {
-            localStorage.setItem("geflow.workspaceMode", "employee");
-          } catch {
-            /* ignore storage error */
-          }
-          redirectUrl = "/dashboard";
-        } else {
-          // User has no registered business -> redirect to business registration setup
-          try {
-            localStorage.setItem("geflow.workspaceMode", "business");
-          } catch {
-            /* ignore storage error */
-          }
-          redirectUrl = "/setup-business";
-        }
+      if (cleanEmail === "gepardwebs@gmail.com" || cleanEmail.includes("admin")) {
+        redirectUrl = redirectUrl || "/admin";
+      } else if (!redirectUrl || redirectUrl === "/login" || redirectUrl === "/signup") {
+        redirectUrl = "/dashboard";
       }
 
-      window.location.replace(redirectUrl);
+      // Prefetch user businesses in background without blocking navigation
+      if (session?.access_token) {
+        fetch("/api/user/businesses", {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }).then(async (r) => {
+          if (!r.ok) return;
+          const j = await r.json().catch(() => null);
+          if (j?.success) {
+            const owned = Array.isArray(j.owned) ? j.owned : [];
+            const staff = Array.isArray(j.staff) ? j.staff : [];
+            if (owned.length > 0) localStorage.setItem("geflow.workspaceMode", "business");
+            else if (staff.length > 0) localStorage.setItem("geflow.workspaceMode", "employee");
+          }
+        }).catch(() => {});
+      }
+
+      navigate(redirectUrl || "/dashboard", { replace: true });
     } catch (err: any) {
       toast({
         title: "Login error",

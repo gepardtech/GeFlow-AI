@@ -662,6 +662,125 @@ export function generateLocalBusinessAnalysis(
     q.includes("فروخت بڑھا") ||
     q.includes("گاہک بڑھا");
 
+  const isCookingOrRestaurantQuery =
+    q.includes("cook") ||
+    q.includes("kitchen") ||
+    q.includes("restaurant") ||
+    q.includes("dish") ||
+    q.includes("food") ||
+    q.includes("on order") ||
+    q.includes("made on order") ||
+    q.includes("recipe") ||
+    q.includes("pizza") ||
+    q.includes("burger") ||
+    q.includes("chef") ||
+    q.includes("dine") ||
+    q.includes("takeaway") ||
+    q.includes("کھانا") ||
+    q.includes("پکانا") ||
+    q.includes("ریستوران") ||
+    q.includes("طعام") ||
+    q.includes("مطبخ");
+
+  const isVarietyOrVariantsQuery =
+    q.includes("variet") ||
+    q.includes("variant") ||
+    q.includes("variation") ||
+    q.includes("variable") ||
+    q.includes("size") ||
+    q.includes("matrix") ||
+    q.includes("small") ||
+    q.includes("medium") ||
+    q.includes("large") ||
+    q.includes("رنگ") ||
+    q.includes("سائز") ||
+    q.includes("انواع");
+
+  const isPermissionsOrStaffQuery =
+    q.includes("permission") ||
+    q.includes("role") ||
+    q.includes("cashier") ||
+    q.includes("staff") ||
+    q.includes("employee") ||
+    q.includes("invite") ||
+    q.includes("manager") ||
+    q.includes("access") ||
+    q.includes("restrict") ||
+    q.includes("pin") ||
+    q.includes("صلاحيات") ||
+    q.includes("موظف") ||
+    q.includes("ملازم") ||
+    q.includes("اجازت");
+
+  const isPaymentGatewayQuery =
+    q.includes("payment gateway") ||
+    q.includes("gateway") ||
+    q.includes("paypal") ||
+    q.includes("stripe") ||
+    q.includes("sync gateway") ||
+    q.includes("بوابة دفع") ||
+    q.includes("ادائیگی گیٹ وے");
+
+  if (isCookingOrRestaurantQuery) {
+    if (lang === "roman_urdu") {
+      return [
+        `### 🍳 GeFlow AI Agent: Live Cooking & Made-on-Order Management`,
+        ``,
+        `• **Made on Order Dish Tag**: Restaurant ya kitchen dishes (pizza, burger, fresh pasta) ko Product Dialog me 'Live Cooking / Made on Order Dish' switch se tag karein.`,
+        `• **Stock Count Bypass**: Aisi dishes par opening stock ki pabandi nahi hoti aur system unhe kabhi '0 units' ya 'Out of Stock' mark nahi karta.`,
+        `• **Direct POS Routing**: POS counter par cashier bina kisi stock blockage ke item punch kar sakta hai.`,
+        `• **Food Costing**: Raw items (cheese, dough, meat) ko Purchases me log karein taake accurate dish margins calculate hon.`
+      ].join("\n");
+    }
+    return [
+      `### 🍳 GeFlow AI Agent: Live Cooking & Made-on-Order Kitchen Operations`,
+      ``,
+      `• **On-Demand Preparation**: Freshly prepared restaurant dishes (pizzas, burgers, handcrafted meals) bypass inventory opening counts and are never flagged as "0 Units / Out of Stock".`,
+      `• **POS Counter Throughput**: Cashiers can add made-on-order dishes to cart instantly with a clear \`🍳 MADE ON ORDER\` badge and zero inventory locks.`,
+      `• **Food Costing & Margin Control**: Log raw ingredient purchases (produce, meat, dairy) under Purchases & Expenses to calculate precise plate cost margins.`,
+      `• **Kitchen Ticket Flow**: Order line items print or display directly with customer notes for kitchen prep.`
+    ].join("\n");
+  }
+
+  if (isVarietyOrVariantsQuery) {
+    if (lang === "roman_urdu") {
+      return [
+        `### 🏷️ GeFlow AI Agent: Product Varieties & Pricing Matrix`,
+        ``,
+        `• **Independent Variant Pricing**: Agar aapne Small, Medium, Large varieties par alag prices set ki hain to main base retail price add karne ki zaroorat nahi hoti.`,
+        `• **Inventory Table Badges**: Har product ke aagay uski varieties ka count aur price range (e.g. ₨500 – ₨1,200) auto show hota hai.`,
+        `• **POS Variety Selection Modal**: POS par click karne par dedicated search popup khulta hai jahan se exact variant select ki jati hai.`
+      ].join("\n");
+    }
+    return [
+      `### 🏷️ GeFlow AI Agent: Product Variations & Dynamic Pricing Matrices`,
+      ``,
+      `• **Individual Variety Pricing**: When variant prices are defined in the Variations Matrix (e.g. Small $12, Medium $18, Large $24), the system automatically validates them without requiring a base retail price.`,
+      `• **Inventory Table Transparency**: Products with active variants display a clean \`{N} Varieties\` badge along with the dynamic price span (\`$12.00 – $24.00\`).`,
+      `• **Interactive POS Variety Modal**: Clicking any variable product in POS launches a dedicated modal with live search, SKU inspection, and variant-specific pricing.`
+    ].join("\n");
+  }
+
+  if (isPermissionsOrStaffQuery) {
+    return [
+      `### 👥 GeFlow AI Agent: Role-Based Access Control & Staff Security`,
+      ``,
+      `• **Cashier Permissions**: Cashiers are limited to POS checkout and receipts; cost prices and profit reports remain strictly protected.`,
+      `• **Manager Overrides**: Managers can approve custom discounts and review active drawer shift sessions.`,
+      `• **Session Balancing**: Cash counts at opening and closing ensure strict cash register reconciliation.`
+    ].join("\n");
+  }
+
+  if (isPaymentGatewayQuery) {
+    return [
+      `### 💳 GeFlow AI Agent: Payment Gateways & PayPal Integration`,
+      ``,
+      `• **Verified Gateways**: PayPal is integrated for plan subscriptions and customer POS checkouts.`,
+      `• **Synchronization**: Real-time webhook listeners continuously reconcile transaction status.`,
+      `• **Multi-Tender POS**: Split tender across Cash, Card, QR, and Online Payment Gateways without counter delays.`
+    ].join("\n");
+  }
+
   if (isSalesIncreaseQuery) {
     if (lang === "roman_urdu") {
       return [
@@ -1130,29 +1249,27 @@ export function generateLocalBusinessAnalysis(
     ].join("\n");
   }
 
-  // 4.5. LIVE GEFLOW SYSTEM KNOWLEDGE & FAQS
-  if (q.includes("maryam") || q.includes("who are you") || q.includes("kaun ho") || q.includes("ap kaun") || q.includes("introduce")) {
+  // 4.5. LIVE GEFLOW SYSTEM KNOWLEDGE & IDENTITY
+  if (q.includes("maryam") || q.includes("who are you") || q.includes("kaun ho") || q.includes("ap kaun") || q.includes("introduce") || q.includes("what can you do")) {
     if (lang === "roman_urdu") {
       return [
-        `👋 **Salam! Main hoon Maryam AI — aapki dedicated GeFlow Live Store Assistant.**`,
-        `Main aapke active store (${ctx.business.name}) ke live sales, real-time profits, low-stock inventory alerts, aur configuration settings ki mukammal maloomat rakhti hoon.`,
+        `### ⚡ GeFlow Business AI Agent: Executive System Intelligence`,
+        `Main aapke active store (**${ctx.business.name}**) ka autonomous enterprise business agent hoon. Mera kaam aapke real-time sales ledger, live profits, POS cashier rules, aur inventory controls ko analyze kar ke solid business decisions aur actions lena hai.`,
         ``,
-        `**Live Version Features jin par main madad kar sakti hoon:**`,
-        `• **POS Terminal**: Barcode scanning, discount calculation, split payments aur 80mm thermal receipts.`,
-        `• **Inventory**: Auto SKU generator, low stock alerts, aur quick product purchase.`,
-        `• **Team Hub**: Staff roles (Manager, Cashier, Inventory) aur secure invite links.`,
-        `• **Analytics**: Aapke active store ka real-time profit, revenue aur order trends.`,
+        `• **Financial & Profit Intelligence**: Real-time gross & net profit margins, today's sales velocity (${fmt(ctx.sales.todayRevenue)}), aur monthly cash balance.`,
+        `• **Inventory & Made-on-Order Engine**: Low-stock items (${ctx.inventory.lowStockCount} alerts), auto-SKU, live kitchen cooking bypass, aur variant price matrix.`,
+        `• **POS Terminal Operations**: Barcode scan, split tender, customer Khata / Udhar management, aur thermal receipt formatting.`,
+        `• **RBAC Staff Permissions**: Cashier vs Manager controls aur PayPal gateway transactions.`
       ].join("\n");
     }
     return [
-      `👋 **Hello! I am Maryam AI — your dedicated GeFlow Live Store Assistant.**`,
-      `I have real-time access to your active store (**${ctx.business.name}**) metrics, inventory stock, sales ledger, and operational configurations.`,
+      `### ⚡ GeFlow Business AI Agent: Executive Operations Intelligence`,
+      `I am the autonomous GeFlow Business AI Agent for **${ctx.business.name}**. Rather than a basic conversational chatbot, I operate as an executive decision engine grounded in your live store metrics, backend policies, and operational workflows.`,
       ``,
-      `**Live System Capabilities I support:**`,
-      `• **POS & Checkout**: Fast barcode scanning, multi-mode payments (Cash/Card/Split), and ESC/POS thermal receipts.`,
-      `• **Inventory & Procurement**: One-click SKU generation, threshold alerts, and supplier purchase orders with quick-add.`,
-      `• **Team & Workspace**: Multi-business switching and granular staff roles (Manager, Cashier, Inventory).`,
-      `• **Store Analytics**: Live profit margins, order velocity, and cost valuation strictly scoped to your active store.`,
+      `• **Real-Time Financial Diagnostics**: Live sales velocity (${fmt(ctx.sales.todayRevenue)} today / ${fmt(ctx.sales.monthRevenue)} monthly), net margins (${ctx.sales.netProfitMargin.toFixed(1)}%), and multi-currency accounting.`,
+      `• **Inventory & Kitchen Engine**: Threshold alerts (${ctx.inventory.lowStockCount} items), batch expiry watchlist, auto SKU generation, and made-on-order dish routing.`,
+      `• **POS & Counter Flow**: Fast barcode lookup, split payments, customer store credit / Udhar balances, and ESC/POS thermal printing.`,
+      `• **Access Control & Multi-Store**: Granular staff permissions (Cashier vs Manager vs Admin) and automated multi-location sync.`
     ].join("\n");
   }
 
@@ -1205,108 +1322,146 @@ export function generateLocalBusinessAnalysis(
   if (q.includes("best") || q.includes("top") || q.includes("performing") || q.includes("slow") || q.includes("zyada") || q.includes("popul")) {
     const topList = ctx.sales.topSellingItems.length > 0
       ? ctx.sales.topSellingItems.map((it, idx) => `${idx + 1}. **${it.name}**: ${it.units} units sold (${fmt(it.revenue)} revenue | ${fmt(it.profit)} profit)`).join("\n")
-      : "No detailed item sale logs found yet.";
+      : "No detailed item sale logs recorded yet for this period.";
 
     if (lang === "roman_urdu") {
       return [
-        `**Top Selling Products for ${ctx.business.name}:**`,
+        `### 🏆 Top Performing Products for ${ctx.business.name}`,
         topList,
         ``,
-        `💡 In items ka stock hamesha safe level par rakhein taake sales drop na hon.`
+        `• **Action Item**: Top items ka buffer stock hamesha safe level par rakhein taake peak hours me stock out na ho.`
       ].join("\n");
     }
 
     return [
-      `### Top Performing Products for **${ctx.business.name}**`,
+      `### 🏆 Top Performing Products for **${ctx.business.name}**`,
       topList,
       ``,
-      `**Recommendation:** Maintain ample safety stock on these high-velocity items to maximize throughput.`
+      `• **Action Item**: Maintain ample safety stock on high-velocity items to maximize throughput and counter conversion.`
     ].join("\n");
   }
 
-  // 6. GENERAL BUSINESS OVERVIEW / PERFORMANCE
-  if (isFree) {
-    if (lang === "roman_urdu") {
-      return [
-        `**${ctx.business.name} ka Monthly Summary (Free Plan):**`,
-        `• **Active Currency:** ${ctx.business.currency} | **Tax Rate:** ${ctx.business.taxRate}%`,
-        `• **Pichle 30 Din Ka Revenue:** ${fmt(ctx.sales.monthRevenue)} | **Net Profit:** ${fmt(ctx.sales.monthProfit)} (${ctx.sales.netProfitMargin.toFixed(1)}% margin)`,
-        `• **Inventory Valuation:** ${fmt(ctx.inventory.inventoryCostValue)} (${ctx.inventory.activeProducts} products)`,
-        `• **Stock Status:** ${ctx.inventory.outOfStockCount} out-of-stock, ${ctx.inventory.lowStockCount} low stock alerts`,
-        ``,
-        `Aap mujh se monthly profit, inventory, aur business settings ke bare mein pooch sakte hain!`
-      ].join("\n");
-    }
-
-    return [
-      `### Monthly Business Overview for **${ctx.business.name}** *(Free Plan)*`,
-      `• **Configuration:** Currency: **${ctx.business.currency}** | Tax Rate: **${ctx.business.taxRate}%** | Stock Alert: **${ctx.business.stockAlertLimit} units**`,
-      `• **Trailing 30 Days (Monthly):** **${fmt(ctx.sales.monthRevenue)}** revenue with **${fmt(ctx.sales.monthProfit)}** net profit (**${ctx.sales.netProfitMargin.toFixed(1)}% margin**).`,
-      `• **Inventory Valuation:** **${fmt(ctx.inventory.inventoryCostValue)}** cost value across **${ctx.inventory.activeProducts} active products** (${ctx.inventory.totalUnitsInStock} units).`,
-      `• **Stock Health Alerts:** **${ctx.inventory.outOfStockCount}** out-of-stock, **${ctx.inventory.lowStockCount}** low-stock items.`,
-      ``,
-      `*Note: Upgrade to Standard or Premium to unlock 7-day weekly, daily real-time reports, and all 4 AI operational models.*`
-    ].join("\n");
-  }
-
-  if (isStandard) {
-    if (lang === "roman_urdu") {
-      return [
-        `**${ctx.business.name} ka Weekly & Monthly Summary (Standard Plan):**`,
-        `• **Pichle 7 Din (Weekly):** ${fmt(ctx.sales.weekRevenue)} (Munafa: ${fmt(ctx.sales.weekProfit)})`,
-        `• **Pichle 30 Din (Monthly):** ${fmt(ctx.sales.monthRevenue)} (Munafa: ${fmt(ctx.sales.monthProfit)}, ${ctx.sales.netProfitMargin.toFixed(1)}% margin)`,
-        `• **Inventory Valuation:** ${fmt(ctx.inventory.inventoryCostValue)} (${ctx.inventory.activeProducts} products)`,
-        `• **Stock Status:** ${ctx.inventory.outOfStockCount} out-of-stock, ${ctx.inventory.lowStockCount} low stock alerts`,
-        ``,
-        `💡 *Standard Access:* Analyst aur Operator modes active hain.`
-      ].join("\n");
-    }
-
-    return [
-      `### Weekly & Monthly Business Overview for **${ctx.business.name}** *(Standard Plan)*`,
-      `• **Last 7 Days (Weekly):** **${fmt(ctx.sales.weekRevenue)}** revenue with **${fmt(ctx.sales.weekProfit)}** profit (${ctx.sales.weekTransactions} orders).`,
-      `• **Last 30 Days (Monthly):** **${fmt(ctx.sales.monthRevenue)}** revenue with **${fmt(ctx.sales.monthProfit)}** profit (**${ctx.sales.netProfitMargin.toFixed(1)}% margin**).`,
-      `• **Inventory Valuation:** **${fmt(ctx.inventory.inventoryCostValue)}** across **${ctx.inventory.activeProducts} active products**.`,
-      `• **Stock Health:** **${ctx.inventory.outOfStockCount}** out-of-stock items, **${ctx.inventory.lowStockCount}** low stock alerts.`,
-      ``,
-      `*Upgrade to Premium to unlock daily real-time reports, lifetime data, Knowledge mode, and Advisor mode.*`
-    ].join("\n");
-  }
-
-  // Premium / Lifetime
+  // 6. ADAPTIVE BUSINESS AUDIT & TARGETED RESOLUTION
   if (lang === "roman_urdu") {
     return [
-      `**${ctx.business.name} ka Complete Executive Summary [Premium / Lifetime]:**`,
-      `• **Active Currency:** ${ctx.business.currency} | **Tax Rate:** ${ctx.business.taxRate}%`,
-      `• **Aaj Ki Sales (Daily):** ${fmt(ctx.sales.todayRevenue)} (${ctx.sales.todayTransactions} sales) | **Munafa:** ${fmt(ctx.sales.todayProfit)}`,
-      `• **Pichle 7 Din (Weekly):** ${fmt(ctx.sales.weekRevenue)} | **Munafa:** ${fmt(ctx.sales.weekProfit)}`,
-      `• **Pichle 30 Din (Monthly):** ${fmt(ctx.sales.monthRevenue)} | **Munafa:** ${fmt(ctx.sales.monthProfit)} (${ctx.sales.netProfitMargin.toFixed(1)}% margin)`,
-      `• **Lifetime Profit:** ${fmt(ctx.sales.totalProfit)} on ${fmt(ctx.sales.totalRevenue)} revenue`,
-      `• **Inventory Valuation:** ${fmt(ctx.inventory.inventoryCostValue)} (${ctx.inventory.activeProducts} products, ${ctx.inventory.totalUnitsInStock} units)`,
-      `• **Stock Status:** ${ctx.inventory.outOfStockCount} out-of-stock, ${ctx.inventory.lowStockCount} low stock alerts`,
-      ``,
-      `Aap tamam 4 AI models (Analyst, Operator, Knowledge, Advisor) se full assistance le sakte hain!`
+      `### ⚡ GeFlow AI Agent: Executive Operations Audit for **${ctx.business.name}**`,
+      `• **Active Store Profile**: Currency: **${ctx.business.currency}** | Tax Rate: **${ctx.business.taxRate}%** | Stock Alert Limit: **${ctx.business.stockAlertLimit} units**`,
+      `• **Financial Performance**: Today's Sales: **${fmt(ctx.sales.todayRevenue)}** (${ctx.sales.todayTransactions} orders) | Today's Net Profit: **${fmt(ctx.sales.todayProfit)}** | 30-Day Sales: **${fmt(ctx.sales.monthRevenue)}** (${fmt(ctx.sales.monthProfit)} profit, ${ctx.sales.netProfitMargin.toFixed(1)}% margin)`,
+      `• **Inventory Health**: **${ctx.inventory.activeProducts} active products** in catalog (${ctx.inventory.totalUnitsInStock} total units). Cost Valuation: **${fmt(ctx.inventory.inventoryCostValue)}** | **${ctx.inventory.lowStockCount} items** need reordering`,
+      `• **System Rules & Operations**: Live cooking dishes bypass stock blockage, variety pricing matrix handles independent size prices, and POS terminal supports multi-tender split payments.`,
+      `• **Agent Directive**: Agar aap kisi specific item, discount setting, receipt print, ya staff permission ke baray me jan-na chahte hain to foran poochiye.`
     ].join("\n");
   }
 
   return [
-    `### Comprehensive Performance Audit for **${ctx.business.name}** *(Premium / Lifetime VIP)*`,
-    `• **Configuration:** Currency: **${ctx.business.currency}** | Tax Rate: **${ctx.business.taxRate}%** | Stock Alert: **${ctx.business.stockAlertLimit} units**`,
-    `• **Today's Real-Time Performance (Daily):** **${fmt(ctx.sales.todayRevenue)}** revenue (${ctx.sales.todayTransactions} orders) generating **${fmt(ctx.sales.todayProfit)}** net profit.`,
-    `• **Trailing 7 Days (Weekly):** **${fmt(ctx.sales.weekRevenue)}** revenue with **${fmt(ctx.sales.weekProfit)}** profit.`,
-    `• **Trailing 30 Days (Monthly):** **${fmt(ctx.sales.monthRevenue)}** revenue with **${fmt(ctx.sales.monthProfit)}** profit (**${ctx.sales.netProfitMargin.toFixed(1)}% margin**).`,
-    `• **All-Time Lifetime Totals:** **${fmt(ctx.sales.totalProfit)}** net profit on **${fmt(ctx.sales.totalRevenue)}** lifetime revenue.`,
-    `• **Inventory Valuation:** **${fmt(ctx.inventory.inventoryCostValue)}** cost value across **${ctx.inventory.activeProducts} active products** (${ctx.inventory.totalUnitsInStock} total units).`,
-    `• **Stock Health Alerts:** **${ctx.inventory.outOfStockCount}** out-of-stock items, **${ctx.inventory.lowStockCount}** low-stock items, and **${ctx.inventory.expiringCount}** expiring items.`,
-    ``,
-    `Ask me specific questions across all 4 intelligence models: profit breakdowns, operator drafting, industry knowledge, or multi-branch growth advisory!`
+    `### ⚡ GeFlow AI Agent: Executive Operations Audit for **${ctx.business.name}**`,
+    `• **Active Store Profile**: Organization: **${ctx.business.name}** | Currency: **${ctx.business.currency}** | Tax Rate: **${ctx.business.taxRate}%** | Stock Alert: **${ctx.business.stockAlertLimit} units**`,
+    `• **Financial Performance**: Today's Revenue: **${fmt(ctx.sales.todayRevenue)}** (${ctx.sales.todayTransactions} orders) | Today's Net Profit: **${fmt(ctx.sales.todayProfit)}** | 30-Day Revenue: **${fmt(ctx.sales.monthRevenue)}** (${fmt(ctx.sales.monthProfit)} net profit, **${ctx.sales.netProfitMargin.toFixed(1)}% margin**)`,
+    `• **Inventory Valuation & Health**: **${ctx.inventory.activeProducts} active products** in catalog (${ctx.inventory.totalUnitsInStock} shelf units). Cost Valuation: **${fmt(ctx.inventory.inventoryCostValue)}** | Retail Worth: **${fmt(ctx.inventory.inventoryRetailValue)}** | **${ctx.inventory.lowStockCount} items** below safety threshold`,
+    `• **Operational Controls**: Made-on-order dishes (kitchen prep) run without stock locks, product variety matrices apply independent prices, and POS cashier splits are active.`,
+    `• **Agent Directive**: Ask any specific question regarding margins, menu costing, cashier drawer balancing, receipt templates, or product variants for instant precision guidance.`
   ].join("\n");
 }
 
 /**
  * Storage helpers for AI Assistant conversations in Supabase / User Cache.
  */
+export interface AIChatSession {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: AIChatMessage[];
+  mode: AIMode;
+  businessId?: string;
+}
+
+export const PLAN_CHAT_LIMITS: Record<PlanId, number> = {
+  free: 2,
+  standard: 10,
+  premium: 20,
+  lifetime: Infinity,
+};
+
+export function getPlanChatLimit(planId: PlanId = "free"): number {
+  return PLAN_CHAT_LIMITS[planId] ?? 2;
+}
+
+const SESSIONS_CACHE_PREFIX = "geflow_ai_sessions_";
 const CONV_CACHE_PREFIX = "geflow_ai_conv_";
+
+export function loadStoredAISessions(businessId?: string | null, userId?: string | null): AIChatSession[] {
+  const key = `${SESSIONS_CACHE_PREFIX}${businessId || "global"}_${userId || "anon"}`;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.debug("Failed to read stored AI sessions:", e);
+  }
+
+  // Fallback: check if legacy single conversation exists and migrate it
+  const legacy = loadStoredAIConversation(businessId, userId);
+  if (legacy && legacy.length > 0) {
+    const migrated: AIChatSession = {
+      id: `session_${Date.now()}`,
+      title: legacy.find((m) => m.role === "user")?.content.slice(0, 32) || "Business Intelligence Chat",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messages: legacy,
+      mode: "analyst",
+      businessId: businessId || undefined,
+    };
+    saveStoredAISessions([migrated], businessId, userId);
+    return [migrated];
+  }
+
+  return [];
+}
+
+export function saveStoredAISessions(
+  sessions: AIChatSession[],
+  businessId?: string | null,
+  userId?: string | null
+): void {
+  const key = `${SESSIONS_CACHE_PREFIX}${businessId || "global"}_${userId || "anon"}`;
+  try {
+    localStorage.setItem(key, JSON.stringify(sessions));
+  } catch (e) {
+    console.debug("Failed to persist AI sessions:", e);
+  }
+}
+
+export function createNewAISession(
+  title?: string,
+  mode: AIMode = "analyst",
+  businessId?: string | null
+): AIChatSession {
+  return {
+    id: `chat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    title: title || "New Business Query",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    messages: [],
+    mode,
+    businessId: businessId || undefined,
+  };
+}
+
+export function deleteStoredAISession(
+  sessionId: string,
+  businessId?: string | null,
+  userId?: string | null
+): AIChatSession[] {
+  const sessions = loadStoredAISessions(businessId, userId);
+  const remaining = sessions.filter((s) => s.id !== sessionId);
+  saveStoredAISessions(remaining, businessId, userId);
+  return remaining;
+}
 
 export function loadStoredAIConversation(businessId?: string | null, userId?: string | null): AIChatMessage[] {
   const key = `${CONV_CACHE_PREFIX}${businessId || "global"}_${userId || "anon"}`;
@@ -1329,19 +1484,6 @@ export async function saveAIConversation(
   try {
     const trimmed = messages.slice(-40);
     localStorage.setItem(key, JSON.stringify(trimmed));
-
-    // Also sync to Supabase user metadata asynchronously
-    if (userId && businessId) {
-      try {
-        await supabase.auth.updateUser({
-          data: {
-            [`ai_last_chat_${businessId}`]: trimmed.slice(-10),
-          },
-        });
-      } catch (err) {
-        console.debug("User metadata AI conversation sync:", err);
-      }
-    }
   } catch (e) {
     console.debug("Failed to store AI conversation:", e);
   }

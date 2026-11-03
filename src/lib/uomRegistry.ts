@@ -898,6 +898,7 @@ export interface ProductStockBreakdown {
   subUnitName: string; // e.g. "Tablet"
   displayText: string; // e.g. "10 Boxes (120 tablets)" or "10 Boxes + 6 tablets"
   subText: string; // e.g. "120 tablets · 12 per box"
+  isMadeOnOrder?: boolean; // For restaurant dishes cooked on demand / live manufactured products
 }
 
 export function getDefaultBaseUnit(uom: string, industryType?: string | null): string {
@@ -968,6 +969,38 @@ export function computeProductStock(
       baseUnit = "tablet";
       subUnitName = "Tablet";
     }
+  }
+
+  // Check if item is a live-cooked dish or made-to-order manufacturing item (e.g. restaurant pizza, burger)
+  const isMadeOnOrder =
+    desc.includes("[MADE_ON_ORDER]") ||
+    desc.includes("[COOKING]") ||
+    desc.includes("[ON_DEMAND]") ||
+    desc.includes("[LIVE_COOKING]") ||
+    desc.toLowerCase().includes("made on order") ||
+    desc.toLowerCase().includes("live cooking") ||
+    desc.toLowerCase().includes("cooked on order") ||
+    rawUom === "dish" ||
+    rawUom === "plate" ||
+    rawUom === "portion" ||
+    rawUom === "slice";
+
+  if (isMadeOnOrder) {
+    return {
+      listingStock: 999999,
+      packSize: 1,
+      totalSubUnits: 999999,
+      fullPacks: 999999,
+      looseSubUnits: 0,
+      hasFractions: false,
+      uom: rawUom,
+      uomLabel,
+      baseUnit,
+      subUnitName,
+      displayText: "Made on Order",
+      subText: "Live Kitchen Preparation",
+      isMadeOnOrder: true,
+    };
   }
 
   // 4. Resolve Stock in Base Units
@@ -1072,6 +1105,8 @@ export function isProductLowStock(
   defaultThreshold = 10
 ): boolean {
   const stock = resolveProductUnits(p);
+  // Made on order dishes are cooked live and are never out of stock or low stock
+  if (stock.isMadeOnOrder) return false;
   // If 0 or negative, it's out-of-stock (handled separately in out of stock view)
   if (stock.totalSubUnits <= 0) return false;
 

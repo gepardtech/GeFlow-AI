@@ -1,43 +1,115 @@
 {
   "parent_company": "Gepard Techs",
-  "social_links": [],
+  "social_links": [
+    {
+      "id": "soc_1791911381386_1v4g",
+      "url": "https://facebook.com/geflowai.official",
+      "label": "Facebook",
+      "order": 1,
+      "enabled": true,
+      "platform": "facebook"
+    },
+    {
+      "id": "soc_1791911650092_l0pl",
+      "url": "https://instagram.com/geflow.ai?cplk=emU5ZG16cTFwcGg2",
+      "label": "Instagram",
+      "order": 2,
+      "enabled": true,
+      "platform": "instagram"
+    },
+    {
+      "id": "soc_1791911689970_scon",
+      "url": "https://pinterest.com/geflow.ai",
+      "label": "Pinterest",
+      "order": 3,
+      "enabled": true,
+      "platform": "pinterest"
+    },
+    {
+      "id": "soc_1791911780742_rz1w",
+      "url": "mailto:support@geflowai.com",
+      "label": "Email / Newsletter",
+      "order": 4,
+      "enabled": true,
+      "platform": "email"
+    }
+  ],
   "footer_copyright": {
-    "text": "Copyright 2026",
-    "wordUrls": []
+    "text": "© 2026 GeFlow AI. All rights reserved. Built by Gepard Techs.",
+    "wordUrls": [
+      {
+        "id": "w_1791995618302",
+        "url": "/",
+        "word": "GeFlow AI",
+        "openInNewTab": false
+      },
+      {
+        "id": "w_1791995699550",
+        "url": "https://instagram.com/gepardweb",
+        "word": "Gepard Techs",
+        "openInNewTab": true
+      }
+    ]
   },
   "about_members": [
     {
       "id": "mem_1",
-      "bio": "Founder of Gepard Tech & Creator of GeFlow ecosystem.",
+      "bio": "Building AI-powered platforms and practical technology solutions that help businesses work smarter, operate efficiently, and grow.",
       "name": "SG Bilal",
-      "role": "Chairman & CEO",
+      "role": "Founder & Chief Technology Officer at Gepard Techs",
       "order": 1,
       "enabled": true,
-      "imageUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
-      "image_url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=faces",
+      "imageUrl": "https://gvkvljxhufsrgyfsqrkc.supabase.co/storage/v1/object/public/about_members/member_mem_1_1792337746432.jpg",
+      "image_url": "https://gvkvljxhufsrgyfsqrkc.supabase.co/storage/v1/object/public/about_members/member_mem_1_1792337746432.jpg",
+      "socialLinks": {
+        "x": "",
+        "email": "Support@geflowai.com",
+        "github": "",
+        "twitter": "",
+        "facebook": "https://facebook.com/geflowai.official",
+        "linkedin": "",
+        "instagram": "https://instagram.com/geflow.ai",
+        "pinterest": "https://pinterest.com/geflow.ai"
+      },
       "social_links": {
-        "x": "https://x.com/gepardweb",
-        "email": "gepardwebs@gmail.com",
-        "github": "https://github.com/gepardweb",
-        "facebook": "https://web.facebook.com/gepardweb/",
-        "linkedin": "https://www.linkedin.com/company/gepardweb",
-        "instagram": "https://www.instagram.com/gepardweb/",
-        "pinterest": "https://www.pinterest.com/gepardwebs"
+        "x": "",
+        "email": "Support@geflowai.com",
+        "github": "",
+        "twitter": "",
+        "facebook": "https://facebook.com/geflowai.official",
+        "linkedin": "",
+        "instagram": "https://instagram.com/geflow.ai",
+        "pinterest": "https://pinterest.com/geflow.ai"
       }
     },
     {
       "id": "mem_sarah",
-      "name": "Sarah Jenkins",
-      "role": "Head of AI & Product Architecture",
-      "bio": "Pioneering intelligent inventory heuristics and machine learning algorithms for high-speed commerce.",
-      "image_url": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop&crop=faces",
-      "imageUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop&crop=faces",
+      "bio": "Leading business strategy, growth, and company operations to turn innovative ideas into valuable technology products and business solutions.",
+      "name": "Rana Anas Nazakat",
+      "role": "Chief Executive Officer at Gepard Techs",
       "order": 2,
       "enabled": true,
+      "imageUrl": "https://gvkvljxhufsrgyfsqrkc.supabase.co/storage/v1/object/public/about_members/member_mem_sarah_1792338028563.jpg",
+      "image_url": "https://gvkvljxhufsrgyfsqrkc.supabase.co/storage/v1/object/public/about_members/member_mem_sarah_1792338028563.jpg",
+      "socialLinks": {
+        "x": "",
+        "email": "Support@geflowai.com",
+        "github": "",
+        "twitter": "",
+        "facebook": "",
+        "linkedin": "",
+        "instagram": "",
+        "pinterest": ""
+      },
       "social_links": {
-        "linkedin": "https://linkedin.com",
-        "x": "https://x.com",
-        "email": "sarah@geflow.com"
+        "x": "",
+        "email": "Support@geflowai.com",
+        "github": "",
+        "twitter": "",
+        "facebook": "",
+        "linkedin": "",
+        "instagram": "",
+        "pinterest": ""
       }
     }
   ]

@@ -103,11 +103,11 @@ const UserPanelGate = ({ children, pageTitle }: Props) => {
   // Prevent false redirection if user has an active or cached business in localStorage
   const hasStoredBusiness = useMemo(() => {
     try {
-      const activeId = localStorage.getItem("geflow_active_business_id");
+      const activeId = localStorage.getItem("geflow_active_business_id") || localStorage.getItem("geflow.activeBusinessId");
       if (activeId) return true;
-      const owned = localStorage.getItem("geflow_owned_businesses");
+      const owned = localStorage.getItem("geflow_owned_businesses") || localStorage.getItem("geflow_cached_owned_businesses");
       if (owned && JSON.parse(owned).length > 0) return true;
-      const staff = localStorage.getItem("geflow_staff_businesses");
+      const staff = localStorage.getItem("geflow_staff_businesses") || localStorage.getItem("geflow_cached_staff_businesses");
       if (staff && JSON.parse(staff).length > 0) return true;
     } catch {
       /* ignore storage read error */
@@ -119,23 +119,8 @@ const UserPanelGate = ({ children, pageTitle }: Props) => {
     return <MaintenanceScreen />;
   }
 
-  // If user (including admin) has no registered business, redirect to business registration setup steps
-  const isSetupRoute =
-    location.pathname.startsWith("/setup") ||
-    location.pathname.startsWith("/business-setup") ||
-    location.pathname.startsWith("/business/setup") ||
-    location.pathname.startsWith("/onboarding");
-
-  if (
-    hasLoaded &&
-    !bizLoading &&
-    businesses.length === 0 &&
-    staffBusinesses.length === 0 &&
-    !hasStoredBusiness &&
-    !isSetupRoute
-  ) {
-    return <Navigate to="/setup-business" replace />;
-  }
+  // Do not trap users in setup-business; allow access to the user panel layout
+  // with contextual setup prompts rather than jarring redirect loops.
 
   if (
     !roleLoading &&

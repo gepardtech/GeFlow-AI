@@ -1,0 +1,1010 @@
+# GeFlow AI
+## Implementation Step 02: Existing UI & Functionality Baseline Freeze
+
+**Project:** GeFlow AI  
+**Parent Company:** Gepard Tech  
+**Product Tagline:** Fast. Smart. Reliable.  
+**Implementation Phase:** Step 02  
+**Step Name:** Existing UI & Functionality Baseline Freeze  
+**Prerequisite:** Step 01 — Existing Application Audit  
+**Execution Mode:** Read-Only Inspection, Baseline Documentation & Freeze Preparation  
+**Modification Permission:** Not Authorized  
+**Status:** Pending Explicit Authorization
+
+---
+
+# 1. Objective
+
+The objective of this phase is to establish a documented, evidence-based baseline of GeFlow AI's existing user interface, user experience, application functionality, business logic, navigation, data flows, integrations, permissions, and operational workflows.
+
+This baseline will serve as the reference point for all future implementation work, particularly the integration of 29 dedicated AI agents for GeFlow's 29 business categories.
+
+Before any new agent-related development begins, the builder must understand and document how the existing application currently behaves.
+
+The baseline must protect:
+
+- Existing page layouts and component structures.
+- Existing colors, typography, spacing, icons, and visual styles.
+- Existing navigation and routing.
+- Existing authentication and account management.
+- Existing dashboard functionality.
+- Existing business-category and product-category management.
+- Existing unit-of-measurement management.
+- Existing purchasing and supplier workflows.
+- Existing inventory management.
+- Existing POS and sales workflows.
+- Existing reporting and analytics.
+- Existing billing, subscription, and pricing functionality.
+- Existing administrative interfaces.
+- Existing permissions and security controls.
+- Existing database structures and data relationships.
+- Existing APIs and integrations.
+- Existing responsive behavior.
+- Existing loading, error, success, and empty states.
+
+**Core rule: New AI capabilities must integrate with the existing GeFlow application. They must not silently redesign, replace, remove, or damage existing functionality.**
+
+---
+
+# 2. Strict Execution Rules
+
+The builder must follow these rules throughout this phase.
+
+## 2.1 No Application Modifications
+
+This phase is for baseline inspection and documentation only.
+
+The builder must not:
+
+- Modify existing source code.
+- Modify database schemas or migrations.
+- Create, rename, or delete database tables.
+- Change database records or production data.
+- Modify authentication settings.
+- Modify authorization policies or database security rules.
+- Change environment variables or application configuration.
+- Modify API routes or server functions.
+- Change frontend components.
+- Modify global CSS, themes, typography, or design tokens.
+- Redesign any page.
+- Modify existing navigation.
+- Add, remove, or disable application features.
+- Install, remove, or upgrade dependencies.
+- Change package versions.
+- Change existing AI configurations.
+- Modify existing business logic.
+- Deploy changes.
+- Execute database migrations.
+- Run scripts that alter application data.
+- Perform destructive tests against the existing application.
+
+Read-only inspection is permitted.
+
+Creating a separate baseline report or documentation artifact is permitted, provided it does not alter the application's runtime behavior.
+
+## 2.2 No Unauthorized Fixes
+
+If the builder discovers an existing bug, broken page, visual inconsistency, security concern, or incomplete feature, it must document the finding.
+
+It must not fix the issue during this phase.
+
+Every finding must be classified as one of the following:
+
+1. Working as intended.
+2. Partially working.
+3. Broken.
+4. Not implemented.
+5. Planned but not implemented.
+6. Unable to verify.
+7. Requires security review.
+8. Requires product-owner decision.
+
+Existing defects must not be silently treated as part of the approved baseline.
+
+## 2.3 Preserve the Current State
+
+The builder must distinguish between:
+
+- The current state of the application.
+- The intended product behavior.
+- Previously documented plans.
+- Features that have actually been implemented.
+- Features that have been partially implemented.
+- Features that remain planned.
+- Features whose implementation status cannot be verified.
+
+Documentation or design files alone do not prove that a feature works in the application.
+
+Where possible, findings must be supported by actual application behavior, source files, component references, routes, database definitions, tests, or other relevant evidence.
+
+## 2.4 Stop at the End
+
+After preparing the complete baseline documentation, the builder must stop.
+
+It must not automatically begin the next implementation phase.
+
+Further work requires explicit authorization from the project owner.
+
+---
+
+# 3. Baseline Scope
+
+The baseline must cover the following areas.
+
+## 3.1 Application-Wide UI Baseline
+
+Inspect the overall visual and structural design of GeFlow AI.
+
+Document:
+
+- Application shell and layout.
+- Header and top navigation.
+- Sidebar navigation.
+- Main content containers.
+- Page width and spacing conventions.
+- Typography and font usage.
+- Color palette.
+- Background colors.
+- Borders and dividers.
+- Card styles.
+- Button styles.
+- Input fields.
+- Dropdowns and selectors.
+- Tabs.
+- Tables.
+- Pagination.
+- Dialogs and modal windows.
+- Drawers and side panels.
+- Tooltips.
+- Toast notifications.
+- Alert banners.
+- Icons.
+- Loading indicators.
+- Empty states.
+- Error states.
+- Success states.
+- Confirmation dialogs.
+- Responsive navigation.
+- Mobile-specific layouts.
+- Tablet layouts.
+- Desktop layouts.
+
+Record the actual design tokens and component implementations where discoverable.
+
+Do not invent design specifications when the actual values cannot be verified.
+
+## 3.2 Page-by-Page Inventory
+
+Create a complete inventory of existing application routes and pages.
+
+For each page, document:
+
+| Field | Required information |
+|---|---|
+| Page ID | Unique baseline reference |
+| Page name | Existing page name |
+| Route | Actual route or path |
+| Access level | Public, authenticated, or role-restricted |
+| User roles | Roles that can access the page |
+| Parent navigation | Sidebar, header, submenu, or other entry point |
+| Main purpose | Actual business purpose |
+| UI components | Important visible components |
+| Actions | Existing user actions |
+| Data sources | Tables, APIs, services, or other sources |
+| Dependencies | Components and services required |
+| Loading behavior | Current loading state |
+| Error behavior | Current error handling |
+| Empty state | Existing empty-state behavior |
+| Responsive behavior | Verified responsive characteristics |
+| Implementation status | Working, partial, broken, planned, or unverified |
+| Evidence | File paths, route references, tests, or observations |
+
+Include all discovered pages, not merely the pages the builder expects to find.
+
+If a page exists in the source code but cannot be reached through the current interface, record that separately.
+
+Do not assume that an inaccessible page is unused or safe to remove.
+
+## 3.3 Authentication and Account UI
+
+Record the existing behavior and appearance of:
+
+- Login.
+- Signup.
+- Logout.
+- Password recovery.
+- Password reset.
+- Email verification.
+- Session handling.
+- Profile management.
+- Organization or business selection.
+- Account settings.
+- Role-based access.
+- Unauthorized-access states.
+
+Only document features that actually exist.
+
+If an expected feature is absent, identify it as missing rather than implementing it.
+
+## 3.4 Dashboard Baseline
+
+Document the existing dashboard in detail.
+
+Capture:
+
+- Layout and visual hierarchy.
+- Summary cards.
+- Business metrics.
+- Charts.
+- Tables.
+- Recent activity.
+- Alerts.
+- Shortcuts.
+- Filters.
+- Date ranges.
+- Dashboard widgets.
+- Available actions.
+- Data-loading behavior.
+- Role-dependent content.
+- Subscription-dependent content.
+- Responsive behavior.
+
+Record how each visible metric is calculated, if its implementation can be established.
+
+Do not change calculations or replace actual data with sample data.
+
+## 3.5 Business and Product Category Management
+
+Document the existing functionality for:
+
+- Creating business categories.
+- Editing business categories.
+- Viewing business categories.
+- Activating or deactivating categories.
+- Assigning categories to businesses.
+- Creating product categories.
+- Editing product categories.
+- Organizing category hierarchies.
+- Associating products with categories.
+- Applying category-specific configurations.
+- Managing category-dependent business workflows.
+
+Document the relationship between business categories and product categories.
+
+Do not assume that these two concepts are interchangeable.
+
+Record current validation rules, default values, dependencies, and error behavior.
+
+## 3.6 Unit of Measurement Management
+
+Document the current UoM management interface and logic.
+
+Inspect:
+
+- UoM list.
+- UoM creation.
+- UoM editing.
+- UoM deletion or deactivation, if supported.
+- Parent UoM relationships.
+- Conversion logic, if implemented.
+- Target business-category associations.
+- Description fields.
+- Validation rules.
+- Usage in product records.
+- Usage in inventory.
+- Usage in purchasing.
+- Usage in POS.
+- Restrictions involving UoMs already used by existing records.
+
+Document the actual behavior without changing it.
+
+## 3.7 Purchase Management
+
+Record existing purchase workflows, including:
+
+- Purchase creation.
+- Supplier selection.
+- Product selection.
+- Quantity and UoM selection.
+- Purchase prices.
+- Taxes and discounts, if supported.
+- Purchase totals.
+- Purchase status.
+- Receiving workflow.
+- Stock updates.
+- Supplier balances.
+- Purchase returns.
+- Purchase history.
+- Validation and error handling.
+
+Only include operations that exist in the current application.
+
+## 3.8 Inventory Management
+
+Document:
+
+- Product creation and editing.
+- SKU and barcode handling.
+- Product variants.
+- Product categories.
+- Stock quantities.
+- Purchase prices.
+- Sale prices.
+- Stock adjustments.
+- Stock movements.
+- Stock transfers, if supported.
+- Batch management.
+- Expiry dates.
+- Reorder levels.
+- Low-stock alerts.
+- Inventory valuation.
+- Import and export.
+- Bulk operations.
+- Product search and filters.
+- Inventory history.
+- Inventory-related permissions.
+
+Record which operations update inventory and how those updates occur.
+
+Identify whether stock changes happen immediately, through server-side operations, through background processing, or through another mechanism.
+
+Do not modify stock records during baseline inspection.
+
+## 3.9 POS and Sales
+
+Document the existing POS experience and sales workflow.
+
+Inspect:
+
+- Product search.
+- Barcode scanning.
+- Cart management.
+- Quantity changes.
+- Discounts.
+- Tax calculations.
+- Customer selection.
+- Payment methods.
+- Payment validation.
+- Sale completion.
+- Invoice generation.
+- Invoice printing or downloading.
+- Sale cancellation.
+- Returns and refunds.
+- Stock deduction.
+- Cashier permissions.
+- Receipt layout.
+- Transaction history.
+- Offline behavior, if supported.
+
+For each operation, record its actual effect on sales records, inventory, payments, and reports.
+
+Do not perform real financial transactions or create production sales merely to test the interface.
+
+Use an existing safe test environment if one is available and authorized.
+
+## 3.10 Reports and Analytics
+
+Document the existing reports and analytical features.
+
+Record:
+
+- Report names.
+- Filters.
+- Date ranges.
+- Business-category scope.
+- Data sources.
+- Calculation logic.
+- Export options.
+- Permissions.
+- Empty states.
+- Error behavior.
+- Dashboard/report consistency.
+- Subscription restrictions, if present.
+
+Do not change formulas, chart types, or report layouts.
+
+## 3.11 Billing, Pricing, and Subscription UI
+
+Inspect existing billing-related pages and workflows, including:
+
+- Pricing page.
+- Subscription plans.
+- Current subscription display.
+- Plan selection.
+- Upgrade and downgrade flows.
+- Billing history.
+- Payment status.
+- Coupon handling.
+- Referral-related interfaces, if implemented.
+- Usage limits.
+- Subscription restrictions.
+- Payment failure states.
+- Cancellation and renewal behavior.
+
+Document actual functionality and configuration.
+
+Do not modify plan prices, discount rules, billing settings, payment provider configurations, or customer subscriptions.
+
+## 3.12 Administrative UI
+
+Document the existing administrative interface and its current capabilities.
+
+Inspect relevant areas such as:
+
+- User management.
+- Role management.
+- Business management.
+- Category management.
+- Product configuration.
+- UoM management.
+- Subscription management.
+- Announcements.
+- Notifications.
+- Support tickets.
+- AI settings.
+- Existing agent settings, if any.
+- Audit logs.
+- Reporting.
+- System configuration.
+
+The above list is an inspection checklist, not an instruction to create missing pages.
+
+Record which capabilities exist and which are absent.
+
+## 3.13 Existing AI Features
+
+Document all AI-related functionality that currently exists.
+
+Inspect:
+
+- AI entry points.
+- Existing AI assistants.
+- Existing prompts and configurations.
+- AI provider integrations.
+- Model selection.
+- API routes.
+- Server-side AI calls.
+- Data passed to AI models.
+- Tool invocation.
+- Error handling.
+- Usage tracking.
+- Usage limits.
+- AI-related permissions.
+- AI-related database records.
+- AI-generated content storage.
+- Existing conversation history, if any.
+
+Do not introduce the 29 business-category agents during this phase.
+
+Do not replace an existing AI implementation or assume that planned agent functionality is already present.
+
+## 3.14 Navigation and Routing
+
+Record:
+
+- All discovered routes.
+- Public routes.
+- Authenticated routes.
+- Role-restricted routes.
+- Navigation hierarchy.
+- Sidebar items.
+- Header links.
+- Breadcrumbs.
+- Redirect behavior.
+- Route guards.
+- Unknown-route behavior.
+- Deep-link behavior.
+- Mobile navigation.
+- Links between related modules.
+
+Identify broken or duplicate navigation paths without modifying them.
+
+## 3.15 Permissions and Data Boundaries
+
+Document existing authorization and data-isolation behavior.
+
+Inspect:
+
+- User roles.
+- Organization or business ownership.
+- Route-level access checks.
+- Component-level restrictions.
+- Server-side authorization.
+- API authorization.
+- Database row-level security, if applicable.
+- Tenant-scoped queries.
+- Data ownership.
+- Admin privileges.
+- Existing AI permissions.
+- Sensitive data handling.
+
+Do not weaken security controls for convenience.
+
+Do not assume that hiding a button is sufficient authorization.
+
+Record any unverified or potentially unsafe behavior as a finding requiring further investigation.
+
+## 3.16 Existing Integrations
+
+Inventory relevant integrations, including:
+
+- Database services.
+- Authentication providers.
+- AI providers.
+- Payment providers.
+- Email services.
+- File storage.
+- Barcode or scanning libraries.
+- Analytics.
+- External APIs.
+- Webhooks.
+- Background jobs.
+- Third-party SDKs.
+
+Record which integrations are active, configured, partially configured, unused, or unverified.
+
+Never expose API keys, passwords, tokens, private credentials, or other secrets in the baseline report.
+
+## 3.17 Responsive and Accessibility Baseline
+
+Record verified behavior at the viewport sizes supported by the application.
+
+Inspect:
+
+- Desktop layouts.
+- Tablet layouts.
+- Mobile layouts.
+- Navigation behavior.
+- Table overflow.
+- Modal sizing.
+- Form usability.
+- Touch targets.
+- Keyboard navigation.
+- Visible focus states.
+- Form labels.
+- Accessible names.
+- Color contrast, where measurable.
+- Screen-reader-related attributes, where applicable.
+
+Do not claim accessibility compliance based on visual inspection alone.
+
+Document known issues and areas that have not been tested.
+
+---
+
+# 4. Functionality Baseline
+
+The UI baseline is only one part of this phase. Existing business behavior must also be documented.
+
+For each significant feature, record:
+
+1. Feature name.
+2. Business purpose.
+3. Entry point.
+4. User roles permitted to use it.
+5. Required input.
+6. Validation rules.
+7. Processing logic.
+8. Database reads.
+9. Database writes.
+10. API or server operations.
+11. Result presented to the user.
+12. Error handling.
+13. Side effects.
+14. Dependencies.
+15. Existing tests.
+16. Known limitations.
+17. Verification status.
+18. Evidence references.
+
+### Example
+
+Suppose the existing application has a feature that completes a POS sale.
+
+The baseline must establish, where verifiable:
+
+- How the user starts a sale.
+- Which products can be selected.
+- How quantities and totals are calculated.
+- Which permissions are required.
+- How the sale is submitted.
+- Which server-side operations are executed.
+- How the sale is stored.
+- How stock is deducted.
+- How payment status is recorded.
+- How the receipt is produced.
+- How failures are handled.
+- Whether duplicate submissions are prevented.
+- Whether the operation is atomic or otherwise protected against inconsistent updates.
+
+This is an illustrative example of the required inspection depth, not a claim that every listed behavior is currently implemented.
+
+---
+
+# 5. Baseline Classification System
+
+Every discovered page, feature, workflow, and relevant component must receive a clear status.
+
+Use these classifications:
+
+### A. Working and Verified
+
+The feature was inspected and its relevant behavior was successfully verified.
+
+### B. Partially Working
+
+Some functionality works, but at least one required operation is incomplete or failing.
+
+### C. Broken
+
+A reproducible failure prevents the feature from behaving as expected.
+
+### D. Implemented but Unverified
+
+Relevant implementation exists, but its runtime behavior could not be safely verified.
+
+### E. Planned but Not Implemented
+
+Documentation or planning references the feature, but there is no sufficient evidence that it exists in the running application.
+
+### F. Not Found
+
+The feature was not found in the inspected application or project sources.
+
+### G. Blocked
+
+Verification requires access, credentials, infrastructure, permission, or another dependency that is unavailable.
+
+### H. Requires Further Investigation
+
+Available evidence is insufficient to assign a more precise status.
+
+Every classification must include evidence or an explicit explanation of the verification limitation.
+
+---
+
+# 6. Visual Baseline and Evidence Capture
+
+Create a reference record for the existing UI.
+
+Where the environment supports safe screenshots, capture representative screenshots of existing pages without changing their content or configuration.
+
+Capture relevant states such as:
+
+- Normal page state.
+- Expanded navigation.
+- Open dropdowns.
+- Open modals.
+- Form validation errors.
+- Loading states.
+- Empty states.
+- Success states.
+- Error states.
+- Responsive layouts.
+
+Do not fabricate screenshots or use mockups as proof of the existing implementation.
+
+For every screenshot, record:
+
+- Screenshot reference ID.
+- Page name.
+- Route.
+- Viewport dimensions.
+- User role used for inspection.
+- State being captured.
+- Date of capture.
+- Relevant observation.
+
+Do not capture or expose sensitive customer information, credentials, payment information, or other private data.
+
+If screenshots cannot be captured, document the limitation and use other available evidence.
+
+---
+
+# 7. Existing UI and Functionality Freeze Register
+
+Create a dedicated register that future implementation phases must reference.
+
+The register must include:
+
+| Field | Description |
+|---|---|
+| Baseline ID | Unique reference |
+| Page or feature | Existing application element |
+| Current state | Verified current behavior |
+| Visual reference | Screenshot or component reference |
+| Code reference | Relevant source files |
+| Route reference | Relevant application route |
+| Data dependencies | Tables, APIs, or services |
+| Criticality | Critical, high, medium, or low |
+| Freeze requirement | What must remain unchanged |
+| Known defect | Existing issue, if any |
+| Allowed change | None unless explicitly authorized |
+| Regression test | Existing or proposed verification |
+| Verification status | Verified, partial, or unverified |
+
+The register must explicitly protect the following:
+
+- Existing page structure.
+- Existing component behavior.
+- Existing routes.
+- Existing user workflows.
+- Existing business rules.
+- Existing database relationships.
+- Existing API contracts.
+- Existing permissions.
+- Existing reports and calculations.
+- Existing billing behavior.
+- Existing integrations.
+- Existing responsive behavior.
+
+The register is a baseline and change-control document. It does not automatically create a technical lock or prevent a developer from changing files. Any actual repository protection or deployment control must be separately reviewed and explicitly authorized.
+
+---
+
+# 8. Regression Testing Baseline
+
+Inspect existing tests before creating any new tests.
+
+Document:
+
+- Unit tests.
+- Component tests.
+- Integration tests.
+- API tests.
+- End-to-end tests.
+- Database tests.
+- Security tests.
+- Existing test fixtures.
+- Test environments.
+- Current test results.
+- Missing critical coverage.
+
+Do not install testing tools, alter dependencies, modify configuration, or create test code during this phase unless the project owner explicitly authorizes that work.
+
+A proposed regression checklist may be included in the documentation.
+
+## 8.1 Core Regression Areas
+
+At minimum, identify regression coverage requirements for:
+
+1. Authentication and logout.
+2. Role-based access.
+3. Business selection and ownership.
+4. Business-category management.
+5. Product-category management.
+6. UoM management.
+7. Supplier management.
+8. Purchase creation.
+9. Inventory updates.
+10. Stock adjustments.
+11. POS sale completion.
+12. Payment handling.
+13. Invoice generation.
+14. Sales history.
+15. Reports and calculations.
+16. Subscription and billing flows.
+17. Existing AI features.
+18. Administrative workflows.
+19. Tenant isolation.
+20. Responsive UI.
+
+These are proposed test areas. Do not claim they already have automated tests unless evidence confirms it.
+
+---
+
+# 9. Future 29-Agent Compatibility Baseline
+
+GeFlow will eventually support 29 dedicated AI agents, one per business category.
+
+This phase must document the existing application structures that those agents may later need to interact with.
+
+The 29 categories are:
+
+1. CAT-001 — General Retail & Department Store
+2. CAT-002 — Agriculture & Farming Supplies
+3. CAT-003 — Wholesale & Distribution Hub
+4. CAT-004 — Optometry & Eyewear Store
+5. CAT-005 — Pet Shop & Veterinary Supplies
+6. CAT-006 — Sports, Gym & Fitness Equipment
+7. CAT-007 — Home Appliances & Kitchenware
+8. CAT-008 — Home Furniture & Living
+9. CAT-009 — Jewelry, Watches & Luxury Goods
+10. CAT-010 — Bookstore & Stationery
+11. CAT-011 — Hair Salon & Barbershop
+12. CAT-012 — Cosmetics, Beauty & Skincare
+13. CAT-013 — Vehicle Repair & Service Garage
+14. CAT-014 — Auto Parts & Accessories
+15. CAT-015 — Plumbing & Sanitary Ware
+16. CAT-016 — Electrical & Lighting Supplies
+17. CAT-017 — Hardware, Tools & Construction
+18. CAT-018 — Bakery & Pastry Shop
+19. CAT-019 — Cafe & Coffee Shop
+20. CAT-020 — Fast Food & Quick Service
+21. CAT-021 — Restaurant & Dine-In
+22. CAT-022 — Footwear & Shoes
+23. CAT-023 — Fashion & Apparel Boutique
+24. CAT-024 — Computer & IT Hardware
+25. CAT-025 — Mobile Phones & Telecommunication
+26. CAT-026 — Electronics & Gadgets
+27. CAT-027 — Grocery Store & Minimart
+28. CAT-028 — Supermarket & Hypermarket
+29. CAT-029 — Pharmacy & Health Store
+
+For each category, record:
+
+- Whether a matching business-category configuration exists.
+- Whether category-specific workflows exist.
+- Whether product fields or variants differ.
+- Whether different inventory rules are implemented.
+- Whether the category uses different UoMs.
+- Whether category-specific reports exist.
+- Whether category-specific permissions exist.
+- Whether any existing AI behavior is category-aware.
+- Which existing components might be reusable.
+- Which limitations require further architecture analysis.
+
+**Do not create or configure any agents during this phase.**
+
+The purpose is to establish the existing application's condition before agent architecture is introduced.
+
+Future architecture must preserve isolation between organizations and their data, permissions, business context, agent memory, and tool execution.
+
+---
+
+# 10. Required Deliverables
+
+Prepare the following documentation artifacts.
+
+## Deliverable 1 — UI Baseline Report
+
+Document:
+
+- Global design system.
+- Layout conventions.
+- Components.
+- Navigation.
+- Responsive behavior.
+- Page-level visual references.
+- Known visual issues.
+
+## Deliverable 2 — Page and Route Inventory
+
+List all discovered pages and routes, their access restrictions, dependencies, status, and evidence.
+
+## Deliverable 3 — Functionality Baseline Register
+
+Document existing features, workflows, input/output behavior, side effects, dependencies, and current implementation status.
+
+## Deliverable 4 — UI and Workflow Freeze Register
+
+Identify the existing application elements that must remain unchanged unless a future step explicitly authorizes a change.
+
+## Deliverable 5 — Data and Integration Baseline
+
+Document relevant database structures, API contracts, integrations, business rules, and important data flows.
+
+Do not include secrets or private credentials.
+
+## Deliverable 6 — Existing Test Coverage Report
+
+Record existing test types, verified coverage, test results, and major gaps.
+
+## Deliverable 7 — Known Issues and Limitations Register
+
+List reproducible defects, incomplete features, security concerns, unresolved questions, and verification blockers.
+
+Do not fix these issues during this phase.
+
+## Deliverable 8 — Future Agent Integration Impact Register
+
+Identify the existing pages, components, workflows, data structures, and permissions that future AI-agent work could affect.
+
+This is an impact assessment, not an implementation plan.
+
+## Deliverable 9 — Baseline Evidence Index
+
+Provide references to screenshots, source files, routes, tests, database definitions, and other evidence supporting the report.
+
+## Deliverable 10 — Baseline Freeze Completion Report
+
+Summarize:
+
+- What was inspected.
+- What was verified.
+- What could not be verified.
+- Which artifacts were prepared.
+- Which issues require decisions.
+- Whether the baseline is complete.
+- Which areas require additional investigation.
+
+---
+
+# 11. Change-Control Rules for Future Steps
+
+Once the baseline has been reviewed and approved, it will serve as the reference for subsequent implementation steps.
+
+Future changes must follow these rules:
+
+1. Identify the exact feature or component authorized for modification.
+2. Explain why the change is necessary.
+3. Identify the relevant baseline IDs.
+4. Identify the expected behavior before and after the change.
+5. Identify the files, components, routes, APIs, and database structures potentially affected.
+6. Identify dependent workflows and regression risks.
+7. Limit implementation to the authorized scope.
+8. Preserve unrelated UI and functionality.
+9. Verify the authorized change.
+10. Run relevant regression checks where permitted.
+11. Document any deviation from the baseline.
+12. Report unresolved issues honestly.
+
+A future instruction to implement one AI agent must not be interpreted as permission to redesign unrelated pages or modify unrelated business workflows.
+
+If a requested change appears to require additional modifications outside its authorized scope, stop and explain the dependency before making those additional changes.
+
+If an existing component must be modified to support an authorized feature, document the minimum necessary modification and its impact. Do not silently expand the scope.
+
+---
+
+# 12. Completion Criteria
+
+This phase is complete only when:
+
+- The existing application's UI has been inventoried.
+- All discoverable routes have been documented.
+- Major existing workflows have been documented.
+- Current implementation status has been classified.
+- Critical business rules and data flows have been recorded where verifiable.
+- Existing integrations and permissions have been documented.
+- Existing test coverage has been inspected.
+- Known defects and verification gaps have been recorded.
+- Baseline evidence has been collected where possible.
+- The freeze register has been prepared.
+- Future AI-agent integration risks have been documented.
+- No unauthorized application changes have occurred.
+- Every deliverable is available for project-owner review.
+
+Do not declare the baseline complete merely because documentation files were created. The report must accurately reflect the scope actually inspected.
+
+---
+
+# 13. Final Report Format
+
+At the end of this phase, provide a concise completion summary containing:
+
+**Phase:** Step 02 — Existing UI & Functionality Baseline Freeze
+
+**Execution status:** Complete, partially complete, or blocked.
+
+**Application modifications:** Confirm whether any modifications occurred. The expected answer is no.
+
+**UI baseline:** Completed areas and remaining gaps.
+
+**Functionality baseline:** Completed areas and remaining gaps.
+
+**Freeze register:** File location and summary.
+
+**Evidence:** Relevant source files, routes, screenshots, tests, and other references.
+
+**Known issues:** Summary and references.
+
+**Unverified areas:** Explicit list.
+
+**Authorization required:** Any decisions needed from the project owner.
+
+**Next step:** Wait for explicit authorization.
+
+---
+
+# 14. Final Mandatory Instruction
+
+This phase establishes a reliable reference for protecting the existing GeFlow AI application while future AI-agent capabilities are developed.
+
+The existing application must remain the source of truth.
+
+**Do not modify the application, implement future agents, redesign pages, fix existing defects, change schemas, alter configurations, install dependencies, or deploy anything during this phase.**
+
+Prepare the baseline documentation, report the findings honestly, and stop.
+
+Wait for the project owner's explicit authorization before beginning any subsequent implementation step.

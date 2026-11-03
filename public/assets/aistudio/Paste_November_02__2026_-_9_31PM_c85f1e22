@@ -1,0 +1,1625 @@
+# GeFlow AI
+## Implementation Step 04: 29-Agent Master Registry Finalization
+
+**Parent Company:** Gepard Tech  
+**Product:** GeFlow AI  
+**Tagline:** Fast. Smart. Reliable.  
+**Implementation Step:** 04  
+**Step Name:** 29-Agent Master Registry Finalization  
+**Prerequisites:**
+- Step 01 — Existing Application Audit
+- Step 02 — Existing UI & Functionality Baseline Freeze
+- Step 03 — Existing Database & API Contracts Inspection
+
+**Execution Mode:** Architecture Definition, Registry Finalization & Documentation  
+**Application Modification Permission:** Not Authorized  
+**Database Modification Permission:** Not Authorized  
+**Agent Deployment Permission:** Not Authorized  
+**Status:** Pending Registry Finalization
+
+---
+
+# 1. Primary Objective
+
+Finalize the official master registry of exactly 29 dedicated business-category AI agents for GeFlow AI.
+
+Each agent must represent one specific business category and have its own:
+
+- Unique agent identity.
+- Permanent agent ID.
+- Official agent name.
+- Assigned business category.
+- Business-specific mission.
+- Operational responsibilities.
+- Functional scope.
+- Business knowledge requirements.
+- Supported workflows.
+- Authorized data domains.
+- Required tools and capabilities.
+- Read permissions.
+- Write permissions.
+- Prohibited operations.
+- Approval requirements.
+- Security boundaries.
+- Performance expectations.
+- Testing requirements.
+- Version and lifecycle status.
+
+The registry will become the authoritative reference for all subsequent agent architecture and implementation phases.
+
+The objective is not to create 29 generic AI chatbots.
+
+The objective is to establish 29 specialized business intelligence and operational agents that understand the specific workflows, inventory characteristics, business terminology, operational requirements, and decision-making needs of their assigned business categories.
+
+**One agent = One dedicated business category.**
+
+No category may have two different primary agents in this master registry, and no category may be left without its assigned agent.
+
+# 2. Non-Negotiable Architecture Rules
+
+## 2.1 Exactly 29 Dedicated Category Agents
+
+The master registry must contain exactly 29 agent definitions.
+
+- First agent: AGT-001.
+- Last agent: AGT-029.
+- Every ID must be unique.
+- Every category must have exactly one assigned primary agent.
+- Every agent must map to exactly one business category.
+- No additional category agents may be introduced without an explicitly authorized registry revision.
+
+## 2.2 Independent Agent Identity
+
+Each agent must have an independent logical identity.
+
+For example:
+
+- AGT-001 is not AGT-002.
+- AGT-018 is not AGT-019.
+- AGT-029 is not a general-purpose pharmacy chatbot.
+
+Each agent must have its own configuration, role definition, category-specific instructions, operational scope, and permission profile.
+
+Agents may share infrastructure, model providers, monitoring services, and common technical utilities.
+
+Sharing infrastructure does not mean sharing agent identity or unrestricted access.
+
+## 2.3 Same-Category Business Isolation
+
+A single category-agent definition may serve multiple businesses belonging to its assigned category.
+
+However, each business must have a separate execution context.
+
+For example:
+
+- Business A uses the Restaurant Agent.
+- Business B also uses the Restaurant Agent.
+- Business C also uses the Restaurant Agent.
+
+All three businesses use the same Restaurant Agent definition, but their runtime contexts must remain isolated.
+
+Each business must have separate:
+
+- Business data.
+- User permissions.
+- Conversation history.
+- Agent memory.
+- Business preferences.
+- Operational context.
+- Tool authorization.
+- Workflow state.
+- Reports and generated insights.
+- Audit records.
+
+The Restaurant Agent must never expose Business A's information to Business B or Business C.
+
+This isolation must be enforced through trusted server-side authorization and tenant-scoped data access, not merely through AI prompt instructions.
+
+## 2.4 No Default Cross-Agent Delegation
+
+Agents must not independently delegate tasks to other category agents.
+
+Examples:
+
+- Restaurant Agent cannot directly execute Pharmacy Agent workflows.
+- Grocery Agent cannot directly execute Vehicle Repair Agent workflows.
+- Bakery Agent cannot independently access Jewelry Agent operations.
+
+A central orchestration layer may later identify the appropriate category agent for a request and route the request through authorized execution.
+
+That routing does not grant the requesting agent unrestricted access to another agent's identity, memory, tools, or permissions.
+
+Cross-agent delegation remains prohibited by default unless a future architecture decision explicitly authorizes a controlled exception.
+
+## 2.5 Existing GeFlow Remains the Source of Truth
+
+Agents must operate on the existing GeFlow application and its authorized services.
+
+They must not create competing copies of:
+
+- POS systems.
+- Inventory systems.
+- Purchase systems.
+- Supplier databases.
+- Customer databases.
+- Business records.
+- Financial ledgers.
+- Reporting databases.
+
+Agents may interpret, analyze, and operate on existing GeFlow data through authorized interfaces.
+
+The registry must not assume that a new database or API is required for every agent.
+
+## 2.6 Agents Are Functional Roles, Not Necessarily Separate Models
+
+The registry defines logical agent identities and their responsibilities.
+
+It does not require:
+
+- 29 separate AI model providers.
+- 29 independently trained foundation models.
+- 29 separate servers.
+- 29 separate databases.
+- 29 duplicated application architectures.
+
+A shared AI execution infrastructure may serve multiple agents, provided the correct identity, context, configuration, tools, permissions, and data boundaries are enforced for every execution.
+
+---
+
+# 3. Official Agent Naming Convention
+
+All agent IDs must follow this format:
+
+`AGT-001` through `AGT-029`
+
+The official agent names must follow this format:
+
+`[Business Category] Agent`
+
+Examples:
+
+- General Retail Agent.
+- Restaurant Agent.
+- Pharmacy Agent.
+
+Each agent must have:
+
+- Permanent ID.
+- Official name.
+- Assigned category ID.
+- Category name.
+- Unique registry record.
+- Version number.
+
+Agent IDs must never be reused for another category.
+
+If an agent's official name changes in the future, its permanent ID and category assignment must remain unchanged unless a formally approved registry revision explicitly authorizes reassignment.
+
+---
+
+# 4. Final Master Registry — 29 Agents
+
+The following registry establishes the official one-to-one mapping between GeFlow's 29 business categories and their dedicated agents.
+
+## AGT-001 — General Retail Agent
+
+<badge color="success">Registry definition 01</badge>
+
+**Category ID:** CAT-001  
+**Business Category:** General Retail & Department Store  
+**Agent Name:** General Retail Agent
+
+**Primary Mission:**
+
+Manage and analyze general retail operations by understanding product assortments, stock availability, purchasing, sales performance, customer activity, and retail business performance.
+
+**Primary Responsibilities:**
+
+- General retail inventory intelligence.
+- Product assortment monitoring.
+- Stock availability analysis.
+- Reorder recommendations.
+- Sales trend analysis.
+- Product performance analysis.
+- Purchase planning.
+- Supplier performance insights.
+- Customer purchasing analysis.
+- Retail performance reporting.
+
+**Business-Specific Knowledge:**
+
+General retail products, SKUs, product categories, retail pricing, stock turnover, inventory valuation, sales margins, and department-level performance.
+
+**Operational Boundary:**
+
+Limited to General Retail & Department Store businesses.
+
+---
+
+## AGT-002 — Agriculture & Farming Supplies Agent
+
+**Category ID:** CAT-002  
+**Business Category:** Agriculture & Farming Supplies  
+**Agent Name:** Agriculture & Farming Supplies Agent
+
+**Primary Mission:**
+
+Support agricultural and farming supply businesses through specialized inventory, seasonal demand, purchasing, product availability, and sales intelligence.
+
+**Primary Responsibilities:**
+
+- Agricultural supply inventory management.
+- Farming product categorization.
+- Seasonal demand analysis.
+- Agricultural supply purchasing insights.
+- Fertilizer and seed inventory monitoring.
+- Irrigation supply tracking.
+- Product availability analysis.
+- Supplier performance monitoring.
+- Agricultural sales analysis.
+- Stock planning.
+
+**Business-Specific Knowledge:**
+
+Seeds, fertilizers, pesticides, irrigation supplies, farming equipment, seasonal purchasing patterns, product packaging, and agricultural supply terminology.
+
+**Operational Boundary:**
+
+Limited to Agriculture & Farming Supplies businesses.
+
+---
+
+## AGT-003 — Wholesale & Distribution Agent
+
+**Category ID:** CAT-003  
+**Business Category:** Wholesale & Distribution Hub  
+**Agent Name:** Wholesale & Distribution Agent
+
+**Primary Mission:**
+
+Support wholesale and distribution operations through bulk inventory management, purchasing, distributor relationships, order processing, and distribution performance analysis.
+
+**Primary Responsibilities:**
+
+- Bulk inventory intelligence.
+- Wholesale pricing analysis.
+- Distributor and supplier insights.
+- Bulk purchase planning.
+- Wholesale order monitoring.
+- Customer credit and outstanding balance analysis, where supported.
+- Distribution stock monitoring.
+- Warehouse stock insights.
+- Order fulfillment monitoring.
+- Wholesale profitability analysis.
+
+**Business-Specific Knowledge:**
+
+Bulk quantities, wholesale pricing, minimum order quantities, distribution channels, stock allocation, supplier terms, and high-volume inventory operations.
+
+**Operational Boundary:**
+
+Limited to Wholesale & Distribution Hub businesses.
+
+---
+
+## AGT-004 — Optometry & Eyewear Agent
+
+**Category ID:** CAT-004  
+**Business Category:** Optometry & Eyewear Store  
+**Agent Name:** Optometry & Eyewear Agent
+
+**Primary Mission:**
+
+Support eyewear businesses with specialized product, lens, frame, accessory, stock, sales, and purchasing intelligence.
+
+**Primary Responsibilities:**
+
+- Eyewear inventory monitoring.
+- Frame and lens product management.
+- Eyewear variant analysis.
+- Prescription-related product record management, where supported.
+- Lens and frame availability insights.
+- Supplier analysis.
+- Eyewear sales reporting.
+- Product demand monitoring.
+- Inventory replenishment recommendations.
+
+**Business-Specific Knowledge:**
+
+Eyeglass frames, sunglasses, lenses, lens specifications, frame dimensions, eyewear accessories, product variants, and eyewear retail terminology.
+
+**Operational Boundary:**
+
+Limited to Optometry & Eyewear Store businesses.
+
+**Restriction:**
+
+This is a business operations agent, not a medical diagnostic agent. It must not independently diagnose eye conditions or prescribe medical treatment.
+
+---
+
+## AGT-005 — Pet Shop & Veterinary Supplies Agent
+
+**Category ID:** CAT-005  
+**Business Category:** Pet Shop & Veterinary Supplies  
+**Agent Name:** Pet Shop & Veterinary Supplies Agent
+
+**Primary Mission:**
+
+Manage and analyze pet product and veterinary supply business operations.
+
+**Primary Responsibilities:**
+
+- Pet product inventory monitoring.
+- Animal food stock analysis.
+- Pet accessories management.
+- Veterinary supply inventory insights.
+- Product expiry monitoring, where applicable.
+- Product demand analysis.
+- Supplier performance insights.
+- Purchase planning.
+- Pet product sales analysis.
+- Inventory replenishment recommendations.
+
+**Business-Specific Knowledge:**
+
+Pet food, animal accessories, pet grooming supplies, veterinary inventory, animal categories, packaging, expiry information, and specialized product classifications.
+
+**Operational Boundary:**
+
+Limited to Pet Shop & Veterinary Supplies businesses.
+
+**Restriction:**
+
+The agent manages business information and inventory. It does not independently diagnose or prescribe veterinary treatment.
+
+---
+
+## AGT-006 — Sports & Fitness Equipment Agent
+
+**Category ID:** CAT-006  
+**Business Category:** Sports, Gym & Fitness Equipment  
+**Agent Name:** Sports & Fitness Equipment Agent
+
+**Primary Mission:**
+
+Support sports, gym, and fitness equipment businesses through specialized product, inventory, purchasing, and sales intelligence.
+
+**Primary Responsibilities:**
+
+- Sports equipment inventory.
+- Fitness equipment monitoring.
+- Product variant analysis.
+- Equipment availability.
+- Seasonal product demand.
+- Supplier insights.
+- Bulk purchasing analysis.
+- Sales performance.
+- Product category performance.
+- Stock replenishment recommendations.
+
+**Business-Specific Knowledge:**
+
+Sports equipment, gym machines, fitness accessories, protective equipment, sportswear-related inventory, equipment specifications, and product variants.
+
+**Operational Boundary:**
+
+Limited to Sports, Gym & Fitness Equipment businesses.
+
+---
+
+## AGT-007 — Home Appliances & Kitchenware Agent
+
+**Category ID:** CAT-007  
+**Business Category:** Home Appliances & Kitchenware  
+**Agent Name:** Home Appliances & Kitchenware Agent
+
+**Primary Mission:**
+
+Support home appliance and kitchenware retailers with product specifications, stock monitoring, supplier management, sales insights, and purchasing intelligence.
+
+**Primary Responsibilities:**
+
+- Appliance inventory management.
+- Kitchenware stock analysis.
+- Product specification tracking.
+- Model and variant monitoring.
+- Warranty information tracking, where supported.
+- Supplier performance insights.
+- Product availability monitoring.
+- Sales trend analysis.
+- Reorder planning.
+- Inventory performance reporting.
+
+**Business-Specific Knowledge:**
+
+Home appliances, kitchen equipment, appliance models, product specifications, warranties, product variants, and household equipment terminology.
+
+**Operational Boundary:**
+
+Limited to Home Appliances & Kitchenware businesses.
+
+---
+
+## AGT-008 — Home Furniture & Living Agent
+
+**Category ID:** CAT-008  
+**Business Category:** Home Furniture & Living  
+**Agent Name:** Home Furniture & Living Agent
+
+**Primary Mission:**
+
+Support furniture and home-living businesses through product configuration, stock management, order tracking, purchasing, and sales intelligence.
+
+**Primary Responsibilities:**
+
+- Furniture inventory monitoring.
+- Product dimension and specification tracking.
+- Material and finish variants.
+- Furniture order monitoring.
+- Stock and availability analysis.
+- Supplier performance.
+- Purchase planning.
+- Sales performance analysis.
+- Product profitability insights.
+- Inventory reporting.
+
+**Business-Specific Knowledge:**
+
+Furniture categories, materials, dimensions, colors, finishes, sets, custom configurations, and home-living products.
+
+**Operational Boundary:**
+
+Limited to Home Furniture & Living businesses.
+
+---
+
+## AGT-009 — Jewelry & Luxury Goods Agent
+
+**Category ID:** CAT-009  
+**Business Category:** Jewelry, Watches & Luxury Goods  
+**Agent Name:** Jewelry & Luxury Goods Agent
+
+**Primary Mission:**
+
+Support jewelry, watch, and luxury goods businesses with detailed product identification, inventory control, purchasing, pricing, and sales intelligence.
+
+**Primary Responsibilities:**
+
+- High-value inventory monitoring.
+- Jewelry product identification.
+- Watch inventory management.
+- Product specification tracking.
+- Serial and unique-item tracking, where supported.
+- Supplier analysis.
+- Purchase and sales insights.
+- Inventory valuation analysis.
+- Product profitability.
+- Stock discrepancy monitoring.
+
+**Business-Specific Knowledge:**
+
+Jewelry types, metals, gemstones, watches, luxury products, item specifications, weight-based information, serial numbers, and high-value inventory controls.
+
+**Operational Boundary:**
+
+Limited to Jewelry, Watches & Luxury Goods businesses.
+
+**Restriction:**
+
+The agent must not independently certify gemstone authenticity, metal purity, or market valuations without verified supporting information.
+
+---
+
+## AGT-010 — Bookstore & Stationery Agent
+
+**Category ID:** CAT-010  
+**Business Category:** Bookstore & Stationery  
+**Agent Name:** Bookstore & Stationery Agent
+
+**Primary Mission:**
+
+Manage and analyze bookstore and stationery retail operations, including book catalogues, educational supplies, stock availability, and purchasing.
+
+**Primary Responsibilities:**
+
+- Book inventory monitoring.
+- ISBN and edition management, where supported.
+- Stationery product management.
+- Publisher and supplier insights.
+- Educational product demand.
+- Stock replenishment.
+- Product availability analysis.
+- Sales trend monitoring.
+- Category performance.
+- Inventory reporting.
+
+**Business-Specific Knowledge:**
+
+Books, authors, publishers, ISBNs, editions, stationery, educational supplies, academic seasons, and related product classifications.
+
+**Operational Boundary:**
+
+Limited to Bookstore & Stationery businesses.
+
+---
+
+## AGT-011 — Hair Salon & Barbershop Agent
+
+**Category ID:** CAT-011  
+**Business Category:** Hair Salon & Barbershop  
+**Agent Name:** Hair Salon & Barbershop Agent
+
+**Primary Mission:**
+
+Support salon and barbershop business operations by managing relevant service, product, appointment, staff, and sales workflows where those capabilities exist in GeFlow.
+
+**Primary Responsibilities:**
+
+- Salon product inventory.
+- Service catalogue intelligence.
+- Appointment-related operational insights, where supported.
+- Staff performance reporting, where supported.
+- Service pricing analysis.
+- Product consumption tracking, where supported.
+- Purchase planning.
+- Customer activity insights.
+- Sales and service performance.
+- Business reporting.
+
+**Business-Specific Knowledge:**
+
+Salon services, haircut categories, grooming products, hair treatments, service durations, salon supplies, and relevant retail products.
+
+**Operational Boundary:**
+
+Limited to Hair Salon & Barbershop businesses.
+
+**Important Dependency:**
+
+Appointment and staff scheduling capabilities must not be assumed to exist. Their availability depends on verified GeFlow functionality.
+
+---
+
+## AGT-012 — Cosmetics & Beauty Agent
+
+**Category ID:** CAT-012  
+**Business Category:** Cosmetics, Beauty & Skincare  
+**Agent Name:** Cosmetics & Beauty Agent
+
+**Primary Mission:**
+
+Support cosmetics, beauty, and skincare businesses through specialized product inventory, variants, batch tracking, expiry monitoring, purchasing, and sales intelligence.
+
+**Primary Responsibilities:**
+
+- Cosmetics inventory monitoring.
+- Skincare product management.
+- Beauty product variants.
+- Batch and expiry tracking, where supported.
+- Product demand analysis.
+- Supplier performance insights.
+- Purchase planning.
+- Sales and profitability analysis.
+- Stock replenishment.
+- Product category reporting.
+
+**Business-Specific Knowledge:**
+
+Skincare, makeup, cosmetics, personal care, shades, sizes, product ingredients as stored in authorized records, batches, expiry dates, and beauty product terminology.
+
+**Operational Boundary:**
+
+Limited to Cosmetics, Beauty & Skincare businesses.
+
+---
+
+## AGT-013 — Vehicle Repair & Service Garage Agent
+
+**Category ID:** CAT-013  
+**Business Category:** Vehicle Repair & Service Garage  
+**Agent Name:** Vehicle Repair & Service Garage Agent
+
+**Primary Mission:**
+
+Support vehicle repair and service businesses through service operations, spare inventory, work-order monitoring, purchasing, and business performance insights.
+
+**Primary Responsibilities:**
+
+- Repair service catalogue management.
+- Vehicle service records, where supported.
+- Work-order tracking, where supported.
+- Spare parts inventory monitoring.
+- Service material consumption.
+- Supplier insights.
+- Service profitability analysis.
+- Purchase planning.
+- Customer service history.
+- Operational reporting.
+
+**Business-Specific Knowledge:**
+
+Vehicle service types, maintenance categories, repair operations, workshop supplies, labor charges, spare parts, and vehicle-related business terminology.
+
+**Operational Boundary:**
+
+Limited to Vehicle Repair & Service Garage businesses.
+
+**Important Dependency:**
+
+Vehicle profiles, job cards, work orders, and service scheduling must be treated as existing functionality only when verified. Otherwise, record them as future integration requirements.
+
+---
+
+## AGT-014 — Auto Parts & Accessories Agent
+
+**Category ID:** CAT-014  
+**Business Category:** Auto Parts & Accessories  
+**Agent Name:** Auto Parts & Accessories Agent
+
+**Primary Mission:**
+
+Support auto parts retailers and accessories businesses through compatibility-aware product organization, stock management, purchasing, and sales analysis.
+
+**Primary Responsibilities:**
+
+- Auto parts inventory.
+- Vehicle compatibility data management, where supported.
+- Part number and SKU monitoring.
+- Brand and model categorization.
+- Product availability.
+- Supplier insights.
+- Purchase planning.
+- Stock turnover analysis.
+- Sales performance.
+- Inventory discrepancy monitoring.
+
+**Business-Specific Knowledge:**
+
+Automotive components, spare parts, accessories, manufacturer part numbers, vehicle makes, models, compatibility attributes, and product specifications.
+
+**Operational Boundary:**
+
+Limited to Auto Parts & Accessories businesses.
+
+---
+
+## AGT-015 — Plumbing & Sanitary Ware Agent
+
+**Category ID:** CAT-015  
+**Business Category:** Plumbing & Sanitary Ware  
+**Agent Name:** Plumbing & Sanitary Ware Agent
+
+**Primary Mission:**
+
+Support plumbing and sanitary ware businesses through product specification management, inventory intelligence, bulk purchasing, and sales analysis.
+
+**Primary Responsibilities:**
+
+- Plumbing inventory monitoring.
+- Sanitary ware management.
+- Product dimension tracking.
+- Material and size variants.
+- Bulk quantity analysis.
+- Supplier insights.
+- Purchase planning.
+- Stock availability.
+- Sales performance.
+- Reorder recommendations.
+
+**Business-Specific Knowledge:**
+
+Pipes, fittings, valves, taps, bathroom fixtures, sanitary products, dimensions, materials, pressure specifications, and related product terminology.
+
+**Operational Boundary:**
+
+Limited to Plumbing & Sanitary Ware businesses.
+
+---
+
+## AGT-016 — Electrical & Lighting Agent
+
+**Category ID:** CAT-016  
+**Business Category:** Electrical & Lighting Supplies  
+**Agent Name:** Electrical & Lighting Agent
+
+**Primary Mission:**
+
+Support electrical and lighting supply businesses through product specification intelligence, inventory control, purchasing, and sales analysis.
+
+**Primary Responsibilities:**
+
+- Electrical inventory monitoring.
+- Lighting product management.
+- Electrical product specifications.
+- Voltage and power attributes, where stored.
+- Product variants.
+- Supplier insights.
+- Purchase planning.
+- Stock availability.
+- Sales analysis.
+- Inventory reporting.
+
+**Business-Specific Knowledge:**
+
+Electrical supplies, cables, switches, sockets, circuit protection, lighting, LED products, voltage ratings, power ratings, and electrical product specifications.
+
+**Operational Boundary:**
+
+Limited to Electrical & Lighting Supplies businesses.
+
+**Restriction:**
+
+The agent provides business and product information, not professional electrical installation approval or safety certification.
+
+---
+
+## AGT-017 — Hardware & Construction Agent
+
+**Category ID:** CAT-017  
+**Business Category:** Hardware, Tools & Construction  
+**Agent Name:** Hardware & Construction Agent
+
+**Primary Mission:**
+
+Support hardware, tools, and construction supply businesses through product inventory, measurements, bulk purchasing, supplier operations, and sales intelligence.
+
+**Primary Responsibilities:**
+
+- Hardware product management.
+- Construction material inventory.
+- Tool inventory tracking.
+- Measurement-based product management.
+- Bulk quantity analysis.
+- Supplier performance.
+- Purchase planning.
+- Product availability.
+- Sales and margin insights.
+- Inventory reporting.
+
+**Business-Specific Knowledge:**
+
+Construction materials, tools, fasteners, hardware products, measurement units, packaging, dimensions, weights, and bulk purchasing terminology.
+
+**Operational Boundary:**
+
+Limited to Hardware, Tools & Construction businesses.
+
+---
+
+## AGT-018 — Bakery & Pastry Agent
+
+**Category ID:** CAT-018  
+**Business Category:** Bakery & Pastry Shop  
+**Agent Name:** Bakery & Pastry Agent
+
+**Primary Mission:**
+
+Support bakery and pastry operations through product management, ingredient inventory, production-related workflows where supported, expiry monitoring, purchasing, and sales intelligence.
+
+**Primary Responsibilities:**
+
+- Bakery product inventory.
+- Ingredient stock monitoring.
+- Recipe or bill-of-material tracking, where supported.
+- Production planning, where supported.
+- Batch and expiry monitoring.
+- Waste tracking, where supported.
+- Supplier analysis.
+- Purchase planning.
+- Product sales performance.
+- Daily operational reporting.
+
+**Business-Specific Knowledge:**
+
+Bakery products, pastries, ingredients, recipes, production batches, shelf life, perishability, packaging, and bakery sales terminology.
+
+**Operational Boundary:**
+
+Limited to Bakery & Pastry Shop businesses.
+
+**Important Dependency:**
+
+Recipe management, production planning, and waste-management capabilities must be verified before being treated as available GeFlow operations.
+
+---
+
+## AGT-019 — Cafe & Coffee Shop Agent
+
+**Category ID:** CAT-019  
+**Business Category:** Cafe & Coffee Shop  
+**Agent Name:** Cafe & Coffee Shop Agent
+
+**Primary Mission:**
+
+Support cafe and coffee shop operations through menu management, ingredient inventory, sales performance, purchasing, and service operations where supported.
+
+**Primary Responsibilities:**
+
+- Cafe menu intelligence.
+- Coffee product management.
+- Ingredient inventory.
+- Beverage-related stock analysis.
+- Recipe and ingredient consumption, where supported.
+- Supplier performance.
+- Purchase planning.
+- Sales trend analysis.
+- Product profitability.
+- Operational reporting.
+
+**Business-Specific Knowledge:**
+
+Coffee beans, beverages, ingredients, cafe menus, serving sizes, recipes, food supplies, and cafe product terminology.
+
+**Operational Boundary:**
+
+Limited to Cafe & Coffee Shop businesses.
+
+---
+
+## AGT-020 — Fast Food & Quick Service Agent
+
+**Category ID:** CAT-020  
+**Business Category:** Fast Food & Quick Service  
+**Agent Name:** Fast Food & Quick Service Agent
+
+**Primary Mission:**
+
+Support fast food and quick service businesses through menu operations, ingredient stock monitoring, order-related workflows, purchasing, and sales intelligence.
+
+**Primary Responsibilities:**
+
+- Quick-service menu management.
+- Ingredient inventory.
+- Food product availability.
+- Recipe and ingredient consumption, where supported.
+- Order performance monitoring.
+- Sales trend analysis.
+- Supplier insights.
+- Purchase planning.
+- Waste monitoring, where supported.
+- Operational reporting.
+
+**Business-Specific Knowledge:**
+
+Fast food menus, meal combinations, food ingredients, serving sizes, preparation workflows, packaging, and quick-service terminology.
+
+**Operational Boundary:**
+
+Limited to Fast Food & Quick Service businesses.
+
+---
+
+## AGT-021 — Restaurant Agent
+
+**Category ID:** CAT-021  
+**Business Category:** Restaurant & Dine-In  
+**Agent Name:** Restaurant Agent
+
+**Primary Mission:**
+
+Support restaurant operations through menu management, ingredient inventory, purchasing, sales, customer activity, and restaurant-specific operational intelligence.
+
+**Primary Responsibilities:**
+
+- Restaurant menu management.
+- Ingredient inventory monitoring.
+- Food cost analysis.
+- Recipe and bill-of-material insights, where supported.
+- Table and order workflows, where supported.
+- Supplier performance.
+- Purchase planning.
+- Sales and profitability analysis.
+- Food waste monitoring, where supported.
+- Restaurant performance reporting.
+
+**Business-Specific Knowledge:**
+
+Restaurant menus, ingredients, recipes, serving sizes, table service, dine-in orders, food costs, and restaurant operations.
+
+**Operational Boundary:**
+
+Limited to Restaurant & Dine-In businesses.
+
+---
+
+## AGT-022 — Footwear & Shoes Agent
+
+**Category ID:** CAT-022  
+**Business Category:** Footwear & Shoes  
+**Agent Name:** Footwear & Shoes Agent
+
+**Primary Mission:**
+
+Support footwear businesses through size-aware product inventory, color and style variants, purchasing, stock availability, and sales intelligence.
+
+**Primary Responsibilities:**
+
+- Footwear inventory.
+- Size-based stock monitoring.
+- Color and design variants.
+- Product availability.
+- Brand and style analysis.
+- Supplier insights.
+- Purchase planning.
+- Sales performance.
+- Stock turnover.
+- Replenishment recommendations.
+
+**Business-Specific Knowledge:**
+
+Shoes, sandals, boots, footwear sizes, colors, styles, brands, materials, and product variants.
+
+**Operational Boundary:**
+
+Limited to Footwear & Shoes businesses.
+
+---
+
+## AGT-023 — Fashion & Apparel Agent
+
+**Category ID:** CAT-023  
+**Business Category:** Fashion & Apparel Boutique  
+**Agent Name:** Fashion & Apparel Agent
+
+**Primary Mission:**
+
+Support fashion and apparel businesses through size and color variants, seasonal inventory, product assortment, purchasing, and sales intelligence.
+
+**Primary Responsibilities:**
+
+- Apparel inventory monitoring.
+- Size and color variant management.
+- Fashion product categorization.
+- Seasonal demand analysis.
+- Collection performance.
+- Supplier insights.
+- Purchase planning.
+- Sales and profitability analysis.
+- Stock turnover.
+- Inventory replenishment recommendations.
+
+**Business-Specific Knowledge:**
+
+Clothing, apparel, sizes, colors, fabrics, styles, collections, seasonal fashion, and boutique retail terminology.
+
+**Operational Boundary:**
+
+Limited to Fashion & Apparel Boutique businesses.
+
+---
+
+## AGT-024 — Computer & IT Hardware Agent
+
+**Category ID:** CAT-024  
+**Business Category:** Computer & IT Hardware  
+**Agent Name:** Computer & IT Hardware Agent
+
+**Primary Mission:**
+
+Support computer and IT hardware retailers through technical product identification, component compatibility information, serial tracking, inventory management, purchasing, and sales intelligence.
+
+**Primary Responsibilities:**
+
+- Computer hardware inventory.
+- Component specification management.
+- Model and configuration tracking.
+- Serial number management, where supported.
+- Product compatibility information, where supported.
+- Warranty tracking, where supported.
+- Supplier insights.
+- Purchase planning.
+- Sales performance.
+- Inventory valuation.
+
+**Business-Specific Knowledge:**
+
+Processors, motherboards, RAM, storage, GPUs, peripherals, networking hardware, specifications, models, and component terminology.
+
+**Operational Boundary:**
+
+Limited to Computer & IT Hardware businesses.
+
+---
+
+## AGT-025 — Mobile & Telecom Agent
+
+**Category ID:** CAT-025  
+**Business Category:** Mobile Phones & Telecommunication  
+**Agent Name:** Mobile & Telecom Agent
+
+**Primary Mission:**
+
+Support mobile phone and telecommunications retailers through device inventory, model and variant tracking, accessories, stock management, and sales intelligence.
+
+**Primary Responsibilities:**
+
+- Mobile device inventory.
+- Brand and model management.
+- Storage and color variants.
+- IMEI tracking, where supported.
+- Serial number management, where supported.
+- Warranty information.
+- Mobile accessories inventory.
+- Supplier insights.
+- Sales analysis.
+- Stock monitoring.
+
+**Business-Specific Knowledge:**
+
+Smartphones, feature phones, IMEI identifiers, storage variants, device colors, accessories, telecom products, and mobile retail terminology.
+
+**Operational Boundary:**
+
+Limited to Mobile Phones & Telecommunication businesses.
+
+---
+
+## AGT-026 — Electronics & Gadgets Agent
+
+**Category ID:** CAT-026  
+**Business Category:** Electronics & Gadgets  
+**Agent Name:** Electronics & Gadgets Agent
+
+**Primary Mission:**
+
+Support electronics and gadgets retailers through product specification tracking, inventory management, purchasing, warranty-related records, and sales intelligence.
+
+**Primary Responsibilities:**
+
+- Electronics inventory monitoring.
+- Gadget product management.
+- Model and specification tracking.
+- Serial number management, where supported.
+- Warranty tracking, where supported.
+- Product variant management.
+- Supplier performance insights.
+- Purchase planning.
+- Sales analysis.
+- Inventory reporting.
+
+**Business-Specific Knowledge:**
+
+Consumer electronics, gadgets, accessories, electronic devices, product specifications, models, warranties, and product variants.
+
+**Operational Boundary:**
+
+Limited to Electronics & Gadgets businesses.
+
+---
+
+## AGT-027 — Grocery Agent
+
+**Category ID:** CAT-027  
+**Business Category:** Grocery Store & Minimart  
+**Agent Name:** Grocery Agent
+
+**Primary Mission:**
+
+Support grocery and minimart businesses through fast-moving inventory monitoring, expiry management, replenishment intelligence, purchasing, and sales performance analysis.
+
+**Primary Responsibilities:**
+
+- Grocery product inventory.
+- Fast-moving product analysis.
+- Perishable stock monitoring.
+- Batch and expiry tracking, where supported.
+- Reorder recommendations.
+- Supplier performance.
+- Purchase planning.
+- Daily sales analysis.
+- Stock loss and wastage insights, where supported.
+- Product availability reporting.
+
+**Business-Specific Knowledge:**
+
+Packaged foods, beverages, dairy, household essentials, perishable goods, product expiry, retail packaging, and grocery demand patterns.
+
+**Operational Boundary:**
+
+Limited to Grocery Store & Minimart businesses.
+
+---
+
+## AGT-028 — Supermarket & Hypermarket Agent
+
+**Category ID:** CAT-028  
+**Business Category:** Supermarket & Hypermarket  
+**Agent Name:** Supermarket & Hypermarket Agent
+
+**Primary Mission:**
+
+Support large-format retail operations through department-level inventory intelligence, high-volume stock monitoring, supplier management, purchasing, and consolidated business reporting.
+
+**Primary Responsibilities:**
+
+- Multi-department inventory analysis.
+- High-volume stock monitoring.
+- Department performance.
+- Bulk purchasing intelligence.
+- Product assortment monitoring.
+- Supplier performance.
+- Stock replenishment.
+- Sales trend analysis.
+- Inventory valuation.
+- Consolidated reporting.
+
+**Business-Specific Knowledge:**
+
+Supermarket departments, high-volume retail, grocery products, household goods, product assortments, bulk procurement, and department-level performance.
+
+**Operational Boundary:**
+
+Limited to Supermarket & Hypermarket businesses.
+
+---
+
+## AGT-029 — Pharmacy & Health Store Agent
+
+**Category ID:** CAT-029  
+**Business Category:** Pharmacy & Health Store  
+**Agent Name:** Pharmacy & Health Store Agent
+
+**Primary Mission:**
+
+Support pharmacy and health store business operations through medicine and health-product inventory, batch and expiry monitoring, purchasing, supplier intelligence, and specialized business reporting.
+
+**Primary Responsibilities:**
+
+- Pharmacy product inventory.
+- Medicine catalogue management.
+- Batch tracking.
+- Expiry monitoring.
+- Stock availability.
+- Reorder recommendations.
+- Supplier performance.
+- Purchase planning.
+- Product movement analysis.
+- Pharmacy sales and inventory reporting.
+
+**Business-Specific Knowledge:**
+
+Medicine records, product names, strengths, dosage-form metadata, packaging, manufacturers, batches, expiry dates, and pharmacy inventory terminology.
+
+**Operational Boundary:**
+
+Limited to Pharmacy & Health Store businesses.
+
+**Critical Restriction:**
+
+This agent is a business operations and inventory intelligence agent. It must not independently diagnose patients, prescribe medication, recommend treatment, or make clinical decisions. Any future healthcare-related functionality requires separate authorization, appropriate safety controls, and its own approved scope.
+
+---
+
+# 5. Official Master Registry Summary
+
+| Agent ID | Official Agent Name | Category ID |
+|---|---|---|
+| AGT-001 | General Retail Agent | CAT-001 |
+| AGT-002 | Agriculture & Farming Supplies Agent | CAT-002 |
+| AGT-003 | Wholesale & Distribution Agent | CAT-003 |
+| AGT-004 | Optometry & Eyewear Agent | CAT-004 |
+| AGT-005 | Pet Shop & Veterinary Supplies Agent | CAT-005 |
+| AGT-006 | Sports & Fitness Equipment Agent | CAT-006 |
+| AGT-007 | Home Appliances & Kitchenware Agent | CAT-007 |
+| AGT-008 | Home Furniture & Living Agent | CAT-008 |
+| AGT-009 | Jewelry & Luxury Goods Agent | CAT-009 |
+| AGT-010 | Bookstore & Stationery Agent | CAT-010 |
+| AGT-011 | Hair Salon & Barbershop Agent | CAT-011 |
+| AGT-012 | Cosmetics & Beauty Agent | CAT-012 |
+| AGT-013 | Vehicle Repair & Service Garage Agent | CAT-013 |
+| AGT-014 | Auto Parts & Accessories Agent | CAT-014 |
+| AGT-015 | Plumbing & Sanitary Ware Agent | CAT-015 |
+| AGT-016 | Electrical & Lighting Agent | CAT-016 |
+| AGT-017 | Hardware & Construction Agent | CAT-017 |
+| AGT-018 | Bakery & Pastry Agent | CAT-018 |
+| AGT-019 | Cafe & Coffee Shop Agent | CAT-019 |
+| AGT-020 | Fast Food & Quick Service Agent | CAT-020 |
+| AGT-021 | Restaurant Agent | CAT-021 |
+| AGT-022 | Footwear & Shoes Agent | CAT-022 |
+| AGT-023 | Fashion & Apparel Agent | CAT-023 |
+| AGT-024 | Computer & IT Hardware Agent | CAT-024 |
+| AGT-025 | Mobile & Telecom Agent | CAT-025 |
+| AGT-026 | Electronics & Gadgets Agent | CAT-026 |
+| AGT-027 | Grocery Agent | CAT-027 |
+| AGT-028 | Supermarket & Hypermarket Agent | CAT-028 |
+| AGT-029 | Pharmacy & Health Store Agent | CAT-029 |
+
+**Registry count: 29**
+
+**Category count: 29**
+
+**Mapping: 1:1**
+
+---
+
+# 6. Mandatory Registry Data Structure
+
+Every agent must eventually have a complete registry record.
+
+The following fields define the official registry specification.
+
+## 6.1 Identity Fields
+
+- agent_id
+- agent_name
+- agent_slug
+- category_id
+- category_name
+- description
+- mission
+- version
+- registry_status
+- lifecycle_status
+
+## 6.2 Functional Definition
+
+- primary_responsibilities
+- secondary_responsibilities
+- supported_workflows
+- business_knowledge_domains
+- business_rules
+- operational_scope
+- prohibited_scope
+- supported_languages
+- expected_outputs
+
+## 6.3 Technical Configuration
+
+- agent_configuration_id
+- model_provider_reference
+- model_reference
+- system_instruction_reference
+- prompt_version
+- execution_profile
+- context_configuration
+- memory_configuration
+- response_configuration
+- timeout_policy
+- retry_policy
+
+These fields define configuration requirements. They do not authorize creating or configuring any actual AI infrastructure in this phase.
+
+## 6.4 Tool and Permission Definition
+
+- authorized_modules
+- authorized_tools
+- read_permissions
+- write_permissions
+- delete_permissions
+- approval_required_operations
+- prohibited_operations
+- data_access_scope
+- tenant_scope
+- category_scope
+
+Permissions must be explicit.
+
+An agent must not receive unrestricted database access simply because its business category needs inventory or sales information.
+
+## 6.5 Data and Knowledge Definition
+
+- required_business_context
+- optional_business_context
+- required_data_domains
+- knowledge_sources
+- business_glossary
+- business_specific_rules
+- calculation_requirements
+- reporting_requirements
+- data_freshness_requirements
+
+## 6.6 Security and Governance
+
+- authentication_requirements
+- authorization_requirements
+- tenant_isolation_requirements
+- agent_identity_verification
+- audit_logging_requirements
+- data_retention_policy_reference
+- sensitive_data_handling
+- human_approval_requirements
+- risk_classification
+- security_review_status
+
+## 6.7 Testing and Lifecycle
+
+- acceptance_criteria
+- functional_test_requirements
+- security_test_requirements
+- regression_test_requirements
+- performance_requirements
+- release_status
+- activation_status
+- created_at
+- updated_at
+- approved_by
+- approval_timestamp
+
+Not every field must contain a finalized value at registry creation time. Unknown technical details must be marked pending and finalized during the relevant later architecture or agent-specification phases.
+
+---
+
+# 7. Registry Lifecycle and Status Definitions
+
+Each registry record must distinguish between its definition status and deployment status.
+
+## Definition Status
+
+- Draft
+- Under Review
+- Finalized
+- Deprecated
+
+## Deployment Status
+
+- Not Created
+- Not Configured
+- Not Tested
+- Ready for Approval
+- Approved
+- Active
+- Suspended
+- Retired
+
+At the end of this step:
+
+- All 29 logical agent definitions should be finalized.
+- No actual agent should be assumed to have been created.
+- No agent should be marked active merely because its registry definition exists.
+- Technical configuration and deployment must remain pending until their authorized implementation phases.
+
+---
+
+# 8. Registry Governance
+
+The master registry must be treated as a controlled architectural document.
+
+The following rules apply:
+
+1. Agent IDs are permanent identifiers.
+2. Category mapping is one-to-one.
+3. Agent responsibilities must remain category-specific.
+4. Duplicate agent definitions are prohibited.
+5. Unrestricted cross-category operations are prohibited.
+6. Tenant isolation is mandatory.
+7. Existing GeFlow modules remain the operational source of truth.
+8. Shared infrastructure is permitted.
+9. Agent configurations and permissions must remain isolated.
+10. Agent versions must be tracked.
+11. Registry changes require explicit authorization.
+12. Every approved change must include a reason and impact assessment.
+13. Deprecated agents must not silently disappear from historical records.
+14. Registry changes must not automatically change the running application.
+15. Documentation finalization must not be treated as deployment authorization.
+
+---
+
+# 9. Required Deliverables
+
+The builder must prepare:
+
+### Deliverable 1 — Official 29-Agent Master Registry
+
+Complete AGT-001 through AGT-029 mapping, names, category assignments, missions, responsibilities, knowledge domains, and operational boundaries.
+
+### Deliverable 2 — Agent Identity Register
+
+Unique IDs, official names, category IDs, slugs, descriptions, and version definitions.
+
+### Deliverable 3 — Agent Responsibility Matrix
+
+A comparison of the 29 agents showing their primary and secondary responsibilities.
+
+### Deliverable 4 — Category-to-Agent Mapping Matrix
+
+Verified one-to-one mapping between CAT-001 through CAT-029 and AGT-001 through AGT-029.
+
+### Deliverable 5 — Agent Boundary Matrix
+
+Clearly define what each agent is permitted and prohibited from handling.
+
+### Deliverable 6 — Shared Infrastructure vs. Isolated Agent Definition
+
+Document which technical services may be shared and which agent-specific elements must remain isolated.
+
+### Deliverable 7 — Tenant Isolation Requirements
+
+Document the mandatory separation of business data, context, memory, conversations, tools, and permissions for organizations using the same category agent.
+
+### Deliverable 8 — Registry Schema Specification
+
+Provide the complete registry field definitions, data types where known, descriptions, required/optional status, and lifecycle rules.
+
+Do not create the actual database schema.
+
+### Deliverable 9 — Registry Governance Specification
+
+Document ID permanence, versioning, approvals, change control, and registry lifecycle.
+
+### Deliverable 10 — Registry Completion Report
+
+Confirm the total agent count, category coverage, uniqueness, mapping integrity, unresolved fields, and outstanding decisions.
+
+---
+
+# 10. Registry Validation Requirements
+
+Before declaring this step complete, perform a documentation-level validation.
+
+## 10.1 Count Validation
+
+- Total agent records = 29.
+- Total unique agent IDs = 29.
+- Total unique category IDs = 29.
+- First ID = AGT-001.
+- Last ID = AGT-029.
+- No missing sequence numbers.
+
+## 10.2 Mapping Validation
+
+For every agent:
+
+- Exactly one assigned category.
+- No duplicate category assignment.
+- No missing category.
+- No invalid category ID.
+- Agent ID matches the official sequence.
+
+## 10.3 Scope Validation
+
+For every agent:
+
+- A clear primary mission exists.
+- Responsibilities relate to the assigned category.
+- Operational boundaries are documented.
+- Category-specific knowledge requirements are documented.
+- Prohibited activities are identified where necessary.
+- Dependencies are identified where required.
+
+## 10.4 Isolation Validation
+
+Confirm that the registry specification requires:
+
+- Separate agent identities.
+- Separate configurations.
+- Separate permission profiles.
+- Separate business contexts.
+- Separate business memories.
+- Separate conversations.
+- Separate execution authorization.
+- Tenant-scoped data access.
+- No default cross-agent delegation.
+
+## 10.5 Duplicate and Overlap Validation
+
+Some business categories naturally share concepts.
+
+For example:
+
+- Grocery and Supermarket both manage perishable goods.
+- Restaurant, Cafe, Fast Food, and Bakery all manage food-related products.
+- Computer Hardware and Electronics both manage technical products.
+- General Retail and Wholesale both manage product inventory.
+
+Shared concepts do not justify merging their agent identities.
+
+Each agent must retain its category-specific mission, workflows, context, and permissions.
+
+If responsibilities overlap, document the overlap and define the category-specific boundary.
+
+---
+
+# 11. Important Architectural Decisions
+
+The following decisions are established for the master registry.
+
+| Decision | Final rule |
+|---|---|
+| Number of category agents | Exactly 29 |
+| Agent ID pattern | AGT-001 to AGT-029 |
+| Category mapping | One agent per category |
+| Agent identity | Independently defined |
+| Model infrastructure | May be shared |
+| Runtime infrastructure | May be shared |
+| Agent configuration | Isolated |
+| Business context | Isolated per business |
+| Memory | Isolated per business |
+| Conversations | Isolated per business |
+| Tools and permissions | Agent-specific and tenant-scoped |
+| Cross-agent delegation | Prohibited by default |
+| Central orchestration | Allowed as a future controlled routing layer |
+| Existing GeFlow database | Remains source of truth |
+| Duplicate POS/inventory systems | Not permitted |
+| Actual agent creation | Not authorized in this step |
+| Application modification | Not authorized in this step |
+
+---
+
+# 12. Final Acceptance Criteria
+
+Step 04 is complete only when:
+
+- Exactly 29 agents are defined.
+- All 29 official category assignments are documented.
+- All agent IDs are unique and sequential.
+- Every agent has an official name.
+- Every agent has a primary mission.
+- Every agent has defined responsibilities.
+- Every agent has category-specific knowledge requirements.
+- Every agent has a clear operational boundary.
+- Relevant prohibited activities are documented.
+- Shared infrastructure and isolated agent identity are clearly distinguished.
+- Same-category business isolation is documented.
+- Cross-agent delegation restrictions are documented.
+- Registry fields and lifecycle rules are specified.
+- Registry governance is established.
+- The registry passes count, mapping, uniqueness, and scope validation.
+- No application or database changes have occurred.
+- No AI agents have been deployed or activated.
+- The complete registry is available for project-owner review.
+
+---
+
+# 13. Final Completion Report
+
+At the end of this phase, provide:
+
+**Phase:** Step 04 — 29-Agent Master Registry Finalization
+
+**Execution status:** Complete, partially complete, or blocked.
+
+**Total registered agents:** 29 expected.
+
+**Unique agent IDs:** 29 expected.
+
+**Category mappings:** 29 expected.
+
+**Missing categories:** Explicitly list any.
+
+**Duplicate mappings:** Explicitly list any.
+
+**Agent responsibilities:** Completion summary.
+
+**Agent boundaries:** Completion summary.
+
+**Isolation architecture requirements:** Confirmation.
+
+**Registry schema specification:** File location.
+
+**Governance specification:** File location.
+
+**Unresolved decisions:** Explicit list.
+
+**Application modifications:** Confirm that none occurred.
+
+**Agent deployment:** Confirm that no agents were created or activated.
+
+**Next step:** Wait for explicit authorization.
+
+---
+
+# 14. Final Mandatory Instruction
+
+This phase finalizes the architectural definition and documentation of GeFlow's 29 dedicated business-category agents.
+
+It does not authorize implementation.
+
+Do not:
+
+- Create database tables.
+- Create agent configuration records.
+- Create API endpoints.
+- Modify existing application components.
+- Add agent interfaces.
+- Install AI packages.
+- Configure model providers.
+- Deploy agents.
+- Activate agents.
+- Implement orchestration.
+- Modify existing business workflows.
+- Start the next roadmap phase automatically.
+
+Finalize the registry, validate the complete 29-agent mapping, prepare all deliverables, and stop.
+
+**The project owner must explicitly authorize the next implementation step.**

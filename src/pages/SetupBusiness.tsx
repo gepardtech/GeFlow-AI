@@ -102,14 +102,28 @@ const SetupBusiness = () => {
         u = res.data?.user;
       }
       if (!u) {
-        const raw = localStorage.getItem("sb-gvkvljxhufsrgyfsqrkc-auth-token") || localStorage.getItem("supabase.auth.token");
-        if (!raw) {
-          navigate("/login");
-          return;
-        }
+        navigate("/login");
+        return;
       }
 
       setEmail(u?.email ?? null);
+
+      let totalCount = 0;
+      // 1. Check via backend API to bypass RLS restrictions
+      try {
+        const token = session?.access_token;
+        const apiRes = await fetch("/api/user/businesses", {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (apiRes.ok) {
+          const apiJson = await apiRes.json();
+          if (apiJson?.success && Array.isArray(apiJson.owned)) {
+            totalCount = apiJson.owned.length;
+          }
+        }
+      } catch {
+        /* fallback to database count */
+      }
 
       const [{ data: cats }, { count }] = await Promise.all([
         supabase
@@ -124,11 +138,12 @@ const SetupBusiness = () => {
       ]);
 
       setCategories((cats as Category[]) ?? []);
-      const totalCount = count ?? 0;
-      setBizCount(totalCount);
+      const dbCount = count ?? 0;
+      const effectiveCount = Math.max(totalCount, dbCount);
+      setBizCount(effectiveCount);
 
       // If user already has a business registered, don't trap them in setup step 1!
-      if (totalCount > 0) {
+      if (effectiveCount > 0) {
         const queryParams = new URLSearchParams(window.location.search);
         if (!queryParams.get("new") && !queryParams.get("create")) {
           navigate("/dashboard", { replace: true });

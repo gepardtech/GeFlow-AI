@@ -1,0 +1,1192 @@
+# GeFlow AI
+## Implementation Step 03: Existing Database & API Contracts Inspection
+
+**Parent Company:** Gepard Tech  
+**Product:** GeFlow AI  
+**Tagline:** Fast. Smart. Reliable.  
+**Implementation Step:** 03  
+**Prerequisites:** Step 01 — Existing Application Audit; Step 02 — Existing UI & Functionality Baseline Freeze  
+**Execution Mode:** Read-Only Technical Inspection and Documentation  
+**Implementation Permission:** Not Authorized  
+**Database Write Permission:** Not Authorized  
+**API Modification Permission:** Not Authorized  
+**Deployment Permission:** Not Authorized  
+**Status:** Pending Execution
+
+---
+
+# 1. Primary Objective
+
+Inspect and document the existing GeFlow AI database architecture, schema, data relationships, API contracts, server-side operations, integrations, authorization rules, and data flows.
+
+The purpose is to establish an accurate technical understanding of the current system before any future implementation work involving the 29 dedicated business-category AI agents.
+
+The inspection must determine:
+
+- Which database technology is actually used.
+- Which tables, collections, views, and other data structures currently exist.
+- How existing entities relate to one another.
+- How users, businesses, organizations, products, suppliers, purchases, inventory, sales, and other records are associated.
+- Which API endpoints and server-side functions exist.
+- How requests are authenticated and authorized.
+- How tenant and business data isolation is enforced.
+- How data validation and business rules are implemented.
+- How existing transactions and inventory updates work.
+- How external services interact with the application.
+- Which components future AI agents may need to access.
+- Which existing interfaces and data contracts must remain compatible.
+- Which architectural limitations require further investigation.
+
+**The existing GeFlow application remains the source of truth. Future AI-agent development must integrate with its existing architecture rather than replace it without explicit authorization.**
+
+# 2. Mandatory Read-Only Restrictions
+
+This phase authorizes inspection and documentation only.
+
+The builder must not:
+
+1. Modify existing database schemas.
+2. Create or delete tables, collections, views, functions, triggers, or indexes.
+3. Execute migrations.
+4. Insert, update, or delete application records.
+5. Modify production data.
+6. Modify row-level security policies.
+7. Modify database permissions or roles.
+8. Change API endpoint behavior.
+9. Create new API endpoints.
+10. Rename existing API routes.
+11. Change request or response formats.
+12. Modify server-side functions.
+13. Modify authentication or authorization logic.
+14. Change environment variables.
+15. Change API keys, secrets, or provider configurations.
+16. Install, remove, or upgrade dependencies.
+17. Run scripts that alter database structures or data.
+18. Deploy application changes.
+19. Create AI agents or connect new AI workflows.
+20. Fix existing defects discovered during inspection.
+
+The builder may inspect source code, schema definitions, migration files, database metadata, API definitions, existing tests, logs available through authorized read-only access, and other relevant evidence.
+
+The builder must not assume that access to a database permits modifying it.
+
+If a required inspection needs elevated permissions or a potentially destructive operation, stop and report the limitation.
+
+## 2.1 Evidence-Based Inspection
+
+Use the actual project as the primary source of truth.
+
+Do not assume the database is Supabase, Firebase, PostgreSQL, or any other technology until the implementation confirms it.
+
+Similarly, do not assume that the application uses REST, GraphQL, server actions, RPC, or a particular API architecture.
+
+Inspect what exists and document the findings.
+
+If the source code and live system disagree, record the discrepancy instead of silently choosing one.
+
+# 3. Database Architecture Inspection
+
+## 3.1 Identify the Actual Database Architecture
+
+Determine:
+
+- Database provider.
+- Database engine.
+- Database version, if safely discoverable.
+- Database hosting model.
+- Development and production database separation.
+- Schema organization.
+- Connection architecture.
+- Data access libraries or ORM.
+- Migration system.
+- Database initialization mechanism.
+- Database backup approach, if documented or accessible.
+- Existing database environments.
+- Whether multiple data stores are used.
+- Whether files and binary objects use separate storage.
+- Whether caching or search indexes are present.
+
+Record whether each finding is confirmed, inferred from source code, documented only, or unverified.
+
+Never expose connection strings, passwords, access tokens, or private credentials in the report.
+
+## 3.2 Database Object Inventory
+
+Create a complete inventory of discoverable database objects.
+
+Include applicable object types:
+
+- Tables.
+- Collections.
+- Columns and fields.
+- Primary keys.
+- Foreign keys.
+- Unique constraints.
+- Check constraints.
+- Indexes.
+- Views.
+- Materialized views.
+- Database functions.
+- Stored procedures.
+- Triggers.
+- Enumerated types.
+- Sequences.
+- Policies.
+- Database roles.
+- Scheduled database jobs.
+- Migration files.
+- Storage buckets and their access policies, where relevant.
+
+Only include object types supported by the actual database technology.
+
+For each object, record:
+
+| Field | Required information |
+|---|---|
+| Object ID | Unique audit reference |
+| Object name | Actual database object name |
+| Object type | Table, collection, view, function, policy, etc. |
+| Purpose | Verified or inferred responsibility |
+| Source | Schema file, migration, metadata, or other evidence |
+| Fields | Relevant fields and data types |
+| Relationships | Related objects |
+| Constraints | Applicable validation or integrity constraints |
+| Access controls | Applicable permissions or policies |
+| Consumers | API routes, server functions, or UI features using it |
+| Sensitivity | Public, internal, confidential, or sensitive data classification |
+| Verification status | Confirmed, partial, or unverified |
+
+Do not expose actual personal information when describing example records.
+
+## 3.3 Schema and Migration Reconciliation
+
+Inspect existing schema definitions and migration history where available.
+
+Determine:
+
+- Which migrations exist.
+- Their recorded order.
+- Which migrations appear to have been applied, if safely verifiable.
+- Whether schema definitions match the currently accessible database metadata.
+- Whether expected objects are missing.
+- Whether duplicate or conflicting definitions exist.
+- Whether application code references obsolete fields.
+- Whether old migration files remain relevant.
+- Whether database defaults differ from application defaults.
+
+Do not execute migrations to verify their behavior.
+
+If the migration history is incomplete or the live database cannot be inspected, explicitly identify that limitation.
+
+## 3.4 Data Integrity
+
+Inspect existing mechanisms for:
+
+- Primary-key integrity.
+- Foreign-key integrity.
+- Unique values.
+- Required fields.
+- Default values.
+- Referential integrity.
+- Soft deletion.
+- Archiving.
+- Record ownership.
+- Timestamp handling.
+- Audit fields.
+- Status transitions.
+- Duplicate prevention.
+- Orphaned records.
+- Inconsistent relationships.
+
+Do not conduct destructive integrity tests or modify existing records.
+
+Where live-data inspection is unavailable, assess integrity protections from schema definitions and application code without claiming that all stored records are valid.
+
+# 4. Core GeFlow Data Domains
+
+Inspect all relevant existing data domains. The following list is an inspection checklist, not a requirement to create missing tables.
+
+## 4.1 Authentication and User Identity
+
+Inspect structures and operations related to:
+
+- Authentication users.
+- User profiles.
+- User roles.
+- Role assignments.
+- Account status.
+- Email verification.
+- Session-related records, where applicable.
+- User-to-business relationships.
+- Organization membership.
+- Administrative privileges.
+- User preferences.
+
+Determine whether identity is managed directly by the application database or by an external authentication provider.
+
+Document the relationship between authentication identities and application-level user records.
+
+Do not assume that an authentication user ID and a profile ID are always identical.
+
+## 4.2 Businesses and Organizations
+
+Inspect structures related to:
+
+- Business records.
+- Organization records.
+- Business owners.
+- Organization membership.
+- Business categories.
+- Business locations.
+- Branches.
+- Business settings.
+- Business status.
+- Business-specific configuration.
+- Business subscription associations.
+
+Determine how the application identifies the active business or organization during a request.
+
+Document whether users can belong to multiple businesses and whether the application supports multiple locations or branches.
+
+Record only behavior supported by actual implementation evidence.
+
+## 4.3 Business Categories
+
+Inspect the existing business-category implementation.
+
+Determine:
+
+- Where business categories are stored.
+- How categories are identified.
+- Whether category IDs are stable.
+- Whether categories are built-in, user-created, or both.
+- How a business is associated with a category.
+- Whether category configurations affect workflows.
+- Whether categories can be enabled or disabled.
+- How category records are referenced elsewhere.
+
+The future agent registry must be able to map the 29 established business categories to the existing category architecture without assuming that a new category table is required.
+
+Do not create an agent registry or modify category records during this step.
+
+## 4.4 Product Categories and Products
+
+Inspect:
+
+- Product records.
+- Product-category records.
+- Category hierarchies.
+- Product identifiers.
+- SKUs.
+- Barcodes.
+- Product variants.
+- Product attributes.
+- Purchase prices.
+- Sale prices.
+- Tax fields.
+- Product status.
+- Product images and attachments.
+- Product-to-business relationships.
+- Product-to-location relationships.
+- Category-specific product fields.
+
+Determine which fields are mandatory and which are optional.
+
+Document whether product records are shared across businesses or independently owned by each business.
+
+Do not assume that a product's business category and its product category represent the same concept.
+
+## 4.5 Units of Measurement
+
+Inspect:
+
+- UoM records.
+- Parent UoM relationships.
+- Conversion definitions.
+- Business-category associations.
+- Product-to-UoM relationships.
+- Purchase UoMs.
+- Sales UoMs.
+- Inventory UoMs.
+- Conversion calculations.
+- UoM validation rules.
+
+Determine how conversion factors are represented and where conversion calculations occur.
+
+If conversion behavior is implemented in application code rather than the database, record the relevant source files and functions.
+
+Do not change UoM records or conversion rules.
+
+## 4.6 Suppliers and Purchasing
+
+Inspect data structures related to:
+
+- Suppliers.
+- Supplier contact information.
+- Supplier-business associations.
+- Purchase orders.
+- Purchase records.
+- Purchase line items.
+- Purchase status.
+- Supplier invoices.
+- Purchase payments.
+- Supplier balances.
+- Purchase returns.
+- Receiving records.
+- Purchase taxes and discounts.
+
+Determine how purchase records connect to products, inventory movements, suppliers, payments, and reports.
+
+Document whether purchase creation and stock updates are performed in one transaction or through separate operations.
+
+If transaction boundaries cannot be verified, mark them as unverified.
+
+## 4.7 Inventory and Stock Movements
+
+Inspect structures related to:
+
+- Inventory records.
+- Product stock quantities.
+- Business or branch stock.
+- Stock movements.
+- Stock adjustments.
+- Stock transfers.
+- Batch records.
+- Expiry information.
+- Reorder thresholds.
+- Inventory valuation.
+- Stock reservation.
+- Inventory audit history.
+
+Determine:
+
+- Where stock quantities are stored.
+- Whether stock is tracked per business, branch, warehouse, or product.
+- How stock changes are recorded.
+- Whether stock movement history exists.
+- How negative stock is handled.
+- Whether concurrent updates are protected.
+- Whether stock adjustments require specific permissions.
+
+Do not modify stock quantities or perform inventory transactions.
+
+## 4.8 POS, Sales, and Payments
+
+Inspect data structures related to:
+
+- Sales transactions.
+- Sale line items.
+- Carts or temporary sale records, if persisted.
+- Customers.
+- Invoices.
+- Payment records.
+- Payment methods.
+- Discounts.
+- Taxes.
+- Refunds.
+- Returns.
+- Cashier sessions.
+- Register sessions.
+- Transaction status.
+- Sale cancellations.
+
+Determine the relationships between sales, inventory, customers, invoices, payments, and reports.
+
+Inspect how the application handles:
+
+- Duplicate submissions.
+- Failed payments.
+- Partial payments.
+- Refunds.
+- Concurrent sales.
+- Stock deduction.
+- Transaction rollback.
+
+Do not create real sales, payments, or refunds.
+
+## 4.9 Customers and Customer Balances
+
+Inspect:
+
+- Customer profiles.
+- Customer-to-business relationships.
+- Contact details.
+- Customer history.
+- Credit balances.
+- Outstanding invoices.
+- Payment history.
+- Customer-specific pricing or discounts, if implemented.
+
+Document sensitive fields without reproducing real customer data.
+
+## 4.10 Reports and Analytics
+
+Inspect the data sources and calculation mechanisms behind existing reports.
+
+Determine whether reports are generated through:
+
+- Direct database queries.
+- Views.
+- Stored functions.
+- Server-side calculations.
+- Client-side calculations.
+- External analytics services.
+- Cached results.
+
+Document the sources and calculation paths for important metrics such as sales totals, inventory value, purchase totals, and profit, where implemented.
+
+Do not assume that similarly named metrics use identical formulas.
+
+Record differences or ambiguities for future review.
+
+## 4.11 Billing, Subscriptions, and Referrals
+
+Inspect existing structures related to:
+
+- Subscription plans.
+- Customer subscriptions.
+- Subscription status.
+- Billing history.
+- Payment provider references.
+- Coupons.
+- Discount rules.
+- Usage limits.
+- Referral attribution.
+- Referral rewards.
+- Commission ledgers.
+- Withdrawal requests.
+- Payout methods.
+- Payment webhooks.
+
+Only include structures that actually exist.
+
+Document which financial calculations happen server-side and how external payment events are validated.
+
+Do not alter prices, referral balances, subscription records, payment settings, or financial records.
+
+## 4.12 Notifications, Announcements, and Support
+
+Inspect existing structures related to:
+
+- Notifications.
+- Announcements.
+- User preferences.
+- Support tickets.
+- Ticket messages.
+- Ticket assignments.
+- Ticket status.
+- Community features, if implemented.
+- Audit logs.
+- Activity history.
+
+Document relationships between these features and users, businesses, roles, and subscriptions.
+
+Do not create missing structures.
+
+## 4.13 Existing AI Data
+
+Inspect all existing AI-related data structures and operations.
+
+Potential areas include:
+
+- AI configurations.
+- Provider settings.
+- Model settings.
+- Prompts.
+- AI conversations.
+- Conversation messages.
+- Tool execution records.
+- Usage tracking.
+- Token usage.
+- AI-generated reports.
+- AI task history.
+- AI permissions.
+- AI audit logs.
+
+Determine which AI data is persisted and how it is associated with users, businesses, and organizations.
+
+Do not assume that these structures already exist.
+
+Do not create or modify any agent-related data structures.
+
+# 5. Relationships and Data Flow Mapping
+
+Create an evidence-based relationship map for the existing application.
+
+Document relationships such as:
+
+- Authentication user → application profile.
+- User → organization membership.
+- Organization → business.
+- Business → business category.
+- Business → products.
+- Product → product category.
+- Product → UoM.
+- Purchase → supplier.
+- Purchase → purchase items.
+- Purchase items → products.
+- Inventory records → products and locations.
+- Stock movements → inventory operations.
+- Sales → customers.
+- Sales → sale items.
+- Sale items → products.
+- Sales → payments.
+- Sales → invoices.
+- Reports → underlying data sources.
+- Subscriptions → users or businesses.
+- AI operations → authorized user and business context.
+
+These are examples of relationships to investigate. Confirm each relationship from the actual implementation.
+
+For every confirmed relationship, document:
+
+1. Source object.
+2. Target object.
+3. Relationship type.
+4. Key fields.
+5. Integrity constraints.
+6. Ownership boundaries.
+7. Relevant business rules.
+8. Relevant API operations.
+9. Evidence source.
+10. Verification status.
+
+Produce a relationship diagram if the existing project tools support documentation-only diagram generation without modifying the application.
+
+If the diagram cannot be generated reliably, provide a structured relationship table instead.
+
+# 6. API Contract Inspection
+
+## 6.1 Discover Existing API Surfaces
+
+Inspect all API mechanisms actually used by the application.
+
+Potential mechanisms include:
+
+- REST endpoints.
+- GraphQL operations.
+- RPC functions.
+- Server actions.
+- Serverless functions.
+- Webhooks.
+- Database-backed API services.
+- Internal service modules.
+- Background job handlers.
+- External provider APIs.
+
+Do not assume all these mechanisms exist.
+
+Inspect:
+
+- Route files.
+- Handler functions.
+- Middleware.
+- Request validation.
+- Authentication checks.
+- Authorization checks.
+- Service-layer methods.
+- Database queries.
+- Response construction.
+- Error handling.
+- Existing API documentation.
+- API schemas.
+- Relevant tests.
+
+## 6.2 API Contract Register
+
+Create a complete inventory of discoverable API endpoints and significant internal service operations.
+
+For each endpoint or operation, record:
+
+| Field | Description |
+|---|---|
+| API ID | Unique audit reference |
+| Name | Actual endpoint or operation |
+| Method | HTTP method or operation type |
+| Route | Actual path, where applicable |
+| Purpose | Business function |
+| Caller | UI, server process, webhook, or external service |
+| Authentication | Required identity mechanism |
+| Authorization | Roles, ownership, and permission checks |
+| Request schema | Required and optional input fields |
+| Validation | Existing input validation |
+| Response schema | Actual successful response structure |
+| Error contract | Error types and response behavior |
+| Database effects | Reads, writes, and side effects |
+| External effects | Emails, payments, AI calls, or other effects |
+| Idempotency | Existing duplicate-request protection |
+| Rate limits | Existing limits, if any |
+| Tests | Relevant tests |
+| Evidence | Source files and references |
+| Status | Verified, partial, broken, or unverified |
+
+If an endpoint's contract is undocumented, reconstruct it from implementation evidence and clearly label the result as reverse-engineered.
+
+Do not invent missing fields or expected responses.
+
+## 6.3 Request Validation
+
+Inspect how the application validates:
+
+- Required fields.
+- Data types.
+- String lengths.
+- Numeric ranges.
+- IDs and references.
+- Enumerated values.
+- Dates and timestamps.
+- Currency values.
+- Quantities.
+- UoM values.
+- Pagination parameters.
+- Search terms.
+- Sort parameters.
+- File uploads.
+- Business and organization identifiers.
+
+Determine whether validation occurs on the client, server, database, or multiple layers.
+
+Record cases where a client-supplied value is trusted without sufficient server-side validation.
+
+Do not change validation logic.
+
+## 6.4 Response Contracts
+
+Inspect the actual response formats.
+
+Record:
+
+- Success response structure.
+- Error response structure.
+- Status codes, where applicable.
+- Nullability.
+- Pagination metadata.
+- Count fields.
+- Timestamp formats.
+- Currency representation.
+- Quantity precision.
+- Serialization behavior.
+
+Identify inconsistencies between endpoints serving similar functions.
+
+Do not standardize response formats during this phase.
+
+## 6.5 Error Handling
+
+Inspect how errors are handled and returned.
+
+Relevant categories include:
+
+- Authentication failures.
+- Authorization failures.
+- Validation errors.
+- Missing records.
+- Duplicate records.
+- Business-rule violations.
+- Insufficient inventory.
+- Payment failures.
+- Database errors.
+- External provider errors.
+- Rate-limit errors.
+- Unexpected server errors.
+
+Document whether errors expose internal implementation details or sensitive information.
+
+Do not intentionally trigger destructive errors against production services.
+
+## 6.6 API Compatibility
+
+Identify existing contracts that other application components depend on.
+
+Document:
+
+- UI components relying on response fields.
+- Server functions relying on database return values.
+- External integrations relying on existing endpoints.
+- Webhooks relying on specific event formats.
+- Reports relying on specific query outputs.
+- Existing tests relying on specific behavior.
+
+These dependencies must be considered before any future API changes are authorized.
+
+---
+
+# 7. Authentication, Authorization, and Tenant Isolation
+
+This is a critical part of the inspection.
+
+## 7.1 Authentication
+
+Determine how the application establishes the identity of the requesting user.
+
+Inspect:
+
+- Session validation.
+- Token validation.
+- Authentication middleware.
+- Server-side identity retrieval.
+- Service-role or administrator credentials, where applicable.
+- Anonymous access.
+- Public endpoints.
+- Webhook authentication.
+
+Do not expose credentials or private tokens in the report.
+
+## 7.2 Authorization
+
+Determine how the system verifies whether a user may perform a requested operation.
+
+Inspect:
+
+- Role checks.
+- Business ownership checks.
+- Organization membership checks.
+- Resource-level permissions.
+- API authorization.
+- Database-level policies.
+- Administrative overrides.
+- Subscription-based restrictions.
+
+Distinguish authentication from authorization.
+
+A successfully authenticated user must not automatically be treated as authorized to access every business or record.
+
+## 7.3 Tenant Isolation
+
+Inspect whether queries and operations enforce the correct business or organization scope.
+
+Determine:
+
+- How the active business is resolved.
+- Whether ownership is derived from the authenticated identity.
+- Whether client-provided business IDs are validated.
+- Whether every relevant query enforces tenant scope.
+- Whether records can be accessed through guessed or substituted IDs.
+- Whether administrative access is explicitly controlled.
+- Whether background tasks preserve tenant context.
+- Whether AI operations can access records belonging to another organization.
+
+Do not perform unauthorized access attempts against production data.
+
+Use source inspection, existing tests, and authorized non-destructive checks where available.
+
+Record any unverified isolation guarantee as a risk rather than declaring it secure.
+
+## 7.4 Database Security Policies
+
+Where supported by the actual database technology, inspect:
+
+- Row-level security.
+- Table-level grants.
+- Column-level restrictions.
+- Database roles.
+- Security-definer functions.
+- Policy conditions.
+- Storage access policies.
+- Privileged service credentials.
+- Direct database access from client code.
+
+Document the actual protection mechanisms and their scope.
+
+Do not modify or disable any security policy.
+
+# 8. Transactions and Concurrency
+
+Inspect operations where multiple related changes must remain consistent.
+
+Prioritize:
+
+- Purchase creation and stock updates.
+- Sale completion and stock deduction.
+- Payment recording and invoice status.
+- Returns and inventory restoration.
+- Stock adjustments.
+- Transfers between locations.
+- Subscription activation following payment.
+- Referral reward calculation.
+- Refund and commission reversal.
+
+For each operation, document:
+
+1. Initiating API or function.
+2. Sequence of operations.
+3. Database transaction boundaries.
+4. Rollback behavior.
+5. Duplicate-request protection.
+6. Concurrent update handling.
+7. Failure recovery.
+8. Audit trail.
+9. Evidence.
+10. Verification status.
+
+Do not claim atomicity unless supported by actual implementation evidence.
+
+If the system performs related writes separately, document the possible consistency risks without changing the implementation.
+
+# 9. External Integrations and Webhooks
+
+Inspect existing integration contracts.
+
+Potential integrations include:
+
+- AI providers.
+- Payment gateways.
+- Email providers.
+- File storage.
+- Authentication services.
+- Analytics providers.
+- Third-party APIs.
+- Webhook consumers.
+- Background processing systems.
+
+For each confirmed integration, record:
+
+- Integration name.
+- Purpose.
+- Entry point.
+- Authentication method, without revealing secrets.
+- Request format.
+- Response format.
+- Timeout handling.
+- Retry behavior.
+- Error handling.
+- Idempotency.
+- Data transmitted.
+- Data persisted.
+- Configuration location, without exposing secret values.
+- Related tests.
+- Current verification status.
+
+For webhooks, inspect how the application validates signatures or otherwise authenticates incoming events.
+
+Determine how duplicate events, delayed events, failed processing, and retries are handled.
+
+Do not send real payments, trigger production webhooks, or modify provider configurations.
+
+# 10. Future 29-Agent Integration Compatibility
+
+The eventual system will have 29 dedicated business-category agents.
+
+Each agent must be restricted to its assigned business category and authorized organization context.
+
+This phase must establish which existing database and API structures can support that architecture.
+
+## 10.1 Category Registry Compatibility
+
+Inspect whether existing business categories have:
+
+- Stable identifiers.
+- Unique keys or slugs.
+- Category metadata.
+- Business associations.
+- Category-specific settings.
+- Category-specific workflows.
+- Category-specific permissions.
+
+Document how the existing category IDs map to the established 29-category list.
+
+Do not create the agent registry during this phase.
+
+## 10.2 Agent Context Requirements
+
+Identify the existing mechanisms that could supply an authorized agent with:
+
+- Authenticated user identity.
+- Organization or business identity.
+- Business category.
+- Current location or branch, where applicable.
+- User role.
+- Relevant products and inventory.
+- Purchasing context.
+- Sales context.
+- Reporting context.
+- Subscription and usage permissions.
+- Allowed operations.
+- Audit and attribution metadata.
+
+Document missing context fields or unresolved identity relationships.
+
+Do not add new fields or tables.
+
+## 10.3 Agent Data Isolation
+
+Future agent execution must not rely solely on instructions inside an AI prompt to enforce security.
+
+Document the existing server-side mechanisms that could enforce:
+
+- Active agent identity.
+- Assigned business category.
+- Authorized business or organization.
+- Tool permissions.
+- Resource-level access.
+- Tenant-scoped database operations.
+- Allowed read/write actions.
+- Usage limits.
+- Audit logging.
+
+If these controls do not currently exist, record the gap.
+
+## 10.4 Prohibited Cross-Category Access
+
+The future design requires that an agent cannot independently operate outside its assigned category.
+
+For example, a Restaurant agent must not directly execute Pharmacy agent workflows.
+
+Inspect the existing category and authorization architecture for potential support of this restriction.
+
+Shared infrastructure may be reused where appropriate, but business context, tool permissions, and access to tenant data must be enforced for each execution.
+
+Do not implement agents, orchestration, or new permissions during this step.
+
+---
+
+# 11. Required Documentation Deliverables
+
+Prepare the following artifacts.
+
+## Deliverable 1 — Database Architecture Report
+
+Document the actual database technology, architecture, environments, access patterns, and dependencies.
+
+## Deliverable 2 — Database Object Inventory
+
+Inventory all discoverable tables, collections, views, functions, triggers, indexes, policies, and other relevant objects.
+
+## Deliverable 3 — Schema and Migration Report
+
+Document schema definitions, migration history, detected discrepancies, and verification limitations.
+
+## Deliverable 4 — Data Relationship Map
+
+Provide verified relationships among users, businesses, categories, products, UoMs, suppliers, purchases, inventory, sales, customers, billing, and AI-related data where present.
+
+## Deliverable 5 — API Contract Inventory
+
+Document all discoverable API endpoints and significant internal service operations.
+
+## Deliverable 6 — Request and Response Schema Report
+
+Document verified request formats, validation rules, response structures, error formats, and compatibility concerns.
+
+## Deliverable 7 — Authentication and Authorization Report
+
+Document authentication mechanisms, role checks, resource permissions, database security controls, and tenant-isolation behavior.
+
+## Deliverable 8 — Transaction and Data Consistency Report
+
+Document transaction boundaries, stock-update logic, payment processing, duplicate-request protection, concurrency behavior, and failure recovery.
+
+## Deliverable 9 — External Integration Report
+
+Document existing integrations, webhooks, data exchanged, retries, idempotency, and error handling.
+
+## Deliverable 10 — Security and Technical Risk Register
+
+Record:
+
+- Missing authorization checks.
+- Potential tenant-isolation gaps.
+- Inconsistent data ownership.
+- Exposed or overly broad data access.
+- Weak input validation.
+- Inconsistent API contracts.
+- Missing transaction safeguards.
+- Potential duplicate-processing risks.
+- Unverified webhook security.
+- Unclear audit trails.
+- Other relevant technical risks.
+
+Each risk must include evidence, potential impact, severity, confidence, and recommended investigation or remediation.
+
+**Recommendations must not be implemented during this phase.**
+
+## Deliverable 11 — Future Agent Integration Compatibility Matrix
+
+For each relevant existing data domain and API operation, document its potential relevance to the 29-agent architecture, access requirements, and unresolved gaps.
+
+## Deliverable 12 — Existing Contract Preservation Register
+
+Record database objects, API routes, response formats, business rules, and integrations that future implementation work must preserve unless an authorized change explicitly permits otherwise.
+
+## Deliverable 13 — Inspection Evidence Index
+
+Provide source file paths, schema references, route references, tests, migration files, and other evidence supporting the findings.
+
+Never include secrets, passwords, private tokens, or real customer data.
+
+## Deliverable 14 — Step 03 Completion Report
+
+Summarize inspected areas, completed deliverables, verification limitations, major risks, and outstanding decisions.
+
+---
+
+# 12. Evidence and Reporting Standards
+
+Every significant finding must have an evidence reference where possible.
+
+Suitable evidence includes:
+
+- Source file path and relevant function.
+- Database object name.
+- Schema definition.
+- Migration file.
+- API route and handler.
+- Authorization policy.
+- Test name and result.
+- Non-sensitive application log.
+- Existing API documentation.
+- Authorized read-only database metadata.
+
+For each finding, distinguish between:
+
+**Verified:** Directly confirmed through implementation or safe observation.
+
+**Code-Inferred:** Supported by source code, but runtime behavior has not been verified.
+
+**Documented:** Described in project documentation, but implementation has not been confirmed.
+
+**Unverified:** Available evidence is insufficient.
+
+**Blocked:** Access or permission limitations prevent inspection.
+
+Do not describe an intended architecture as an existing implementation.
+
+Do not claim that an API is secure merely because authentication middleware exists.
+
+Do not claim that tenant isolation is guaranteed merely because records contain a business ID.
+
+Do not claim that database transactions are atomic without verifying the actual transaction boundary.
+
+Do not report a security test as passed unless it was actually performed through an authorized, safe process.
+
+---
+
+# 13. Execution Order
+
+Follow this sequence:
+
+### Stage 1 — Confirm Inspection Scope
+
+Review the findings and artifacts from Steps 01 and 02, if available.
+
+Identify the relevant project, database definitions, API source files, and baseline references.
+
+Do not modify any files.
+
+### Stage 2 — Identify Database Technology
+
+Inspect project configuration and source code to identify the actual database and data-access architecture.
+
+Do not expose secrets or modify configuration.
+
+### Stage 3 — Inventory Database Objects
+
+Inspect schemas, migrations, object definitions, relationships, and security policies.
+
+### Stage 4 — Trace Critical Data Flows
+
+Follow existing workflows from UI entry points through API or server operations to database reads and writes.
+
+Prioritize purchases, inventory, POS, billing, and existing AI functionality where implemented.
+
+### Stage 5 — Inventory API Contracts
+
+Inspect routes, request validation, response construction, authorization, side effects, and tests.
+
+### Stage 6 — Review Security Boundaries
+
+Document identity verification, permissions, tenant isolation, database policies, and privileged operations.
+
+### Stage 7 — Review Consistency and Integrations
+
+Inspect transactions, concurrent updates, idempotency, external integrations, webhooks, and error recovery.
+
+### Stage 8 — Assess Future Agent Compatibility
+
+Map existing structures to future agent requirements without implementing any agent functionality.
+
+### Stage 9 — Prepare Deliverables
+
+Generate the required reports and registers using verified evidence.
+
+### Stage 10 — Final Verification and Stop
+
+Confirm that no application, database, configuration, or API modifications were made.
+
+Report remaining uncertainties honestly.
+
+Stop and wait for explicit authorization.
+
+---
+
+# 14. Acceptance Criteria
+
+Step 03 may be marked complete only when:
+
+- The actual database technology has been identified or its identity limitation documented.
+- Discoverable database objects have been inventoried.
+- Schema and migration evidence has been inspected where available.
+- Major data relationships have been documented.
+- Existing API surfaces have been inventoried.
+- Request and response contracts have been documented where discoverable.
+- Critical business workflows have been traced through their relevant data operations.
+- Authentication and authorization mechanisms have been inspected.
+- Tenant-isolation protections and uncertainties have been documented.
+- Transaction and consistency behavior has been assessed.
+- Existing integrations and webhooks have been inspected.
+- Potential future AI-agent integration points have been mapped.
+- Existing database and API contracts have been recorded for preservation.
+- Technical risks and limitations have been documented.
+- All findings are appropriately classified by evidence and verification status.
+- No unauthorized modifications have occurred.
+- All completed deliverables are available for review.
+
+If any area cannot be inspected, report the limitation instead of falsely declaring the step complete.
+
+---
+
+# 15. Final Completion Report Format
+
+At the end of this phase, provide:
+
+**Phase:** Step 03 — Existing Database & API Contracts Inspection
+
+**Execution status:** Complete, partially complete, or blocked.
+
+**Database technology:** Actual confirmed technology or explicitly unverified.
+
+**Database inventory:** Location and coverage of the inventory.
+
+**Data relationships:** Location and summary of the relationship map.
+
+**API inventory:** Location and coverage of the API contract register.
+
+**Security review:** Confirmed controls, identified risks, and unverified areas.
+
+**Transaction review:** Critical workflows inspected and remaining gaps.
+
+**Integration review:** Existing integrations inspected and their verification status.
+
+**Agent compatibility:** Major findings relevant to the future 29-agent architecture.
+
+**Known risks:** Severity, evidence, and recommended next investigation.
+
+**Application modifications:** Confirm that no changes were made, or disclose any accidental deviation immediately.
+
+**Outstanding questions:** Items requiring project-owner decisions.
+
+**Next step:** Wait for explicit authorization.
+
+---
+
+# 16. Final Mandatory Instruction
+
+This is an inspection and documentation phase only.
+
+Do not create, alter, or delete database objects. Do not modify application code, API contracts, authorization policies, integrations, configuration, or existing records. Do not install dependencies or deploy changes.
+
+Do not implement any of the 29 AI agents or begin the next roadmap step automatically.
+
+Inspect the actual GeFlow project, document what is verifiably present, identify risks and unknowns, prepare the deliverables, and stop.
+
+**Wait for the project owner's explicit authorization before making any implementation changes.**

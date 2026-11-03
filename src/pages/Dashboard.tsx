@@ -321,19 +321,6 @@ const Dashboard = () => {
 
   // Load business data and listen to realtime changes cleanly
   useEffect(() => {
-    const hasStoredBusiness = Boolean(
-      localStorage.getItem("geflow_active_business_id") ||
-      localStorage.getItem("geflow.activeBusinessId") ||
-      (localStorage.getItem("geflow_owned_businesses") && localStorage.getItem("geflow_owned_businesses") !== "[]") ||
-      (localStorage.getItem("geflow_cached_owned_businesses") && localStorage.getItem("geflow_cached_owned_businesses") !== "[]") ||
-      (localStorage.getItem("geflow_staff_businesses") && localStorage.getItem("geflow_staff_businesses") !== "[]")
-    );
-
-    if (hasLoaded && !bizLoading && !activeId && businesses.length === 0 && staffBusinesses.length === 0 && !hasStoredBusiness) {
-      navigate("/setup-business", { replace: true });
-      return;
-    }
-
     if (!activeId) {
       if (hasLoaded) setLoading(false);
       return;

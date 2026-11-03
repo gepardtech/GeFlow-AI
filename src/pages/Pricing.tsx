@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import Layout from "@/components/Layout";
-import { Check, Minus, Tag, Crown } from "lucide-react";
+import { Check, Minus, Tag, Crown, Flame, Clock, Sparkles, ArrowRight, ShieldCheck, Zap } from "lucide-react";
 import { useMoney } from "@/lib/currency";
 import { usePricingPlans } from "@/hooks/usePricingPlans";
 import { getPendingCoupon } from "@/lib/couponHelper";
@@ -13,6 +13,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { LazyHydrate } from "@/components/common/LazyHydrate";
 
 const freeFeatures = ["50 items limit", "Basic POS", "Single user", "Real-time Profit"];
 const standardFeatures = ["1000 items limit", "Full POS & Returns", "Multi-user support", "Financial summaries", "Supplier Portal"];
@@ -45,6 +46,20 @@ const Pricing = () => {
   const [lifetimeLimits, setLifetimeLimits] = useState<{ standard: number; premium: number }>({ standard: 25, premium: 25 });
   const [lifetimeCounts, setLifetimeCounts] = useState<{ standard: number; premium: number }>({ standard: 0, premium: 0 });
   const [planLimits, setPlanLimits] = useState<Record<string, Record<string, { value: number | null; isLocked: boolean }>>>({});
+  const [countdown, setCountdown] = useState({ days: 2, hours: 14, minutes: 36, seconds: 45 });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev.seconds > 0) return { ...prev, seconds: prev.seconds - 1 };
+        if (prev.minutes > 0) return { ...prev, minutes: prev.minutes - 1, seconds: 59 };
+        if (prev.hours > 0) return { ...prev, hours: prev.hours - 1, minutes: 59, seconds: 59 };
+        if (prev.days > 0) return { days: prev.days - 1, hours: 23, minutes: 59, seconds: 59 };
+        return { days: 2, hours: 23, minutes: 59, seconds: 59 };
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     fetch("/api/admin/pricing-plans")
@@ -437,8 +452,207 @@ const Pricing = () => {
         </div>
       </section>
 
-      {/* Compare Plans */}
+      {/* Live Lifetime Seats Countdown Section */}
       <section className="pb-20">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto rounded-3xl bg-gradient-to-b from-card to-card/60 border border-amber-500/30 p-6 sm:p-8 md:p-10 relative overflow-hidden shadow-xl shadow-amber-500/5">
+            {/* Background subtle glow effect */}
+            <div className="absolute -top-24 -right-24 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative z-10">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-6 border-b border-border/80">
+                <div>
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold uppercase tracking-wider mb-2.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                    </span>
+                    <Flame className="w-3.5 h-3.5" />
+                    Live Registration Window · Remaining Seats
+                  </div>
+                  <h3 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                    Limited Lifetime Enrollment Countdown
+                  </h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-1 max-w-xl">
+                    Seats are claimed live on a first-come, first-served basis. Once current batch spots are filled, lifetime deals lock permanently.
+                  </p>
+                </div>
+
+                {/* Live Ticking Countdown Timer */}
+                <div className="flex items-center gap-2 sm:gap-2.5 self-start sm:self-center shrink-0 bg-background/80 backdrop-blur-xs border border-border/80 px-3.5 py-2.5 rounded-2xl shadow-xs">
+                  <div className="text-center px-1.5 sm:px-2">
+                    <span className="text-xl sm:text-2xl font-mono font-black text-foreground">
+                      {String(countdown.days).padStart(2, "0")}
+                    </span>
+                    <span className="block text-[9px] font-bold tracking-wider text-muted-foreground uppercase">DAYS</span>
+                  </div>
+                  <span className="text-lg font-bold text-muted-foreground/60 -mt-3">:</span>
+                  <div className="text-center px-1.5 sm:px-2">
+                    <span className="text-xl sm:text-2xl font-mono font-black text-foreground">
+                      {String(countdown.hours).padStart(2, "0")}
+                    </span>
+                    <span className="block text-[9px] font-bold tracking-wider text-muted-foreground uppercase">HOURS</span>
+                  </div>
+                  <span className="text-lg font-bold text-muted-foreground/60 -mt-3">:</span>
+                  <div className="text-center px-1.5 sm:px-2">
+                    <span className="text-xl sm:text-2xl font-mono font-black text-foreground">
+                      {String(countdown.minutes).padStart(2, "0")}
+                    </span>
+                    <span className="block text-[9px] font-bold tracking-wider text-muted-foreground uppercase">MINS</span>
+                  </div>
+                  <span className="text-lg font-bold text-muted-foreground/60 -mt-3">:</span>
+                  <div className="text-center px-1.5 sm:px-2">
+                    <span className="text-xl sm:text-2xl font-mono font-black text-amber-500">
+                      {String(countdown.seconds).padStart(2, "0")}
+                    </span>
+                    <span className="block text-[9px] font-bold tracking-wider text-muted-foreground uppercase">SECS</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Two Tiers Live Seats Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                {/* Standard Lifetime Seats */}
+                {(() => {
+                  const limit = lifetimeLimits.standard || 25;
+                  const claimed = lifetimeCounts.standard || 0;
+                  const remaining = Math.max(0, limit - claimed);
+                  const percent = Math.min(100, Math.round((claimed / Math.max(1, limit)) * 100));
+                  return (
+                    <div className="rounded-2xl border border-border/80 bg-background/60 backdrop-blur-xs p-5 flex flex-col justify-between hover:border-amber-500/40 transition-colors">
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <span className="text-xs font-bold tracking-wider uppercase text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded-full border border-purple-500/20">
+                            Standard Lifetime
+                          </span>
+                          <span className="text-[11px] font-mono font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {remaining > 0 ? `${remaining} spots left` : "Registration Full"}
+                          </span>
+                        </div>
+
+                        <div className="flex items-baseline justify-between mb-2">
+                          <div>
+                            <span className="text-3xl font-black text-foreground tracking-tight">{remaining}</span>
+                            <span className="text-xs font-semibold text-muted-foreground ml-1.5">seats left</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground font-mono">
+                            {claimed} / {limit} claimed ({percent}%)
+                          </span>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden mb-3">
+                          <div
+                            className="h-full bg-gradient-to-r from-purple-500 to-amber-500 rounded-full transition-all duration-500"
+                            style={{ width: `${Math.max(8, percent)}%` }}
+                          />
+                        </div>
+
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          Includes 1,000 items catalog capacity, point-of-sale terminal, returns processing, and forever updates.
+                        </p>
+                      </div>
+
+                      <div className="mt-4 pt-4 border-t border-border/60 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] uppercase font-bold text-muted-foreground">ONE-TIME PASS</p>
+                          <p className="text-lg font-bold text-foreground">{price(priceOf("standard", "lifetime"))}</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          className="rounded-xl font-bold text-xs bg-purple-600 hover:bg-purple-700 text-white cursor-pointer shadow-xs"
+                          asChild
+                        >
+                          <Link to={getCheckoutUrl("standard", "lifetime")}>
+                            Claim Standard Seat <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Premium Lifetime Seats */}
+                {(() => {
+                  const limit = lifetimeLimits.premium || 25;
+                  const claimed = lifetimeCounts.premium || 0;
+                  const remaining = Math.max(0, limit - claimed);
+                  const percent = Math.min(100, Math.round((claimed / Math.max(1, limit)) * 100));
+                  return (
+                    <div className="rounded-2xl border border-sky-500/30 bg-background/60 backdrop-blur-xs p-5 flex flex-col justify-between hover:border-sky-500/50 transition-colors shadow-xs">
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <span className="text-xs font-bold tracking-wider uppercase text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2.5 py-0.5 rounded-full border border-sky-500/20 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" /> Premium Lifetime VIP
+                          </span>
+                          <span className="text-[11px] font-mono font-bold text-sky-600 dark:text-sky-400 flex items-center gap-1">
+                            <Zap className="w-3 h-3" />
+                            {remaining > 0 ? `${remaining} spots left` : "Registration Full"}
+                          </span>
+                        </div>
+
+                        <div className="flex items-baseline justify-between mb-2">
+                          <div>
+                            <span className="text-3xl font-black text-foreground tracking-tight">{remaining}</span>
+                            <span className="text-xs font-semibold text-muted-foreground ml-1.5">seats left</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground font-mono">
+                            {claimed} / {limit} claimed ({percent}%)
+                          </span>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden mb-3">
+                          <div
+                            className="h-full bg-gradient-to-r from-sky-500 via-indigo-500 to-amber-500 rounded-full transition-all duration-500"
+                            style={{ width: `${Math.max(8, percent)}%` }}
+                          />
+                        </div>
+
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          Unlimited items, multi-branch syncing, batch and expiry management, enterprise analytics, and VIP priority support.
+                        </p>
+                      </div>
+
+                      <div className="mt-4 pt-4 border-t border-border/60 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] uppercase font-bold text-muted-foreground">ONE-TIME PASS</p>
+                          <p className="text-lg font-bold text-foreground">{price(priceOf("premium", "lifetime"))}</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          className="rounded-xl font-bold text-xs bg-sky-500 hover:bg-sky-600 text-white cursor-pointer shadow-xs"
+                          asChild
+                        >
+                          <Link to={getCheckoutUrl("premium", "lifetime")}>
+                            Claim Premium Seat <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-border/60 flex items-center justify-between flex-wrap gap-2 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                  14-Day Money Back Guarantee · Instant Activation Upon Checkout
+                </span>
+                <span className="font-mono text-[10px]">
+                  Real-time synchronization with platform database
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Compare Plans */}
+      <LazyHydrate whenVisible>
+        <section className="pb-20">
         <div className="container mx-auto px-4">
           <div className="text-center mb-10">
             <h2 className="text-3xl md:text-4xl font-bold mb-3">Compare Our Plans</h2>
@@ -515,35 +729,38 @@ const Pricing = () => {
           </div>
         </div>
       </section>
+      </LazyHydrate>
 
       {/* FAQs */}
-      <section className="pb-20">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-10">
-            <h2 className="text-3xl md:text-4xl font-bold mb-3">Pricing FAQs</h2>
-            <p className="text-muted-foreground">Answers to common billing and plan questions.</p>
-          </div>
+      <LazyHydrate whenVisible>
+        <section className="pb-20">
+          <div className="container mx-auto px-4">
+            <div className="text-center mb-10">
+              <h2 className="text-3xl md:text-4xl font-bold mb-3">Pricing FAQs</h2>
+              <p className="text-muted-foreground">Answers to common billing and plan questions.</p>
+            </div>
 
-          <div className="max-w-2xl mx-auto space-y-3">
-            <Accordion type="single" collapsible className="space-y-3">
-              {faqs.map((faq, i) => (
-                <AccordionItem
-                  key={i}
-                  value={`item-${i}`}
-                  className="premium-card px-5 border-0"
-                >
-                  <AccordionTrigger className="text-sm font-semibold hover:no-underline py-4">
-                    {faq.q}
-                  </AccordionTrigger>
-                  <AccordionContent className="text-sm text-muted-foreground">
-                    {faq.a}
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
+            <div className="max-w-2xl mx-auto space-y-3">
+              <Accordion type="single" collapsible className="space-y-3">
+                {faqs.map((faq, i) => (
+                  <AccordionItem
+                    key={i}
+                    value={`item-${i}`}
+                    className="premium-card px-5 border-0"
+                  >
+                    <AccordionTrigger className="text-sm font-semibold hover:no-underline py-4">
+                      {faq.q}
+                    </AccordionTrigger>
+                    <AccordionContent className="text-sm text-muted-foreground">
+                      {faq.a}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </LazyHydrate>
 
       {/* CTA */}
       <section className="pb-24">

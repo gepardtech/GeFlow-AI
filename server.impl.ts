@@ -1641,6 +1641,27 @@ app.get("/api/currency/convert", async (req: Request, res: Response) => {
   }
 });
 
+// Authoritative user products retrieval (synced directly with PostgreSQL database)
+app.get("/api/user/products", async (req: Request, res: Response) => {
+  try {
+    const businessId = req.query.businessId as string;
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "businessId query parameter is required" });
+    }
+    const [bgRes, srvRes] = await Promise.all([
+      bgSupabase.from("products").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
+      serverSupabase.from("products").select("*").eq("business_id", businessId).order("created_at", { ascending: false }),
+    ]);
+    const prodMap = new Map<string, any>();
+    (bgRes.data || []).forEach((p: any) => prodMap.set(p.id, p));
+    (srvRes.data || []).forEach((p: any) => prodMap.set(p.id, p));
+    const products = Array.from(prodMap.values());
+    return res.json({ success: true, products });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Securely save product to PostgreSQL database collection
 app.post("/api/user/products/save", async (req: Request, res: Response) => {
   try {
@@ -1723,6 +1744,19 @@ app.post("/api/user/products/save", async (req: Request, res: Response) => {
       updated_at: now,
     };
 
+    // Ensure variations config is embedded in productRow.description
+    const incomingVConfig = req.body?.variationsConfig;
+    if (incomingVConfig && (incomingVConfig.variants?.length > 0 || incomingVConfig.attributes?.length > 0 || incomingVConfig.product_type === "variable")) {
+      const completeVConfig = {
+        ...incomingVConfig,
+        product_id: productId,
+        business_id: businessId,
+      };
+      const cleanDesc = (productRow.description || "").replace(/\[VARIATIONS_DATA:\s*[^\]]+\]/gi, "").trim();
+      const encodedTag = `[VARIATIONS_DATA: ${encodeURIComponent(JSON.stringify(completeVConfig))}]`;
+      productRow.description = cleanDesc ? `${cleanDesc}\n${encodedTag}` : encodedTag;
+    }
+
     const { data: savedData, error: saveErr } = await serverSupabase
       .from("products")
       .upsert(productRow, { onConflict: "id" })
@@ -1755,6 +1789,19 @@ app.post("/api/user/products/save", async (req: Request, res: Response) => {
       businessDataSyncService.saveProduct(businessId, productRow, resolvedOwnerId);
     } catch {
       /* ignore sync cache update error */
+    }
+
+    // Persist variations configuration if provided in payload
+    if (req.body?.variationsConfig) {
+      try {
+        productVariationsStorage.saveConfig({
+          ...req.body.variationsConfig,
+          product_id: productId,
+          business_id: businessId,
+        });
+      } catch (vErr) {
+        console.warn("Notice saving variationsConfig in /api/user/products/save:", vErr);
+      }
     }
 
     return res.json({ success: true, product: savedData || productRow });
@@ -2363,17 +2410,50 @@ app.delete("/api/sync/store-credits/:id", (req: Request, res: Response) => {
 // ============================================================
 // PRODUCT VARIATIONS, ATTRIBUTES & CATEGORY SETUP ENGINE
 // ============================================================
-app.get("/api/sync/product-variations", (req: Request, res: Response) => {
+app.get("/api/sync/product-variations", async (req: Request, res: Response) => {
   try {
-    const productId = req.query.productId as string | undefined;
-    const businessId = req.query.businessId as string | undefined;
+    const productId = (req.query.productId || req.query.product_id) as string | undefined;
+    const businessId = (req.query.businessId || req.query.business_id) as string | undefined;
 
     if (productId) {
-      const config = productVariationsStorage.getByProduct(productId);
+      let config = productVariationsStorage.getByProduct(productId);
+      if (!config) {
+        try {
+          const { data: p } = await serverSupabase.from("products").select("description").eq("id", productId).maybeSingle();
+          if (p?.description && p.description.includes("[VARIATIONS_DATA:")) {
+            const m = p.description.match(/\[VARIATIONS_DATA:\s*([^\]]+)\]/);
+            if (m && m[1]) {
+              const parsed = JSON.parse(decodeURIComponent(m[1].trim()));
+              config = productVariationsStorage.saveConfig(parsed);
+            }
+          }
+        } catch {}
+      }
       return res.json({ success: true, config });
     }
     if (businessId) {
-      const configs = productVariationsStorage.getByBusiness(businessId);
+      let configs = productVariationsStorage.getByBusiness(businessId);
+      try {
+        const { data: prods } = await serverSupabase
+          .from("products")
+          .select("id, description")
+          .eq("business_id", businessId)
+          .like("description", "%[VARIATIONS_DATA:%");
+        if (prods && prods.length > 0) {
+          prods.forEach((p) => {
+            if (!configs.some((c) => c.product_id === p.id) && p.description) {
+              const m = p.description.match(/\[VARIATIONS_DATA:\s*([^\]]+)\]/);
+              if (m && m[1]) {
+                try {
+                  const parsed = JSON.parse(decodeURIComponent(m[1].trim()));
+                  productVariationsStorage.saveConfig(parsed);
+                  configs.push(parsed);
+                } catch {}
+              }
+            }
+          });
+        }
+      } catch {}
       return res.json({ success: true, configs });
     }
     return res.status(400).json({ success: false, error: "productId or businessId is required." });
@@ -3344,37 +3424,62 @@ app.get("/api/user/plan", async (req: Request, res: Response) => {
           profRes.data?.plan,
           bgProfRes.data?.plan,
           user.user_metadata?.plan
-        ].filter(Boolean).map((s: string) => s.toLowerCase());
+        ].filter(Boolean).map((s: string) => String(s).toLowerCase().trim());
 
-        if (candidates.some((c: string) => c.includes("lifetime"))) planId = "lifetime";
-        else if (candidates.some((c: string) => c.includes("premium"))) planId = "premium";
-        else if (candidates.some((c: string) => c.includes("standard"))) planId = "standard";
+        let rawPlan = "free";
+        for (const c of candidates) {
+          if (c && c !== "free") {
+            rawPlan = c;
+            break;
+          }
+        }
+        if (rawPlan === "free" && candidates.length > 0) {
+          rawPlan = candidates[0];
+        }
+
+        if (rawPlan.includes("lifetime") || rawPlan === "unlimited") planId = "lifetime";
+        else if (rawPlan.includes("premium")) planId = "premium";
+        else if (rawPlan.includes("standard")) planId = "standard";
+        else planId = "free";
+
+        // Persist profile in both databases so future queries don't revert
+        if (planId !== "free") {
+          try {
+            const profileRow = {
+              user_id: user.id,
+              email: user.email,
+              full_name: fullName || (user.email ? user.email.split("@")[0] : "User"),
+              plan: rawPlan,
+              status: "active",
+              last_active: new Date().toISOString()
+            };
+            await Promise.allSettled([
+              serverSupabase.from("profiles").upsert(profileRow, { onConflict: "user_id" }),
+              bgSupabase.from("profiles").upsert(profileRow, { onConflict: "user_id" })
+            ]);
+          } catch {
+            /* ignore */
+          }
+        }
+
+        return res.json({
+          success: true,
+          planId,
+          rawPlan: rawPlan || planId,
+          fullName,
+          email: user.email,
+          userId: user.id,
+          isAdmin,
+        });
       } catch {
-        /* fallback to free */
+        /* fallback below */
       }
-    }
-
-    // Persist profile in both databases so future queries don't revert
-    try {
-      const profileRow = {
-        user_id: user.id,
-        email: user.email,
-        full_name: fullName || (user.email ? user.email.split("@")[0] : "User"),
-        plan: planId,
-        status: "active",
-        last_active: new Date().toISOString()
-      };
-      await Promise.allSettled([
-        serverSupabase.from("profiles").upsert(profileRow, { onConflict: "user_id" }),
-        bgSupabase.from("profiles").upsert(profileRow, { onConflict: "user_id" })
-      ]);
-    } catch {
-      /* ignore */
     }
 
     res.json({
       success: true,
       planId,
+      rawPlan: planId,
       fullName,
       email: user.email,
       userId: user.id,
@@ -3613,21 +3718,27 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
 
       if (plan !== undefined && authUserId) {
         const cleanPlan = String(plan).toLowerCase();
-        const nextBillingDate = cleanPlan === "lifetime" ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        const isLifetime = cleanPlan === "lifetime" || cleanPlan === "unlimited" || cleanPlan.includes("lifetime");
+        const isYearly = cleanPlan.includes("yearly") || cleanPlan.includes("annual");
+        const subTier = cleanPlan.includes("standard") ? "standard" : (cleanPlan === "free" ? "free" : "premium");
+        const subCycle = isLifetime ? "lifetime" : (isYearly ? "yearly" : "monthly");
+        const nextBillingDate = isLifetime ? null : new Date(Date.now() + (isYearly ? 365 : 30) * 24 * 60 * 60 * 1000).toISOString();
         tasks.push(
           (async () => {
             // Cancel older active subscriptions to avoid candidate collisions
             await serverSupabase.from("subscriptions").update({ status: "superseded" }).eq("owner_user_id", authUserId).eq("status", "active").then(() => {}).catch(() => {});
             await serverSupabase.from("subscriptions").insert({
               owner_user_id: authUserId,
-              tier: cleanPlan,
-              cycle: cleanPlan === "lifetime" ? "lifetime" : "monthly",
+              tier: subTier,
+              cycle: subCycle,
               status: status === "suspended" ? "suspended" : "active",
               source: "admin_manual",
               payment_method: null,
               next_billing_date: nextBillingDate,
               created_at: new Date().toISOString(),
             }).then(() => {}).catch(() => {});
+            // Also ensure profiles table has the updated plan
+            await serverSupabase.from("profiles").update({ plan: cleanPlan }).eq("user_id", authUserId).then(() => {}).catch(() => {});
             // Clear any user payment method so user panel shows NO payment method until user manually adds their own
             await clearUserPaymentMethodOnAdminManualUpdate(authUserId).catch(() => {});
           })()
@@ -3643,7 +3754,11 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, error: "user_id and plan required" });
       }
       const cleanPlan = String(plan).toLowerCase();
-      const nextBillingDate = cleanPlan === "lifetime" ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const isLifetime = cleanPlan === "lifetime" || cleanPlan === "unlimited" || cleanPlan.includes("lifetime");
+      const isYearly = cleanPlan.includes("yearly") || cleanPlan.includes("annual");
+      const subTier = cleanPlan.includes("standard") ? "standard" : (cleanPlan === "free" ? "free" : "premium");
+      const subCycle = isLifetime ? "lifetime" : (isYearly ? "yearly" : "monthly");
+      const nextBillingDate = isLifetime ? null : new Date(Date.now() + (isYearly ? 365 : 30) * 24 * 60 * 60 * 1000).toISOString();
       let authUserId = user_id;
       const { data: matchedProf } = await serverSupabase
         .from("profiles")
@@ -3672,8 +3787,8 @@ app.post("/api/admin/users", async (req: Request, res: Response) => {
           try {
             await serverSupabase.from("subscriptions").insert({
               owner_user_id: authUserId,
-              tier: cleanPlan,
-              cycle: cleanPlan === "lifetime" ? "lifetime" : "monthly",
+              tier: subTier,
+              cycle: subCycle,
               status: "active",
               source: "admin_manual",
               payment_method: null,
@@ -3880,21 +3995,30 @@ app.get("/api/admin/users-overview", async (req: Request, res: Response) => {
 
     const [
       authRes,
-      { data: profs },
-      { data: roleRows },
-      { data: bizRows },
-      { data: prodRows }
+      profRes,
+      roleRes,
+      bizRes,
+      prodRes
     ] = await Promise.all([
-      serverSupabase.auth.admin.listUsers().catch(() => ({ data: { users: [] } })),
-      serverSupabase.from("profiles").select("*").order("created_at", { ascending: false }),
-      serverSupabase.from("user_roles").select("id, user_id, role"),
-      serverSupabase.from("businesses").select("id, owner_user_id, business_name, currency, status, created_at, category_id"),
-      serverSupabase.from("products").select("id, business_id, owner_user_id, name, retail_price, stock_units, category_id, sku")
+      serverSupabase.auth.admin.listUsers({ page: 1, perPage: 1000 }).catch((e) => {
+        console.warn("auth.admin.listUsers notice:", e?.message);
+        return { data: { users: [] } };
+      }),
+      serverSupabase.from("profiles").select("*").order("created_at", { ascending: false }).catch(() => ({ data: [] })),
+      serverSupabase.from("user_roles").select("id, user_id, role").catch(() => ({ data: [] })),
+      serverSupabase.from("businesses").select("id, owner_user_id, business_name, currency, status, created_at, category_id").catch(() => ({ data: [] })),
+      serverSupabase.from("products").select("id, business_id, owner_user_id, name, retail_price, stock_units, category_id, sku").catch(() => ({ data: [] }))
     ]);
 
-    const authUsers = (authRes as any)?.data?.users || [];
+    const authUsers = (authRes as any)?.data?.users || (authRes as any)?.users || [];
+    const profs = (profRes as any)?.data || [];
+    const roleRows = (roleRes as any)?.data || [];
+    const bizRows = (bizRes as any)?.data || [];
+    const prodRows = (prodRes as any)?.data || [];
+
     const profilesList = [...(profs || [])];
-    const profileUserIds = new Set(profilesList.map((p: any) => p.user_id));
+    const profileUserIds = new Set(profilesList.map((p: any) => p.user_id || p.id));
+    const profileEmails = new Set(profilesList.map((p: any) => p.email?.toLowerCase()).filter(Boolean));
 
     // Auto-sync any user registered in Supabase Auth who is missing a profile row, and sync real names
     const authUserMap = new Map<string, any>();
@@ -3904,14 +4028,17 @@ app.get("/api/admin/users-overview", async (req: Request, res: Response) => {
     });
 
     for (const au of authUsers) {
-      if (!profileUserIds.has(au.id)) {
-        const email = au.email || "";
-        const fullName = au.user_metadata?.full_name || au.user_metadata?.name || (email.toLowerCase() === "gepardwebs@gmail.com" ? "SG Bilal" : email.split("@")[0]) || "User";
-        const plan = au.user_metadata?.plan || (email.toLowerCase() === "gepardwebs@gmail.com" ? "lifetime" : "free");
+      const email = au.email?.toLowerCase() || "";
+      const hasByUid = profileUserIds.has(au.id);
+      const hasByEmail = email && profileEmails.has(email);
+
+      if (!hasByUid && !hasByEmail) {
+        const fullName = au.user_metadata?.full_name || au.user_metadata?.name || (email === "gepardwebs@gmail.com" ? "SG Bilal" : email.split("@")[0]) || "User";
+        const plan = au.user_metadata?.plan || (email === "gepardwebs@gmail.com" ? "lifetime" : "free");
         const newProf = {
           id: au.id,
           user_id: au.id,
-          email,
+          email: au.email || "",
           full_name: fullName,
           plan,
           status: "active",
@@ -3922,11 +4049,18 @@ app.get("/api/admin/users-overview", async (req: Request, res: Response) => {
         };
         profilesList.push(newProf);
         profileUserIds.add(au.id);
+        if (email) profileEmails.add(email);
         serverSupabase.from("profiles").upsert(newProf, { onConflict: "user_id" }).catch(() => {});
+      } else if (hasByEmail && !hasByUid) {
+        const existingProf = profilesList.find((p: any) => p.email?.toLowerCase() === email);
+        if (existingProf && (!existingProf.user_id || existingProf.user_id !== au.id)) {
+          existingProf.user_id = au.id;
+          serverSupabase.from("profiles").update({ user_id: au.id }).eq("id", existingProf.id).catch(() => {});
+        }
       }
     }
 
-    // Resolve real original name from Supabase Auth metadata for all profiles
+    // Resolve real original name and last_active from Supabase Auth metadata for all profiles
     for (const p of profilesList) {
       const au = authUserMap.get(p.user_id) || authUserMap.get(p.id) || (p.email ? authUserMap.get(p.email.toLowerCase()) : null);
       const isSuperAdminEmail = p.email?.toLowerCase() === "gepardwebs@gmail.com";
@@ -3934,9 +4068,17 @@ app.get("/api/admin/users-overview", async (req: Request, res: Response) => {
         ? "SG Bilal"
         : (au?.user_metadata?.full_name || au?.user_metadata?.name || (p.full_name && p.full_name !== p.email?.split("@")[0] ? p.full_name : null) || p.full_name);
       
+      const updates: Record<string, any> = {};
       if (realName && p.full_name !== realName) {
         p.full_name = realName;
-        await serverSupabase.from("profiles").update({ full_name: realName }).or(`user_id.eq.${p.user_id},id.eq.${p.user_id}`).then(() => {}).catch(() => {});
+        updates.full_name = realName;
+      }
+      if (au?.last_sign_in_at && (!p.last_active || new Date(au.last_sign_in_at).getTime() > new Date(p.last_active).getTime())) {
+        p.last_active = au.last_sign_in_at;
+        updates.last_active = au.last_sign_in_at;
+      }
+      if (Object.keys(updates).length > 0) {
+        serverSupabase.from("profiles").update(updates).or(`user_id.eq.${p.user_id},id.eq.${p.user_id}`).catch(() => {});
       }
     }
 
@@ -4905,45 +5047,172 @@ app.get("/api/business-category-uoms/:categoryId", async (req: Request, res: Res
   }
 });
 
+let cachedPricingPayload: any = null;
+let cachedPricingTimestamp = 0;
+
+const DEFAULT_FALLBACK_PLANS = [
+  {
+    id: "66b1e1e9-c498-47bb-98c0-55c7f333b894",
+    plan_key: "free",
+    name: "Free",
+    tagline: "Always free for small stores",
+    monthly_price: 0,
+    yearly_price: 0,
+    lifetime_price: 0,
+    features: ["50 items limit", "Basic POS", "Single user", "Real-time Profit"],
+    is_active: true,
+    is_popular: false,
+    sort_order: 1,
+    badge_text: "FOREVER FREE",
+    badge_position: "top",
+    badge_cycle: "all",
+    payment_method_synced: true,
+    cta_button_text: null,
+  },
+  {
+    id: "00e49c70-0a74-4914-acaa-c5f2b81e8e92",
+    plan_key: "standard",
+    name: "Standard",
+    tagline: null,
+    monthly_price: 9.99,
+    yearly_price: 49.99,
+    lifetime_price: 299.99,
+    features: ["1000 items limit", "Full POS & Returns", "Multi-user support", "Financial summaries", "Supplier Portal"],
+    is_active: true,
+    is_popular: true,
+    sort_order: 2,
+    badge_text: "58% Off",
+    badge_position: "top",
+    badge_cycle: "yearly",
+    payment_method_synced: true,
+    cta_button_text: null,
+  },
+  {
+    id: "e965c79c-bd2b-4991-9c21-259d2cdc23b8",
+    plan_key: "premium",
+    name: "Premium",
+    tagline: "For advanced operations",
+    monthly_price: 14.99,
+    yearly_price: 74.99,
+    lifetime_price: 499.99,
+    features: ["Unlimited items", "Everything in Standard", "Batch & expiry tracking", "Advanced analytics", "Multi-branch support", "Priority support"],
+    is_active: true,
+    is_popular: false,
+    sort_order: 3,
+    badge_text: "58% OFF",
+    badge_position: "top",
+    badge_cycle: "yearly",
+    payment_method_synced: true,
+    cta_button_text: null,
+  },
+];
+
 // 3. Pricing Plans
 app.get("/api/admin/pricing-plans", async (_req: Request, res: Response) => {
+  if (cachedPricingPayload && Date.now() - cachedPricingTimestamp < 15000) {
+    return res.json(cachedPricingPayload);
+  }
+
   try {
-    const [{ data, error }, { data: setRow }, { data: subData }] = await Promise.all([
+    const [planRes, setRes, subRes, profRes] = await Promise.allSettled([
       serverSupabase.from("pricing_plans").select("*").order("sort_order", { ascending: true }),
       serverSupabase.from("platform_settings").select("alerts").limit(1).maybeSingle(),
-      serverSupabase.from("subscriptions").select("tier").eq("cycle", "lifetime").eq("status", "active"),
+      serverSupabase.from("subscriptions").select("id, owner_user_id, tier, cycle, status, source").in("status", ["active", "trialing"]),
+      serverSupabase.from("profiles").select("id, user_id, plan, status"),
     ]);
-    if (error) return res.status(500).json({ success: false, error: error.message });
+
+    const data = planRes.status === "fulfilled" ? planRes.value.data : null;
+    const setRow = setRes.status === "fulfilled" ? setRes.value.data : null;
+    const subData = subRes.status === "fulfilled" ? subRes.value.data : null;
+    const profData = profRes.status === "fulfilled" ? profRes.value.data : null;
 
     const alerts = (setRow?.alerts && typeof setRow.alerts === "object" ? setRow.alerts : {}) as any;
     const lifetimeLimits = alerts.lifetime_plan_limits || { standard: 25, premium: 25 };
     const lifetimeCustomizations = alerts.lifetime_customizations || {};
     const planCustomizations = alerts.pricing_plan_customizations || {};
 
+    const claimedStandardUsers = new Set<string>();
+    const claimedPremiumUsers = new Set<string>();
+
+    // 1. Inspect subscriptions (both automated and admin_manual)
     const subs = subData || [];
+    for (const s of subs) {
+      if (s.status === "suspended" || s.status === "cancelled" || s.status === "superseded") continue;
+      const t = String(s.tier || "").toLowerCase();
+      const c = String(s.cycle || "").toLowerCase();
+      const isLifetimeCycle = c === "lifetime";
+      const isManualLifetime = s.source === "admin_manual" && (c === "lifetime" || t.includes("lifetime") || t === "unlimited");
+      const isLifetimeTier = t.includes("lifetime") || t === "unlimited";
+
+      if (isLifetimeCycle || isManualLifetime || isLifetimeTier) {
+        const uid = s.owner_user_id || s.id;
+        if (t === "standard" || t === "standard_lifetime") {
+          claimedStandardUsers.add(uid);
+        } else {
+          claimedPremiumUsers.add(uid);
+        }
+      }
+    }
+
+    // 2. Inspect profiles for admin manual plan assignments
+    const profiles = profData || [];
+    for (const p of profiles) {
+      if (p.status === "suspended") continue;
+      const uid = p.user_id || p.id;
+      if (!uid) continue;
+      const plan = String(p.plan || "").toLowerCase();
+
+      if (plan === "standard_lifetime") {
+        if (!claimedPremiumUsers.has(uid)) {
+          claimedStandardUsers.add(uid);
+        }
+      } else if (plan === "lifetime" || plan === "unlimited" || plan === "premium_lifetime") {
+        if (!claimedStandardUsers.has(uid)) {
+          claimedPremiumUsers.add(uid);
+        }
+      }
+    }
+
     const counts = {
-      standard: subs.filter((s: any) => s.tier === "standard").length,
-      premium: subs.filter((s: any) => s.tier === "premium").length,
+      standard: claimedStandardUsers.size,
+      premium: claimedPremiumUsers.size,
     };
 
-    const enrichedPlans = (data || []).map((p: any) => {
+    const sourcePlans = Array.isArray(data) && data.length > 0 ? data : DEFAULT_FALLBACK_PLANS;
+    const enrichedPlans = sourcePlans.map((p: any) => {
       const planKey = (p.plan_key || "").toLowerCase();
       const cta = planCustomizations[planKey]?.cta_button_text ?? lifetimeCustomizations[planKey]?.cta_button_text ?? null;
       return {
         ...p,
+        payment_method_synced: true,
         cta_button_text: cta,
       };
     });
 
-    return res.json({
+    const payload = {
       success: true,
       plans: enrichedPlans,
+      payment_method_synced: true,
       lifetime_plan_limits: lifetimeLimits,
       lifetime_offer_counts: counts,
       lifetime_customizations: lifetimeCustomizations,
-    });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message });
+    };
+
+    cachedPricingPayload = payload;
+    cachedPricingTimestamp = Date.now();
+
+    return res.json(payload);
+  } catch (_err: any) {
+    // If database query failed, serve fallback immediately rather than 500
+    const fallbackPayload = {
+      success: true,
+      plans: DEFAULT_FALLBACK_PLANS,
+      payment_method_synced: true,
+      lifetime_plan_limits: { standard: 25, premium: 25 },
+      lifetime_offer_counts: { standard: 0, premium: 1 },
+      lifetime_customizations: {},
+    };
+    return res.json(fallbackPayload);
   }
 });
 
@@ -4953,20 +5222,23 @@ app.post("/api/admin/pricing-plans/lifetime-customizations", async (req: Request
     if (!plan_key) return res.status(400).json({ success: false, error: "plan_key is required" });
     const cleanKey = plan_key.toLowerCase().trim();
 
-    // 1. If lifetime_price is provided, update pricing_plans table
+    // 1. Update pricing_plans table with lifetime_price and independent badge
+    const planUpdate: any = { updated_at: new Date().toISOString() };
     if (lifetime_price !== undefined) {
-      await serverSupabase.from("pricing_plans").update({
-        lifetime_price: Number(lifetime_price) || 0,
-        updated_at: new Date().toISOString()
-      }).eq("plan_key", cleanKey);
-      try {
-        await bgSupabase.from("pricing_plans").update({
-          lifetime_price: Number(lifetime_price) || 0,
-          updated_at: new Date().toISOString()
-        }).eq("plan_key", cleanKey);
-      } catch {
-        /* ignore secondary db update */
-      }
+      planUpdate.lifetime_price = Number(lifetime_price) || 0;
+    }
+    if (badge_text !== undefined) {
+      planUpdate.badge_text = badge_text ? String(badge_text).trim() : null;
+      planUpdate.badge_cycle = "lifetime";
+    }
+    if (badge_position !== undefined) {
+      planUpdate.badge_position = badge_position;
+    }
+    await serverSupabase.from("pricing_plans").update(planUpdate).eq("plan_key", cleanKey);
+    try {
+      await bgSupabase.from("pricing_plans").update(planUpdate).eq("plan_key", cleanKey);
+    } catch {
+      /* ignore secondary db update */
     }
 
     // 2. Save lifetime-specific badge, popular status, custom CTA button text, and features into platform_settings alerts
@@ -4974,9 +5246,9 @@ app.post("/api/admin/pricing-plans/lifetime-customizations", async (req: Request
     const alerts = row?.alerts && typeof row.alerts === "object" ? (row.alerts as any) : {};
     const customs = alerts.lifetime_customizations || {};
     customs[cleanKey] = {
-      badge_text: badge_text !== undefined ? (badge_text?.trim() || null) : (customs[cleanKey]?.badge_text || null),
+      badge_text: badge_text !== undefined ? (badge_text ? String(badge_text).trim() : null) : (customs[cleanKey]?.badge_text || null),
       badge_position: badge_position || customs[cleanKey]?.badge_position || "top",
-      cta_button_text: cta_button_text !== undefined ? (cta_button_text?.trim() || null) : (customs[cleanKey]?.cta_button_text || null),
+      cta_button_text: cta_button_text !== undefined ? (cta_button_text ? String(cta_button_text).trim() : null) : (customs[cleanKey]?.cta_button_text || null),
       is_popular: is_popular !== undefined ? Boolean(is_popular) : Boolean(customs[cleanKey]?.is_popular),
       lifetime_price: lifetime_price !== undefined ? Number(lifetime_price) : customs[cleanKey]?.lifetime_price,
       features: Array.isArray(features) ? features : (typeof features === "string" ? features.split("\n").map((s: string) => s.trim()).filter(Boolean) : customs[cleanKey]?.features),
@@ -4993,6 +5265,10 @@ app.post("/api/admin/pricing-plans/lifetime-customizations", async (req: Request
     } catch {
       /* ignore secondary db update */
     }
+
+    // Immediately bust cache so UI and Landing Page reflect changes instantly
+    cachedPricingPayload = null;
+    cachedPricingTimestamp = 0;
 
     return res.json({ success: true, lifetime_customizations: customs });
   } catch (err: any) {
@@ -5020,6 +5296,9 @@ app.post("/api/admin/pricing-plans/lifetime-limits", async (req: Request, res: R
     } else {
       await serverSupabase.from("platform_settings").insert({ singleton: true, alerts: nextAlerts, updated_at: new Date().toISOString() });
     }
+
+    cachedPricingPayload = null;
+    cachedPricingTimestamp = 0;
 
     return res.json({ success: true, lifetime_plan_limits: updatedLimits });
   } catch (err: any) {
@@ -5083,7 +5362,7 @@ app.post("/api/admin/pricing-plans", async (req: Request, res: Response) => {
 
       // Keep lifetime_customizations in perfect sync with the saved plan
       const lifetimeCustoms = existingAlerts.lifetime_customizations || {};
-      if (lifetime_price !== undefined) {
+      if (lifetime_price !== undefined || badge_cycle === "lifetime") {
         lifetimeCustoms[cleanKey] = {
           ...(lifetimeCustoms[cleanKey] || {}),
           lifetime_price: Number(lifetime_price) || 0,
@@ -5112,6 +5391,9 @@ app.post("/api/admin/pricing-plans", async (req: Request, res: Response) => {
       console.warn("Notice saving plan customization:", e);
     }
 
+    cachedPricingPayload = null;
+    cachedPricingTimestamp = 0;
+
     return res.json({ success: true, plan: { ...savedPlan, cta_button_text: cleanCta } });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
@@ -5139,6 +5421,8 @@ app.delete("/api/admin/pricing-plans/:id", async (req: Request, res: Response) =
       /* ignore */
     }
 
+    cachedPricingPayload = null;
+    cachedPricingTimestamp = 0;
     return res.json({ success: true, id });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
@@ -5517,6 +5801,75 @@ app.post("/api/user/subscription/send-renewal-reminder", async (req: Request, re
     console.log(`[Email Dispatched] Renewal Reminder successfully dispatched to ${email || userId}: Plan ${cleanPlan} expires in ${daysRemaining} day(s) on ${expiryStr}. Direct Renewal Link: /dashboard/subscription`);
 
     return res.json({ success: true, message: "Renewal reminder email and notification sent successfully", notification: notif });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// User Subscription Change Upcoming Cycle & Auto-Renewal Handling
+app.post("/api/user/subscription/change-upcoming-cycle", async (req: Request, res: Response) => {
+  try {
+    const { userId, businessId, upcomingCycle, upcomingTier } = req.body || {};
+    if (!userId) return res.status(400).json({ success: false, error: "userId required" });
+    if (!upcomingCycle && !upcomingTier) {
+      return res.status(400).json({ success: false, error: "upcomingCycle or upcomingTier required" });
+    }
+
+    // Retrieve active subscription
+    const { data: subData } = await serverSupabase
+      .from("subscriptions")
+      .select("*")
+      .eq("owner_user_id", userId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!subData) {
+      return res.status(404).json({ success: false, error: "No active subscription found" });
+    }
+
+    const targetCycle = upcomingCycle || subData.cycle;
+    const targetTier = upcomingTier || subData.tier;
+
+    // Recalculate amount if needed
+    const isYearly = targetCycle === "yearly";
+    let renewalAmount = subData.amount;
+    if (targetTier === "standard") {
+      renewalAmount = isYearly ? 49.9 : 4.99;
+    } else if (targetTier === "premium") {
+      renewalAmount = isYearly ? 99.9 : 9.99;
+    }
+
+    const patch: Record<string, any> = {
+      cycle: targetCycle,
+      tier: targetTier,
+      amount: renewalAmount,
+      upcoming_cycle: targetCycle,
+      updated_at: new Date().toISOString(),
+    };
+
+    await Promise.allSettled([
+      serverSupabase.from("subscriptions").update(patch).eq("id", subData.id),
+      bgSupabase.from("subscriptions").update(patch).eq("id", subData.id),
+    ]);
+
+    // Record notification
+    systemActivityEvents.unshift({
+      id: `cycle_chg_${userId}_${Date.now()}`,
+      userId,
+      title: `Upcoming Renewal Updated: ${String(targetCycle).toUpperCase()}`,
+      description: `Your next renewal will now renew on the ${String(targetCycle).toUpperCase()} schedule (${renewalAmount > 0 ? `$${renewalAmount.toFixed(2)}` : "free"}) on ${subData.next_billing_date ? new Date(subData.next_billing_date).toLocaleDateString() : "next billing date"}. If unchanged, it maintains this cycle automatically.`,
+      type: "billing",
+      createdAt: new Date().toISOString(),
+      unread: true,
+    } as any);
+
+    return res.json({
+      success: true,
+      message: `Upcoming renewal schedule updated to ${String(targetCycle).toUpperCase()}`,
+      subscription: { ...subData, ...patch },
+    });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -6134,7 +6487,7 @@ app.post("/api/ai/assistant", async (req: Request, res: Response) => {
 
     recordSystemActivity({
       type: "ai_usage",
-      title: "Maryam AI Query",
+      title: "GeFlow AI Agent Query",
       description: `Analysis performed in ${mode || "store"} workspace (${targetLanguage})`,
       businessId,
     });
@@ -6163,96 +6516,115 @@ app.post("/api/ai/assistant", async (req: Request, res: Response) => {
     if (client) {
       try {
         const languageDescriptions: Record<string, string> = {
-          english: "simple, warm, everyday British English (English UK)",
+          english: "professional, executive British English (English UK)",
           roman_urdu:
-            "natural, friendly, conversational Roman Urdu (Urdu written in English alphabet, e.g. 'Salam! Aap apni dukan ki sale bohot asani se barha sakte hain...'). Use simple everyday Pakistani Roman Urdu that any shop owner can understand. NEVER reply in English.",
-          urdu: "warm, polite, and simple Urdu script (اردو). NEVER reply in English.",
-          arabic: "friendly, simple everyday Arabic (العربية)",
-          spanish: "warm, clear Spanish (Español)",
-          french: "warm, friendly French (Français)",
-          german: "warm, polite German (Deutsch)",
-          chinese: "friendly, simple Simplified Chinese (中文)",
-          chinese_traditional: "friendly, simple Traditional Chinese (繁體中文)",
-          hindi: "warm, polite Hindi (हिन्दी) in Devanagari script",
-          hinglish: "conversational Hinglish (Hindi written in English alphabet)",
-          bengali: "friendly Bengali (বাংলা)",
-          portuguese: "warm, friendly Portuguese (Português)",
-          russian: "friendly, clear Russian (Русский)",
-          japanese: "friendly, polite Japanese (日本語)",
-          korean: "friendly Korean (한국어)",
-          turkish: "warm, friendly Turkish (Türkçe)",
-          italian: "warm, friendly Italian (Italiano)",
-          vietnamese: "friendly Vietnamese (Tiếng Việt)",
-          indonesian: "friendly Bahasa Indonesia",
-          malay: "friendly Bahasa Melayu",
-          persian: "friendly Persian / Farsi (فارسی)",
-          pashto: "warm, polite Pashto (پښتو)",
-          punjabi: "warm, friendly Punjabi (پنجابی)",
-          sindhi: "warm, polite Sindhi (سنڌي)",
-          tamil: "friendly Tamil (தமிழ்)",
-          telugu: "friendly Telugu (తెలుగు)",
-          marathi: "friendly Marathi (मराठी)",
-          dutch: "friendly Dutch (Nederlands)",
-          polish: "friendly Polish (Polski)",
-          swedish: "friendly Swedish (Svenska)",
-          greek: "friendly Greek (Ελληνικά)",
-          hebrew: "friendly Hebrew (עבריت)",
-          swahili: "friendly Swahili (Kiswahili)",
-          tagalog: "friendly Filipino / Tagalog",
-          thai: "friendly Thai (ไทย)",
-          czech: "friendly Czech (Čeština)",
-          romanian: "friendly Romanian (Română)",
-          hungarian: "friendly Hungarian (Magyar)",
-          ukrainian: "friendly Ukrainian (Українська)",
-          norwegian: "friendly Norwegian (Norsk)",
-          danish: "friendly Danish (Dansk)",
-          finnish: "friendly Finnish (Suomi)",
+            "professional, natural, business Roman Urdu (Urdu written in English alphabet, e.g. 'GeFlow AI Agent Report: Aapki dukan ki sales aur operations audit...'). Use direct, clear Pakistani Roman Urdu. NEVER output canned greetings.",
+          urdu: "polite, professional, executive Urdu script (اردو). Directly address the inquiry.",
+          arabic: "professional, business Arabic (العربية)",
+          spanish: "professional business Spanish (Español)",
+          french: "professional business French (Français)",
+          german: "professional business German (Deutsch)",
+          chinese: "professional Simplified Chinese (中文)",
+          chinese_traditional: "professional Traditional Chinese (繁體中文)",
+          hindi: "professional Hindi (हिन्दी) in Devanagari script",
+          hinglish: "conversational business Hinglish (Hindi written in English alphabet)",
+          bengali: "professional Bengali (বাংলা)",
+          portuguese: "professional business Portuguese (Português)",
+          russian: "professional business Russian (Русский)",
+          japanese: "professional business Japanese (日本語)",
+          korean: "professional business Korean (한국어)",
+          turkish: "professional business Turkish (Türkçe)",
+          italian: "professional business Italian (Italiano)",
+          vietnamese: "professional business Vietnamese (Tiếng Việt)",
+          indonesian: "professional business Bahasa Indonesia",
+          malay: "professional business Bahasa Melayu",
+          persian: "professional business Persian / Farsi (فارسی)",
+          pashto: "professional Pashto (پښتو)",
+          punjabi: "professional Punjabi (پنجابی)",
+          sindhi: "professional Sindhi (سنڌي)",
+          tamil: "professional Tamil (தமிழ்)",
+          telugu: "professional Telugu (తెలుగు)",
+          marathi: "professional Marathi (मराठी)",
+          dutch: "professional Dutch (Nederlands)",
+          polish: "professional Polish (Polski)",
+          swedish: "professional Swedish (Svenska)",
+          greek: "professional Greek (Ελληνικά)",
+          hebrew: "professional Hebrew (עברית)",
+          swahili: "professional Swahili (Kiswahili)",
+          tagalog: "professional Filipino / Tagalog",
+          thai: "professional Thai (ไทย)",
+          czech: "professional Czech (Čeština)",
+          romanian: "professional Romanian (Română)",
+          hungarian: "professional Hungarian (Magyar)",
+          ukrainian: "professional Ukrainian (Українська)",
+          norwegian: "professional Norwegian (Norsk)",
+          danish: "professional Danish (Dansk)",
+          finnish: "professional Finnish (Suomi)",
         };
 
-        const langDesc = languageDescriptions[targetLanguage] || `natural, friendly ${targetLanguage}`;
-        const langInstructions = `LANGUAGE INSTRUCTION: You MUST reply entirely in ${langDesc}. Use everyday, simple words that any local shop owner can understand.`;
+        const langDesc = languageDescriptions[targetLanguage] || `professional ${targetLanguage}`;
+        const langInstructions = `LANGUAGE INSTRUCTION: You MUST reply entirely in ${langDesc}. Provide professional, authoritative business analysis.`;
 
-        const systemInstruction = `You are Maryam AI, a friendly, warm, and helpful retail shop assistant for GeFlow.
-Your personality:
-- You are like a caring, helpful store friend or trusted colleague standing right beside the shopkeeper.
-- Your tone is fully friendly, humanized, empathetic, warm, and positive.
-- Use easy and simple everyday words only. Never use complicated corporate jargon, confusing acronyms, or complex steps.
-- Explain things in simple, bite-sized bullet points (•) with clear bold labels.
-- Keep instructions down to 1 or 2 easy, straightforward steps.
+        const systemInstruction = `You are the GeFlow AI Business Agent, an executive autonomous business intelligence and operations agent for retail, wholesale, and restaurant operations.
+Your core persona & capabilities:
+- You are an advanced enterprise operations agent, NOT a generic conversational chatbot.
+- You think critically, analyze real-time business data, and take actionable operational positions based on system rules.
+- You deeply understand retail, restaurant, and kitchen workflows:
+  * Live cooking & made-on-order dishes (e.g. Pizza, Burgers, Dishes cooked on order that bypass stock counts and never show 0 units/out of stock).
+  * Product varieties & pricing matrices (Small, Medium, Large sizes where individual variety prices override the base price).
+  * POS cashier operations, order holds, thermal receipt printers (58mm/80mm), line-item discounts, and drawer balancing.
+  * Multi-role permissions (Cashier, Manager, Admin restrictions) and billing/payment gateways (PayPal, Stripe).
+- Structure responses with an executive header (### ⚡ ...), followed by crisp bullet points (•) with bold section titles, and concrete operational steps.
+- Directly answer the user's specific prompt with data-driven depth. NEVER output canned greetings, menus, or questions asking the user what to do.
 
 Operating mode: ${mode || "business"}
 Active plan: ${planId || "free"}
 ${
   businessContext
-    ? `Store Information:
-• Store Name: ${businessContext.businessName || "Your Store"}
-• Currency: ${businessCurrency} (${currencySym})
-• Products in Catalog: ${businessContext.totalProducts ?? 0}
-• Items Running Low: ${businessContext.lowStockCount ?? 0}
-• Today's Sales: ${fmtCur(businessContext.todayRevenue ?? 0)}
+    ? `Store Operational Metrics:
+• Store / Organization: ${businessContext.businessName || "Your Store"}
+• Active Currency: ${businessCurrency} (${currencySym})
+• Catalog Products: ${businessContext.totalProducts ?? 0}
+• Low Stock Alerts: ${businessContext.lowStockCount ?? 0}
+• Today's Revenue: ${fmtCur(businessContext.todayRevenue ?? 0)}
 • Today's Profit: ${fmtCur(businessContext.todayProfit ?? 0)}
-• This Month's Sales: ${fmtCur(businessContext.monthRevenue ?? 0)}
+• This Month's Revenue: ${fmtCur(businessContext.monthRevenue ?? 0)}
 • This Month's Profit: ${fmtCur(businessContext.monthProfit ?? 0)}
 • Orders Today: ${businessContext.todaySalesCount ?? 0}`
-    : "No specific business loaded yet."
+    : "Store operational context initialized."
 }
 
 CRITICAL RULES:
 1. ${langInstructions}
-2. Always report money and profit strictly in "${businessCurrency}" (${currencySym}). Never use "$" or USD unless the business currency is explicitly USD.
-3. Start with a warm, friendly 1-line greeting.
-4. Give the answer in simple, easy-to-read bullet points (•).
-5. Finish with a short, helpful, positive tip.`;
+2. Always report money and profit strictly in "${businessCurrency}" (${currencySym}).
+3. Answer the user's specific question directly. Do not repeat canned chatbot greetings or static menus.
+4. Provide structured, executive-grade bullet points with practical actions.`;
 
-        const response = await client.models.generateContent({
-          model: "gemini-3.8-flash",
-          contents: lastUserMessage,
-          config: {
-            systemInstruction,
-          },
-        });
+        let rawReply = "";
+        try {
+          const response = await client.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: lastUserMessage,
+            config: {
+              systemInstruction,
+            },
+          });
+          rawReply = (response.text || "").trim();
+        } catch (_firstModelErr) {
+          try {
+            const fallbackResponse = await client.models.generateContent({
+              model: "gemini-flash-latest",
+              contents: lastUserMessage,
+              config: {
+                systemInstruction,
+              },
+            });
+            rawReply = (fallbackResponse.text || "").trim();
+          } catch (_secondModelErr) {
+            // Silently fall through to intelligent agent engine
+          }
+        }
 
-        let rawReply = (response.text || "").trim();
         if (rawReply) {
           if (businessCurrency !== "USD") {
             rawReply = rawReply
@@ -6274,11 +6646,11 @@ CRITICAL RULES:
           return res.json({ success: true, reply: formattedReply });
         }
       } catch (_geminiErr: any) {
-        // Silently fall through to intelligent copilot engine
+        // Silently fall through to intelligent agent engine
       }
     }
 
-    // High-precision friendly, humanized domain engine with simple wordings
+    // Professional GeFlow Business AI Agent Engine (Autonomous multi-domain operational intelligence)
     let reply = "";
     const storeName = businessContext?.businessName || "Your Store";
     const rev = fmtCur(Number(businessContext?.todayRevenue || 0));
@@ -6289,7 +6661,7 @@ CRITICAL RULES:
     const lowStock = businessContext?.lowStockCount ?? 0;
     const totalProd = businessContext?.totalProducts ?? 0;
 
-    // Check specific intent queries
+    // Detect specialized operational business intents
     const isSalesIncreaseQuery =
       /increase.*sale/i.test(lowerQuery) ||
       /boost.*sale/i.test(lowerQuery) ||
@@ -6310,6 +6682,79 @@ CRITICAL RULES:
       lowerQuery.includes("سیل بڑھا") ||
       lowerQuery.includes("فروخت بڑھا") ||
       lowerQuery.includes("گاہک بڑھا");
+
+    const isCookingOrRestaurantQuery =
+      lowerQuery.includes("cook") ||
+      lowerQuery.includes("kitchen") ||
+      lowerQuery.includes("restaurant") ||
+      lowerQuery.includes("dish") ||
+      lowerQuery.includes("food") ||
+      lowerQuery.includes("on order") ||
+      lowerQuery.includes("made on order") ||
+      lowerQuery.includes("recipe") ||
+      lowerQuery.includes("pizza") ||
+      lowerQuery.includes("burger") ||
+      lowerQuery.includes("chef") ||
+      lowerQuery.includes("dine") ||
+      lowerQuery.includes("takeaway") ||
+      lowerQuery.includes("کھانا") ||
+      lowerQuery.includes("پکانا") ||
+      lowerQuery.includes("ریستوران") ||
+      lowerQuery.includes("طعام") ||
+      lowerQuery.includes("مطبخ");
+
+    const isVarietyOrVariantsQuery =
+      lowerQuery.includes("variet") ||
+      lowerQuery.includes("variant") ||
+      lowerQuery.includes("variation") ||
+      lowerQuery.includes("variable") ||
+      lowerQuery.includes("size") ||
+      lowerQuery.includes("matrix") ||
+      lowerQuery.includes("small") ||
+      lowerQuery.includes("medium") ||
+      lowerQuery.includes("large") ||
+      lowerQuery.includes("رنگ") ||
+      lowerQuery.includes("سائز") ||
+      lowerQuery.includes("انواع");
+
+    const isPermissionsOrStaffQuery =
+      lowerQuery.includes("permission") ||
+      lowerQuery.includes("role") ||
+      lowerQuery.includes("cashier") ||
+      lowerQuery.includes("staff") ||
+      lowerQuery.includes("employee") ||
+      lowerQuery.includes("invite") ||
+      lowerQuery.includes("manager") ||
+      lowerQuery.includes("access") ||
+      lowerQuery.includes("restrict") ||
+      lowerQuery.includes("pin") ||
+      lowerQuery.includes("صلاحيات") ||
+      lowerQuery.includes("موظف") ||
+      lowerQuery.includes("ملازم") ||
+      lowerQuery.includes("اجازت");
+
+    const isPaymentGatewayQuery =
+      lowerQuery.includes("payment gateway") ||
+      lowerQuery.includes("gateway") ||
+      lowerQuery.includes("paypal") ||
+      lowerQuery.includes("stripe") ||
+      lowerQuery.includes("sync gateway") ||
+      lowerQuery.includes("بوابة دفع") ||
+      lowerQuery.includes("ادائیگی گیٹ وے");
+
+    const isPricingPlanOrBillingQuery =
+      lowerQuery.includes("pricing") ||
+      lowerQuery.includes("plan") ||
+      lowerQuery.includes("subscription") ||
+      lowerQuery.includes("standard") ||
+      lowerQuery.includes("premium") ||
+      lowerQuery.includes("lifetime") ||
+      lowerQuery.includes("billing") ||
+      lowerQuery.includes("badge") ||
+      lowerQuery.includes("seat") ||
+      lowerQuery.includes("خطة") ||
+      lowerQuery.includes("اشتراك") ||
+      lowerQuery.includes("پلان");
 
     const isUdharQuery =
       lowerQuery.includes("udhar") ||
@@ -6383,315 +6828,311 @@ CRITICAL RULES:
       lowerQuery.includes("بل");
 
     if (targetLanguage === "roman_urdu") {
-      if (isSalesIncreaseQuery) {
+      if (isCookingOrRestaurantQuery) {
         reply =
-          `### 📈 Salam! Dukan Ki Sale aur Bikri Barhanay ke 5 Asaan aur Kaamyaab Tareeqay\n\n` +
-          `Aap apni dukan ki sale (bikri) bohot asani se barha sakte hain. Yeh 5 practical aur aasan tareeqay follow karein:\n\n` +
-          `• **1. Fast-Moving (Top Selling) Items Hamesha Full Rakhein**:\n` +
-          `Jo cheezein aapki dukan par rozana sab se zyada bikti hain, unka stock kabhi khatam na hone dein. Jab grahak ko hamesha uska man-pasand samaan milta hai to wo bar bar aata hai.\n\n` +
-          `• **2. Counter Display (Checkout / POS ke qareeb samaan)**:\n` +
-          `Choti aur zaroori cheezein (jaise toffees, accessories, snacks, sachets) counter par bilkul samnay rakhein. Bill banwate waqt customer 1–2 cheezein extra khareed leta hai jis se bill ka total barh jata hai.\n\n` +
-          `• **3. Combo Deals aur Bundle Offers Banao**:\n` +
-          `2 ya 3 milti-julti cheezon ka package bana kar halka sa discount dein (e.g., "Do khareedne par aik par 15% discount"). Customer aik cheez lene aata hai aur do le jata hai.\n\n` +
-          `• **4. Slow-Moving Stock par Chota Discount Dein**:\n` +
-          `Jo samaan dukan me kaafi arsay se para hai aur bik nahi raha, us par 5% se 10% discount laga kar cash free karein aur us paisay se tezi se bikne wala naya stock layein.\n\n` +
-          `• **5. Regular Customers se WhatsApp Rabta**:\n` +
-          `Apne purane grahakon ke numbers mehfooz karein aur jab bhi naya maal ya fresh stock aaye to unko WhatsApp par pyara sa message ya photo bhej kar itlaa dein.\n\n` +
-          `💡 **Aasan Mashwara**: GeFlow POS counter par item-level discount feature use karein taake regular grahak ko foran khush kar sakein!`;
-      } else if (isUdharQuery) {
+          `### 🍳 GeFlow AI Agent: Live Cooking & Made-on-Order Dish Management\n\n` +
+          `Aapki restaurant/food business me jo dishes customer ke order par banayi jati hain unka automated system:\n\n` +
+          `• **Made on Order / Live Kitchen Setup**: Pizza, burger ya fresh dishes ke liye inventory me 'Made on Order' toggle on karein ya tag [MADE_ON_ORDER] shamil karein.\n` +
+          `• **Stock Constraint Bypass**: Aisi dishes par opening stock ki pabandi nahi hoti aur na hi wo kabhi '0 units' ya 'Out of Stock' show karti hain.\n` +
+          `• **POS Counter Handling**: Counter par cashier bina kisi stock blockage ke fresh dish select kar ke add to cart karta hai.\n` +
+          `• **Food Costing**: Raw ingredients (cheese, meat, sauces) ko Purchases & Expenses me log karein taake har dish ka clear margin calculate ho sake.\n\n` +
+          `💡 **Action Item**: Dishes banate waqt Product Dialog me 'Live Cooking / Made on Order Dish' switch activate karein.`;
+      } else if (isVarietyOrVariantsQuery) {
         reply =
-          `### 📒 Salam! Customer Udhar (Store Credit) ka Asaan Record\n\n` +
-          `GeFlow me customer ka udhar (credit) sambhalna bohot aasan hai:\n\n` +
-          `• **Udhar Record Rakhna**: POS par customer select karein aur payment method me 'Store Credit / Udhar' chunein.\n` +
-          `• **Khata Page**: Customers & Udhar page par har grahak ka baqaya hisab saaf nazar aata hai.\n` +
-          `• **Wapsi / Jama**: Jab grahak paise jama karwaye to aik click par balance minus ho jata hai.\n\n` +
-          `💡 **Aasan Tip**: Regular grahak ko uski payment ka message bhejein taake hisab hamesha pakka rahe.`;
-      } else if (isReceiptQuery) {
+          `### 🏷️ GeFlow AI Agent: Product Varieties & Pricing Matrix\n\n` +
+          `Aapke business ke multi-attribute items (Sizes, Flavors, Variations) ka mukammal control:\n\n` +
+          `• **Individual Variety Pricing**: Agar aapne Small, Medium, ya Large varieties par alag prices set ki hain to main base retail price add karne ki zaroorat nahi hoti, system automated detect kar leta hai.\n` +
+          `• **Inventory Table Display**: Inventory list me har product ke aagay uski varieties ka count aur price range (e.g. ₨500 – ₨1,200) auto show hota hai.\n` +
+          `• **POS Variety Selection Modal**: POS par jab cashier kisi variety product par click karta hai to live search bar ke sath popup khulta hai jahan se exact variety select hoti hai.\n\n` +
+          `💡 **Action Item**: Inventory > Products me ja kar 'Add Variety' matrix use karein.`;
+      } else if (isPermissionsOrStaffQuery) {
         reply =
-          `### 🖨️ Salam! Thermal Receipt aur Printer Settings\n\n` +
-          `Aapki receipt printing bilkul saaf aur professional aayegi:\n\n` +
-          `• **Dukan Ka Naam**: Settings > POS & Receipt me aapki registered business ka naam receipt ke top par auto show hota hai.\n` +
-          `• **Professional Font**: Receipt font Poppins aur Arial par set hai jo 58mm aur 80mm thermal printers par bilkul saaf print hota hai.\n` +
-          `• **Custom Text**: Aap footer me apna thank you note aur contact number asani se likh sakte hain.\n\n` +
-          `💡 **Aasan Tip**: Receipt Settings me print density high rakhein taake barik text bhi mota aur saaf nazar aaye.`;
-      } else if (isDiscountQuery) {
+          `### 👥 GeFlow AI Agent: Staff Roles & Permissions Architecture\n\n` +
+          `Aapke business me cashiers aur managers ke ikhtiyarat (permissions) ka system:\n\n` +
+          `• **Role-Based Access Control**: Cashiers sirf POS counter chala sakte hain, inventory ke purchase rates ya profit reports unse mehfooz rehte hain.\n` +
+          `• **Manager Privileges**: Manager ko discount approval aur drawer balance audit ki access hoti hai.\n` +
+          `• **PIN & Session Security**: Har cashier apna personal PIN enter kar ke session login karta hai.\n\n` +
+          `💡 **Action Item**: Settings > Users & Permissions se cashiers ko invite karein aur unke access controls set karein.`;
+      } else if (isPaymentGatewayQuery) {
         reply =
-          `### 🏷️ Salam! Item-Level aur Cart Discount ka Tareeqa\n\n` +
-          `GeFlow POS par discount lagana bohot aasan hai:\n\n` +
-          `• **Per-Product Discount**: Cart ke andar har item ke aagay discount box hota hai, jahan aap 1 specific item par discount laga sakte hain.\n` +
-          `• **Overall Cart Discount**: Cart ke bottom par overall order discount ka option bhi maujood hai.\n` +
-          `• **Fixed ya Percent**: Aap Rs ya % dono me discount de sakte hain.\n\n` +
-          `💡 **Aasan Tip**: Jo samaan jaldi sell karna ho sirf usi item par discount lagayein taake baqi items ka profit mehfooz rahe.`;
-      } else if (isHoldQuery) {
+          `### 💳 GeFlow AI Agent: Payment Gateways & PayPal Sync\n\n` +
+          `Aapke billing aur online payment gateway ka status:\n\n` +
+          `• **PayPal Integration**: PayPal gateway subscription plans aur checkout payments ke liye sync hai.\n` +
+          `• **Gateway Status Sync**: Admin panel aur user panel me automated listeners real-time transaction status verify karte hain.\n` +
+          `• **Multi-Tender POS**: Counter par Cash, Card, QR, aur Online Payment sab ek sath accept ho sakte hain.\n\n` +
+          `💡 **Action Item**: Settings > Payment Gateways me ja kar credentials verify karein.`;
+      } else if (isPricingPlanOrBillingQuery) {
         reply =
-          `### ⏸️ Salam! POS Hold Order Feature\n\n` +
-          `Agar customer counter par khara ho aur mazeed samaan lene chala jaye:\n\n` +
-          `• **Hold Dabayein**: POS par **Hold** button dabayein, customer ka poora cart database me mehfooz ho jata hai.\n` +
-          `• **Agla Customer**: Aap aglay customer ka bill bila rukawat bana sakte hain.\n` +
-          `• **Resume Karein**: Jab purana customer wapis aaye, **Hold Orders** list se uska cart aik click par wapis counter par layein.\n\n` +
-          `💡 **Aasan Tip**: Page refresh karne par bhi hold orders database me mehfooz rehte hain!`;
-      } else if (isTaxQuery) {
+          `### 🌟 GeFlow AI Agent: Pricing Plans & Lifetime Badges\n\n` +
+          `Aapke system ke subscription plans aur badge management:\n\n` +
+          `• **Real Admin Created Plans**: System sirf admin ke tayyar kardah verified plans (Standard, Premium, Lifetime) show karta hai.\n` +
+          `• **Lifetime Plan Badges & Countdown**: Lifetime plans par visual highlight badges aur limited seats left counter display hota hai.\n` +
+          `• **Feature Access**: Standard plan par Analyst + Operator modes hain, jabkay Premium/Lifetime par tamam 4 AI models aur VIP reports shamil hain.\n\n` +
+          `💡 **Action Item**: Admin Panel > Billing & Subs se live plans ko configure karein.`;
+      } else if (isSalesIncreaseQuery) {
         reply =
-          `### 🏛️ Salam! Tax aur FISCAL Settings\n\n` +
-          `Tax settings ka mukammal control aapke hath me hai:\n\n` +
-          `• **Tax Disable Karein**: **Settings > Tax & FISCAL** me ja kar tax disable karein to POS par kisi bhi product par tax nahi lagega.\n` +
-          `• **Zero Tax**: Tax band karne par POS terminal bilkul saaf price calculate karta hai bina kisi tax ke.\n` +
-          `• **Auto Save**: Settings foran database me save hoti hain aur refresh ke baad bhi tax disabled rehta hai.\n\n` +
-          `💡 **Aasan Tip**: Agar aapki retail shop tax-exempt hai to Settings me Tax Rate 0% set rakhein.`;
+          `### 📈 GeFlow AI Agent: Dukan Ki Sale aur Bikri Barhanay ke 5 Asaan Tareeqay\n\n` +
+          `• **1. Fast-Moving Items Full Rakhein**: Top 20% products ka stock kabhi khatam na hone dein.\n` +
+          `• **2. Counter Display (Impulse Items)**: POS counter par choti cheezein rakhein jo bill banwate waqt foran khareedi jayein.\n` +
+          `• **3. Combo Deals aur Bundles**: 2 milti-julti cheezon par package discount dein taake Average Order Value barh sakay.\n` +
+          `• **4. Slow Stock Clearance**: Dukan me ruka hua maal 10% discount par sell kar ke cash naye stock me lagayein.\n` +
+          `• **5. WhatsApp Customer Retention**: Regular customers ko naye stock aur deals ki foran itlaa dein.\n\n` +
+          `💡 **Action Item**: GeFlow POS counter par item-level discount aur combo deals create karein.`;
+      } else if (isProfitQuery) {
+        reply =
+          `### 💰 GeFlow AI Agent: Financial Performance Audit for ${storeName}\n\n` +
+          `• **Aaj Ki Total Sales**: ${rev} (${tx} mukammal orders)\n` +
+          `• **Aaj Ka Saaf Net Profit**: ${todayProf}\n` +
+          `• **Pichle 30 Din Ki Bikri**: ${mRev}\n` +
+          `• **Pichle 30 Din Ka Net Profit**: ${mProf}\n` +
+          `• **Active Currency**: Tamam figures ${businessCurrency} (${currencySym}) me calculated hain.\n\n` +
+          `💡 **Action Item**: High-margin products ko POS me spotlight karein taake rozana ka profit barh sakay.`;
       } else if (isStockQuery) {
         reply =
-          `### 📦 Salam! Stock aur Products ka Asaan Hisab\n\n` +
-          `Aapki dukan me is waqt total **${totalProd} products** hain:\n\n` +
-          `• **Kam Stock Alert**: Is waqt **${lowStock} items** ka stock kam ho raha hai.\n` +
-          `• **Naya Product Shamil Karein**: **Inventory > Products** me jayein aur '+ Add Product' dabayein.\n` +
-          `• **Barcode aur SKU**: Auto SKU button dabane se product ka barcode code khud ban jata hai.\n` +
-          `• **Reorder Karein**: Kam stock walay samaan ka supplier order Purchases se asani se banayein.\n\n` +
-          `💡 **Aasan Tip**: Jo cheezein sab se zyada bikti hain unka stock hamesha fresh rakhein taake koi grahak khali hath na jaye.`;
-      } else if (isProfitQuery) {
-        reply =
-          `### 💰 Salam! ${storeName} ka Asaan Munafa aur Bikri Hisab\n\n` +
-          `Aapki dukan ki performance bohot achi chal rahi hai:\n\n` +
-          `• **Aaj Ki Bikri (Sales)**: ${rev} (${tx} orders mukammal huay)\n` +
-          `• **Aaj Ka Saaf Munafa (Profit)**: ${todayProf}\n` +
-          `• **Pichle 30 Din Ki Total Bikri**: ${mRev}\n` +
-          `• **Pichle 30 Din Ka Saaf Munafa**: ${mProf}\n` +
-          `• **Dukan Ki Currency**: Tamam hisab **${businessCurrency}** (${currencySym}) me hai\n\n` +
-          `💡 **Aasan Tip**: Rozana sham ko counter band karne se pehle apna cash check kar lein taake hisab hamesha barabar rahe.`;
+          `### 📦 GeFlow AI Agent: Inventory Health & Stock Audit for ${storeName}\n\n` +
+          `• **Total Catalog Items**: ${totalProd} products active hain.\n` +
+          `• **Low Stock Alert**: ${lowStock} items safety threshold se neechay hain.\n` +
+          `• **Kitchen Dishes**: Made-on-order dishes automated prepare hoti hain aur unka stock lock nahi hota.\n` +
+          `• **Reordering**: Purchases tab se low stock items ka vendor order foran create karein.\n\n` +
+          `💡 **Action Item**: Inventory > Low Stock filter select karein aur restock order issue karein.`;
       } else if (isPOSQuery) {
         reply =
-          `### 🛒 Salam! POS aur Counter Sales ka Asaan Tareeqa\n\n` +
-          `POS par counter sale karna bohot asaan hai:\n\n` +
-          `• **Item Scan ya Search Karein**: Barcode scanner use karein ya item ka naam likhein.\n` +
-          `• **Bill aur Payment**: Cash, Card, ya QR code se payment select karein.\n` +
-          `• **Hold Order**: Agar customer mazeed samaan lene chala jaye to bill ko 'Hold' karein, baad me aik click par wapis layein.\n` +
-          `• **Receipt Print**: Bill mukammal hote hi thermal printer se saaf slip nikal aati hai.\n\n` +
-          `💡 **Aasan Tip**: Agar customer ko discount dena ho to direct item ke samnay discount add kar sakte hain.`;
+          `### 🛒 GeFlow AI Agent: POS Counter Operations\n\n` +
+          `• **Barcode Scan / Live Search**: Scanner use karein ya item name likhein.\n` +
+          `• **Variety Selection Popup**: Variable item par click karne par search popup se specific variant chunein.\n` +
+          `• **Hold & Resume**: Kisi order ko hold kar ke agla customer deal karein aur baad me resume karein.\n` +
+          `• **Thermal Receipts**: 58mm aur 80mm printers par sharp clean slip print karein.\n\n` +
+          `💡 **Action Item**: POS counter par shift open kar ke fast billing shuru karein.`;
       } else {
         reply =
-          `### 👋 Salam! Main Maryam hoon, aapki dukan ki madadgar\n\n` +
-          `Aap mujh se apni dukan ke baray me koi bhi baat asaan lafzon me pooch sakte hain:\n\n` +
-          `• **Sale Barhana**: "Mujhy btao k me kesy apni sale ko increase kr skta ho"\n` +
-          `• **Dukan Ka Munafa**: "Mera aaj ya is mahine ka munafa kitna hai?"\n` +
-          `• **Stock Ka Hisab**: "Konsa samaan khatam ho raha hai?"\n` +
-          `• **POS aur Bill**: "Customer ko bill aur discount kaise dena hai?"\n` +
-          `• **Products**: "Naya item ya barcode kaise shamil karein?"\n\n` +
-          `Bataiye main aaj aapki dukan ke liye kya check karoon?`;
+          `### ⚡ GeFlow AI Agent: Executive Operations Audit for ${storeName}\n\n` +
+          `• **Store Status**: Organization: **${storeName}** | Currency: **${businessCurrency}** (${currencySym}) | Catalog Size: **${totalProd} items**\n` +
+          `• **Financial Velocity**: Today's Sales: **${rev}** (${tx} orders) | Today's Net Profit: **${todayProf}** | Monthly Sales: **${mRev}** (${mProf} profit)\n` +
+          `• **Inventory & Kitchen State**: **${lowStock} items** need reordering. Made-on-order dishes are routed directly to live preparation.\n` +
+          `• **System Infrastructure**: Variations matrix, POS quick selection, multi-role security (Cashier/Manager/Admin), and PayPal synchronization are active.\n` +
+          `• **Executive Directives**: Review low-stock alerts in Purchases, maintain high-margin dishes on POS favorites, and audit daily cashier drawer balancing.\n\n` +
+          `💡 **Pro Tip**: Specific sawal poochiye jaise recipes, profit margins, product varieties, ya staff permissions.`;
       }
     } else if (targetLanguage === "urdu") {
-      if (isSalesIncreaseQuery) {
+      if (isCookingOrRestaurantQuery) {
         reply =
-          `### 📈 السلام علیکم! دکان کی فروخت اور سیل بڑھانے کے 5 آسان اور بہترین طریقے\n\n` +
-          `آپ اپنی دکان کی فروخت اور آمدن درج ذیل 5 آسان طریقوں پر عمل کر کے تیزی سے بڑھا سکتے ہیں:\n\n` +
-          `• **1. زیادہ بکنے والے پراڈکٹس کا اسٹاک ہمیشہ پورا رکھیں**:\n` +
-          `جو اشیاء سب سے زیادہ فروخت ہوتی ہیں ان کا اسٹاک کبھی ختم نہ ہونے دیں۔ گاہک جب بھی آئے اسے اس کی مطلوبہ چیز ملنی چاہیے۔\n\n` +
-          `• **2. کاؤنٹر پر پرکشش اشیاء رکھیں (Impulse Items)**:\n` +
-          `کاؤنٹر کے بالکل سامنے چھوٹی اور روزمرہ کی اشیاء رکھیں تاکہ گاہک بل بنواتے وقت مزید ایک دو چیزیں خرید لے۔\n\n` +
-          `• **3. بنڈل ڈیلز اور خصوصی پیشکشیں**:\n` +
-          `دو یا تین ملتی جلتی اشیاء کا پیکج بنائیں اور تھوڑی رعایت دیں۔ اس سے گاہک ایک کے بجائے دو اشیاء خریدے گا۔\n\n` +
-          `• **4. سست رفتار مال پر چھوٹ دے کر کیش آزاد کریں**:\n` +
-          `جو سامان کافی عرصے سے نہیں بک رہا اس پر رعایت دے کر فروخت کریں اور اس رقم سے تیز بکنے والا نیا مال لائیں۔\n\n` +
-          `• **5. مستقل گاہکوں سے رابطہ**:\n` +
-          `اپنے پرانے گاہکوں کا فون نمبر محفوظ رکھیں اور نیا مال آنے پر انہیں واٹس ایپ پر مطلع کریں۔\n\n` +
-          `💡 **آسان مشورہ:** پی او ایس کاؤنٹر پر آئٹم ڈسکاؤنٹ کا فیچر استعمال کر کے اچھے گاہکوں کو رعایت دیں۔`;
+          `### 🍳 GeFlow AI Agent: ریستوران اور آرڈر پر تیار ہونے والے پراڈکٹس\n\n` +
+          `• **آن آرڈر ڈشز:** پیزا، برگر اور تازہ ڈشز کو [MADE_ON_ORDER] ٹیگ سے مارک کیا جاتا ہے اور ان کا اسٹاک کبھی ختم شو نہیں ہوتا۔\n` +
+          `• **پی او ایس کاؤنٹر:** کاؤنٹر پر کیشیئر بغیر کسی رکاوٹ کے آرڈر پنچ کر سکتا ہے۔\n` +
+          `• **فوڈ کاسٹنگ:** کچے اجزاء کو پرچیزز میں درج کریں تاکہ منافع کا درست حساب ملے۔\n\n` +
+          `💡 **رہنمائی:** پراڈکٹ شامل کرتے وقت Live Cooking / Made on Order Dish کو فعال کریں۔`;
+      } else if (isVarietyOrVariantsQuery) {
+        reply =
+          `### 🏷️ GeFlow AI Agent: پراڈکٹ ورائٹیز اور پرائسنگ میٹرکس\n\n` +
+          `• **ورائٹی کی قیمتیں:** اگر آپ نے ہر سائز (چھوٹا، درمیانہ، بڑا) کی الگ قیمت دی ہے تو بنیادی قیمت دوبارہ دینے کی ضرورت نہیں ہے۔\n` +
+          `• **انوینٹری ٹیبل:** ہر ورائٹی پراڈکٹ کے سامنے ورائٹی بیج اور قیمت کا دائرہ کار (مثلاً 500 – 1200) شو ہوتا ہے۔\n` +
+          `• **پی او ایس پاپ اپ:** پی او ایس پر کلک کرنے پر سرچ بار کے ساتھ تمام ورائٹیز کا پاپ اپ کھلتا ہے۔\n\n` +
+          `💡 **رہنمائی:** انوینٹری میں پراڈکٹ ایڈیٹ کر کے Variations ٹیب دیکھیں۔`;
       } else if (isProfitQuery) {
         reply =
-          `### 💰 السلام علیکم! ${storeName} کا آسان منافع اور فروخت کا حساب\n\n` +
-          `آپ کی دکان کا تازہ ترین حساب کتاب درج ذیل ہے:\n\n` +
+          `### 💰 GeFlow AI Agent: مالیاتی کارکردگی کی رپورٹ برائے ${storeName}\n\n` +
           `• **آج کی کل فروخت:** ${rev} (${tx} آرڈرز)\n` +
           `• **آج کا خالص منافع:** ${todayProf}\n` +
           `• **پچھلے 30 دن کی فروخت:** ${mRev}\n` +
           `• **پچھلے 30 دن کا منافع:** ${mProf}\n` +
-          `• **کرنسی:** تمام حساب **${businessCurrency}** (${currencySym}) میں ہے\n\n` +
-          `💡 **آسان مشورہ:** زیادہ بکنے والی اشیاء کو ہمیشہ کاؤنٹر کے قریب رکھیں تاکہ گاہک آسانی سے دیکھ سکیں۔`;
-      } else if (isStockQuery) {
-        reply =
-          `### 📦 السلام علیکم! اسٹاک کی صورتحال\n\n` +
-          `• **کل پراڈکٹس:** ${totalProd} اشیاء درج ہیں\n` +
-          `• **کم اسٹاک:** اس وقت ${lowStock} اشیاء کا اسٹاک کم ہو رہا ہے\n` +
-          `• **نیا آئٹم:** انوینٹری میں جا کر '+ Add Product' دبائیں\n\n` +
-          `💡 **آسان مشورہ:** کم اسٹاک والی اشیاء کا آرڈر جلد تیار کر لیں۔`;
+          `• **کرنسی:** تمام حساب **${businessCurrency}** (${currencySym}) میں ہے۔\n\n` +
+          `💡 **رہنمائی:** زیادہ منافع بخش اشیاء کو پی او ایس کے فیورٹس میں شامل کریں۔`;
       } else {
         reply =
-          `### 👋 السلام علیکم! میں مریم ہوں، آپ کی دکان کی معاون\n\n` +
-          `آپ مجھ سے اپنی دکان کے بارے میں آسان اور سادہ الفاظ میں کچھ بھی پوچھ سکتے ہیں:\n\n` +
-          `• **سیل اور فروخت بڑھانے کے طریقے**\n` +
-          `• **منافع اور فروخت کا حساب**\n` +
-          `• **اسٹاک اور سامان کی تفصیل**\n` +
-          `• **بل بنانے اور کاؤنٹر کا طریقہ کار**\n\n` +
-          `فرمائیے میں آپ کی کیا مدد کر سکتی ہوں؟`;
-      }
-    } else if (targetLanguage === "spanish") {
-      if (isSalesIncreaseQuery) {
-        reply =
-          `### 📈 ¡Hola! 5 Formas Prácticas de Aumentar las Ventas de su Tienda\n\n` +
-          `Aumentar las ventas diarias y el ticket promedio es sencillo con estas 5 estrategias comprobadas:\n\n` +
-          `• **1. Mantenga Siempre Stock de los Productos Más Vendidos**:\n` +
-          `Identifique sus artículos de mayor rotación y asegúrese de reponerlos antes de que se agoten.\n\n` +
-          `• **2. Productos de Impulso en el Mostrador de Pago**:\n` +
-          `Coloque artículos pequeños y de alto margen junto al terminal POS para compras espontáneas.\n\n` +
-          `• **3. Cree Paquetes y Ofertas Combinadas**:\n` +
-          `Empareje productos complementarios con un pequeño descuento para elevar el valor del pedido.\n\n` +
-          `• **4. Liquide el Inventario de Lento Movimiento**:\n` +
-          `Aplique descuentos moderados a artículos estancados para liberar capital y reinvertir en novedades.\n\n` +
-          `• **5. Fidelice Clientes por WhatsApp**:\n` +
-          `Envíe mensajes cordiales a sus clientes habituales cuando lleguen nuevos lotes o productos.\n\n` +
-          `💡 **Consejo Práctico**: ¡Use los descuentos por artículo en la pantalla POS para premiar a clientes fieles!`;
-      } else if (isProfitQuery) {
-        reply =
-          `### 💰 Resumen Financiero y Ganancias: ${storeName}\n\n` +
-          `• **Ventas de Hoy**: ${rev} (${tx} pedidos procesados)\n` +
-          `• **Ganancia Neta de Hoy**: ${todayProf}\n` +
-          `• **Ventas Últimos 30 Días**: ${mRev}\n` +
-          `• **Ganancia Últimos 30 Días**: ${mProf}\n` +
-          `• **Moneda**: ${businessCurrency} (${currencySym})\n\n` +
-          `💡 **Consejo Práctico**: Mantenga los artículos más rentables en zonas destacadas de la tienda.`;
-      } else if (isStockQuery) {
-        reply =
-          `### 📦 Estado del Inventario: ${storeName}\n\n` +
-          `• **Total de Productos**: ${totalProd} artículos registrados\n` +
-          `• **Stock Bajo**: ${lowStock} productos requieren reposición pronta\n` +
-          `• **Agregar Producto**: Vaya a Inventario y pulse '+ Agregar Producto'\n\n` +
-          `💡 **Consejo Práctico**: Reabastezca antes de que las existencias lleguen a cero.`;
-      } else {
-        reply =
-          `### 👋 ¡Hola! Soy Maryam, tu asistente de tienda en GeFlow\n\n` +
-          `Puedo ayudarte con explicaciones sencillas y claras sobre tu negocio:\n\n` +
-          `• **Cómo aumentar ventas e ingresos**\n` +
-          `• **Cálculo de ganancias netas y márgenes**\n` +
-          `• **Estado del inventario y alertas de stock**\n` +
-          `• **Manejo del terminal punto de venta (POS)**\n\n` +
-          `¿En qué puedo ayudarte hoy?`;
+          `### ⚡ GeFlow AI Agent: کاروباری آڈٹ برائے ${storeName}\n\n` +
+          `• **اسٹور تفصیلات:** ادارہ: **${storeName}** | کرنسی: **${businessCurrency}** (${currencySym}) | کل پراڈکٹس: **${totalProd}**\n` +
+          `• **کاروباری حجم:** آج کی فروخت: **${rev}** (${tx} آرڈرز) | آج کا منافع: **${todayProf}** | ماہانہ فروخت: **${mRev}** (${mProf} منافع)\n` +
+          `• **اسٹاک کی صورتحال:** **${lowStock} اشیاء** کم اسٹاک پر ہیں۔ آرڈر پر تیار ڈشز بغیر کسی رکاوٹ کے چالو ہیں۔\n` +
+          `• **سسٹم کنٹرول:** ورائٹیز، رولز پرمیشنز، اور ادائیگی گیٹ وے مکمل سنک ہیں۔\n\n` +
+          `💡 **رہنمائی:** انوینٹری، منافع یا عملے کی اجازتوں سے متعلق مخصوص سوال فرمائیں۔`;
       }
     } else if (targetLanguage === "arabic") {
-      if (isSalesIncreaseQuery) {
+      if (isCookingOrRestaurantQuery) {
         reply =
-          `### 📈 أهلاً بك! 5 طرق عملية لزيادة مبيعات وأرباح متجرك\n\n` +
-          `يمكنك زيادة مبيعاتك اليومية وحجم السلة بسهولة من خلال اتباع هذه الخطوات الـ 5 البسيطة:\n\n` +
-          `• **1. توفير المنتجات الأكثر مبيعاً دائماً**:\n` +
-          `احرص على ألا ينفد مخزون السلع الأكثر طلباً في متجرك لضمان تلبية طلبات الزبائن دائماً.\n\n` +
-          `• **2. عروض المنتجات بجانب كاونتر ونقاط البيع (POS)**:\n` +
-          `ضع السلع الصغيرة ذات الهامش الربحي المرتفع بجوار الكاشير لزيادة المبيعات التلقائية.\n\n` +
-          `• **3. عروض الحزم والخصومات المجمعة**:\n` +
-          `اصنع باقات تجمع بين منتجين معاً بتخفيض بسيط لتشجيع العميل على شراء أكثر من قطعة.\n\n` +
-          `• **4. تصريف البضائع بطيئة الحركة**:\n` +
-          `قدّم تخفيضات مناسبة على البضائع الراكدة لتحرير السيولة وإعادة استثمارها في بضائع سريعة.\n\n` +
-          `• **5. التواصل مع الزبائن الدائمين عبر واتساب**:\n` +
-          `أرسل تنبيهات لطيفة لزبائنك عند وصول بضائع جديدة أو عروض مميزة.\n\n` +
-          `💡 **نصيحة سريعة**: استخدم خاصية الخصم على مستوى الصنف في شاشة POS لمكافأة زبائنك الدائمين!`;
+          `### 🍳 GeFlow AI Agent: إدارة أطباق المطاعم والتحضير الفوري\n\n` +
+          `• **أطباق التحضير الفوري**: المنتجات المجهزة عند الطلب (مثل البيتزا والبرغر) لا تخضع لحدود المخزون ولا تظهر أبداً كمنتج نافد.\n` +
+          `• **نقطة البيع POS**: يتم إدراج الطلب مباشرة إلى المطبخ دون أي عوائق في المخزون.\n` +
+          `• **تكلفة المكونات**: سجل مشتريات المكونات الأولية في قسم المشتريات لحساب هامش الربح بدقة.\n\n` +
+          `💡 **إجراء عملي**: فعّل خيار Live Cooking / Made on Order في بطاقة المنتج.`;
       } else if (isProfitQuery) {
         reply =
-          `### 💰 ملخص الأرباح والأداء المالي: ${storeName}\n\n` +
+          `### 💰 GeFlow AI Agent: تقرير الأداء المالي لمتجر ${storeName}\n\n` +
           `• **مبيعات اليوم**: ${rev} (${tx} طلباً)\n` +
           `• **أرباح اليوم الصافية**: ${todayProf}\n` +
           `• **مبيعات آخر 30 يوماً**: ${mRev}\n` +
           `• **أرباح آخر 30 يوماً**: ${mProf}\n` +
           `• **العملة الحالية**: ${businessCurrency} (${currencySym})\n\n` +
-          `💡 **نصيحة سريعة**: ضع السلع ذات الربحية العالية في مكان واضح بالقرب من نقطة الدفع.`;
+          `💡 **إجراء عملي**: احرص على ترويج السلع الأكثر ربحية في واجهة نقطة البيع.`;
       } else {
         reply =
-          `### 👋 مرحباً بك! أنا مريم، مساعدة متجرك في GeFlow\n\n` +
-          `أنا هنا لمساعدتك بكلمات بسيطة ومباشرة في كل ما يخص متجرك:\n\n` +
-          `• **طرق زيادة المبيعات وجذب الزبائن**\n` +
-          `• **متابعة الأرباح وحساب المبيعات**\n` +
-          `• **إدارة المخزون والتنبيهات**\n` +
-          `• **استخدام نظام نقاط البيع (POS)**\n\n` +
-          `كيف يمكنني مساعدتك الآن؟`;
+          `### ⚡ GeFlow AI Agent: التدقيق التشغيلي لمتجر ${storeName}\n\n` +
+          `• **معلومات المنشأة**: المنشأة: **${storeName}** | العملة: **${businessCurrency}** (${currencySym}) | المنتجات: **${totalProd}**\n` +
+          `• **السرعة المالية**: مبيعات اليوم: **${rev}** (${tx} طلباً) | صافي ربح اليوم: **${todayProf}** | مبيعات الشهر: **${mRev}** (${mProf} أرباح)\n` +
+          `• **المخزون والمطبخ**: يوجد **${lowStock} منتجات** بحاجة لإعادة طلب. الأطباق الفورية تعمل دون قيد.\n` +
+          `• **إجراءات موصى بها**: أعد تموين المنتجات منخفضة المخزون، وراجع مطابقة أدراج الكاشير يومياً.\n\n` +
+          `💡 **توجيه**: اسأل عن أسعار الأصناف، المخزون، تقارير الأرباح أو بوابات الدفع.`;
       }
-    } else {
-      // Friendly, simple, humanized English (UK) - Default
-      if (isSalesIncreaseQuery) {
+    } else if (targetLanguage === "spanish") {
+      if (isCookingOrRestaurantQuery) {
         reply =
-          `### 📈 5 Practical Ways to Increase Your Store Sales & Revenue\n\n` +
-          `Hello! Growing your daily retail sales and basket size is straightforward with these 5 proven, practical strategies:\n\n` +
-          `• **1. Keep Fast-Moving Items Consistently in Stock**:\n` +
-          `Identify your top 20% best-selling products and ensure they are reordered before stock runs low. Never turn away a ready buyer due to an out-of-stock item.\n\n` +
-          `• **2. Upsell at the Checkout Counter**:\n` +
-          `Place high-margin impulse items (accessories, pocket snacks, essentials) right by your POS counter so shoppers can easily add them to their basket during checkout.\n\n` +
-          `• **3. Create Bundle Offers & Combo Deals**:\n` +
-          `Pair complementary products together (e.g. "Buy Product A and get 15% off Product B"). Customers perceive high value and your Average Order Value (AOV) increases immediately.\n\n` +
-          `• **4. Clear Slow-Moving Inventory**:\n` +
-          `Run quick clearance discounts on dead or slow stock to recover tied-up capital, then reinvest the cash into fast-selling seasonal products.\n\n` +
-          `• **5. Engage Regular Shoppers via WhatsApp**:\n` +
-          `Keep a contact list of your frequent customers. Send brief, friendly alerts whenever fresh stock or new arrivals arrive at your store.\n\n` +
-          `💡 **Pro Tip**: Use GeFlow POS quick item discounts to reward loyal shoppers directly at checkout!`;
-      } else if (isUdharQuery) {
-        reply =
-          `### 📒 Customer Udhar & Store Credit Management\n\n` +
-          `Managing customer balances and credit ledgers in GeFlow is clear and reliable:\n\n` +
-          `• **Issuing Credit**: On the POS screen, select the customer and choose 'Store Credit / Udhar' as payment.\n` +
-          `• **Customer Ledger**: View real-time outstanding balances on the Customers & Udhar page.\n` +
-          `• **Recording Payments**: When a customer settles their balance, record the repayment with one click.\n\n` +
-          `💡 **Friendly Tip**: Keep accurate contact info for credit customers to send friendly payment reminders.`;
-      } else if (isReceiptQuery) {
-        reply =
-          `### 🖨️ Thermal Receipt & Printer Setup\n\n` +
-          `Ensure crisp, professional receipt printing across all devices:\n\n` +
-          `• **Business Name**: Your registered business name appears clearly at the top of every receipt.\n` +
-          `• **Optimized Fonts**: Receipt styling uses Poppins and Arial, designed specifically for 58mm and 80mm thermal printers.\n` +
-          `• **Custom Footer**: In **Settings > POS & Receipt**, personalize your receipt title, subtitle, and footer note.\n\n` +
-          `💡 **Friendly Tip**: Select high print density in your thermal printer drivers for the sharpest barcode and text output.`;
-      } else if (isDiscountQuery) {
-        reply =
-          `### 🏷️ Per-Product & Basket Discounts\n\n` +
-          `GeFlow POS allows both item-level and order-level discounts:\n\n` +
-          `• **Item Discount**: Click into the discount field beside each cart product to discount that specific item.\n` +
-          `• **Cart Total Discount**: Apply a percentage or flat amount discount to the entire basket at the bottom.\n` +
-          `• **Security**: Cashiers can apply standard discounts without editing base inventory cost prices.\n\n` +
-          `💡 **Friendly Tip**: Target discounts at items nearing shelf expiration to turn stock into immediate cash flow.`;
-      } else if (isHoldQuery) {
-        reply =
-          `### ⏸️ POS Hold Order Feature\n\n` +
-          `Never make waiting customers wait when someone steps away to grab an extra item:\n\n` +
-          `• **Click Hold**: Click the **Hold** button on the POS counter to save the active basket to the database.\n` +
-          `• **Serve Next**: Immediately ring up the next customer with a clean, empty cart.\n` +
-          `• **Resume Anytime**: When the shopper returns, click **Hold Orders** to restore the basket in one click.\n\n` +
-          `💡 **Friendly Tip**: Hold orders persist securely in the database even if you refresh the browser page.`;
-      } else if (isTaxQuery) {
-        reply =
-          `### 🏛️ Tax & FISCAL Configuration\n\n` +
-          `Manage your store tax calculation cleanly in GeFlow:\n\n` +
-          `• **Disable Tax**: Go to **Settings > Tax & FISCAL** and toggle Tax Calculation to Disabled.\n` +
-          `• **POS Zero-Tax**: Once disabled, the POS terminal calculates checkout totals with 0% tax, regardless of how many items are added.\n` +
-          `• **Persistent Persistence**: Tax settings are saved directly to the database and remain disabled across reloads.\n\n` +
-          `💡 **Friendly Tip**: If your business is registered for GST/VAT, enter your tax percentage and tax ID number in Settings.`;
-      } else if (isStockQuery) {
-        reply =
-          `### 📦 Simple Stock & Product Overview: ${storeName}\n\n` +
-          `Hi there! Here is how your inventory is looking right now:\n\n` +
-          `• **Total Products**: You have **${totalProd} items** in your store catalog.\n` +
-          `• **Low Stock Alert**: **${lowStock} items** are running low and need restocking soon.\n` +
-          `• **Add New Product**: Go to **Inventory > Products** and click the green **+ Add Product** button.\n` +
-          `• **Auto Barcode / SKU**: Click **Auto SKU** to generate a clean product code instantly.\n\n` +
-          `💡 **Friendly Tip**: Restock your fast-moving items before they reach zero so your shoppers never leave empty-handed.`;
+          `### 🍳 GeFlow AI Agent: Gestión de Platos Preparados al Momento y Cocina\n\n` +
+          `• **Preparación Bajo Pedido**: Los platos de restaurante (pizzas, hamburguesas, cocina en vivo) se configuran como 'Made on Order' para que nunca figuren como agotados.\n` +
+          `• **Terminal POS sin Bloqueos**: El cajero procesa el pedido inmediatamente sin restricciones de existencias previas.\n` +
+          `• **Control de Costos**: Registre los insumos en Compras para calcular los márgenes reales por plato.\n\n` +
+          `💡 **Acción recomendada**: Active la opción 'Live Cooking / Made on Order Dish' en el diálogo del producto.`;
       } else if (isProfitQuery) {
         reply =
-          `### 💰 Simple Financial Summary for ${storeName}\n\n` +
-          `Hello! Here is your friendly business performance breakdown in plain terms:\n\n` +
-          `• **Today's Sales**: **${rev}** across **${tx} completed orders**.\n` +
-          `• **Today's Clear Profit**: **${todayProf}**.\n` +
-          `• **Last 30 Days (Monthly) Sales**: **${mRev}**.\n` +
-          `• **Last 30 Days Clear Profit**: **${mProf}**.\n` +
-          `• **Active Currency**: All amounts are strictly in **${businessCurrency}** (${currencySym}).\n\n` +
-          `💡 **Friendly Tip**: Your top selling products bring in the most profit—keep them visible near the checkout counter!`;
-      } else if (isPOSQuery) {
-        reply =
-          `### 🛒 Friendly Guide: POS & Fast Counter Checkout\n\n` +
-          `Hello! Here is how to keep counter checkouts quick and smooth for your customers:\n\n` +
-          `• **Scan or Search Items**: Scan any barcode with your reader or type the item name in the search bar.\n` +
-          `• **Simple Payments**: Choose Cash, Card, or QR payment with a single click.\n` +
-          `• **Hold Order**: If a shopper wants to grab another item, click **Hold** to save their basket, and resume it anytime.\n` +
-          `• **Clean Receipts**: Print clear, sharp thermal receipts with your shop details on standard paper.\n\n` +
-          `💡 **Friendly Tip**: You can also add item-level discounts directly in the cart row if you want to reward a loyal customer.`;
+          `### 💰 GeFlow AI Agent: Auditoría Financiera de ${storeName}\n\n` +
+          `• **Ventas de Hoy**: ${rev} (${tx} pedidos)\n` +
+          `• **Ganancia Neta de Hoy**: ${todayProf}\n` +
+          `• **Ventas Últimos 30 Días**: ${mRev}\n` +
+          `• **Ganancia Neta Últimos 30 Días**: ${mProf}\n` +
+          `• **Moneda Activa**: ${businessCurrency} (${currencySym})\n\n` +
+          `💡 **Acción recomendada**: Impulse las líneas de mayor margen en su terminal POS.`;
       } else {
         reply =
-          `### 👋 Hello! I'm Maryam, your friendly shop assistant\n\n` +
-          `I am right here to help you manage ${storeName} easily. You can ask me anything in simple everyday words:\n\n` +
-          `• **Increase Sales**: "How can I increase my store sales and revenue?"\n` +
-          `• **Check Shop Profit**: "How much profit did I make today or this month?"\n` +
-          `• **Check Low Stock**: "Which items are running out of stock?"\n` +
-          `• **POS & Billing**: "How do I give a discount or hold an order?"\n` +
-          `• **Store Setup**: "How do I change my currency or invite a cashier?"\n\n` +
-          `What can I help you check for your store today?`;
+          `### ⚡ GeFlow AI Agent: Informe Ejecutivo para ${storeName}\n\n` +
+          `• **Estado del Negocio**: Comercio: **${storeName}** | Moneda: **${businessCurrency}** (${currencySym}) | Catálogo: **${totalProd} productos**\n` +
+          `• **Rendimiento Financiero**: Ventas de Hoy: **${rev}** (${tx} órdenes) | Margen Neto Hoy: **${todayProf}** | Ventas Mes: **${mRev}** (${mProf} beneficio)\n` +
+          `• **Inventario y Cocina**: **${lowStock} artículos** con stock bajo. Los platos bajo pedido operan con bypass automático.\n` +
+          `• **Directivas Estratégicas**: Reabastezca insumos críticos y verifique los cierres de caja en cada turno.\n\n` +
+          `💡 **Consejo Profesional**: Puede consultar detalles de inventario, márgenes de recetas, permisos o pasarelas de pago.`;
+      }
+    } else {
+      // Professional Executive British English (English UK) - Default GeFlow Business AI Agent
+      if (isCookingOrRestaurantQuery) {
+        reply =
+          `### 🍳 GeFlow AI Agent: Live Cooking & Made-on-Order Dish Management\n\n` +
+          `Operational architecture for restaurant kitchens, food preparation, and made-on-order dishes:\n\n` +
+          `• **Made-on-Order Stock Bypass**: Freshly cooked dishes (pizzas, burgers, chef specials, coffees) are tagged with \`[MADE_ON_ORDER]\`. The inventory engine bypasses opening stock requirements so these items are never locked out or displayed as "0 Units / Out of Stock".\n` +
+          `• **Live POS Counter Routing**: In the POS terminal, made-on-order dishes display a distinctive \`🍳 MADE ON ORDER\` badge and can be rung up instantly without inventory deduction errors.\n` +
+          `• **Recipe Margins & Food Costing**: Track raw ingredient batches (flour, meats, produce, dairy) in **Purchases & Expenses** to monitor true plate margins against retail sale prices.\n` +
+          `• **Kitchen Display Flow**: Once submitted at the counter, orders queue directly for kitchen preparation with full table or customer reference notes.\n\n` +
+          `💡 **Operational Directive**: When creating or editing dishes, toggle on the **'Live Cooking / Made on Order Dish'** banner in Section 3 of the Product Dialog.`;
+      } else if (isVarietyOrVariantsQuery) {
+        reply =
+          `### 🏷️ GeFlow AI Agent: Product Variations & Dynamic Pricing Matrices\n\n` +
+          `Comprehensive management of multi-attribute items (Sizes, Flavours, Specifications):\n\n` +
+          `• **Automated Variant Pricing**: When individual prices are defined in the Variations Matrix (e.g. Small $12, Medium $18, Large $24), the system automatically validates them and does not require re-entering a redundant base retail price.\n` +
+          `• **Inventory Table Transparency**: Products with active variants display a clear \`{N} Varieties\` badge alongside the dynamic price span (e.g. \`$12.00 – $24.00\`) in both table and mobile views.\n` +
+          `• **Dedicated POS Variety Modal**: Clicking any variable product in POS launches an interactive variety selection modal complete with live search, SKU inspection, and variant-specific pricing for rapid counter checkout.\n` +
+          `• **Stock per Variety**: Variant inventory is tracked either per-variety or routed to made-on-order preparation without stock bottlenecks.\n\n` +
+          `💡 **Operational Directive**: Configure attributes in **Inventory > Products > Section 2 (Variations)** to enable automated matrix pricing.`;
+      } else if (isPermissionsOrStaffQuery) {
+        reply =
+          `### 👥 GeFlow AI Agent: Role-Based Access Control (RBAC) & Staff Security\n\n` +
+          `Granular operational security and permissions architecture:\n\n` +
+          `• **Role Separation**: Cashiers have access strictly limited to POS checkout and customer receipts; they cannot inspect wholesale supplier costs, delete invoices, or modify product pricing.\n` +
+          `• **Manager Overrides**: Managers can authorise discretionary discounts, oversee refunds, and monitor active drawer shifts.\n` +
+          `• **Administrator Control**: Store owners retain complete authority over billing, payment gateways, tax rates, and staff invitation codes.\n` +
+          `• **Drawer Balancing & Audit Trails**: Every shift requires opening and closing cash counts to identify discrepancies and maintain cash register accountability.\n\n` +
+          `💡 **Operational Directive**: Manage staff roles and PIN authorizations under **Settings > Users & Permissions** or Admin Panel.`;
+      } else if (isPaymentGatewayQuery) {
+        reply =
+          `### 💳 GeFlow AI Agent: Payment Gateway Architecture & PayPal Sync\n\n` +
+          `Live status and verification of store payment gateways:\n\n` +
+          `• **PayPal Gateway Integration**: PayPal is configured and verified as an active payment gateway for billing subscriptions and POS customer checkout.\n` +
+          `• **Real-Time Gateway Sync**: Webhook handlers and client-side listeners continuously verify transaction completion and update subscription plan states.\n` +
+          `• **Multi-Tender POS Capability**: Cashiers can split or accept tenders across Cash, Card, QR, Store Credit (Udhar), and Online Payment Gateways without transaction delays.\n\n` +
+          `💡 **Operational Directive**: Verify credentials and test sandbox/live webhooks under **Settings > Payment Gateways**.`;
+      } else if (isPricingPlanOrBillingQuery) {
+        reply =
+          `### 🌟 GeFlow AI Agent: Pricing Plans, Lifetime Badges & Seat Allocations\n\n` +
+          `Subscription tiers and promotional badge configuration:\n\n` +
+          `• **Verified Admin Created Plans**: The system renders only authentic administrator-configured plans (Standard, Premium, Lifetime) and eliminates any demo/mock plans.\n` +
+          `• **Lifetime Promotional Badges**: Lifetime plans feature prominent visual badges and a live countdown showing remaining seat allocations to drive buyer urgency.\n` +
+          `• **Tier Capabilities**: Standard includes Analyst + Operator AI models and weekly reporting; Premium/Lifetime unlocks all 4 AI models, VIP daily auditing, and unlimited agent capabilities.\n\n` +
+          `💡 **Operational Directive**: Manage plan pricing, badge visibility, and seat limits under **Admin Panel > Billing & Subs > Pricing Plans**.`;
+      } else if (isSalesIncreaseQuery) {
+        reply =
+          `### 📈 GeFlow AI Agent: 5 Strategic Levers to Accelerate Store Revenue\n\n` +
+          `Executive strategies to increase revenue and Average Order Value (AOV):\n\n` +
+          `• **1. Eliminate Stockouts on High-Velocity Items**: Analyze your top 20% revenue drivers and establish automated safety stock buffers to prevent counter walkouts.\n` +
+          `• **2. High-Margin Checkout Merchandising**: Position high-margin impulse items and complementary add-ons directly beside the POS terminal to stimulate spontaneous basket additions.\n` +
+          `• **3. Strategic Product Bundling**: Package related products together (e.g. "Main Dish + Beverage Combo") with a slight bundled discount to increase total spend per customer.\n` +
+          `• **4. Clearance of Dormant Capital**: Discount slow-moving inventory by 10–15% to liquidate trapped capital and immediately reinvest into fast-turning stock.\n` +
+          `• **5. Direct WhatsApp & SMS Customer Retention**: Leverage your customer ledger to alert frequent patrons regarding newly arrived stock, seasonal dishes, or limited promotions.\n\n` +
+          `💡 **Operational Directive**: Deploy line-item and cart-level discounts in the POS terminal to execute targeted customer incentives.`;
+      } else if (isProfitQuery) {
+        reply =
+          `### 💰 GeFlow AI Agent: Financial Performance Audit for ${storeName}\n\n` +
+          `Real-time financial breakdown based on store transactional data:\n\n` +
+          `• **Today's Gross Sales**: **${rev}** across **${tx} completed order(s)**.\n` +
+          `• **Today's Net Profit**: **${todayProf}**.\n` +
+          `• **Trailing 30-Day Sales**: **${mRev}**.\n` +
+          `• **Trailing 30-Day Net Profit**: **${mProf}**.\n` +
+          `• **Operational Currency**: All figures calculated strictly in **${businessCurrency}** (${currencySym}).\n\n` +
+          `💡 **Operational Directive**: Spotlight high gross-margin items on your POS terminal to systematically elevate daily net earnings.`;
+      } else if (isStockQuery) {
+        reply =
+          `### 📦 GeFlow AI Agent: Inventory Health & Stock Audit for ${storeName}\n\n` +
+          `Current warehouse and kitchen stock evaluation:\n\n` +
+          `• **Catalog Breadth**: **${totalProd} registered products** in catalog.\n` +
+          `• **Low-Stock Alert**: **${lowStock} products** currently below reorder thresholds.\n` +
+          `• **Made-on-Order Dishes**: Kitchen items marked for on-demand cooking bypass stock counts to prevent false stockouts.\n` +
+          `• **Restock Workflow**: Generate vendor purchase orders directly from the Purchases module for all items flagged low.\n\n` +
+          `💡 **Operational Directive**: Filter by 'Low Stock' in **Inventory > Products** and issue replenishment purchase orders.`;
+      } else if (isPOSQuery) {
+        reply =
+          `### 🛒 GeFlow AI Agent: POS Terminal & Checkout Operations\n\n` +
+          `High-efficiency counter checkout workflow:\n\n` +
+          `• **Rapid Item Search & Barcode Scan**: Scan barcodes or type product names for sub-second cart addition.\n` +
+          `• **Interactive Variety Selection**: Click variable items to open the search modal and choose exact variants with individual prices.\n` +
+          `• **Order Hold & Multi-Customer Handling**: Click **Hold** to park an active cart to the database and serve waiting customers; resume at any time.\n` +
+          `• **Thermal Printer Optimization**: Crisp formatting tailored for standard 58mm and 80mm ESC/POS receipt printers.\n\n` +
+          `💡 **Operational Directive**: Open daily cashier drawer sessions in POS to maintain balanced end-of-day reconciliation.`;
+      } else if (isUdharQuery) {
+        reply =
+          `### 📒 GeFlow AI Agent: Customer Ledger & Store Credit (Udhar) Control\n\n` +
+          `Credit ledger and debt management protocol:\n\n` +
+          `• **Issuing Credit**: Select customer profile at checkout and choose 'Store Credit / Udhar' as the settlement method.\n` +
+          `• **Ledger Tracking**: Inspect outstanding receivables in real-time under Customers & Udhar.\n` +
+          `• **Payment Recording**: Record partial or full cash settlements with immediate automatic ledger deductions.\n\n` +
+          `💡 **Operational Directive**: Set credit limits per customer to prevent excessive uncollateralized receivables.`;
+      } else if (isReceiptQuery) {
+        reply =
+          `### 🖨️ GeFlow AI Agent: Thermal Printer & Receipt Configuration\n\n` +
+          `Setup instructions for clean, reliable receipt output:\n\n` +
+          `• **Header Branding**: Registered store name (${storeName}) and contact details render automatically at the top.\n` +
+          `• **Thermal Geometry**: Layout optimized for 58mm (pocket) and 80mm (counter) thermal printer rolls using crisp high-contrast fonts.\n` +
+          `• **Custom Footers**: Personalize receipt header notes, tax registration IDs, and return policies under Settings > POS & Receipt.\n\n` +
+          `💡 **Operational Directive**: Select 'High' print density in thermal printer drivers for maximum barcode scan reliability.`;
+      } else if (isDiscountQuery) {
+        reply =
+          `### 🏷️ GeFlow AI Agent: Line-Item & Order Discount Controls\n\n` +
+          `Discount configuration and cashier permission limits:\n\n` +
+          `• **Line-Item Discounts**: Modify the discount field beside any cart item to apply a specific discount without affecting other products.\n` +
+          `• **Cart Total Discount**: Apply a flat amount or percentage discount to the entire order subtotal.\n` +
+          `• **Cost Floor Protection**: Base purchase costs remain locked so discounts never violate minimum gross margin limits.\n\n` +
+          `💡 **Operational Directive**: Use targeted line discounts to clear expiring stock rather than broad order markdowns.`;
+      } else if (isHoldQuery) {
+        reply =
+          `### ⏸️ GeFlow AI Agent: Order Hold & Resume Architecture\n\n` +
+          `Multi-cart queueing mechanism for uninterrupted checkout lanes:\n\n` +
+          `• **Instant Hold**: Click the **Hold** button on the POS screen to persist the cart into the database.\n` +
+          `• **Serve Next**: The POS cart clears immediately to begin ringing up the next customer in line.\n` +
+          `• **One-Click Resume**: When the customer returns, open **Hold Orders** and restore the exact basket.\n\n` +
+          `💡 **Operational Directive**: Parked orders persist across browser refreshes and device reloads.`;
+      } else if (isTaxQuery) {
+        reply =
+          `### 🏛️ GeFlow AI Agent: Tax & FISCAL System Configuration\n\n` +
+          `Tax configuration guidelines:\n\n` +
+          `• **Tax Toggle**: Enable or disable tax calculations under **Settings > Tax & FISCAL**.\n` +
+          `• **0% Tax Mode**: When disabled, all POS line items and basket totals calculate with 0% tax.\n` +
+          `• **Compliance**: If your business is GST/VAT registered, set the rate and tax ID to appear automatically on thermal receipts.\n\n` +
+          `💡 **Operational Directive**: Ensure tax rates conform to local regulations for food vs retail goods.`;
+      } else {
+        reply =
+          `### ⚡ GeFlow AI Agent: Executive Operations & Performance Audit for ${storeName}\n\n` +
+          `• **Operational Snapshot**: Organization: **${storeName}** | Currency: **${businessCurrency}** (${currencySym}) | Active Products: **${totalProd}** | Reorder Alerts: **${lowStock}**\n` +
+          `• **Financial Velocity**: Today's Gross Sales: **${rev}** (${tx} completed orders) | Today's Net Profit: **${todayProf}** | Trailing 30-Day Sales: **${mRev}** (${mProf} net profit)\n` +
+          `• **Kitchen & Inventory Engine**: Made-on-order dishes bypass stock constraints for live kitchen assembly; multi-attribute items utilize dynamic variety pricing matrices.\n` +
+          `• **Operational Security**: Role-based access control enforces Cashier, Manager, and Administrator privileges with audit logging and PayPal gateway synchronization.\n` +
+          `• **Strategic Directives**:\n` +
+          `  - 1. Replenish the **${lowStock} low-stock items** via the Purchases module to avoid sales loss.\n` +
+          `  - 2. Utilize POS product bundles and variety pricing matrices to increase Average Order Value.\n` +
+          `  - 3. Audit cashier drawer sessions and reconcile payment gateway transactions daily.\n\n` +
+          `💡 **Operational Support**: You can ask me specific questions regarding recipe costing, variety pricing, staff permissions, payment gateways, or financial reports.`;
       }
     }
 
@@ -7049,6 +7490,13 @@ app.post("/api/coupons/validate", async (req: Request, res: Response) => {
 async function startServer() {
   // Guarantee real 29 business categories and 96 product categories are synchronized to database
   syncRealCategoriesToDatabase().catch((e) => console.warn("Notice: syncRealCategories startup error:", e));
+
+  // Explicitly handle Vite dev server health check ping so client reconnects immediately
+  app.all(["/__vite_ping", "/@vite_ping"], (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Content-Type", "text/plain");
+    res.status(200).send("pong");
+  });
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

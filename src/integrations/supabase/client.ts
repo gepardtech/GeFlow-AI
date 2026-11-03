@@ -133,7 +133,21 @@ const safeSupabaseFetch: typeof fetch = async (input, init) => {
   }
 
   try {
-    const res = await fetch(targetUrl, init);
+    let res: Response;
+    try {
+      res = await fetch(targetUrl, init);
+    } catch (fetchErr: any) {
+      if (fetchErr?.name === "AbortError" || (init as any)?.signal?.aborted) {
+        return makeMockResponse([], 200);
+      }
+      // Retry once after brief pause to absorb dev server restarts or network hiccups
+      await new Promise((r) => setTimeout(r, 200));
+      try {
+        res = await fetch(targetUrl, init);
+      } catch {
+        return handleFallbackResponse(urlString);
+      }
+    }
     const contentType = res.headers.get("content-type") || "";
     const isHtml = contentType.toLowerCase().includes("text/html");
 

@@ -21,21 +21,70 @@ export interface PricingPlanRow {
 
 export type BillingCycle = "monthly" | "yearly" | "lifetime";
 
-/**
- * Live pricing plans from Supabase only (admin → Billing → Pricing).
- * Realtime: price / badge / feature edits update landing, checkout, upgrade instantly.
- * No local FALLBACK data.
- */
+const DEFAULT_PLANS: PricingPlanRow[] = [
+  {
+    id: "66b1e1e9-c498-47bb-98c0-55c7f333b894",
+    plan_key: "free",
+    name: "Free",
+    tagline: "Always free for small stores",
+    monthly_price: 0,
+    yearly_price: 0,
+    lifetime_price: 0,
+    features: ["50 items limit", "Basic POS", "Single user", "Real-time Profit"],
+    is_active: true,
+    is_popular: false,
+    sort_order: 1,
+    badge_text: "FOREVER FREE",
+    badge_position: "top",
+    badge_cycle: "all",
+    cta_button_text: null,
+  },
+  {
+    id: "00e49c70-0a74-4914-acaa-c5f2b81e8e92",
+    plan_key: "standard",
+    name: "Standard",
+    tagline: null,
+    monthly_price: 9.99,
+    yearly_price: 49.99,
+    lifetime_price: 299.99,
+    features: ["1000 items limit", "Full POS & Returns", "Multi-user support", "Financial summaries", "Supplier Portal"],
+    is_active: true,
+    is_popular: true,
+    sort_order: 2,
+    badge_text: "58% Off",
+    badge_position: "top",
+    badge_cycle: "yearly",
+    cta_button_text: null,
+  },
+  {
+    id: "e965c79c-bd2b-4991-9c21-259d2cdc23b8",
+    plan_key: "premium",
+    name: "Premium",
+    tagline: "For advanced operations",
+    monthly_price: 14.99,
+    yearly_price: 74.99,
+    lifetime_price: 499.99,
+    features: ["Unlimited items", "Everything in Standard", "Batch & expiry tracking", "Advanced analytics", "Multi-branch support", "Priority support"],
+    is_active: true,
+    is_popular: false,
+    sort_order: 3,
+    badge_text: "58% OFF",
+    badge_position: "top",
+    badge_cycle: "yearly",
+    cta_button_text: null,
+  },
+];
+
 export const usePricingPlans = () => {
-  const [plans, setPlans] = useState<PricingPlanRow[]>([]);
+  const [plans, setPlans] = useState<PricingPlanRow[]>(() => DEFAULT_PLANS);
   const [lifetimeCustomizations, setLifetimeCustomizations] = useState<Record<string, any>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/pricing-plans");
       const json = await res.json();
-      if (json.success && Array.isArray(json.plans)) {
+      if (json.success && Array.isArray(json.plans) && json.plans.length > 0) {
         const rows = json.plans as PricingPlanRow[];
         setPlans(rows.filter((p) => p.is_active !== false));
         if (json.lifetime_customizations) {
@@ -47,17 +96,13 @@ export const usePricingPlans = () => {
           .select("*")
           .order("sort_order", { ascending: true });
 
-        if (error) {
-          console.error("Failed to load pricing_plans:", error.message);
-          setPlans([]);
-        } else {
-          const rows = (data ?? []) as unknown as PricingPlanRow[];
+        if (!error && Array.isArray(data) && data.length > 0) {
+          const rows = data as unknown as PricingPlanRow[];
           setPlans(rows.filter((p) => p.is_active !== false));
         }
       }
     } catch (err) {
-      console.error("pricing_plans load exception:", err);
-      setPlans([]);
+      console.warn("pricing_plans load notice:", err);
     } finally {
       setLoading(false);
     }

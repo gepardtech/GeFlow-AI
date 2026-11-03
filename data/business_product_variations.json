@@ -1,0 +1,235 @@
+{
+  "86fc96a1-fc63-411c-929f-b1bac4a4b92a": {
+    "variants": [
+      {
+        "id": "var_1793460786231_0",
+        "sku": "PRD-256447-SMA-CLA",
+        "name": "Small 8\" / Classic Hand Tossed",
+        "active": true,
+        "parent_id": "",
+        "attributes": {
+          "Size": "Small 8\"",
+          "Crust": "Classic Hand Tossed"
+        },
+        "stock_units": 10,
+        "retail_price": 500,
+        "purchase_cost": 1000
+      },
+      {
+        "id": "var_1793460786231_1",
+        "sku": "PRD-256447-SMA-THI",
+        "name": "Small 8\" / Thin Crust",
+        "active": true,
+        "parent_id": "",
+        "attributes": {
+          "Size": "Small 8\"",
+          "Crust": "Thin Crust"
+        },
+        "stock_units": 10,
+        "retail_price": 500,
+        "purchase_cost": 1000
+      },
+      {
+        "id": "var_1793460786231_2",
+        "sku": "PRD-256447-SMA-CHE",
+        "name": "Small 8\" / Cheese Burst",
+        "active": true,
+        "parent_id": "",
+        "attributes": {
+          "Size": "Small 8\"",
+          "Crust": "Cheese Burst"
+        },
+        "stock_units": 10,
+        "retail_price": 500,
+        "purchase_cost": 1000
+      },
+      {
+        "id": "var_1793460786231_3",
+        "sku": "PRD-256447-MED-CLA",
+        "name": "Medium 10\" / Classic Hand Tossed",
+        "active": true,
+        "parent_id": "",
+        "attributes": {
+          "Size": "Medium 10\"",
+          "Crust": "Classic Hand Tossed"
+        },
+        "stock_units": 10,
+        "retail_price": 750,
+        "purchase_cost": 1150
+      },
+      {
+        "id": "var_1793460786231_4",
+        "sku": "PRD-256447-MED-THI",
+        "name": "Medium 10\" / Thin Crust",
+        "active": true,
+        "parent_id": "",
+        "attributes": {
+          "Size": "Medium 10\"",
+          "Crust": "Thin Crust"
+        },
+        "stock_units": 10,
+        "retail_price": 750,
+        "purchase_cost": 1150
+      },
+      {
+        "id": "var_1793460786231_5",
+        "sku": "PRD-256447-MED-CHE",
+        "name": "Medium 10\" / Cheese Burst",
+        "active": true,
+        "parent_id": "",
+        "attributes": {
+          "Size": "Medium 10\"",
+          "Crust": "Cheese Burst"
+        },
+        "stock_units": 10,
+        "retail_price": 750,
+        "purchase_cost": 1150
+      },
+      {
+        "id": "var_1793460786231_6",
+        "sku": "PRD-256447-LAR-CLA",
+        "name": "Large 12\" / Classic Hand Tossed",
+        "active": true,
+        "parent_id": "",
+        "attributes": {
+          "Size": "Large 12\"",
+          "Crust": "Classic Hand Tossed"
+        },
+        "stock_units": 10,
+        "retail_price": 800,
+        "purchase_cost": 1400
+      },
+      {
+        "id": "var_1793460786231_7",
+        "sku": "PRD-256447-LAR-THI",
+        "name": "Large 12\" / Thin Crust",
+        "active": true,
+        "parent_id": "",
+        "attributes": {
+          "Size": "Large 12\"",
+          "Crust": "Thin Crust"
+        },
+        "stock_units": 10,
+        "retail_price": 800,
+        "purchase_cost": 1400
+      },
+      {
+        "id": "var_1793460786231_8",
+        "sku": "PRD-256447-LAR-CHE",
+        "name": "Large 12\" / Cheese Burst",
+        "active": true,
+        "parent_id": "",
+        "attributes": {
+          "Size": "Large 12\"",
+          "Crust": "Cheese Burst"
+        },
+        "stock_units": 10,
+        "retail_price": 800,
+        "purchase_cost": 1400
+      },
+      {
+        "id": "var_1793460786231_9",
+        "sku": "PRD-256447-FAM-CLA",
+        "name": "Family 14\" / Classic Hand Tossed",
+        "active": true,
+        "parent_id": "",
+        "attributes": {
+          "Size": "Family 14\"",
+          "Crust": "Classic Hand Tossed"
+        },
+        "stock_units": 10,
+        "retail_price": 950,
+        "purchase_cost": 2100
+      },
+      {
+        "id": "var_1793460786231_10",
+        "sku": "PRD-256447-FAM-THI",
+        "name": "Family 14\" / Thin Crust",
+        "active": true,
+        "parent_id": "",
+        "attributes": {
+          "Size": "Family 14\"",
+          "Crust": "Thin Crust"
+        },
+        "stock_units": 10,
+        "retail_price": 950,
+        "purchase_cost": 2100
+      },
+      {
+        "id": "var_1793460786231_11",
+        "sku": "PRD-256447-FAM-CHE",
+        "name": "Family 14\" / Cheese Burst",
+        "active": true,
+        "parent_id": "",
+        "attributes": {
+          "Size": "Family 14\"",
+          "Crust": "Cheese Burst"
+        },
+        "stock_units": 10,
+        "retail_price": 950,
+        "purchase_cost": 2100.04
+      }
+    ],
+    "modifiers": [
+      {
+        "id": "m_toppings",
+        "name": "Extra Toppings",
+        "options": [
+          {
+            "id": "opt_cheese",
+            "name": "Extra Mozzarella",
+            "price": 1.5
+          },
+          {
+            "id": "opt_jalapenos",
+            "name": "Jalapenos",
+            "price": 0.75
+          },
+          {
+            "id": "opt_olives",
+            "name": "Black Olives",
+            "price": 0.75
+          }
+        ],
+        "required": false
+      }
+    ],
+    "attributes": [
+      {
+        "id": "p_size",
+        "name": "Size",
+        "values": [
+          "Small 8\"",
+          "Medium 10\"",
+          "Large 12\"",
+          "Family 14\""
+        ],
+        "inputType": "pills",
+        "generatesVariants": true
+      },
+      {
+        "id": "p_crust",
+        "name": "Crust",
+        "values": [
+          "Classic Hand Tossed",
+          "Thin Crust",
+          "Cheese Burst"
+        ],
+        "inputType": "pills",
+        "generatesVariants": true
+      }
+    ],
+    "product_id": "86fc96a1-fc63-411c-929f-b1bac4a4b92a",
+    "updated_at": "2026-11-01T15:50:25.030Z",
+    "business_id": "abd5e80f-b0f0-4b9c-9167-d183bb905ed3",
+    "weight_unit": "g",
+    "product_type": "variable",
+    "quick_presets": [
+      250,
+      500,
+      750,
+      1000
+    ],
+    "price_per_base_unit": 1000
+  }
+}

@@ -228,6 +228,17 @@
             clearTimeout(bootTimeout);
           }
         });
+
+        // Suppress benign Vite dev server reconnect ping warnings in AI Studio preview iframe
+        window.addEventListener("unhandledrejection", function(event) {
+          try {
+            var r = event && event.reason;
+            var str = String((r && (r.stack || r.message)) || r || "");
+            if (str.indexOf("__vite_ping") !== -1 || str.indexOf("@vite/client") !== -1 || str.indexOf("waitForSuccessfulPing") !== -1) {
+              event.preventDefault();
+            }
+          } catch(e) {}
+        });
       })();
     </script>
   </head>

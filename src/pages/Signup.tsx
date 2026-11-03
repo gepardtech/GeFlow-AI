@@ -40,7 +40,7 @@ const Signup = () => {
       const cleanEmail = email.trim().toLowerCase();
       const goHome = () => {
         if (cleanEmail === "gepardwebs@gmail.com") navigate("/admin");
-        else navigate("/setup-business");
+        else navigate("/dashboard");
       };
 
       // 1) PRIMARY: direct Supabase signUp
@@ -102,6 +102,18 @@ const Signup = () => {
       }
 
       if (error) {
+        if (
+          error.message?.toLowerCase().includes("already registered") ||
+          error.message?.toLowerCase().includes("already in use") ||
+          error.message?.toLowerCase().includes("user already exists")
+        ) {
+          toast({
+            title: "Account Already Exists",
+            description: "An account with this email already exists. Redirecting to sign in...",
+          });
+          navigate(`/login?email=${encodeURIComponent(cleanEmail)}`);
+          return;
+        }
         toast({
           title: "Signup failed",
           description: error.message,

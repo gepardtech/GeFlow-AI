@@ -121,6 +121,7 @@ const emptyForm = {
   expiry_date: "",
   barcode: "",
   status: "active",
+  is_made_on_order: false,
 };
 
 interface FormErrors {
@@ -353,7 +354,11 @@ const ProductDialog = ({
       cleanDesc = cleanDesc.replace(/\[PACK_QTY:\s*[^\]]+\]/i, "").trim();
     }
 
-    cleanDesc = cleanDesc.replace(/\[BASE_QTY:\s*[^\]]+\]/i, "").trim();
+    cleanDesc = cleanDesc
+      .replace(/\[BASE_QTY:\s*[^\]]+\]/i, "")
+      .replace(/\[VARIATIONS_DATA:\s*[^\]]+\]/gi, "")
+      .replace(/\[VARIABLE\]/gi, "")
+      .trim();
 
     return { cleanDesc, uom, scale, packQty, baseUnitTag };
   };
@@ -413,6 +418,13 @@ const ProductDialog = ({
         expiry_date: product.expiry_date ?? "",
         barcode: product.barcode ?? "",
         status: product.status ?? "active",
+        is_made_on_order:
+          (product.description || "").includes("[MADE_ON_ORDER]") ||
+          (product.description || "").includes("[COOKING]") ||
+          (product.description || "").toLowerCase().includes("made on order") ||
+          resolvedUom === "dish" ||
+          resolvedUom === "portion" ||
+          resolvedUom === "plate",
       };
       setForm(initialFormState);
       const initialImgs = product.images ?? [];
@@ -451,8 +463,22 @@ const ProductDialog = ({
       }
     }
 
-    // Load variations configuration from server
+    // Load variations configuration from product description or server
     if (open && product?.id) {
+      if (product.description && product.description.includes("[VARIATIONS_DATA:")) {
+        try {
+          const m = product.description.match(/\[VARIATIONS_DATA:\s*([^\]]+)\]/);
+          if (m && m[1]) {
+            const parsed = JSON.parse(decodeURIComponent(m[1].trim()));
+            if (parsed && typeof parsed === "object") {
+              setVariationsConfig(parsed);
+            }
+          }
+        } catch (_err) {
+          void _err;
+        }
+      }
+
       fetch(`/api/sync/product-variations?product_id=${product.id}&business_id=${businessId}`)
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
@@ -513,8 +539,12 @@ const ProductDialog = ({
       images.length !== snap.images.length ||
       images.some((img, idx) => img !== snap.images[idx]);
 
-    return formChanged || imagesChanged;
-  }, [open, form, images]);
+    const variationsChanged =
+      (variationsConfig.attributes?.length ?? 0) > 0 ||
+      (variationsConfig.variants?.length ?? 0) > 0;
+
+    return formChanged || imagesChanged || variationsChanged;
+  }, [open, form, images, variationsConfig]);
 
   const handleAttemptClose = () => {
     if (saving) return;
@@ -829,17 +859,36 @@ const ProductDialog = ({
       errs.uom = "Please select a unit of measure.";
     }
 
-    if (form.retail_price === "" || isNaN(Number(form.retail_price))) {
-      errs.retail_price = "Retail price must be greater than or equal to 0.";
-    } else if (Number(form.retail_price) < 0) {
-      errs.retail_price = "Retail price must be greater than or equal to 0.";
+    // If product is variable and variants already have individual prices, base price is optional!
+    const hasVariantsWithPrices =
+      variationsConfig.product_type === "variable" &&
+      variationsConfig.variants.length > 0 &&
+      variationsConfig.variants.some((v) => Number(v.retail_price) > 0);
+
+    if (!hasVariantsWithPrices) {
+      if (form.retail_price === "" || isNaN(Number(form.retail_price))) {
+        errs.retail_price = "Retail price must be greater than or equal to 0.";
+      } else if (Number(form.retail_price) < 0) {
+        errs.retail_price = "Retail price must be greater than or equal to 0.";
+      }
     }
 
-    const effectiveStock = form.opening_stock_boxes !== "" ? form.opening_stock_boxes : (form.pack_qty !== "" ? form.pack_qty : form.stock_units);
-    if (effectiveStock === "" || isNaN(Number(effectiveStock))) {
-      errs.stock_units = "Opening stock must be greater than or equal to 0.";
-    } else if (Number(effectiveStock) < 0) {
-      errs.stock_units = "Opening stock cannot be negative.";
+    // Live cooking / Made-on-Order items or Variable products do not require fixed base opening stock
+    const isMadeOnOrder =
+      form.is_made_on_order ||
+      (form.description || "").includes("[MADE_ON_ORDER]") ||
+      (form.description || "").includes("[COOKING]") ||
+      form.uom?.toLowerCase() === "dish" ||
+      form.uom?.toLowerCase() === "portion" ||
+      form.uom?.toLowerCase() === "plate";
+
+    if (!isMadeOnOrder && !hasVariantsWithPrices) {
+      const effectiveStock = form.opening_stock_boxes !== "" ? form.opening_stock_boxes : (form.pack_qty !== "" ? form.pack_qty : form.stock_units);
+      if (effectiveStock === "" || isNaN(Number(effectiveStock))) {
+        errs.stock_units = "Opening stock must be greater than or equal to 0.";
+      } else if (Number(effectiveStock) < 0) {
+        errs.stock_units = "Opening stock cannot be negative.";
+      }
     }
 
     if (form.purchase_cost !== "" && Number(form.purchase_cost) < 0) {
@@ -906,7 +955,16 @@ const ProductDialog = ({
       const resolvedBaseUnit = (form.base_unit || getDefaultBaseUnit(resolvedUom, industryType)).toLowerCase().trim();
 
       // Format description with UOM metadata tags as backward-compatible fallback
-      let finalDescription = form.description.trim();
+      let finalDescription = form.description
+        .replace(/\[VARIATIONS_DATA:\s*[^\]]+\]/gi, "")
+        .replace(/\[VARIABLE\]/gi, "")
+        .replace(/\[UOM:\s*[^\]]+\]/gi, "")
+        .replace(/\[(?:SCALE|PACK_SIZE|UNITS_PER_UOM):\s*[^\]]+\]/gi, "")
+        .replace(/\[BASE_UNIT:\s*[^\]]+\]/gi, "")
+        .replace(/\[PACK_QTY:\s*[^\]]+\]/gi, "")
+        .replace(/\[BASE_QTY:\s*[^\]]+\]/gi, "")
+        .replace(/\[MADE_ON_ORDER\]/gi, "")
+        .trim();
       const tags: string[] = [];
       if (resolvedUom) tags.push(`[UOM: ${resolvedUom}]`);
       if (unitsPerUom > 1) {
@@ -916,6 +974,26 @@ const ProductDialog = ({
       tags.push(`[BASE_UNIT: ${resolvedBaseUnit}]`);
       tags.push(`[PACK_QTY: ${openingBoxes}]`);
       tags.push(`[BASE_QTY: ${totalBaseUnits}]`);
+
+      const isMadeOnOrder =
+        form.is_made_on_order ||
+        (form.description || "").includes("[MADE_ON_ORDER]") ||
+        (form.description || "").includes("[COOKING]") ||
+        resolvedUom === "dish" ||
+        resolvedUom === "portion" ||
+        resolvedUom === "plate";
+
+      if (isMadeOnOrder && !tags.includes("[MADE_ON_ORDER]")) {
+        tags.push("[MADE_ON_ORDER]");
+      }
+
+      if (
+        variationsConfig.product_type === "variable" ||
+        (variationsConfig.variants && variationsConfig.variants.length > 0) ||
+        (variationsConfig.attributes && variationsConfig.attributes.length > 0)
+      ) {
+        tags.push(`[VARIATIONS_DATA: ${encodeURIComponent(JSON.stringify(variationsConfig))}]`);
+      }
 
       if (tags.length > 0) {
         finalDescription = finalDescription
@@ -956,9 +1034,31 @@ const ProductDialog = ({
       const variantTotalStock = variationsConfig.variants
         ?.filter((v) => v.active)
         ?.reduce((acc, v) => acc + (Number(v.stock_units) || 0), 0) || 0;
-      const finalStockUnits = variationsConfig.product_type === "variable" && variationsConfig.variants.length > 0
+      
+      const finalStockUnits = isMadeOnOrder
+        ? 999999
+        : variationsConfig.product_type === "variable" && variationsConfig.variants.length > 0
         ? variantTotalStock
         : totalBaseUnits;
+
+      // Auto-derive base retail price and purchase cost from variations matrix if not manually entered
+      let resolvedRetailPrice = Number(form.retail_price) || 0;
+      let resolvedPurchaseCost = Number(form.purchase_cost) || 0;
+
+      if (variationsConfig.product_type === "variable" && variationsConfig.variants.length > 0) {
+        const variantPrices = variationsConfig.variants
+          .map((v) => Number(v.retail_price) || 0)
+          .filter((p) => p > 0);
+        if (resolvedRetailPrice <= 0 && variantPrices.length > 0) {
+          resolvedRetailPrice = Math.min(...variantPrices);
+        }
+        const variantCosts = variationsConfig.variants
+          .map((v) => Number(v.purchase_cost) || 0)
+          .filter((c) => c > 0);
+        if (resolvedPurchaseCost <= 0 && variantCosts.length > 0) {
+          resolvedPurchaseCost = Math.min(...variantCosts);
+        }
+      }
 
       const payloadWithColumns: Record<string, any> = {
         id: targetProductId,
@@ -969,10 +1069,10 @@ const ProductDialog = ({
         description: finalDescription || null,
         category_id: form.category_id || null,
         subcategory_id: form.subcategory_id || null,
-        purchase_cost: Number(form.purchase_cost) || 0,
-        retail_price: Number(form.retail_price) || 0,
+        purchase_cost: resolvedPurchaseCost,
+        retail_price: resolvedRetailPrice,
         discount_price: form.discount_price ? Number(form.discount_price) : null,
-        stock_units: finalStockUnits, // Calculated from variant matrix or base units
+        stock_units: finalStockUnits, // Calculated from variant matrix, made-on-order, or base units
         uom: resolvedUom,
         units_per_uom: unitsPerUom,
         base_unit: resolvedBaseUnit,
@@ -1000,6 +1100,11 @@ const ProductDialog = ({
             businessId,
             ownerUserId,
             product: payloadWithColumns,
+            variationsConfig: {
+              ...variationsConfig,
+              product_id: targetProductId,
+              business_id: businessId,
+            },
           }),
         });
 
@@ -1159,8 +1264,10 @@ const ProductDialog = ({
       >
         <DialogContent
           onPointerDownOutside={(e) => {
-            // Popup only closes when user clicks cancel or cross icon
-            e.preventDefault();
+            if (isFormDirty) {
+              e.preventDefault();
+              setShowDiscardConfirm(true);
+            }
           }}
           onEscapeKeyDown={(e) => {
             e.preventDefault();
@@ -1498,8 +1605,60 @@ const ProductDialog = ({
               icon={DollarSign}
             />
 
+            {/* Live Cooking / Made-to-Order Toggle for Restaurant Dishes & Fresh Products */}
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl shrink-0">🍳</span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-bold text-foreground">
+                      Live Cooking / Made on Order Dish
+                    </p>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                      Restaurants &amp; Kitchens
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Dishes prepared fresh on customer order (e.g., Pizza, Burgers, Made-to-order meals). No fixed stock count needed and never out-of-stock.
+                  </p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.is_made_on_order)}
+                  onChange={(e) => set("is_made_on_order", e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500 shadow-inner"></div>
+              </label>
+            </div>
+
             {/* Pricing Section */}
             <div className="p-4 rounded-2xl bg-card border border-border space-y-3">
+              {/* Variety Pricing Notice if variants exist */}
+              {variationsConfig.product_type === "variable" && variationsConfig.variants.length > 0 && (
+                <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/25 flex items-center justify-between flex-wrap gap-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-purple-500 shrink-0" />
+                    <span className="text-purple-700 dark:text-purple-300 font-medium">
+                      <strong>Varieties Configured:</strong> Prices are already assigned individually to each of your <strong>{variationsConfig.variants.length} varieties</strong>
+                      {variationsConfig.variants.some((v) => Number(v.retail_price) > 0) && (
+                        <span>
+                          {" "}({symbol}
+                          {Math.min(...variationsConfig.variants.map((v) => Number(v.retail_price) || 0).filter((p) => p > 0)).toFixed(2)}
+                          {" – "}{symbol}
+                          {Math.max(...variationsConfig.variants.map((v) => Number(v.retail_price) || 0)).toFixed(2)})
+                        </span>
+                      )}.
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 bg-purple-500/15 px-2 py-0.5 rounded-full border border-purple-500/30">
+                    Base price optional (auto-synced)
+                  </span>
+                </div>
+              )}
+
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
                   <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
@@ -1556,7 +1715,7 @@ const ProductDialog = ({
                 <div>
                   <FieldLabel
                     htmlFor="retail-price-input"
-                    required
+                    required={!(variationsConfig.product_type === "variable" && variationsConfig.variants.length > 0 && variationsConfig.variants.some((v) => Number(v.retail_price) > 0))}
                     aiInfo={fieldAIStatuses.retail_price}
                     suggestedValue={fieldAIStatuses.retail_price?.suggested}
                     onApplySuggestion={(val) => set("retail_price", String(val))}
@@ -1572,7 +1731,11 @@ const ProductDialog = ({
                       value={form.retail_price}
                       onChange={(e) => set("retail_price", e.target.value)}
                       onBlur={() => markTouched("retail_price")}
-                      placeholder="0.00"
+                      placeholder={
+                        variationsConfig.product_type === "variable" && variationsConfig.variants.length > 0
+                          ? `Auto (${symbol}${Math.min(...variationsConfig.variants.map((v) => Number(v.retail_price) || 0).filter((p) => p > 0)) || 0})`
+                          : "0.00"
+                      }
                       className={
                         errors.retail_price && touched.retail_price
                           ? "border-destructive focus-visible:ring-destructive/30"
@@ -1581,7 +1744,9 @@ const ProductDialog = ({
                     />
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Selling price charged per {form.uom || "unit"}.
+                    {variationsConfig.product_type === "variable" && variationsConfig.variants.length > 0
+                      ? "Optional: Individual variety prices are applied in POS & Catalog."
+                      : `Selling price charged per ${form.uom || "unit"}.`}
                   </p>
                   {errors.retail_price && touched.retail_price && (
                     <p className="text-[11px] text-destructive flex items-center gap-1 mt-1 font-medium">
@@ -1759,58 +1924,85 @@ const ProductDialog = ({
 
                 {/* 3. Opening Stock in UoM */}
                 <div>
-                  <FieldLabel htmlFor="opening-stock-boxes-input" required>
-                    Opening Stock in {form.uom ? formatUomPlural(form.uom.charAt(0).toUpperCase() + form.uom.slice(1), 2) : "Units"}
+                  <FieldLabel htmlFor="opening-stock-boxes-input" required={!form.is_made_on_order && variationsConfig.product_type !== "variable"}>
+                    {form.is_made_on_order ? "Stock Tracking" : `Opening Stock in ${form.uom ? formatUomPlural(form.uom.charAt(0).toUpperCase() + form.uom.slice(1), 2) : "Units"}`}
                   </FieldLabel>
-                  <Input
-                    id="opening-stock-boxes-input"
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={form.opening_stock_boxes}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      set("opening_stock_boxes", val);
-                      set("pack_qty", val);
-                      const totalUnits = Number(val || 0) * Number(form.units_per_uom || 1);
-                      set("stock_units", String(totalUnits));
-                    }}
-                    onBlur={() => markTouched("stock_units")}
-                    placeholder="10"
-                    className={`h-10 text-xs font-bold text-sky-600 dark:text-sky-400 ${
-                      errors.stock_units && touched.stock_units
-                        ? "border-destructive focus-visible:ring-destructive/30"
-                        : "border-sky-500/30 bg-sky-500/5"
-                    }`}
-                  />
+                  {form.is_made_on_order ? (
+                    <div className="h-10 px-3 rounded-md bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                      <span>🍳</span>
+                      <span>Prepared Fresh on Demand</span>
+                    </div>
+                  ) : variationsConfig.product_type === "variable" && variationsConfig.variants.length > 0 ? (
+                    <div className="h-10 px-3 rounded-md bg-purple-500/10 border border-purple-500/30 flex items-center gap-2 text-xs font-bold text-purple-700 dark:text-purple-300">
+                      <span>📦</span>
+                      <span>Managed per Variety ({variationsConfig.variants.reduce((a, v) => a + (Number(v.stock_units) || 0), 0)} units)</span>
+                    </div>
+                  ) : (
+                    <Input
+                      id="opening-stock-boxes-input"
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={form.opening_stock_boxes}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        set("opening_stock_boxes", val);
+                        set("pack_qty", val);
+                        const totalUnits = Number(val || 0) * Number(form.units_per_uom || 1);
+                        set("stock_units", String(totalUnits));
+                      }}
+                      onBlur={() => markTouched("stock_units")}
+                      placeholder="10"
+                      className={`h-10 text-xs font-bold text-sky-600 dark:text-sky-400 ${
+                        errors.stock_units && touched.stock_units
+                          ? "border-destructive focus-visible:ring-destructive/30"
+                          : "border-sky-500/30 bg-sky-500/5"
+                      }`}
+                    />
+                  )}
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    Physical {form.uom || "box"} count currently on hand.
+                    {form.is_made_on_order
+                      ? "Never runs out of stock in POS."
+                      : variationsConfig.product_type === "variable"
+                      ? "Individual variety stock is set in Section 2 above."
+                      : `Physical ${form.uom || "box"} count currently on hand.`}
                   </p>
                 </div>
               </div>
 
               {/* Dynamic Live Preview Banner */}
               <div className="flex items-center justify-between p-3.5 rounded-xl bg-background border border-sky-500/20 text-xs flex-wrap gap-2 shadow-sm">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sky-600 dark:text-sky-400 font-bold flex items-center gap-1">
-                    💡 Live Preview:
-                  </span>
-                  <span className="font-semibold text-foreground">
-                    You are adding{" "}
-                    <strong className="font-bold text-sky-600 dark:text-sky-400">
-                      {form.opening_stock_boxes || "0"} {formatUomPlural(form.uom ? form.uom.charAt(0).toUpperCase() + form.uom.slice(1) : "Box", Number(form.opening_stock_boxes || 0))}
-                    </strong>{" "}
-                    ={" "}
-                    <strong className="font-extrabold text-foreground px-2 py-0.5 rounded-md bg-sky-500/10 border border-sky-500/20">
-                      {+(Number(form.opening_stock_boxes || 0) * Number(form.units_per_uom || 1)).toFixed(2)}{" "}
-                      {formatUomPlural(form.base_unit ? form.base_unit.charAt(0).toUpperCase() + form.base_unit.slice(1) : "Tablet", +(Number(form.opening_stock_boxes || 0) * Number(form.units_per_uom || 1)))}
-                    </strong>
-                  </span>
-                  <span className="text-[11px] text-muted-foreground font-normal">
-                    (Automatically saved in database as Base Units)
-                  </span>
-                </div>
-                {Number(form.units_per_uom) > 1 && Number(form.retail_price) > 0 && (
+                {form.is_made_on_order ? (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                      🍳 Live Kitchen Dish:
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      This item is marked as <strong>Made on Order</strong>. It will be available for instant billing in POS without fixed inventory depletion.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sky-600 dark:text-sky-400 font-bold flex items-center gap-1">
+                      💡 Live Preview:
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      You are adding{" "}
+                      <strong className="font-bold text-sky-600 dark:text-sky-400">
+                        {form.opening_stock_boxes || "0"} {formatUomPlural(form.uom ? form.uom.charAt(0).toUpperCase() + form.uom.slice(1) : "Box", Number(form.opening_stock_boxes || 0))}
+                      </strong>{" "}
+                      ={" "}
+                      <strong className="font-extrabold text-foreground px-2 py-0.5 rounded-md bg-sky-500/10 border border-sky-500/20">
+                        {+(Number(form.opening_stock_boxes || 0) * Number(form.units_per_uom || 1)).toFixed(2)}{" "}
+                        {formatUomPlural(form.base_unit ? form.base_unit.charAt(0).toUpperCase() + form.base_unit.slice(1) : "Tablet", +(Number(form.opening_stock_boxes || 0) * Number(form.units_per_uom || 1)))}
+                      </strong>
+                    </span>
+                    <span className="text-[11px] text-muted-foreground font-normal">
+                      (Automatically saved in database as Base Units)
+                    </span>
+                  </div>
+                )}
+                {!form.is_made_on_order && Number(form.units_per_uom) > 1 && Number(form.retail_price) > 0 && (
                   <span className="text-[11px] font-semibold text-muted-foreground bg-muted/60 px-2 py-1 rounded-md border border-border/60">
                     Single {form.base_unit || "piece"} price: ~{symbol}{(Number(form.retail_price) / Number(form.units_per_uom)).toFixed(2)} / {form.base_unit || "unit"}
                   </span>
@@ -2094,7 +2286,7 @@ const ProductDialog = ({
 
     {/* Discard Unsaved Changes Confirmation Dialog (Shopify / WordPress style) */}
     <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
-      <AlertDialogContent className="max-w-md rounded-2xl p-5 sm:p-6 border-border shadow-2xl">
+      <AlertDialogContent className="max-w-md rounded-2xl p-5 sm:p-6 border-border shadow-2xl z-[100]">
         <AlertDialogHeader className="space-y-3">
           <div className="h-11 w-11 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
             <AlertCircle className="h-6 w-6" />

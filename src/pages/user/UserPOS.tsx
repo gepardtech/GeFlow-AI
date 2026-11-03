@@ -114,6 +114,7 @@ const UserPOS = () => {
   // Product Variations & Options (WooCommerce / Shopify style)
   const [variationsMap, setVariationsMap] = useState<Record<string, ProductVariationsConfig>>({});
   const [selectedProductForVariant, setSelectedProductForVariant] = useState<POSProduct | null>(null);
+  const [selectedVariantConfig, setSelectedVariantConfig] = useState<ProductVariationsConfig | null>(null);
   const [variantModalOpen, setVariantModalOpen] = useState(false);
 
   // Dynamic Country / Business Payment Methods & Split Pay
@@ -426,13 +427,32 @@ const UserPOS = () => {
       const cleanProducts = ((data as POSProduct[]) ?? []).filter((p) => !isDemoProduct(p));
       setProducts(cleanProducts);
 
+      // Extract variations configuration from descriptions immediately
+      const initialVMap: Record<string, ProductVariationsConfig> = {};
+      cleanProducts.forEach((p) => {
+        if (p.description && p.description.includes("[VARIATIONS_DATA:")) {
+          try {
+            const m = p.description.match(/\[VARIATIONS_DATA:\s*([^\]]+)\]/);
+            if (m && m[1]) {
+              const parsed = JSON.parse(decodeURIComponent(m[1].trim()));
+              if (parsed) initialVMap[p.id] = parsed;
+            }
+          } catch (_err) {
+            void _err;
+          }
+        }
+      });
+      if (Object.keys(initialVMap).length > 0) {
+        setVariationsMap((prev) => ({ ...prev, ...initialVMap }));
+      }
+
       // Fetch product variations configs
       try {
         const vRes = await fetch(`/api/sync/product-variations?business_id=${activeId}`);
         if (vRes.ok) {
           const vData = await vRes.json();
           if (vData.configs && Array.isArray(vData.configs)) {
-            const vMap: Record<string, ProductVariationsConfig> = {};
+            const vMap: Record<string, ProductVariationsConfig> = { ...initialVMap };
             vData.configs.forEach((c: ProductVariationsConfig) => {
               vMap[c.product_id] = c;
             });
@@ -485,6 +505,27 @@ const UserPOS = () => {
 
   const unitPrice = (p: POSProduct) => Number(p.discount_price ?? p.retail_price) || 0;
 
+  const getProductVariations = useCallback((p?: POSProduct | null): ProductVariationsConfig | undefined => {
+    if (!p) return undefined;
+    if (variationsMap[p.id]) return variationsMap[p.id];
+    if (p.description && p.description.includes("[VARIATIONS_DATA:")) {
+      try {
+        const match = p.description.match(/\[VARIATIONS_DATA:\s*([^\]]+)\]/);
+        if (match && match[1]) {
+          const raw = match[1].trim();
+          try {
+            return JSON.parse(decodeURIComponent(raw));
+          } catch {
+            return JSON.parse(raw);
+          }
+        }
+      } catch (_err) {
+        void _err;
+      }
+    }
+    return undefined;
+  }, [variationsMap]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return products;
@@ -497,24 +538,42 @@ const UserPOS = () => {
     );
   }, [products, search, catName]);
 
-  const addToCart = (p: POSProduct) => {
-    // If product is variable, measured, or has custom modifiers, open POSVariantSelectionModal
-    const vConfig = variationsMap[p.id];
+  const addToCart = async (p: POSProduct) => {
+    // If product is variable, measured, or has custom modifiers or created variants, open POSVariantSelectionModal
+    let vConfig = variationsMap[p.id] || getProductVariations(p);
+    if (!vConfig && activeId) {
+      try {
+        const vRes = await fetch(`/api/sync/product-variations?productId=${p.id}&businessId=${activeId}`);
+        if (vRes.ok) {
+          const vData = await vRes.json();
+          if (vData.config) {
+            vConfig = vData.config;
+            setVariationsMap((prev) => ({ ...prev, [p.id]: vData.config }));
+          }
+        }
+      } catch (_err) {
+        void _err;
+      }
+    }
+
     if (
       vConfig &&
       (vConfig.product_type === "variable" ||
         vConfig.product_type === "measured" ||
         vConfig.product_type === "addons" ||
+        (vConfig.variants && vConfig.variants.length > 0) ||
         (vConfig.attributes && vConfig.attributes.length > 0) ||
         (vConfig.modifiers && vConfig.modifiers.length > 0))
     ) {
       setSelectedProductForVariant(p);
+      setSelectedVariantConfig(vConfig);
       setVariantModalOpen(true);
       return;
     }
 
     const stockInfo = computeProductStock(p.stock_units, p.name, p.description, p.uom, p.units_per_uom, p.base_unit);
-    if (stockInfo.totalSubUnits <= 0) {
+    // Made-on-Order cooking products are prepared live and never blocked by stock
+    if (!stockInfo.isMadeOnOrder && stockInfo.totalSubUnits <= 0) {
       toast({ title: "Out of stock", description: p.name, variant: "destructive" });
       return;
     }
@@ -534,7 +593,7 @@ const UserPOS = () => {
 
     setCart((prev) => {
       // Find full-pack line if exists
-      const existing = prev.find((l) => l.id === p.id && l.fractionOfPack === 1);
+      const existing = prev.find((l) => l.id === p.id && l.fractionOfPack === 1 && !l.variantId);
       if (existing) {
         const totalBaseRequired = (existing.qty + 1) * stockInfo.packSize;
         const otherLinesBaseUnits = prev
@@ -577,31 +636,56 @@ const UserPOS = () => {
   const handleConfirmVariantSelection = (result: VariantSelectionResult) => {
     const p = result.product;
     const price = result.effectivePrice;
-    setCart((prev) => [
-      ...prev,
-      {
-        ...p,
-        lineId: `${p.id}_var_${result.variant?.id || Date.now()}_${Date.now()}`,
-        name: result.displayName,
-        internal_sku: result.sku,
-        unit: price,
-        retail_price: price,
-        qty: 1,
-        fractionOfPack: 1,
-        stockUnitsDeducted: 1,
-        displayUnitLabel: result.measuredQuantity
-          ? `${result.measuredQuantity}${result.measuredUnit || "g"}`
-          : (result.variant?.name || "Variant"),
-        proportionalCost: Number(result.variant?.purchase_cost ?? p.purchase_cost) || 0,
-        variantId: result.variant?.id,
-        variantSku: result.sku,
-        variantName: result.displayName,
-        variantAttributes: result.selectedAttributes,
-        selectedModifiers: result.selectedModifiers,
-        measuredQuantity: result.measuredQuantity,
-        measuredUnit: result.measuredUnit,
-      },
-    ]);
+    const qtyToAdd = Math.max(1, result.quantity || 1);
+
+    setCart((prev) => {
+      // Check if exact same variant line already exists in cart
+      const existingIdx = prev.findIndex(
+        (l) =>
+          l.id === p.id &&
+          l.name === result.displayName &&
+          l.variantId === result.variant?.id &&
+          Math.abs(l.unit - price) < 0.001
+      );
+
+      if (existingIdx >= 0) {
+        return prev.map((l, idx) =>
+          idx === existingIdx ? { ...l, qty: l.qty + qtyToAdd } : l
+        );
+      }
+
+      return [
+        ...prev,
+        {
+          ...p,
+          lineId: `${p.id}_var_${result.variant?.id || Date.now()}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          name: result.displayName,
+          internal_sku: result.sku,
+          unit: price,
+          retail_price: price,
+          discount_price: null,
+          qty: qtyToAdd,
+          fractionOfPack: 1,
+          stockUnitsDeducted: 1,
+          displayUnitLabel: result.measuredQuantity
+            ? `${result.measuredQuantity}${result.measuredUnit || "g"}`
+            : (result.variant?.name || "Variant"),
+          proportionalCost: Number(result.variant?.purchase_cost ?? p.purchase_cost) || 0,
+          variantId: result.variant?.id,
+          variantSku: result.sku,
+          variantName: result.displayName,
+          variantAttributes: result.selectedAttributes,
+          selectedModifiers: result.selectedModifiers,
+          measuredQuantity: result.measuredQuantity,
+          measuredUnit: result.measuredUnit,
+        },
+      ];
+    });
+
+    toast({
+      title: "Added to Cart",
+      description: `${result.displayName} × ${qtyToAdd} (${fmt(price * qtyToAdd)})`,
+    });
   };
 
   const openUOMCalculatorForProduct = (p: POSProduct, e?: React.MouseEvent) => {
@@ -1419,11 +1503,28 @@ const UserPOS = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4 min-w-0">
                 {filtered.map((p) => {
                   const stockInfo = computeProductStock(p.stock_units, p.name, p.description, p.uom, p.units_per_uom, p.base_unit);
-                  const out = stockInfo.totalSubUnits <= 0;
-                  const low = !out && stockInfo.listingStock <= p.min_stock_alert;
+                  const isMadeOnOrder = Boolean(stockInfo.isMadeOnOrder);
+                  const vConfig = variationsMap[p.id] || getProductVariations(p);
+                  const hasVariants = Boolean(vConfig?.variants && vConfig.variants.length > 0);
+                  const isVariable = Boolean(
+                    hasVariants ||
+                    vConfig?.product_type === "variable" ||
+                    vConfig?.product_type === "measured" ||
+                    vConfig?.product_type === "addons" ||
+                    (p.description && (p.description.includes("[VARIATION") || p.description.includes("[VARIABLE]")))
+                  );
+                  const out = !isMadeOnOrder && !isVariable && stockInfo.totalSubUnits <= 0;
+                  const low = !out && !isMadeOnOrder && !isVariable && stockInfo.listingStock <= p.min_stock_alert;
                   const parsed = parseProductUOM(p.name, p.description || "", p.uom, p.units_per_uom, p.base_unit);
                   const hasSubUnits = parsed.packSize > 1 || parsed.isBulkWeight || parsed.isLiquidVolume || parsed.isPharmaPack;
                   const subUnitPrice = parsed.packSize > 1 ? unitPrice(p) / parsed.packSize : null;
+
+                  const variantPrices = hasVariants
+                    ? (vConfig.variants.map((v: any) => Number(v.retail_price) || 0).filter((pr: number) => pr > 0) || [])
+                    : [];
+                  const minVariantPrice = variantPrices.length > 0 ? Math.min(...variantPrices) : unitPrice(p);
+                  const maxVariantPrice = variantPrices.length > 0 ? Math.max(...variantPrices) : unitPrice(p);
+                  const hasPriceRange = hasVariants && minVariantPrice !== maxVariantPrice;
 
                   return (
                     <div
@@ -1449,21 +1550,32 @@ const UserPOS = () => {
 
                           {/* UOM & Stock Badges */}
                           <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                            {variationsMap[p.id] && (variationsMap[p.id].product_type === "variable" || variationsMap[p.id].product_type === "measured" || variationsMap[p.id].product_type === "addons" || (variationsMap[p.id].variants && variationsMap[p.id].variants.length > 0)) && (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 uppercase">
-                                {variationsMap[p.id].product_type === "variable" ? `${variationsMap[p.id].variants?.length || 0} Variants` : variationsMap[p.id].product_type === "measured" ? "Scale / Wt" : "Options"}
+                            {hasVariants ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 uppercase flex items-center gap-1">
+                                <Layers className="w-3 h-3" />
+                                {vConfig.variants.length} Varieties
                               </span>
-                            )}
+                            ) : vConfig && (vConfig.product_type === "measured" || vConfig.product_type === "addons") ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 uppercase">
+                                {vConfig.product_type === "measured" ? "Scale / Wt" : "Options"}
+                              </span>
+                            ) : null}
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-muted text-foreground border border-border uppercase">
                               {parsed.packSize > 1 ? `${parsed.packSize} ${parsed.subUnitName}s/${parsed.uomLabel}` : parsed.uomLabel}
                             </span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ${
-                              out ? "bg-rose-500/15 text-rose-500" : low ? "bg-amber-500/15 text-amber-500" : "bg-emerald-500/15 text-emerald-500"
-                            }`}>
-                              {out
-                                ? "OUT OF STOCK"
-                                : stockInfo.displayText}
-                            </span>
+                            {isMadeOnOrder ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 shrink-0">
+                                🍳 MADE ON ORDER
+                              </span>
+                            ) : (
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ${
+                                out ? "bg-rose-500/15 text-rose-500" : low ? "bg-amber-500/15 text-amber-500" : "bg-emerald-500/15 text-emerald-500"
+                              }`}>
+                                {out
+                                  ? "OUT OF STOCK"
+                                  : stockInfo.displayText}
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -1477,25 +1589,40 @@ const UserPOS = () => {
                         <div className="flex items-end justify-between gap-2">
                           <div>
                             <p className="text-lg sm:text-xl font-extrabold text-sky-500 leading-none">
-                              {fmt(unitPrice(p))}
+                              {hasPriceRange ? `${fmt(minVariantPrice)} – ${fmt(maxVariantPrice)}` : fmt(unitPrice(p))}
                             </p>
-                            {subUnitPrice !== null && (
+                            {subUnitPrice !== null && !hasPriceRange && (
                               <p className="text-[10px] font-semibold text-muted-foreground mt-1">
                                 ~{fmt(subUnitPrice)} / {parsed.subUnitName}
                               </p>
                             )}
                           </div>
 
-                          {/* Trigger Smart Fractional/Dose modal for any product */}
-                          <button
-                            type="button"
-                            onClick={(e) => openUOMCalculatorForProduct(p, e)}
-                            className="h-8 px-2.5 rounded-xl bg-sky-500/10 hover:bg-sky-500 hover:text-white text-sky-600 dark:text-sky-400 text-[10px] font-bold tracking-wide border border-sky-500/25 transition flex items-center gap-1.5 shrink-0 z-10 shadow-2xs group/btn"
-                            title="Calculate fractional dose or sub-unit (e.g. 1 Tablet, Strip, 0.5kg, 250ml)"
-                          >
-                            <Sparkles className="w-3 h-3 text-sky-500 group-hover/btn:text-white transition-colors" />
-                            <span>Smart UOM</span>
-                          </button>
+                          {/* Quick Action Button */}
+                          {hasVariants || isVariable ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                addToCart(p);
+                              }}
+                              className="h-8 px-2.5 rounded-xl bg-purple-500/10 hover:bg-purple-500 hover:text-white text-purple-600 dark:text-purple-400 text-[10px] font-bold tracking-wide border border-purple-500/25 transition flex items-center gap-1.5 shrink-0 z-10 shadow-2xs group/btn"
+                              title="Choose variety (Size, Flavor, etc.)"
+                            >
+                              <Layers className="w-3 h-3 text-purple-500 group-hover/btn:text-white transition-colors" />
+                              <span>Select Variety</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => openUOMCalculatorForProduct(p, e)}
+                              className="h-8 px-2.5 rounded-xl bg-sky-500/10 hover:bg-sky-500 hover:text-white text-sky-600 dark:text-sky-400 text-[10px] font-bold tracking-wide border border-sky-500/25 transition flex items-center gap-1.5 shrink-0 z-10 shadow-2xs group/btn"
+                              title="Calculate fractional dose or sub-unit (e.g. 1 Tablet, Strip, 0.5kg, 250ml)"
+                            >
+                              <Sparkles className="w-3 h-3 text-sky-500 group-hover/btn:text-white transition-colors" />
+                              <span>Smart UOM</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1507,7 +1634,7 @@ const UserPOS = () => {
         </div>
 
         {/* Cart panel */}
-        <div className="w-full xl:w-[400px] 2xl:w-[440px] flex-shrink-0 bg-card border border-border rounded-2xl flex flex-col overflow-hidden shadow-xl min-w-0 xl:sticky xl:top-4 h-auto xl:h-[calc(100vh-6rem)]">
+        <div className="w-full xl:w-[400px] 2xl:w-[440px] flex-shrink-0 bg-card border border-border rounded-2xl flex flex-col overflow-hidden shadow-xl min-w-0 xl:sticky xl:top-4 h-auto xl:h-[calc(100vh-5.5rem)] max-h-[calc(100dvh-5rem)] mb-16 xl:mb-0">
           {/* Header */}
           <div className="flex items-center justify-between p-3.5 border-b border-border flex-shrink-0 bg-card">
             <div className="flex items-center gap-3">
@@ -1878,8 +2005,8 @@ const UserPOS = () => {
             )}
           </div>
 
-          {/* Financial summary + payment (Always pinned footer) */}
-          <div className="border-t border-border p-3.5 space-y-2.5 flex-shrink-0 bg-card shadow-2xl z-20 mt-auto">
+          {/* Financial summary + payment (Scrollable container so CTA button is never overlapped or pushed off) */}
+          <div className="border-t border-border p-3.5 space-y-2.5 overflow-y-auto max-h-[38vh] xl:max-h-[46vh] shrink min-h-0 bg-card z-20 mt-auto">
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">Subtotal ({cart.length} items)</span>
               <span className="font-bold">{fmt(grossSubtotal)}</span>
@@ -2397,8 +2524,10 @@ const UserPOS = () => {
                 </div>
               )}
             </div>
+          </div>
 
-            {/* Complete Transaction CTA Button - ALWAYS VISIBLE */}
+          {/* Complete Transaction CTA Button - ALWAYS PINNED, PROMINENT & FULLY VISIBLE */}
+          <div className="p-3.5 pt-2.5 border-t border-border bg-card shrink-0 z-30 shadow-2xl">
             <Button
               id="pos-complete-sale-cta"
               onClick={completeTransaction}
@@ -2451,9 +2580,16 @@ const UserPOS = () => {
       {/* Product Variations, Attribute Combos & Modifiers Selection Modal */}
       <POSVariantSelectionModal
         open={variantModalOpen}
-        onOpenChange={setVariantModalOpen}
+        onOpenChange={(isOpen) => {
+          setVariantModalOpen(isOpen);
+          if (!isOpen) {
+            setSelectedProductForVariant(null);
+            setSelectedVariantConfig(null);
+          }
+        }}
         product={selectedProductForVariant}
-        variationConfig={selectedProductForVariant ? variationsMap[selectedProductForVariant.id] : undefined}
+        config={selectedVariantConfig || (selectedProductForVariant ? variationsMap[selectedProductForVariant.id] : null) || getProductVariations(selectedProductForVariant)}
+        variationConfig={selectedVariantConfig || (selectedProductForVariant ? variationsMap[selectedProductForVariant.id] : null) || getProductVariations(selectedProductForVariant)}
         onConfirm={handleConfirmVariantSelection}
         formatMoney={fmt}
       />

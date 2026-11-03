@@ -98,11 +98,69 @@ export const ProductVariationsEditor: React.FC<Props> = ({
   const [newAttrName, setNewAttrName] = useState("");
   const [newAttrValues, setNewAttrValues] = useState("");
   const [newModifierGroupName, setNewModifierGroupName] = useState("");
+  // Attribute option pricing overrides: { [attrName]: { [optionVal]: price } }
+  const [attrPriceOverrides, setAttrPriceOverrides] = useState<Record<string, Record<string, number>>>({});
 
   const handleTypeChange = (type: ProductType) => {
     onChange({
       ...config,
       product_type: type,
+    });
+  };
+
+  const handleOptionPriceChange = (attrName: string, val: string, price: number) => {
+    const nextOverrides = {
+      ...attrPriceOverrides,
+      [attrName]: {
+        ...(attrPriceOverrides[attrName] || {}),
+        [val]: price,
+      },
+    };
+    setAttrPriceOverrides(nextOverrides);
+
+    // If variants already exist, immediately update matching variants' retail prices
+    if (config.variants && config.variants.length > 0) {
+      const updatedVariants = config.variants.map((v) => {
+        if (v.attributes && v.attributes[attrName] === val) {
+          return { ...v, retail_price: price };
+        }
+        return v;
+      });
+      onChange({
+        ...config,
+        variants: updatedVariants,
+      });
+    }
+  };
+
+  const handleApplyAllOptionPrices = () => {
+    if (!config.variants || config.variants.length === 0) return;
+
+    const updatedVariants = config.variants.map((v) => {
+      let resolvedPrice = v.retail_price;
+      let matchedAny = false;
+
+      // Check if variant matches any configured attribute override
+      for (const [attrName, val] of Object.entries(v.attributes || {})) {
+        const optionPrice = attrPriceOverrides[attrName]?.[val];
+        if (optionPrice !== undefined && optionPrice > 0) {
+          resolvedPrice = optionPrice;
+          matchedAny = true;
+          break;
+        }
+      }
+
+      return matchedAny ? { ...v, retail_price: resolvedPrice } : v;
+    });
+
+    onChange({
+      ...config,
+      variants: updatedVariants,
+    });
+
+    toast({
+      title: "Variety Prices Applied",
+      description: "Updated variant prices across your product matrix based on option pricing.",
     });
   };
 
@@ -217,17 +275,58 @@ export const ProductVariationsEditor: React.FC<Props> = ({
         return true;
       });
 
-      if (existing) {
+      if (existing && Number(existing.retail_price) > 0) {
         return existing;
       }
 
+      // 1. Calculate price from explicit attribute overrides
+      let calculatedRetailPrice = 0;
+      let hasExplicitOverride = false;
+      for (const [attrName, val] of Object.entries(attrMap)) {
+        const override = attrPriceOverrides[attrName]?.[val];
+        if (override !== undefined && Number(override) > 0) {
+          calculatedRetailPrice += Number(override);
+          hasExplicitOverride = true;
+        }
+      }
+
+      // 2. If no explicit override, calculate intelligent tiered pricing based on attribute tiers
+      if (!hasExplicitOverride || calculatedRetailPrice <= 0) {
+        const effectiveBase = Number(basePrice) > 0 ? Number(basePrice) : 500;
+        let sizeMultiplier = 1.0;
+
+        const sizeAttr = validAttrs.find((a) => /size|weight|portion|scale|volume|gauge/i.test(a.name)) || validAttrs[0];
+        if (sizeAttr) {
+          const valIndex = sizeAttr.values.indexOf(attrMap[sizeAttr.name]);
+          const tiers = [1.0, 1.4, 1.7, 2.1, 2.5, 3.0];
+          sizeMultiplier = tiers[Math.min(Math.max(0, valIndex), tiers.length - 1)];
+        }
+
+        calculatedRetailPrice = Math.round(effectiveBase * sizeMultiplier);
+
+        // Check if secondary attribute adds crust or premium modifier
+        const crustAttr = validAttrs.find((a) => /crust|topping|style|type|premium/i.test(a.name));
+        if (crustAttr) {
+          const crustVal = (attrMap[crustAttr.name] || "").toLowerCase();
+          if (crustVal.includes("cheese") || crustVal.includes("burst") || crustVal.includes("stuffed")) {
+            calculatedRetailPrice += 150;
+          } else if (crustVal.includes("thin") || crustVal.includes("crispy")) {
+            calculatedRetailPrice += 50;
+          }
+        }
+      }
+
+      const calculatedPurchaseCost = baseCost > 0
+        ? Math.round(baseCost * (calculatedRetailPrice / (basePrice || calculatedRetailPrice || 1)))
+        : Math.round(calculatedRetailPrice * 0.5);
+
       return {
-        id: `var_${Date.now()}_${idx}`,
+        id: existing?.id || `var_${Date.now()}_${idx}`,
         parent_id: config.product_id,
         name: comboName,
         sku,
-        retail_price: basePrice || 0,
-        purchase_cost: baseCost || 0,
+        retail_price: calculatedRetailPrice,
+        purchase_cost: calculatedPurchaseCost,
         stock_units: 10,
         attributes: attrMap,
         active: true,
@@ -334,34 +433,74 @@ export const ProductVariationsEditor: React.FC<Props> = ({
   // Quick Preset Loader based on Industry
   const handleLoadIndustryPreset = (presetType: "pizza" | "clothing" | "sweets" | "bakery") => {
     if (presetType === "pizza") {
+      const pizzaAttrs: ProductAttributeOption[] = [
+        { id: "p_size", name: "Size", values: ["Small 8\"", "Medium 10\"", "Large 12\"", "Family 14\""], generatesVariants: true, inputType: "pills" },
+        { id: "p_crust", name: "Crust", values: ["Classic Hand Tossed", "Thin Crust", "Cheese Burst"], generatesVariants: true, inputType: "pills" },
+      ];
+
+      const pizzaVariants: ProductVariantItem[] = [
+        { id: `var_piz_1`, parent_id: config.product_id, name: "Small 8\" / Classic Hand Tossed", sku: `${baseSku || "PIZ"}-S-TOSS`, retail_price: 500, purchase_cost: 250, stock_units: 999999, attributes: { Size: "Small 8\"", Crust: "Classic Hand Tossed" }, active: true },
+        { id: `var_piz_2`, parent_id: config.product_id, name: "Small 8\" / Thin Crust", sku: `${baseSku || "PIZ"}-S-THIN`, retail_price: 550, purchase_cost: 270, stock_units: 999999, attributes: { Size: "Small 8\"", Crust: "Thin Crust" }, active: true },
+        { id: `var_piz_3`, parent_id: config.product_id, name: "Small 8\" / Cheese Burst", sku: `${baseSku || "PIZ"}-S-BURST`, retail_price: 650, purchase_cost: 320, stock_units: 999999, attributes: { Size: "Small 8\"", Crust: "Cheese Burst" }, active: true },
+
+        { id: `var_piz_4`, parent_id: config.product_id, name: "Medium 10\" / Classic Hand Tossed", sku: `${baseSku || "PIZ"}-M-TOSS`, retail_price: 750, purchase_cost: 375, stock_units: 999999, attributes: { Size: "Medium 10\"", Crust: "Classic Hand Tossed" }, active: true },
+        { id: `var_piz_5`, parent_id: config.product_id, name: "Medium 10\" / Thin Crust", sku: `${baseSku || "PIZ"}-M-THIN`, retail_price: 800, purchase_cost: 400, stock_units: 999999, attributes: { Size: "Medium 10\"", Crust: "Thin Crust" }, active: true },
+        { id: `var_piz_6`, parent_id: config.product_id, name: "Medium 10\" / Cheese Burst", sku: `${baseSku || "PIZ"}-M-BURST`, retail_price: 900, purchase_cost: 450, stock_units: 999999, attributes: { Size: "Medium 10\"", Crust: "Cheese Burst" }, active: true },
+
+        { id: `var_piz_7`, parent_id: config.product_id, name: "Large 12\" / Classic Hand Tossed", sku: `${baseSku || "PIZ"}-L-TOSS`, retail_price: 850, purchase_cost: 425, stock_units: 999999, attributes: { Size: "Large 12\"", Crust: "Classic Hand Tossed" }, active: true },
+        { id: `var_piz_8`, parent_id: config.product_id, name: "Large 12\" / Thin Crust", sku: `${baseSku || "PIZ"}-L-THIN`, retail_price: 900, purchase_cost: 450, stock_units: 999999, attributes: { Size: "Large 12\"", Crust: "Thin Crust" }, active: true },
+        { id: `var_piz_9`, parent_id: config.product_id, name: "Large 12\" / Cheese Burst", sku: `${baseSku || "PIZ"}-L-BURST`, retail_price: 1050, purchase_cost: 520, stock_units: 999999, attributes: { Size: "Large 12\"", Crust: "Cheese Burst" }, active: true },
+
+        { id: `var_piz_10`, parent_id: config.product_id, name: "Family 14\" / Classic Hand Tossed", sku: `${baseSku || "PIZ"}-F-TOSS`, retail_price: 1100, purchase_cost: 550, stock_units: 999999, attributes: { Size: "Family 14\"", Crust: "Classic Hand Tossed" }, active: true },
+        { id: `var_piz_11`, parent_id: config.product_id, name: "Family 14\" / Thin Crust", sku: `${baseSku || "PIZ"}-F-THIN`, retail_price: 1150, purchase_cost: 575, stock_units: 999999, attributes: { Size: "Family 14\"", Crust: "Thin Crust" }, active: true },
+        { id: `var_piz_12`, parent_id: config.product_id, name: "Family 14\" / Cheese Burst", sku: `${baseSku || "PIZ"}-F-BURST`, retail_price: 1300, purchase_cost: 650, stock_units: 999999, attributes: { Size: "Family 14\"", Crust: "Cheese Burst" }, active: true },
+      ];
+
+      setAttrPriceOverrides({
+        Size: { "Small 8\"": 500, "Medium 10\"": 750, "Large 12\"": 850, "Family 14\"": 1100 },
+        Crust: { "Classic Hand Tossed": 0, "Thin Crust": 50, "Cheese Burst": 150 },
+      });
+
       onChange({
         ...config,
         product_type: "variable",
-        attributes: [
-          { id: "p_size", name: "Size", values: ["Small 8\"", "Medium 10\"", "Large 12\"", "Family 14\""], generatesVariants: true, inputType: "pills" },
-          { id: "p_crust", name: "Crust", values: ["Classic Hand Tossed", "Thin Crust", "Cheese Burst"], generatesVariants: true, inputType: "pills" },
-        ],
+        attributes: pizzaAttrs,
+        variants: pizzaVariants,
         modifiers: [
           {
             id: "m_toppings",
             name: "Extra Toppings",
             required: false,
             options: [
-              { id: "opt_cheese", name: "Extra Mozzarella", price: 1.5 },
-              { id: "opt_jalapenos", name: "Jalapenos", price: 0.75 },
-              { id: "opt_olives", name: "Black Olives", price: 0.75 },
+              { id: "opt_cheese", name: "Extra Mozzarella", price: 150 },
+              { id: "opt_jalapenos", name: "Jalapenos", price: 80 },
+              { id: "opt_olives", name: "Black Olives", price: 80 },
             ],
           },
         ],
       });
     } else if (presetType === "clothing") {
+      const clothAttrs = [
+        { id: "c_size", name: "Size", values: ["S", "M", "L", "XL", "XXL"], generatesVariants: true, inputType: "pills" as const },
+        { id: "c_color", name: "Color", values: ["Black", "White", "Navy", "Olive"], generatesVariants: true, inputType: "pills" as const },
+      ];
+      const clothVariants: ProductVariantItem[] = [
+        { id: "var_c_1", parent_id: config.product_id, name: "S / Black", sku: `${baseSku || "CLOTH"}-S-BLK`, retail_price: 1200, purchase_cost: 600, stock_units: 15, attributes: { Size: "S", Color: "Black" }, active: true },
+        { id: "var_c_2", parent_id: config.product_id, name: "M / Black", sku: `${baseSku || "CLOTH"}-M-BLK`, retail_price: 1200, purchase_cost: 600, stock_units: 20, attributes: { Size: "M", Color: "Black" }, active: true },
+        { id: "var_c_3", parent_id: config.product_id, name: "L / Black", sku: `${baseSku || "CLOTH"}-L-BLK`, retail_price: 1300, purchase_cost: 650, stock_units: 20, attributes: { Size: "L", Color: "Black" }, active: true },
+        { id: "var_c_4", parent_id: config.product_id, name: "XL / Black", sku: `${baseSku || "CLOTH"}-XL-BLK`, retail_price: 1400, purchase_cost: 700, stock_units: 15, attributes: { Size: "XL", Color: "Black" }, active: true },
+        { id: "var_c_5", parent_id: config.product_id, name: "XXL / Black", sku: `${baseSku || "CLOTH"}-XXL-BLK`, retail_price: 1500, purchase_cost: 750, stock_units: 10, attributes: { Size: "XXL", Color: "Black" }, active: true },
+      ];
+
+      setAttrPriceOverrides({
+        Size: { S: 1200, M: 1200, L: 1300, XL: 1400, XXL: 1500 },
+      });
+
       onChange({
         ...config,
         product_type: "variable",
-        attributes: [
-          { id: "c_size", name: "Size", values: ["S", "M", "L", "XL", "XXL"], generatesVariants: true, inputType: "pills" },
-          { id: "c_color", name: "Color", values: ["Black", "White", "Navy", "Olive"], generatesVariants: true, inputType: "pills" },
-        ],
+        attributes: clothAttrs,
+        variants: clothVariants,
         modifiers: [],
       });
     } else if (presetType === "sweets") {
@@ -369,7 +508,7 @@ export const ProductVariationsEditor: React.FC<Props> = ({
         ...config,
         product_type: "measured",
         weight_unit: "g",
-        price_per_base_unit: basePrice || 20,
+        price_per_base_unit: basePrice || 800,
         quick_presets: [250, 500, 750, 1000],
         attributes: [],
         modifiers: [
@@ -379,25 +518,37 @@ export const ProductVariationsEditor: React.FC<Props> = ({
             required: false,
             options: [
               { id: "opt_box_reg", name: "Standard Sweet Box", price: 0 },
-              { id: "opt_box_gold", name: "Gold Premium Gift Box", price: 2.5 },
+              { id: "opt_box_gold", name: "Gold Premium Gift Box", price: 150 },
             ],
           },
         ],
       });
     } else if (presetType === "bakery") {
+      const bakeAttrs = [
+        { id: "b_weight", name: "Cake Weight", values: ["0.5 kg (1 lb)", "1 kg (2 lb)", "2 kg (4 lb)"], generatesVariants: true, inputType: "pills" as const },
+        { id: "b_flavor", name: "Flavor", values: ["Dutch Chocolate", "Vanilla Bean", "Red Velvet"], generatesVariants: true, inputType: "pills" as const },
+      ];
+      const bakeVariants: ProductVariantItem[] = [
+        { id: "var_b_1", parent_id: config.product_id, name: "0.5 kg (1 lb) / Dutch Chocolate", sku: `${baseSku || "CAKE"}-05-CHOC`, retail_price: 700, purchase_cost: 350, stock_units: 999999, attributes: { "Cake Weight": "0.5 kg (1 lb)", Flavor: "Dutch Chocolate" }, active: true },
+        { id: "var_b_2", parent_id: config.product_id, name: "1 kg (2 lb) / Dutch Chocolate", sku: `${baseSku || "CAKE"}-10-CHOC`, retail_price: 1300, purchase_cost: 650, stock_units: 999999, attributes: { "Cake Weight": "1 kg (2 lb)", Flavor: "Dutch Chocolate" }, active: true },
+        { id: "var_b_3", parent_id: config.product_id, name: "2 kg (4 lb) / Dutch Chocolate", sku: `${baseSku || "CAKE"}-20-CHOC`, retail_price: 2400, purchase_cost: 1200, stock_units: 999999, attributes: { "Cake Weight": "2 kg (4 lb)", Flavor: "Dutch Chocolate" }, active: true },
+      ];
+
+      setAttrPriceOverrides({
+        "Cake Weight": { "0.5 kg (1 lb)": 700, "1 kg (2 lb)": 1300, "2 kg (4 lb)": 2400 },
+      });
+
       onChange({
         ...config,
         product_type: "variable",
-        attributes: [
-          { id: "b_weight", name: "Cake Weight", values: ["0.5 kg (1 lb)", "1 kg (2 lb)", "2 kg (4 lb)"], generatesVariants: true, inputType: "pills" },
-          { id: "b_flavor", name: "Flavor", values: ["Dutch Chocolate", "Vanilla Bean", "Red Velvet"], generatesVariants: true, inputType: "pills" },
-        ],
+        attributes: bakeAttrs,
+        variants: bakeVariants,
       });
     }
 
     toast({
-      title: "Preset Loaded",
-      description: `Loaded attributes and setup rules for ${presetType}.`,
+      title: "Preset Loaded with Real Pricing",
+      description: `Loaded attributes and verified variety prices (${presetType}).`,
     });
   };
 
@@ -580,14 +731,73 @@ export const ProductVariationsEditor: React.FC<Props> = ({
             </div>
           </div>
 
+          {/* Step 2: Quick Variety Pricing by Option */}
+          {config.attributes && config.attributes.length > 0 && (
+            <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/25 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <span className="text-xs font-bold text-purple-700 dark:text-purple-300 block flex items-center gap-1.5">
+                    <DollarSign className="w-3.5 h-3.5 text-purple-500" />
+                    Quick Variety Pricing by Option
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Define separate prices for each option (e.g. Small: 500, Medium: 750, Large: 850). Each variety retains its real price.
+                  </span>
+                </div>
+                {config.variants && config.variants.length > 0 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleApplyAllOptionPrices}
+                    className="text-[11px] h-7 bg-purple-600 hover:bg-purple-700 text-white font-bold"
+                  >
+                    Apply to All Varieties
+                  </Button>
+                )}
+              </div>
+
+              <div className="space-y-2.5">
+                {config.attributes.map((attr) => (
+                  <div key={attr.id} className="p-2.5 rounded-lg bg-card/80 border border-border space-y-1.5">
+                    <span className="text-[11px] font-bold text-foreground uppercase tracking-wider block">
+                      {attr.name} Prices ({symbol})
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {attr.values.map((val) => {
+                        const currentPrice = attrPriceOverrides[attr.name]?.[val] ?? (
+                          config.variants?.find((v) => v.attributes && v.attributes[attr.name] === val)?.retail_price ?? ""
+                        );
+                        return (
+                          <div key={val} className="flex items-center gap-1 bg-muted/60 border border-border px-2 py-1 rounded-lg">
+                            <span className="text-xs font-semibold text-foreground mr-1">{val}:</span>
+                            <span className="text-xs font-bold text-muted-foreground">{symbol}</span>
+                            <input
+                              type="number"
+                              step="1"
+                              min="0"
+                              placeholder="0"
+                              value={currentPrice}
+                              onChange={(e) => handleOptionPriceChange(attr.name, val, parseFloat(e.target.value) || 0)}
+                              className="w-16 h-6 px-1.5 text-xs font-bold bg-background border border-border rounded focus:outline-none focus:border-purple-500"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Combinations Generator Button & Actions */}
           <div className="flex items-center justify-between p-3.5 rounded-xl bg-sky-500/10 border border-sky-500/20">
             <div>
               <span className="text-xs font-bold text-sky-700 dark:text-sky-300 block">
-                2. Generate Variation Combinations
+                3. Generate Variation Combinations
               </span>
               <span className="text-[11px] text-muted-foreground">
-                Computes every combination (e.g. Size × Color) with individual prices and inventory stocks.
+                Computes every combination (e.g. Size × Crust) with distinct variety prices and inventory stocks.
               </span>
             </div>
             <Button
@@ -603,16 +813,30 @@ export const ProductVariationsEditor: React.FC<Props> = ({
           {/* Variants Matrix Table */}
           {config.variants && config.variants.length > 0 && (
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-foreground uppercase tracking-wider block">
-                  3. Generated Variants Matrix ({config.variants.length} variations)
-                </span>
-                <span className="text-[11px] text-muted-foreground">
-                  Total variant stock:{" "}
-                  <strong className="text-foreground">
-                    {config.variants.reduce((sum, v) => sum + (v.active ? Number(v.stock_units || 0) : 0), 0)} units
-                  </strong>
-                </span>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <span className="text-xs font-bold text-foreground uppercase tracking-wider block">
+                    4. Generated Variants Matrix ({config.variants.length} variations)
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Total variant stock:{" "}
+                    <strong className="text-foreground">
+                      {config.variants.reduce((sum, v) => sum + (v.active ? Number(v.stock_units || 0) : 0), 0)} units
+                    </strong>
+                  </span>
+                </div>
+                {(() => {
+                  const variantPrices = config.variants.map((v) => Number(v.retail_price) || 0).filter((p) => p > 0);
+                  const minP = variantPrices.length > 0 ? Math.min(...variantPrices) : 0;
+                  const maxP = variantPrices.length > 0 ? Math.max(...variantPrices) : 0;
+                  return (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-500/15 px-2.5 py-1 rounded-lg border border-purple-500/30">
+                        Price Range: {fmt(minP)} – {fmt(maxP)}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="rounded-xl border border-border overflow-hidden bg-card">

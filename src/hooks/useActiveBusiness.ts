@@ -126,11 +126,13 @@ async function fetchBusinessData(force = false): Promise<void> {
         return;
       }
 
-      // If switching to a different user, clear previous user's businesses immediately
-      if (store.currentUserId && store.currentUserId !== user.id) {
-        store.owned = [];
+      // Strict per-user isolation: if user changed or store had unverified businesses, purge immediately
+      if (store.currentUserId !== user.id) {
+        store.owned = store.owned.filter((b) => b.owner_user_id === user.id);
         store.staff = [];
-        store.activeId = null;
+        if (!store.owned.some((b) => b.id === store.activeId)) {
+          store.activeId = null;
+        }
       }
 
       store.currentUserId = user.id;
@@ -339,16 +341,16 @@ async function fetchBusinessData(force = false): Promise<void> {
         console.warn("Notice loading api staff businesses:", staffErr);
       }
 
-      // If fetch returned empty due to error, token refresh gap, or network drop, preserve existing businesses
+      // If fetch returned empty due to error, token refresh gap, or network drop, preserve existing businesses belonging to this user
       if (ownedRows.length === 0 && store.owned.length > 0) {
-        ownedRows = store.owned;
+        ownedRows = store.owned.filter((ob) => ob.owner_user_id === user.id);
       } else if (ownedRows.length === 0) {
         try {
           const cached = localStorage.getItem(LS_OWNED_KEY);
           if (cached) {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              ownedRows = parsed;
+              ownedRows = parsed.filter((ob: any) => ob.owner_user_id === user.id);
             }
           }
         } catch {

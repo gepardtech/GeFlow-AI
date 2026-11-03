@@ -92,7 +92,22 @@ const Admin = () => {
       }
     });
 
-    const enrichedProf: UserRow[] = ((prof as UserRow[]) || []).map((p) => {
+    let userProfiles: any[] = prof || [];
+    if (!prof || prof.length === 0) {
+      try {
+        const uRes = await fetch("/api/admin/users-overview");
+        if (uRes.ok) {
+          const uJson = await uRes.json();
+          if (uJson.success && Array.isArray(uJson.users) && uJson.users.length > 0) {
+            userProfiles = uJson.users;
+          }
+        }
+      } catch {
+        /* fallback */
+      }
+    }
+
+    const enrichedProf: UserRow[] = (userProfiles as UserRow[]).map((p) => {
       const directCount = userProductCounts[p.user_id] || 0;
       const bizSumCount = ownerBizListedSum[p.user_id] || 0;
       const profileCount = Number(p.listed_products) || 0;

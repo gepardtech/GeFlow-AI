@@ -7,6 +7,8 @@ import { useMoney } from "@/lib/currency";
 import { usePricingPlans } from "@/hooks/usePricingPlans";
 import heroLaptop from "@/assets/hero-laptop.jpg";
 import aboutOffice from "@/assets/about-office.jpg";
+import { LazyImage } from "@/components/common/LazyImage";
+import { LazyHydrate } from "@/components/common/LazyHydrate";
 import {
   Package,
   ShoppingCart,
@@ -147,16 +149,14 @@ const Index = () => {
             </div>
             <div className="flex justify-center min-w-0">
               <div className="w-full max-w-md md:max-w-none rounded-2xl overflow-hidden shadow-2xl border border-border/60 animate-float cursor-pointer transition-transform duration-300 hover:shadow-3xl">
-                <img
+                <LazyImage
                   src={heroLaptop}
                   srcSet={`${heroLaptop} 800w, ${heroLaptop} 1200w`}
                   sizes="(max-width: 768px) 100vw, 50vw"
                   alt="GeFlow retail counter software displaying POS terminal and live stock inventory"
+                  priority={true}
                   width={800}
                   height={600}
-                  // @ts-expect-error React 18 DOM types attribute
-                  fetchpriority="high"
-                  decoding="async"
                   className="w-full h-auto object-cover"
                 />
               </div>
@@ -170,89 +170,92 @@ const Index = () => {
       </div>
 
       {/* How It Works */}
-      <section className="py-12 sm:py-16 md:py-20">
-        <div className="container mx-auto px-4 sm:px-6">
-          <div className="text-center mb-10 sm:mb-14 max-w-2xl mx-auto">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold mb-3 text-foreground">
-              Simple 5-Step Daily Routine
-            </h2>
-            <p className="text-xs sm:text-sm md:text-base text-muted-foreground">
-              Built for busy shop owners — quick to learn, fast to use, and zero complicated setup.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5 min-w-0">
-            {workflowSteps.map((step) => (
-              <div
-                key={step.title}
-                className="text-center group cursor-pointer p-4 sm:p-5 rounded-2xl border border-border/40 hover:border-border/80 bg-card/40 hover:bg-card hover:shadow-md transition-all duration-300 min-w-0"
-              >
-                <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3 group-hover:bg-primary group-hover:shadow-lg group-hover:shadow-primary/20 transition-all duration-300 shrink-0">
-                  <step.icon className="h-5 w-5 sm:h-6 sm:w-6 text-primary group-hover:text-primary-foreground transition-colors duration-300" />
-                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-secondary text-secondary-foreground text-[10px] font-bold flex items-center justify-center">
-                    {step.num}
-                  </span>
+      <LazyHydrate whenVisible>
+        <section className="py-12 sm:py-16 md:py-20">
+          <div className="container mx-auto px-4 sm:px-6">
+            <div className="text-center mb-10 sm:mb-14 max-w-2xl mx-auto">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold mb-3 text-foreground">
+                Simple 5-Step Daily Routine
+              </h2>
+              <p className="text-xs sm:text-sm md:text-base text-muted-foreground">
+                Built for busy shop owners — quick to learn, fast to use, and zero complicated setup.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5 min-w-0">
+              {workflowSteps.map((step) => (
+                <div
+                  key={step.title}
+                  className="text-center group cursor-pointer p-4 sm:p-5 rounded-2xl border border-border/40 hover:border-border/80 bg-card/40 hover:bg-card hover:shadow-md transition-all duration-300 min-w-0"
+                >
+                  <div className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3 group-hover:bg-primary group-hover:shadow-lg group-hover:shadow-primary/20 transition-all duration-300 shrink-0">
+                    <step.icon className="h-5 w-5 sm:h-6 sm:w-6 text-primary group-hover:text-primary-foreground transition-colors duration-300" />
+                    <span className="absolute -top-1.5 -right-1.5 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-secondary text-secondary-foreground text-[10px] font-bold flex items-center justify-center">
+                      {step.num}
+                    </span>
+                  </div>
+                  <h3 className="font-semibold text-xs sm:text-sm mb-1 truncate text-foreground">
+                    {step.title}
+                  </h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {step.desc}
+                  </p>
                 </div>
-                <h3 className="font-semibold text-xs sm:text-sm mb-1 truncate text-foreground">
-                  {step.title}
-                </h3>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  {step.desc}
-                </p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </LazyHydrate>
 
       {/* Features */}
-      <section className="py-12 sm:py-16 md:py-20 bg-muted/30">
-        <div className="container mx-auto px-4 sm:px-6">
-          <div className="text-center mb-10 sm:mb-14 max-w-2xl mx-auto">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold mb-3 text-foreground">
-              Tools Every Shopkeeper Needs
-            </h2>
-            <p className="text-xs sm:text-sm md:text-base text-muted-foreground">
-              Everything you need to run your store smoothly and prevent stock mistakes.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 max-w-5xl mx-auto min-w-0">
-            {features.map((f) => (
-              <div
-                key={f.title}
-                className="glass-card p-5 sm:p-6 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group cursor-pointer min-w-0"
-              >
-                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-primary/10 flex items-center justify-center mb-3 sm:mb-4 group-hover:bg-primary group-hover:shadow-md transition-all duration-300 shrink-0">
-                  <f.icon className="h-5 w-5 text-primary group-hover:text-primary-foreground transition-colors duration-300" />
+      <LazyHydrate whenVisible>
+        <section className="py-12 sm:py-16 md:py-20 bg-muted/30">
+          <div className="container mx-auto px-4 sm:px-6">
+            <div className="text-center mb-10 sm:mb-14 max-w-2xl mx-auto">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold mb-3 text-foreground">
+                Tools Every Shopkeeper Needs
+              </h2>
+              <p className="text-xs sm:text-sm md:text-base text-muted-foreground">
+                Everything you need to run your store smoothly and prevent stock mistakes.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 max-w-5xl mx-auto min-w-0">
+              {features.map((f) => (
+                <div
+                  key={f.title}
+                  className="glass-card p-5 sm:p-6 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group cursor-pointer min-w-0"
+                >
+                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-primary/10 flex items-center justify-center mb-3 sm:mb-4 group-hover:bg-primary group-hover:shadow-md transition-all duration-300 shrink-0">
+                    <f.icon className="h-5 w-5 text-primary group-hover:text-primary-foreground transition-colors duration-300" />
+                  </div>
+                  <h3 className="font-semibold text-sm sm:text-base mb-1 truncate text-foreground">
+                    {f.title}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                    {f.desc}
+                  </p>
                 </div>
-                <h3 className="font-semibold text-sm sm:text-base mb-1 truncate text-foreground">
-                  {f.title}
-                </h3>
-                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                  {f.desc}
-                </p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </LazyHydrate>
 
       {/* About Section */}
-      <section className="py-12 sm:py-16 md:py-20">
-        <div className="container mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center max-w-5xl mx-auto min-w-0">
-            <div className="rounded-2xl overflow-hidden shadow-lg border border-border/50 animate-float cursor-pointer transition-transform duration-300 hover:shadow-2xl min-w-0">
-              <img
-                src={aboutOffice}
-                srcSet={`${aboutOffice} 800w, ${aboutOffice} 1200w`}
-                sizes="(max-width: 768px) 100vw, 50vw"
-                alt="Shop owner managing inventory and customer receipts with GeFlow"
-                width={800}
-                height={600}
-                loading="lazy"
-                decoding="async"
-                className="w-full h-auto object-cover"
-              />
-            </div>
+      <LazyHydrate whenVisible>
+        <section className="py-12 sm:py-16 md:py-20">
+          <div className="container mx-auto px-4 sm:px-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center max-w-5xl mx-auto min-w-0">
+              <div className="rounded-2xl overflow-hidden shadow-lg border border-border/50 animate-float cursor-pointer transition-transform duration-300 hover:shadow-2xl min-w-0">
+                <LazyImage
+                  src={aboutOffice}
+                  srcSet={`${aboutOffice} 800w, ${aboutOffice} 1200w`}
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  alt="Shop owner managing inventory and customer receipts with GeFlow"
+                  width={800}
+                  height={600}
+                  className="w-full h-auto object-cover"
+                />
+              </div>
             <div className="min-w-0">
               <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold mb-3 sm:mb-4 text-foreground">
                 Built for Real Retail Counters
@@ -283,9 +286,11 @@ const Index = () => {
           </div>
         </div>
       </section>
+      </LazyHydrate>
 
       {/* Pricing Section */}
-      <section className="py-12 sm:py-16 md:py-20 bg-muted/30">
+      <LazyHydrate whenVisible>
+        <section className="py-12 sm:py-16 md:py-20 bg-muted/30">
         <div className="container mx-auto px-4 sm:px-6">
           <div className="text-center mb-8 sm:mb-10 max-w-2xl mx-auto">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-display font-bold mb-3 text-foreground">
@@ -524,8 +529,11 @@ const Index = () => {
           </div>
         </div>
       </section>
+      </LazyHydrate>
 
-      <CTASection />
+      <LazyHydrate whenVisible>
+        <CTASection />
+      </LazyHydrate>
     </Layout>
   );
 };

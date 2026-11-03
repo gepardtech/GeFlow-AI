@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { usePaymentGateways } from "@/hooks/usePaymentGateways";
 
 interface PlanRow {
   id: string; plan_key: string; name: string; tagline: string | null;
@@ -144,6 +145,19 @@ const AdminBillingPricing = () => {
         });
       }
 
+      // Optimistically update local lifetimeCustoms so badge displays immediately
+      setLifetimeCustoms((prev) => ({
+        ...prev,
+        [editingLifetimeKey.toLowerCase()]: {
+          ...(prev[editingLifetimeKey.toLowerCase()] || {}),
+          badge_text: lifetimeForm.badge_text.trim() || null,
+          badge_position: lifetimeForm.badge_position,
+          cta_button_text: lifetimeForm.cta_button_text.trim() || null,
+          is_popular: lifetimeForm.is_popular,
+          lifetime_price: Number(lifetimeForm.lifetime_price),
+        },
+      }));
+
       window.dispatchEvent(new CustomEvent("geflow:pricing-updated"));
       toast({
         title: "Lifetime Plan Updated",
@@ -272,7 +286,9 @@ const AdminBillingPricing = () => {
     }
   };
 
-  const anySynced = rows.some((r) => r.payment_method_synced);
+  const { paypal, gateways } = usePaymentGateways();
+  const isGatewayActive = Boolean(paypal?.enabled || gateways?.some((g) => g.enabled));
+  const anySynced = isGatewayActive || rows.some((r) => r.payment_method_synced);
 
   return (
     <PanelLayout navItems={ADMIN_NAV} {...ADMIN_IDENTITY} isAdmin>
@@ -419,7 +435,7 @@ const AdminBillingPricing = () => {
             const r = rows.find((p) => p.plan_key.toLowerCase() === key);
             const customs = lifetimeCustoms[key] || {};
             const priceVal = customs.lifetime_price !== undefined ? customs.lifetime_price : (r?.lifetime_price || 0);
-            const badgeText = customs.badge_text !== undefined ? customs.badge_text : (r?.badge_cycle === "lifetime" ? r.badge_text : null);
+            const badgeText = (customs.badge_text && String(customs.badge_text).trim()) ? String(customs.badge_text).trim() : (r?.badge_text && (r.badge_cycle === "lifetime" || r.badge_cycle === "all") ? r.badge_text : null);
             const isPop = customs.is_popular !== undefined ? customs.is_popular : Boolean(r?.is_popular);
             const limit = key === "standard" ? lifetimeLimits.standard : lifetimeLimits.premium;
             const claimed = key === "standard" ? lifetimeCounts.standard : lifetimeCounts.premium;
@@ -520,7 +536,7 @@ const AdminBillingPricing = () => {
                   const r = rows.find((p) => p.plan_key.toLowerCase() === key);
                   const customs = lifetimeCustoms[key] || {};
                   const priceVal = customs.lifetime_price !== undefined ? customs.lifetime_price : (r?.lifetime_price || 0);
-                  const badgeText = customs.badge_text !== undefined ? customs.badge_text : (r?.badge_cycle === "lifetime" ? r.badge_text : null);
+                  const badgeText = (customs.badge_text && String(customs.badge_text).trim()) ? String(customs.badge_text).trim() : (r?.badge_text && (r.badge_cycle === "lifetime" || r.badge_cycle === "all") ? r.badge_text : null);
                   const isPop = customs.is_popular !== undefined ? customs.is_popular : Boolean(r?.is_popular);
                   const limit = key === "standard" ? lifetimeLimits.standard : lifetimeLimits.premium;
                   const claimed = key === "standard" ? lifetimeCounts.standard : lifetimeCounts.premium;

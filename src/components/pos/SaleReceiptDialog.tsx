@@ -64,6 +64,25 @@ const fmtDate = (d: Date) =>
 const fmtTime = (d: Date) =>
   d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 
+const getFontFamily = (f?: string) => {
+  switch (f) {
+    case "courier":
+    case "mono":
+      return "'Courier New', Courier, monospace";
+    case "inter":
+      return "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
+    case "roboto":
+      return "'Roboto', Arial, sans-serif";
+    case "space_mono":
+      return "'Space Mono', monospace";
+    case "arial":
+      return "Arial, Helvetica, sans-serif";
+    case "poppins":
+    default:
+      return "'Poppins', Arial, -apple-system, sans-serif";
+  }
+};
+
 export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: Props) => {
   const printedRef = useRef(false);
 
@@ -122,24 +141,6 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
         </div>`
       : "";
 
-    const getFontFamily = (f?: string) => {
-      switch (f) {
-        case "courier":
-        case "mono":
-          return "'Courier New', Courier, monospace";
-        case "inter":
-          return "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
-        case "roboto":
-          return "'Roboto', Arial, sans-serif";
-        case "space_mono":
-          return "'Space Mono', monospace";
-        case "arial":
-          return "Arial, Helvetica, sans-serif";
-        case "poppins":
-        default:
-          return "'Poppins', Arial, -apple-system, sans-serif";
-      }
-    };
     const selectedFont = getFontFamily(data.receiptFont);
 
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>${data.invoiceNo}</title>
@@ -316,7 +317,7 @@ export const SaleReceiptDialog = ({ open, onOpenChange, data, onNewCustomer }: P
           </div>
 
           {/* EXACT THERMAL RECEIPT PREVIEW CARD */}
-          <div className="mt-4 p-5 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-50 text-[11px] space-y-3 shadow-inner" style={{ fontFamily: getFontFamily(data.receiptFont) }}>
+          <div className="mt-4 p-5 rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-50 text-[11px] space-y-3 shadow-inner" style={{ fontFamily: getFontFamily(data?.receiptFont) }}>
             {/* Header / Branding */}
             {showLogo && (
               <div className="text-center pb-2 border-b border-dashed border-zinc-300 dark:border-zinc-700 space-y-1">

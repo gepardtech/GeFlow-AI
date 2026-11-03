@@ -44,13 +44,38 @@ interface UserRow {
   products_sample?: Array<{ id: string; name: string; price: number; stock: number; sku?: string }>;
 }
 
-const PLANS = ["free", "standard", "premium", "unlimited", "lifetime"];
+const PLANS = [
+  "free",
+  "standard_monthly",
+  "standard_yearly",
+  "standard_lifetime",
+  "premium_monthly",
+  "premium_yearly",
+  "premium_lifetime",
+];
+
+const PLAN_LABELS: Record<string, string> = {
+  free: "Free (Forever)",
+  standard: "Standard (Monthly)",
+  standard_monthly: "Standard (Monthly)",
+  standard_yearly: "Standard (Yearly)",
+  standard_lifetime: "Standard (Lifetime)",
+  premium: "Premium (Monthly)",
+  premium_monthly: "Premium (Monthly)",
+  premium_yearly: "Premium (Yearly)",
+  premium_lifetime: "Premium (Lifetime)",
+};
+
 const PLAN_STYLES: Record<string, string> = {
   free: "bg-slate-400/15 text-slate-500",
   standard: "bg-purple-400/15 text-purple-500",
+  standard_monthly: "bg-purple-400/15 text-purple-500",
+  standard_yearly: "bg-indigo-400/15 text-indigo-500",
+  standard_lifetime: "bg-purple-500/20 text-purple-600 dark:text-purple-400 font-semibold",
   premium: "bg-sky-400/15 text-sky-500",
-  unlimited: "bg-emerald-400/15 text-emerald-500",
-  lifetime: "bg-amber-400/15 text-amber-500",
+  premium_monthly: "bg-sky-400/15 text-sky-500",
+  premium_yearly: "bg-blue-400/15 text-blue-500",
+  premium_lifetime: "bg-sky-500/20 text-sky-600 dark:text-sky-400 font-semibold",
 };
 const STATUS_DOT: Record<string, string> = { active: "bg-emerald-500", suspended: "bg-rose-500", pending: "bg-amber-500" };
 
@@ -129,10 +154,12 @@ const callAdmin = async (body: Record<string, unknown>) => {
       if (plan) {
         try {
           const cleanP = String(plan).toLowerCase();
+          const isLifetime = cleanP === "lifetime" || cleanP === "unlimited" || cleanP.includes("lifetime");
+          const subTier = cleanP.includes("standard") ? "standard" : (cleanP === "free" ? "free" : "premium");
           await supabase.from("subscriptions").insert({
             owner_user_id: user_id,
-            tier: cleanP,
-            cycle: cleanP === "lifetime" ? "lifetime" : "monthly",
+            tier: subTier,
+            cycle: isLifetime ? "lifetime" : "monthly",
             status: "active",
             source: "admin_manual",
             payment_method: null,
@@ -180,12 +207,20 @@ const AdminUsers = () => {
       try {
         const { data: sData } = await supabase.auth.getSession();
         const token = sData?.session?.access_token;
-        const apiRes = await fetch("/api/admin/users-overview", {
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        });
+        const fetchOverview = () =>
+          fetch("/api/admin/users-overview", {
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          });
+
+        let apiRes = await fetchOverview();
+        if (!apiRes.ok) {
+          await new Promise((r) => setTimeout(r, 300));
+          apiRes = await fetchOverview();
+        }
+
         if (apiRes.ok) {
           const apiJson = await apiRes.json();
           if (apiJson.success && Array.isArray(apiJson.users)) {
@@ -315,7 +350,7 @@ const AdminUsers = () => {
 
   const totalUsers = users.length;
   const activeUsers = users.filter((u) => u.status === "active").length;
-  const premiumUsers = users.filter((u) => ["premium", "unlimited", "lifetime"].includes(u.plan)).length;
+  const premiumUsers = users.filter((u) => ["premium", "unlimited", "lifetime", "premium_lifetime"].includes(u.plan)).length;
   const suspendedCount = users.filter((u) => u.status === "suspended").length;
 
   // Quick actions on profile row
@@ -381,10 +416,14 @@ const AdminUsers = () => {
   const [editForm, setEditForm] = useState({ full_name: "", role: "user", plan: "free", status: "active" });
   useEffect(() => {
     if (editUser) {
+      let currentPlan = editUser.plan || "free";
+      if (currentPlan === "standard") currentPlan = "standard_monthly";
+      if (currentPlan === "premium") currentPlan = "premium_monthly";
+      if (currentPlan === "lifetime" || currentPlan === "unlimited") currentPlan = "premium_lifetime";
       setEditForm({
         full_name: editUser.full_name || "",
         role: roles[editUser.user_id] ?? "user",
-        plan: editUser.plan || "free",
+        plan: currentPlan,
         status: editUser.status || "active",
       });
     }
@@ -521,7 +560,7 @@ const AdminUsers = () => {
                 <SelectTrigger className="h-9 mb-3"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All plans</SelectItem>
-                  {PLANS.map((p) => <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>)}
+                  {PLANS.map((p) => <SelectItem key={p} value={p}>{PLAN_LABELS[p] || p}</SelectItem>)}
                 </SelectContent>
               </Select>
               <button
@@ -662,7 +701,7 @@ const AdminUsers = () => {
               <Label>Subscription Plan</Label>
               <Select value={addForm.plan} onValueChange={(v) => setAddForm({ ...addForm, plan: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{PLANS.map((p) => <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>)}</SelectContent>
+                <SelectContent>{PLANS.map((p) => <SelectItem key={p} value={p}>{PLAN_LABELS[p] || p}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -815,8 +854,8 @@ const AdminUsers = () => {
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {PLANS.map((p) => (
-                    <SelectItem key={p} value={p} className="capitalize">
-                      {p.toUpperCase()} Plan
+                    <SelectItem key={p} value={p}>
+                      {PLAN_LABELS[p] || `${p.toUpperCase()} Plan`}
                     </SelectItem>
                   ))}
                 </SelectContent>

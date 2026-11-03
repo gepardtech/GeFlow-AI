@@ -52,6 +52,163 @@ interface Props {
   lockedPaths?: string[];
 }
 
+const routeModuleMap: Record<string, () => Promise<any>> = {
+  "/dashboard": () => import("@/pages/Dashboard"),
+  "/dashboard/pos": () => import("@/pages/user/UserPOS"),
+  "/dashboard/inventory": () => import("@/pages/user/UserInventory"),
+  "/dashboard/low-stock": () => import("@/pages/user/UserLowStock"),
+  "/dashboard/out-of-stock": () => import("@/pages/user/UserOutOfStock"),
+  "/dashboard/returns": () => import("@/pages/user/UserReturns"),
+  "/dashboard/purchases": () => import("@/pages/user/UserPurchases"),
+  "/dashboard/reports": () => import("@/pages/user/UserReports"),
+  "/dashboard/analytics": () => import("@/pages/user/UserAnalytics"),
+  "/dashboard/team": () => import("@/pages/user/UserTeam"),
+  "/dashboard/customer-credits": () => import("@/pages/user/UserCustomerCredits"),
+  "/dashboard/subscription": () => import("@/pages/user/UserSubscription"),
+  "/dashboard/businesses": () => import("@/pages/user/UserBusinesses"),
+  "/dashboard/workspace": () => import("@/pages/user/UserWorkspace"),
+  "/dashboard/settings": () => import("@/pages/user/UserSettings"),
+  "/dashboard/announcements": () => import("@/pages/user/UserAnnouncements"),
+  "/dashboard/notifications": () => import("@/pages/user/UserNotifications"),
+  "/dashboard/support": () => import("@/pages/user/UserSupport"),
+  "/dashboard/profile": () => import("@/pages/user/UserProfile"),
+  "/admin": () => import("@/pages/Admin"),
+  "/admin/users": () => import("@/pages/admin/AdminUsers"),
+  "/admin/businesses": () => import("@/pages/admin/AdminBusinesses"),
+  "/admin/billing": () => import("@/pages/admin/AdminBilling"),
+  "/admin/analytics": () => import("@/pages/admin/AdminAnalytics"),
+  "/admin/support": () => import("@/pages/admin/AdminSupport"),
+  "/admin/settings": () => import("@/pages/admin/AdminSettings"),
+  "/admin/profile": () => import("@/pages/admin/AdminProfile"),
+};
+
+const prefetchRoute = (path: string) => {
+  try {
+    const loader = routeModuleMap[path];
+    if (loader) {
+      loader().catch(() => {});
+    }
+  } catch {
+    /* ignore */
+  }
+};
+
+// Preload primary user routes during browser idle time
+if (typeof window !== "undefined") {
+  const preloadCommonUserRoutes = () => {
+    routeModuleMap["/dashboard/pos"]?.().catch(() => {});
+    routeModuleMap["/dashboard/inventory"]?.().catch(() => {});
+    routeModuleMap["/dashboard/customer-credits"]?.().catch(() => {});
+  };
+  if ("requestIdleCallback" in window) {
+    (window as any).requestIdleCallback(preloadCommonUserRoutes);
+  } else {
+    setTimeout(preloadCommonUserRoutes, 1500);
+  }
+}
+
+interface NavListProps {
+  navItems: NavItem[];
+  pathname: string;
+  openGroups: Record<string, boolean>;
+  onToggleGroup: (groupTo: string) => void;
+  isLocked: (to: string) => boolean;
+  mini?: boolean;
+}
+
+const NavList = ({
+  navItems,
+  pathname,
+  openGroups,
+  onToggleGroup,
+  isLocked,
+  mini = false,
+}: NavListProps) => {
+  return (
+    <ul className="space-y-1">
+      {navItems.map((item) => {
+        const Icon = item.icon;
+        const isGroup = !!item.children?.length;
+        const groupOpen = openGroups[item.to] ?? false;
+        const active =
+          pathname === item.to ||
+          (isGroup && item.children!.some((c) => pathname === c.to));
+
+        if (isGroup && !mini) {
+          return (
+            <li key={item.to}>
+              <button
+                type="button"
+                onClick={() => onToggleGroup(item.to)}
+                onMouseEnter={() => prefetchRoute(item.to)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 cursor-pointer ${
+                  active
+                    ? "bg-sky-400 text-white shadow-sm dark:bg-sky-500/90"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                }`}
+              >
+                <Icon className="h-4 w-4 flex-shrink-0" />
+                <span className="flex-1 text-left">{item.label}</span>
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition-transform duration-150 ${
+                    groupOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {groupOpen && (
+                <ul className="mt-1 ml-7 space-y-0.5 border-l border-border pl-2">
+                  {item.children!.map((c) => {
+                    const cActive = pathname === c.to;
+                    return (
+                      <li key={c.to}>
+                        <Link
+                          to={c.to}
+                          onMouseEnter={() => prefetchRoute(c.to)}
+                          onFocus={() => prefetchRoute(c.to)}
+                          className={`block px-3 py-2 rounded-lg text-xs font-medium transition-colors duration-150 cursor-pointer ${
+                            cActive
+                              ? "bg-sky-400/15 text-sky-600 dark:text-sky-300"
+                              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                          }`}
+                        >
+                          {c.label}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </li>
+          );
+        }
+
+        const locked = isLocked(item.to);
+        return (
+          <li key={item.to}>
+            <Link
+              to={item.to}
+              onMouseEnter={() => prefetchRoute(item.to)}
+              onFocus={() => prefetchRoute(item.to)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 cursor-pointer ${
+                active
+                  ? "bg-sky-400 text-white shadow-sm dark:bg-sky-500/90"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              } ${locked ? "opacity-70" : ""}`}
+              title={locked ? `${item.label} — Upgrade required` : item.label}
+            >
+              <Icon className="h-4 w-4 flex-shrink-0" />
+              {!mini && <span className="flex-1">{item.label}</span>}
+              {!mini && locked && (
+                <Lock className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+              )}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+};
+
 const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityRole, identityBadgeClass = "bg-primary/10 text-primary", initial, isAdmin = false, lockedPaths = [] }: Props) => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -379,71 +536,9 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
 
   const unreadCount = notifications.filter((n) => n.unread).length;
 
-  // Shared nav renderer — used by both the desktop sidebar and the mobile drawer.
-  const NavList = ({ mini = false }: { mini?: boolean }) => (
-    <ul className="space-y-1">
-      {navItems.map((item) => {
-        const Icon = item.icon;
-        const isGroup = !!item.children?.length;
-        const groupOpen = openGroups[item.to] ?? false;
-        const active = location.pathname === item.to ||
-          (isGroup && item.children!.some((c) => location.pathname === c.to));
-
-        if (isGroup && !mini) {
-          return (
-            <li key={item.to}>
-              <button
-                onClick={() => setOpenGroups((s) => ({ ...s, [item.to]: !groupOpen }))}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  active ? "bg-sky-400 text-white shadow-sm dark:bg-sky-500/90" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                }`}
-              >
-                <Icon className="h-4 w-4 flex-shrink-0" />
-                <span className="flex-1 text-left">{item.label}</span>
-                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${groupOpen ? "rotate-180" : ""}`} />
-              </button>
-              {groupOpen && (
-                <ul className="mt-1 ml-7 space-y-0.5 border-l border-border pl-2">
-                  {item.children!.map((c) => {
-                    const cActive = location.pathname === c.to;
-                    return (
-                      <li key={c.to}>
-                        <Link
-                          to={c.to}
-                          className={`block px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                            cActive ? "bg-sky-400/15 text-sky-600 dark:text-sky-300" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                          }`}
-                        >
-                          {c.label}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </li>
-          );
-        }
-
-        const locked = isLocked(item.to);
-        return (
-          <li key={item.to}>
-            <Link
-              to={item.to}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                active ? "bg-sky-400 text-white shadow-sm dark:bg-sky-500/90" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-              } ${locked ? "opacity-70" : ""}`}
-              title={locked ? `${item.label} — Upgrade required` : item.label}
-            >
-              <Icon className="h-4 w-4 flex-shrink-0" />
-              {!mini && <span className="flex-1">{item.label}</span>}
-              {!mini && locked && <Lock className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />}
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
-  );
+  const handleToggleGroup = useCallback((groupTo: string) => {
+    setOpenGroups((s) => ({ ...s, [groupTo]: !s[groupTo] }));
+  }, []);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -623,7 +718,14 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
 
         <nav className="flex-1 p-3 overflow-y-auto min-h-0">
           {!collapsed && <p className="text-[10px] font-bold tracking-widest text-muted-foreground px-3 mb-3 mt-2">{sidebarLabel}</p>}
-          <NavList mini={collapsed} />
+          <NavList
+            navItems={navItems}
+            pathname={location.pathname}
+            openGroups={openGroups}
+            onToggleGroup={handleToggleGroup}
+            isLocked={isLocked}
+            mini={collapsed}
+          />
         </nav>
 
         {!collapsed && <IdentityFooter />}
@@ -638,7 +740,14 @@ const PanelLayout = ({ children, sidebarLabel, navItems, identityName, identityR
           <WorkspaceSwitcher />
           <nav className="flex-1 p-3 overflow-y-auto min-h-0">
             <p className="text-[10px] font-bold tracking-widest text-muted-foreground px-3 mb-3 mt-1">{sidebarLabel}</p>
-            <NavList />
+            <NavList
+              navItems={navItems}
+              pathname={location.pathname}
+              openGroups={openGroups}
+              onToggleGroup={handleToggleGroup}
+              isLocked={isLocked}
+              mini={false}
+            />
           </nav>
           <IdentityFooter />
         </SheetContent>

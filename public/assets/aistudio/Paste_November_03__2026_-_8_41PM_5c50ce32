@@ -1,0 +1,1639 @@
+# GeFlow AI — Implementation Step 06: Agent Contract & Runtime Specification Finalization
+
+**Company:** Gepard Tech  
+**Product:** GeFlow AI  
+**Step:** 06  
+**Step Name:** Agent Contract & Runtime Specification Finalization  
+**Previous Step:** Step 05 — Category-to-Agent Mapping Definition  
+**Agent Registry:** Step 04 — 29-Agent Master Registry  
+**Mapping Reference:** Step 05 — Category-to-Agent Mapping  
+**Execution Type:** Architecture, technical contract and runtime specification only  
+**Implementation Authorization:** Not granted
+
+---
+
+# PART 1 — STEP OBJECTIVE AND SCOPE
+
+## 1.1 Primary Objective
+
+Finalize a standardized technical contract and runtime architecture for all 29 GeFlow specialized agents.
+
+This specification must establish:
+
+1. How GeFlow identifies an agent.
+2. How GeFlow resolves a business category to its primary agent.
+3. How an agent receives an authorized request.
+4. What information is included in an agent request.
+5. How the agent accesses business context.
+6. How the agent uses its authorized tools.
+7. How tool execution is requested and validated.
+8. How an agent returns a response.
+9. How execution status is communicated.
+10. How errors, interruptions and timeouts are handled.
+11. How agent memory and tenant isolation are maintained.
+12. How execution permissions are enforced.
+13. How agent versions and contract versions are managed.
+14. How runtime health and performance are monitored.
+15. How all 29 agents follow the same foundational technical standards.
+
+## 1.2 Architectural Principle
+
+GeFlow will use:
+
+**One Standard Agent Contract + One Shared Runtime Architecture + 29 Specialized Agent Configurations.**
+
+The 29 agents must not become 29 unrelated technical systems.
+
+Each agent will have:
+- Its own unique identity.
+- Its own category association.
+- Its own mission and responsibilities.
+- Its own business knowledge configuration.
+- Its own permitted tool set.
+- Its own operational boundaries.
+- Its own response behavior.
+- Its own version and lifecycle status.
+
+Shared infrastructure may be used for execution, authentication, monitoring, logging and other common services.
+
+However, shared infrastructure must never imply unrestricted access to another agent's or tenant's private context.
+
+## 1.3 Scope Boundary
+
+This step covers architecture and specification.
+
+It does not authorize building or deploying the runtime.
+
+---
+
+# PART 2 — STRICT EXECUTION AND PRESERVATION RULES
+
+The existing GeFlow application remains the source of truth.
+
+The builder must inspect existing architecture before documenting integration assumptions.
+
+### 2.1 Prohibited Actions
+
+Without separate explicit authorization, do not:
+
+- Create any agent.
+- Deploy any agent.
+- Build an agent runtime.
+- Implement an orchestrator.
+- Create APIs or backend services.
+- Create database tables or collections.
+- Modify existing database schemas.
+- Modify existing API contracts.
+- Change existing authentication.
+- Change existing authorization.
+- Install dependencies.
+- Change AI provider configurations.
+- Create or modify prompts in production.
+- Modify frontend components.
+- Modify existing UI or workflows.
+- Modify existing inventory, POS or business modules.
+- Configure background workers.
+- Create queues or event infrastructure.
+- Deploy or publish any changes.
+
+### 2.2 Documentation-Only Execution
+
+The builder may:
+
+- Inspect actual existing files.
+- Inspect existing API and database contracts.
+- Document existing integration points.
+- Design proposed technical contracts.
+- Define logical request and response schemas.
+- Define runtime states and transitions.
+- Define security requirements.
+- Define test cases.
+- Produce architecture diagrams and documentation.
+
+Every proposed design must be clearly distinguished from verified existing functionality.
+
+### 2.3 Mandatory Stop Condition
+
+After completing Step 06:
+
+1. Produce all required documents.
+2. Validate the specifications.
+3. Report actual findings.
+4. Confirm no unauthorized changes were made.
+5. STOP.
+
+Do not automatically begin Step 07.
+
+Wait for explicit authorization.
+
+---
+
+# PART 3 — AGENT CONTRACT ARCHITECTURE
+
+## 3.1 Contract Definition
+
+The Agent Contract is the formal agreement between GeFlow's application/backend and a specialized agent.
+
+It defines:
+
+- Request structure.
+- Identity verification.
+- Tenant context.
+- Category context.
+- Conversation context.
+- Authorized capabilities.
+- Tool access.
+- Execution constraints.
+- Response structure.
+- Error structure.
+- Execution status.
+- Version compatibility.
+
+An agent must not independently decide which tenant, business or account it is authorized to access.
+
+GeFlow's trusted backend must establish and validate that context.
+
+## 3.2 Contract Layers
+
+Define the following logical contract layers.
+
+| Layer | Responsibility |
+|---|---|
+| Identity Contract | Agent identity and registry reference |
+| Category Contract | Business category and mapping |
+| Tenant Contract | Business and tenant isolation |
+| Request Contract | Incoming request structure |
+| Context Contract | Authorized business and conversation context |
+| Capability Contract | Available agent capabilities |
+| Tool Contract | Tool invocation and permission rules |
+| Execution Contract | Runtime lifecycle and execution limits |
+| Response Contract | Standardized agent response |
+| Error Contract | Structured error handling |
+| Event Contract | Execution status and event reporting |
+| Memory Contract | Authorized memory operations |
+| Audit Contract | Traceability and accountability |
+| Version Contract | Compatibility and change management |
+
+These are logical contract boundaries. Whether they are implemented as separate APIs, internal modules or shared types must be decided after reviewing the actual architecture.
+
+---
+
+# PART 4 — STANDARD AGENT IDENTITY CONTRACT
+
+Every agent must have a uniquely identifiable configuration.
+
+### Required identity fields
+
+| Field | Description |
+|---|---|
+| agent_id | Unique identifier, AGT-001 through AGT-029 |
+| agent_name | Official agent name |
+| agent_version | Current agent specification/configuration version |
+| registry_version | Master registry version |
+| contract_version | Supported contract version |
+| category_id | Associated primary category |
+| category_name | Official category name |
+| agent_role | Specialized business role |
+| mission | Agent's main purpose |
+| lifecycle_status | Draft, Approved, Active, Suspended or Retired |
+| configuration_status | Configuration validation state |
+| capabilities | Authorized capability references |
+| restrictions | Agent-specific restrictions |
+
+### Identity validation rules
+
+- Agent IDs must be unique.
+- Agent names must match Step 04.
+- Category association must match Step 05.
+- An agent must not claim another agent's identity.
+- An unapproved agent must not be treated as active.
+- A retired or suspended agent must not receive normal production requests.
+- Agent identity must be verified by the trusted backend, not accepted solely from user-supplied request data.
+
+The registry status and deployment status must remain separate.
+
+An agent may be finalized in documentation while still not being implemented or deployed.
+
+---
+
+# PART 5 — STANDARD REQUEST CONTRACT
+
+## 5.1 Request Envelope
+
+Every future agent request must follow a standardized logical envelope.
+
+Proposed structure:
+
+```json
+{
+  "contract_version": "1.0",
+  "request_id": "unique-request-id",
+  "correlation_id": "workflow-correlation-id",
+  "conversation_id": "conversation-reference",
+  "request_timestamp": "ISO-8601-timestamp",
+
+  "actor": {
+    "user_id": "authenticated-user-reference",
+    "role": "authorized-role"
+  },
+
+  "tenant": {
+    "tenant_id": "verified-tenant-reference",
+    "business_id": "verified-business-reference"
+  },
+
+  "agent": {
+    "agent_id": "AGT-001",
+    "agent_version": "1.0",
+    "category_id": "CAT-001"
+  },
+
+  "request": {
+    "message": "User's request",
+    "input_type": "text",
+    "locale": "en",
+    "attachments": []
+  },
+
+  "context": {
+    "business_context_ref": "authorized-context-reference",
+    "conversation_context_ref": "authorized-context-reference",
+    "memory_policy": "configured-policy"
+  },
+
+  "execution": {
+    "mode": "synchronous",
+    "priority": "normal",
+    "timeout_ms": 30000
+  },
+
+  "authorization": {
+    "authorization_context_ref": "trusted-server-reference",
+    "allowed_capabilities": []
+  }
+}
+```
+
+This is a proposed contract example, not a live GeFlow API payload.
+
+## 5.2 Request Validation
+
+Before agent execution, the trusted runtime must validate:
+
+1. Contract version.
+2. Request ID.
+3. Authenticated user.
+4. User's business access.
+5. Tenant identity.
+6. Business identity.
+7. Category identity.
+8. Primary agent mapping.
+9. Agent lifecycle status.
+10. Agent version compatibility.
+11. Requested execution mode.
+12. Authorization context.
+13. Input size and format.
+14. Attachment access.
+15. Execution limits.
+
+If validation fails, the request must not proceed to the agent.
+
+## 5.3 Trusted and Untrusted Data
+
+The following information must be considered trusted only when established or verified by GeFlow's backend:
+
+- Authenticated user identity.
+- Tenant ID.
+- Business ID.
+- User role and permissions.
+- Primary agent identity.
+- Category-to-agent mapping.
+- Tool permissions.
+- Authorization scope.
+
+User-provided text, uploaded files and model-generated content must be treated as untrusted input.
+
+The agent must not be allowed to override trusted authorization fields through natural-language instructions.
+
+---
+
+# PART 6 — AGENT CONTEXT CONTRACT
+
+## 6.1 Context Categories
+
+An agent may require the following context types:
+
+### A. Identity Context
+- Agent identity.
+- Agent role.
+- Agent configuration version.
+- Associated category.
+
+### B. User Context
+- Authenticated user reference.
+- User's authorized role.
+- User's permitted business access.
+
+### C. Business Context
+- Business profile.
+- Business category.
+- Business operating preferences.
+- Currency and regional settings.
+- Business-specific configuration.
+
+### D. Operational Context
+- Authorized inventory information.
+- Products and variants.
+- Suppliers.
+- Purchases.
+- Sales.
+- Customers.
+- Relevant reports.
+
+Only context needed for the current task should be supplied.
+
+### E. Conversation Context
+- Current conversation reference.
+- Relevant conversation history.
+- Current request.
+- Previous execution status.
+
+### F. Agent Memory Context
+- Approved agent-specific memory.
+- Business-specific operational preferences.
+- Authorized historical context.
+
+### G. Knowledge Context
+- Category-specific instructions.
+- Verified business rules.
+- Approved documentation.
+- Authorized reference material.
+
+## 6.2 Context Isolation
+
+The runtime must enforce the following boundaries:
+
+- Tenant A cannot access Tenant B's context.
+- Business A cannot access Business B's private memory.
+- One agent cannot automatically read another agent's private conversation history.
+- One agent cannot access another agent's internal configuration unless explicitly authorized.
+- User permissions must be checked independently of the agent's own capabilities.
+- Context must be limited to the minimum information necessary for the request.
+
+## 6.3 Context Freshness
+
+Define policies for:
+
+- Live database information.
+- Cached information.
+- Historical information.
+- Conversation summaries.
+- Agent memory.
+- Uploaded documents.
+
+The agent must distinguish current verified business data from historical or cached information.
+
+For critical operations, stale context must not be used as if it were live data.
+
+---
+
+# PART 7 — AGENT CAPABILITY CONTRACT
+
+## 7.1 Capability Definition
+
+A capability represents a type of work an agent is authorized to perform.
+
+Examples:
+
+- Explain inventory information.
+- Analyze sales.
+- Summarize purchases.
+- Identify low-stock products.
+- Generate a report.
+- Recommend inventory improvements.
+- Request a stock update.
+- Prepare a purchase draft.
+
+A capability is not automatically permission to execute an operation.
+
+For example:
+
+**Capability:** Update inventory.
+
+This does not mean the agent can directly change stock whenever it chooses.
+
+The runtime must separately validate the required tool, authorization, user permission and business rules.
+
+## 7.2 Capability Registry Fields
+
+Define a logical capability registry containing:
+
+| Field | Purpose |
+|---|---|
+| capability_id | Unique capability identifier |
+| capability_name | Human-readable name |
+| description | Capability purpose |
+| agent_scope | Authorized agent references |
+| category_scope | Applicable categories |
+| required_permissions | Required permission references |
+| required_context | Required data context |
+| allowed_tools | Permitted tool references |
+| approval_requirement | Whether additional approval is required |
+| execution_mode | Read-only, draft or write |
+| risk_level | Low, medium, high or critical |
+| status | Proposed, Approved, Active or Retired |
+
+## 7.3 Capability Classification
+
+Use the following classifications:
+
+**Level A — Informational**
+- Explain.
+- Answer questions.
+- Summarize.
+- Retrieve authorized information.
+
+**Level B — Analytical**
+- Analyze sales.
+- Compare performance.
+- Identify trends.
+- Generate recommendations.
+
+**Level C — Drafting**
+- Prepare purchase drafts.
+- Prepare inventory adjustment proposals.
+- Prepare business reports.
+- Prepare transaction drafts.
+
+**Level D — Controlled Actions**
+- Update an authorized record.
+- Create a permitted business record.
+- Execute an approved operation.
+
+**Level E — High-Impact Actions**
+- Financial adjustments.
+- Destructive data operations.
+- Sensitive account changes.
+- Irreversible business operations.
+
+Level D and Level E actions require explicit permission checks and applicable approval controls.
+
+An AI-generated recommendation or user message must not be treated as authorization.
+
+---
+
+# PART 8 — TOOL INVOCATION CONTRACT
+
+## 8.1 Tool Architecture
+
+Agents must interact with GeFlow's business capabilities through a controlled tool interface.
+
+They must not receive unrestricted direct database access.
+
+Proposed logical tool invocation:
+
+```json
+{
+  "tool_call_id": "unique-tool-call-id",
+  "request_id": "parent-request-id",
+  "agent_id": "AGT-001",
+  "tool_id": "inventory.read",
+  "action": "read",
+  "resource": {
+    "type": "product",
+    "resource_id": "authorized-product-reference"
+  },
+  "parameters": {},
+  "authorization_context_ref": "trusted-authorization-reference"
+}
+```
+
+This is a conceptual schema, not an implemented endpoint.
+
+## 8.2 Tool Categories
+
+Define possible tool groups:
+
+1. Business profile tools.
+2. Category information tools.
+3. Product tools.
+4. Inventory tools.
+5. Purchase tools.
+6. Supplier tools.
+7. POS and sales tools.
+8. Customer tools.
+9. Reporting tools.
+10. Notification tools.
+11. Document tools.
+12. AI analysis tools.
+13. Administrative tools.
+
+Only tools verified to exist in GeFlow may be listed as currently available.
+
+Future tools must be classified as proposed.
+
+## 8.3 Tool Execution Rules
+
+Every invocation must be checked for:
+
+- Valid agent identity.
+- Valid tenant.
+- Valid business.
+- Valid resource ownership.
+- User permissions.
+- Agent capability.
+- Tool authorization.
+- Input schema.
+- Business rules.
+- Execution risk.
+- Approval requirements.
+
+The tool service must perform its own authorization checks. It must not rely exclusively on the AI model's decision.
+
+## 8.4 Tool Results
+
+Tool responses must distinguish:
+
+- Successful execution.
+- Successful read with no matching records.
+- Validation failure.
+- Authorization failure.
+- Resource not found.
+- Temporary failure.
+- Permanent failure.
+- Approval required.
+- Execution pending.
+
+The agent must not claim an operation succeeded until the trusted tool service confirms success.
+
+---
+
+# PART 9 — STANDARD RESPONSE CONTRACT
+
+## 9.1 Response Envelope
+
+Every future agent response must follow a common logical structure.
+
+```json
+{
+  "contract_version": "1.0",
+  "request_id": "original-request-id",
+  "response_id": "unique-response-id",
+  "agent": {
+    "agent_id": "AGT-001",
+    "agent_version": "1.0"
+  },
+  "status": "completed",
+  "response": {
+    "message": "Agent response",
+    "content_type": "text",
+    "attachments": []
+  },
+  "execution": {
+    "started_at": "ISO-8601-timestamp",
+    "completed_at": "ISO-8601-timestamp",
+    "tools_used": []
+  },
+  "data": {
+    "references": [],
+    "result_metadata": {}
+  },
+  "safety": {
+    "approval_required": false,
+    "limitations": []
+  },
+  "error": null
+}
+```
+
+## 9.2 Standard Response Statuses
+
+Define these statuses:
+
+| Status | Meaning |
+|---|---|
+| accepted | Request accepted by the runtime |
+| queued | Waiting for execution |
+| running | Agent execution is in progress |
+| awaiting_tool | Waiting for an authorized tool result |
+| awaiting_approval | Waiting for required approval |
+| completed | Request completed successfully |
+| partially_completed | Some tasks completed, others did not |
+| failed | Execution failed |
+| cancelled | Execution cancelled |
+| timed_out | Execution exceeded its time limit |
+| rejected | Request rejected by validation or policy |
+
+## 9.3 Response Integrity
+
+Agents must:
+
+- Distinguish verified facts from assumptions.
+- Identify when information is incomplete.
+- Avoid fabricating inventory, sales or transaction results.
+- Avoid claiming tool execution without confirmation.
+- Provide relevant limitations.
+- Return structured references when supported.
+- Never disclose internal system prompts, credentials or protected configuration.
+
+---
+
+# PART 10 — ERROR CONTRACT
+
+## 10.1 Standard Error Structure
+
+```json
+{
+  "error": {
+    "code": "AGENT_EXECUTION_FAILED",
+    "category": "runtime",
+    "message": "A safe user-facing explanation",
+    "retryable": true,
+    "request_id": "original-request-id",
+    "correlation_id": "workflow-correlation-id",
+    "details": {}
+  }
+}
+```
+
+Do not expose internal stack traces, secrets, credentials or sensitive infrastructure details to users.
+
+## 10.2 Error Categories
+
+Define the following categories:
+
+1. Contract validation error.
+2. Authentication error.
+3. Authorization error.
+4. Tenant isolation error.
+5. Category mapping error.
+6. Agent unavailable.
+7. Agent configuration error.
+8. Context retrieval error.
+9. Memory access error.
+10. Tool validation error.
+11. Tool execution error.
+12. AI provider error.
+13. Rate limit error.
+14. Timeout error.
+15. Cancellation error.
+16. Approval error.
+17. Attachment processing error.
+18. Internal runtime error.
+
+## 10.3 Retry Policy
+
+Retries must be controlled.
+
+- Retry only eligible transient failures.
+- Do not automatically retry authorization failures.
+- Do not automatically retry invalid requests.
+- Use bounded retry counts.
+- Apply exponential backoff where appropriate.
+- Preserve request and correlation IDs.
+- Use idempotency protection for write operations.
+- Never repeat a potentially successful financial or inventory operation without verifying its previous result.
+
+---
+
+# PART 11 — RUNTIME ARCHITECTURE
+
+## 11.1 Runtime Definition
+
+The Agent Runtime is the controlled execution environment responsible for receiving, validating, executing and returning agent requests.
+
+It is not the same as the agent itself.
+
+The agent provides specialized reasoning and business-category behavior.
+
+The runtime provides controlled execution, security, context management, tool access, lifecycle management and observability.
+
+## 11.2 Logical Runtime Components
+
+Specify the following components:
+
+### 1. Request Gateway
+
+Responsibilities:
+- Receive incoming requests.
+- Validate request structure.
+- Apply request size limits.
+- Establish request identifiers.
+- Forward validated requests to the next stage.
+
+### 2. Authentication and Authorization Layer
+
+Responsibilities:
+- Verify authenticated identity.
+- Validate tenant access.
+- Validate business permissions.
+- Establish trusted authorization context.
+
+### 3. Category Resolver
+
+Responsibilities:
+- Resolve the business category.
+- Retrieve its approved primary-agent mapping.
+- Reject missing or ambiguous mappings.
+- Validate mapping status.
+
+### 4. Agent Registry Resolver
+
+Responsibilities:
+- Identify the correct agent.
+- Retrieve approved agent configuration.
+- Validate agent lifecycle status.
+- Check contract compatibility.
+
+### 5. Context Manager
+
+Responsibilities:
+- Retrieve authorized business context.
+- Load relevant conversation context.
+- Apply memory policies.
+- Prevent unauthorized context access.
+
+### 6. Runtime Orchestrator
+
+Responsibilities:
+- Manage execution lifecycle.
+- Apply execution limits.
+- Coordinate agent invocation.
+- Manage tool-call cycles.
+- Handle cancellation and timeouts.
+
+This component must not be interpreted as permission for unrestricted agent-to-agent delegation.
+
+### 7. Model Execution Adapter
+
+Responsibilities:
+- Connect the approved agent configuration to an authorized AI execution provider.
+- Normalize provider requests and responses.
+- Handle provider errors.
+- Apply configured model limits.
+
+The actual provider architecture must be based on the existing GeFlow implementation and separately approved future decisions.
+
+### 8. Tool Gateway
+
+Responsibilities:
+- Validate tool calls.
+- Enforce permissions.
+- Invoke authorized business services.
+- Return structured results.
+- Record execution outcomes.
+
+### 9. Response Normalizer
+
+Responsibilities:
+- Validate the agent response.
+- Apply the standard response contract.
+- Sanitize unsafe output.
+- Return execution status and result metadata.
+
+### 10. Observability Layer
+
+Responsibilities:
+- Record request and execution metadata.
+- Track latency.
+- Record errors.
+- Track tool usage.
+- Monitor runtime health.
+- Maintain audit references.
+
+### 11. Memory and Context Storage Interface
+
+Responsibilities:
+- Retrieve permitted context.
+- Enforce tenant isolation.
+- Apply memory retention rules.
+- Maintain appropriate access boundaries.
+
+Do not assume a particular database or storage product.
+
+---
+
+# PART 12 — RUNTIME EXECUTION LIFECYCLE
+
+Define the complete request lifecycle.
+
+## Stage 1 — Request Received
+
+A user submits a request through an existing GeFlow interface or another explicitly authorized integration.
+
+## Stage 2 — Request Validation
+
+The request gateway validates its structure and required fields.
+
+## Stage 3 — Authentication
+
+The runtime verifies the authenticated user.
+
+## Stage 4 — Tenant Authorization
+
+The runtime verifies that the user is authorized to access the requested business.
+
+## Stage 5 — Category Resolution
+
+The category resolver retrieves the business's verified category.
+
+## Stage 6 — Primary Agent Resolution
+
+The system retrieves the designated primary agent from the approved mapping registry.
+
+## Stage 7 — Agent Validation
+
+The runtime verifies agent identity, lifecycle status, configuration and contract compatibility.
+
+## Stage 8 — Context Preparation
+
+The context manager retrieves the minimum required authorized context.
+
+## Stage 9 — Capability Validation
+
+The runtime establishes which capabilities are available for the request.
+
+## Stage 10 — Agent Execution
+
+The selected agent processes the request within its authorized boundaries.
+
+## Stage 11 — Tool Request
+
+If the agent needs business data or an operation, it submits a structured tool request.
+
+## Stage 12 — Tool Authorization
+
+The tool gateway independently checks permissions, ownership, risk and approval requirements.
+
+## Stage 13 — Tool Execution
+
+Only authorized tools execute.
+
+## Stage 14 — Tool Result
+
+The runtime returns the structured tool result to the agent.
+
+## Stage 15 — Response Generation
+
+The agent generates its final response using verified results and authorized context.
+
+## Stage 16 — Response Validation
+
+The runtime validates the response envelope and applies required safety checks.
+
+## Stage 17 — Audit and Completion
+
+The runtime records the appropriate execution metadata and final status.
+
+## Stage 18 — User Response
+
+The validated response is returned to the requesting user.
+
+### Lifecycle Diagram
+
+```mermaid
+flowchart TD
+    A[User Request] --> B[Request Gateway]
+    B --> C[Request Validation]
+    C --> D[Authentication and Authorization]
+    D --> E[Tenant Validation]
+    E --> F[Category Resolver]
+    F --> G[Primary Agent Resolver]
+    G --> H[Agent and Contract Validation]
+    H --> I[Context Preparation]
+    I --> J[Capability Validation]
+    J --> K[Agent Execution]
+    K --> L{Tool Required?}
+    L -- No --> M[Response Generation]
+    L -- Yes --> N[Tool Gateway]
+    N --> O[Permission and Policy Validation]
+    O --> P{Authorized?}
+    P -- No --> Q[Structured Error or Approval]
+    P -- Yes --> R[Tool Execution]
+    R --> S[Tool Result]
+    S --> K
+    Q --> M
+    M --> T[Response Validation]
+    T --> U[Audit and Completion]
+    U --> V[Return Response]
+```
+
+---
+
+# PART 13 — RUNTIME EXECUTION MODES
+
+Define the following modes.
+
+## 13.1 Synchronous Execution
+
+For short interactions where the user expects a response in the same request cycle.
+
+Examples:
+- General business questions.
+- Simple inventory queries.
+- Short report summaries.
+
+Requirements:
+- Bounded execution time.
+- Predictable response structure.
+- Proper timeout handling.
+
+## 13.2 Asynchronous Execution
+
+For longer-running work.
+
+Examples:
+- Large report preparation.
+- Multiple-document analysis.
+- Complex business analysis.
+- Large authorized data-processing tasks.
+
+Requirements:
+- Persistent execution reference.
+- Queued/running status.
+- Progress reporting where supported.
+- Cancellation policy.
+- Completion or failure notification.
+
+## 13.3 Streaming Execution
+
+For supported real-time responses.
+
+Requirements:
+- Defined event structure.
+- Ordered response chunks.
+- Request correlation.
+- Cancellation support.
+- Final completion event.
+- No partial message may be represented as a completed business operation.
+
+## 13.4 Draft Execution
+
+For operations that should be prepared but not committed.
+
+Examples:
+- Purchase drafts.
+- Inventory adjustment proposals.
+- Business action plans.
+
+A draft must not silently become a committed database operation.
+
+## 13.5 Controlled Write Execution
+
+For authorized operations that modify business records.
+
+Requirements:
+- Independent authorization.
+- Business-rule validation.
+- Idempotency.
+- Transaction integrity.
+- Approval when required.
+- Auditable execution result.
+
+---
+
+# PART 14 — RUNTIME STATE MACHINE
+
+Define the following lifecycle states:
+
+1. RECEIVED
+2. VALIDATING
+3. AUTHENTICATING
+4. AUTHORIZING
+5. RESOLVING_AGENT
+6. PREPARING_CONTEXT
+7. READY
+8. QUEUED
+9. RUNNING
+10. WAITING_FOR_TOOL
+11. WAITING_FOR_APPROVAL
+12. COMPLETING
+13. COMPLETED
+14. PARTIALLY_COMPLETED
+15. FAILED
+16. CANCELLED
+17. TIMED_OUT
+18. REJECTED
+
+### State Transition Rules
+
+- A request cannot enter RUNNING before authorization and agent validation.
+- A rejected request cannot execute tools.
+- An unauthorized tool request cannot modify business data.
+- WAITING_FOR_APPROVAL must not be treated as approved.
+- COMPLETED must only be assigned after the execution is confirmed.
+- A terminal state must not silently return to RUNNING.
+- Any retry must create an auditable execution attempt under the same appropriate request correlation.
+
+Document all permitted transitions and invalid transitions.
+
+---
+
+# PART 15 — MEMORY AND CONVERSATION RUNTIME SPECIFICATION
+
+## 15.1 Memory Separation
+
+Distinguish these memory types:
+
+**A. Conversation Memory**
+- Context of an individual conversation.
+- Relevant previous messages.
+- Current task history.
+
+**B. Agent Configuration Memory**
+- Agent identity.
+- Agent instructions.
+- Category specialization.
+- Approved behavior configuration.
+
+**C. Business Memory**
+- Business-specific preferences.
+- Operational patterns.
+- Approved business context.
+
+**D. User Preferences**
+- Authorized user preferences relevant to GeFlow interactions.
+
+**E. Operational History**
+- References to previous business operations and outcomes.
+
+These memory types must not be mixed indiscriminately.
+
+## 15.2 Isolation Requirements
+
+- Every memory record must have an explicit ownership scope.
+- Tenant-specific memory must be tenant-isolated.
+- Business-specific memory must be business-isolated.
+- User-specific memory must follow applicable authorization.
+- Agent configuration must not be writable through ordinary user conversation.
+- Memory retrieval must be permission-checked.
+- Memory retention and deletion rules must be defined.
+- Sensitive data must not be stored unnecessarily.
+
+## 15.3 Memory Accuracy
+
+The agent must distinguish:
+
+- Verified current facts.
+- Historical facts.
+- User-provided claims.
+- Model-generated inferences.
+- Missing information.
+
+The agent must not convert an inference into a verified business record.
+
+---
+
+# PART 16 — SECURITY AND EXECUTION GOVERNANCE
+
+## 16.1 Security Boundaries
+
+Define and document:
+
+1. Authentication boundary.
+2. Tenant boundary.
+3. Business boundary.
+4. Agent identity boundary.
+5. Tool permission boundary.
+6. Memory boundary.
+7. Configuration boundary.
+8. Execution boundary.
+9. Audit boundary.
+
+## 16.2 Prompt Injection Protection
+
+The runtime must treat user messages, uploaded documents and retrieved external content as untrusted input.
+
+Requirements:
+
+- Untrusted content cannot override system policy.
+- Untrusted content cannot grant permissions.
+- Retrieved documents cannot authorize tool execution.
+- A prompt cannot change the agent's identity.
+- A prompt cannot change tenant ownership.
+- A prompt cannot disable security validation.
+- Tool execution must be independently authorized.
+
+## 16.3 Secrets and Credentials
+
+- Do not expose provider API keys to the browser.
+- Do not include credentials in agent prompts.
+- Do not return secrets in agent responses.
+- Use approved server-side secret-management mechanisms.
+- Redact sensitive values from logs.
+
+## 16.4 High-Impact Operations
+
+Define additional approval requirements for:
+
+- Financial adjustments.
+- Refunds.
+- Sensitive customer-data changes.
+- Destructive operations.
+- Account and permission changes.
+- Other high-impact actions identified during risk assessment.
+
+The model must never approve its own high-impact operation.
+
+## 16.5 Human Approval
+
+The architecture must support a controlled approval workflow where required.
+
+Document:
+
+- Who can approve.
+- Which operation requires approval.
+- How approval is associated with a specific request.
+- How approval expires.
+- How rejected requests are handled.
+- How approval is audited.
+
+Approval must be explicit and tied to the exact proposed operation.
+
+---
+
+# PART 17 — EXECUTION RELIABILITY AND PERFORMANCE
+
+Define runtime policies for:
+
+### 17.1 Timeouts
+- Request validation timeout.
+- Context retrieval timeout.
+- Model execution timeout.
+- Tool execution timeout.
+- Overall execution deadline.
+
+Actual numeric values must be established after reviewing current infrastructure and expected workload. Do not invent production limits.
+
+### 17.2 Concurrency
+- Per-tenant execution limits.
+- Per-agent execution limits.
+- Per-user execution limits.
+- Provider concurrency limits.
+- Tool-specific concurrency restrictions.
+
+### 17.3 Rate Limiting
+- User-level limits.
+- Tenant-level limits.
+- Agent-level limits.
+- Tool-level limits.
+- Provider-level limits.
+
+### 17.4 Idempotency
+
+Write operations must support an appropriate idempotency strategy.
+
+Repeated requests must not accidentally:
+- Create duplicate purchases.
+- Apply the same stock adjustment twice.
+- Record duplicate transactions.
+- Trigger duplicate financial operations.
+
+### 17.5 Cancellation
+
+Document:
+- User cancellation.
+- Runtime cancellation.
+- Timeout cancellation.
+- Tool cancellation where supported.
+- Behavior when cancellation occurs after a write operation has already committed.
+
+### 17.6 Circuit Breaking and Degradation
+
+Define behavior when:
+- AI providers are unavailable.
+- Database services are unavailable.
+- Tool services are unavailable.
+- Context retrieval fails.
+- A particular agent is suspended.
+
+A failure in one agent must not automatically compromise unrelated agents.
+
+---
+
+# PART 18 — OBSERVABILITY AND AUDIT CONTRACT
+
+## 18.1 Required Identifiers
+
+Define consistent identifiers:
+
+- request_id
+- response_id
+- correlation_id
+- conversation_id
+- tenant_id
+- business_id
+- agent_id
+- agent_version
+- contract_version
+- tool_call_id
+- execution_attempt_id
+
+Sensitive identifiers must be handled according to applicable data-protection policies.
+
+## 18.2 Runtime Metrics
+
+Specify the ability to measure:
+
+- Request volume.
+- Successful execution rate.
+- Failed execution rate.
+- Average execution duration.
+- Response latency.
+- Timeout frequency.
+- Tool invocation count.
+- Tool failure rate.
+- Approval wait time.
+- Provider failure rate.
+- Agent availability.
+- Token and AI usage where available.
+- Per-tenant usage and limits.
+
+## 18.3 Audit Events
+
+Define audit events for:
+
+- Request accepted.
+- Request rejected.
+- Agent resolved.
+- Context loaded.
+- Tool requested.
+- Tool authorized or denied.
+- Approval requested.
+- Approval granted or rejected.
+- Tool execution completed.
+- Agent response generated.
+- Execution failed.
+- Execution cancelled.
+
+Logs must not expose full sensitive records or unnecessary private conversation content.
+
+---
+
+# PART 19 — 29-AGENT CONTRACT COMPLIANCE
+
+All 29 agents must follow the same foundational contract.
+
+Their differences must be expressed through approved configuration and category-specific policies.
+
+| Agent | ID | Required Contract | Runtime |
+|---|---|---|---|
+| General Retail Agent | AGT-001 | Standard v1 | Shared |
+| Agriculture & Farming Supplies Agent | AGT-002 | Standard v1 | Shared |
+| Wholesale & Distribution Agent | AGT-003 | Standard v1 | Shared |
+| Optometry & Eyewear Agent | AGT-004 | Standard v1 | Shared |
+| Pet Shop & Veterinary Supplies Agent | AGT-005 | Standard v1 | Shared |
+| Sports & Fitness Equipment Agent | AGT-006 | Standard v1 | Shared |
+| Home Appliances & Kitchenware Agent | AGT-007 | Standard v1 | Shared |
+| Home Furniture & Living Agent | AGT-008 | Standard v1 | Shared |
+| Jewelry & Luxury Goods Agent | AGT-009 | Standard v1 | Shared |
+| Bookstore & Stationery Agent | AGT-010 | Standard v1 | Shared |
+| Hair Salon & Barbershop Agent | AGT-011 | Standard v1 | Shared |
+| Cosmetics & Beauty Agent | AGT-012 | Standard v1 | Shared |
+| Vehicle Repair & Service Garage Agent | AGT-013 | Standard v1 | Shared |
+| Auto Parts & Accessories Agent | AGT-014 | Standard v1 | Shared |
+| Plumbing & Sanitary Ware Agent | AGT-015 | Standard v1 | Shared |
+| Electrical & Lighting Agent | AGT-016 | Standard v1 | Shared |
+| Hardware & Construction Agent | AGT-017 | Standard v1 | Shared |
+| Bakery & Pastry Agent | AGT-018 | Standard v1 | Shared |
+| Cafe & Coffee Shop Agent | AGT-019 | Standard v1 | Shared |
+| Fast Food & Quick Service Agent | AGT-020 | Standard v1 | Shared |
+| Restaurant Agent | AGT-021 | Standard v1 | Shared |
+| Footwear & Shoes Agent | AGT-022 | Standard v1 | Shared |
+| Fashion & Apparel Agent | AGT-023 | Standard v1 | Shared |
+| Computer & IT Hardware Agent | AGT-024 | Standard v1 | Shared |
+| Mobile & Telecom Agent | AGT-025 | Standard v1 | Shared |
+| Electronics & Gadgets Agent | AGT-026 | Standard v1 | Shared |
+| Grocery Agent | AGT-027 | Standard v1 | Shared |
+| Supermarket & Hypermarket Agent | AGT-028 | Standard v1 | Shared |
+| Pharmacy & Health Store Agent | AGT-029 | Standard v1 | Shared |
+
+The table defines intended compliance, not current deployment status.
+
+For each agent, document:
+- Contract compatibility.
+- Category context requirements.
+- Authorized capabilities.
+- Permitted tool references.
+- Restricted actions.
+- Memory scope.
+- Runtime limits.
+- Safety requirements.
+- Validation status.
+
+---
+
+# PART 20 — AGENT-SPECIFIC CONFIGURATION CONTRACT
+
+Every agent must eventually have an individual configuration manifest.
+
+Proposed logical structure:
+
+```json
+{
+  "agent_id": "AGT-001",
+  "agent_version": "1.0",
+  "contract_version": "1.0",
+
+  "identity": {
+    "name": "General Retail Agent",
+    "category_id": "CAT-001",
+    "role": "primary_category_agent"
+  },
+
+  "specialization": {
+    "mission": "General retail business assistance",
+    "responsibilities": [],
+    "business_knowledge": [],
+    "restrictions": []
+  },
+
+  "runtime": {
+    "execution_modes": [],
+    "timeout_policy_ref": "policy-reference",
+    "memory_policy_ref": "memory-policy-reference"
+  },
+
+  "capabilities": [],
+  "allowed_tools": [],
+  "required_permissions": [],
+
+  "security": {
+    "tenant_isolation": true,
+    "delegation_allowed": false,
+    "approval_policies": []
+  },
+
+  "lifecycle": {
+    "registry_status": "finalized",
+    "configuration_status": "not_created",
+    "deployment_status": "not_deployed"
+  }
+}
+```
+
+This is a design example only.
+
+Do not create 29 configuration records in a live database during this step.
+
+---
+
+# PART 21 — CONTRACT VERSIONING AND COMPATIBILITY
+
+## 21.1 Versioning
+
+Define independent version references for:
+
+- Agent contract.
+- Agent configuration.
+- Agent registry.
+- Category mapping.
+- Runtime interface.
+- Tool interface.
+
+These versions must not be treated as interchangeable.
+
+## 21.2 Compatibility Rules
+
+Document:
+
+- Which runtime versions support each contract version.
+- Which agent configurations are compatible.
+- How deprecated fields are handled.
+- How breaking changes are introduced.
+- How older agents are migrated.
+- How rollback is performed.
+- How incompatible requests are rejected.
+
+## 21.3 Change Governance
+
+Any contract change must include:
+
+1. Change description.
+2. Reason for change.
+3. Affected agents.
+4. Affected categories.
+5. API or data compatibility impact.
+6. Security impact.
+7. Migration requirements, if applicable.
+8. Test requirements.
+9. Approval record.
+10. Rollback plan.
+
+No production contract change is authorized by this documentation step.
+
+---
+
+# PART 22 — TESTING AND VALIDATION SPECIFICATION
+
+Prepare a test plan for the future implementation.
+
+## 22.1 Contract Validation Tests
+
+- Valid request.
+- Missing required field.
+- Invalid contract version.
+- Invalid agent ID.
+- Invalid category mapping.
+- Invalid tenant reference.
+- Invalid execution mode.
+- Invalid request payload.
+- Unsupported attachment type.
+
+## 22.2 Authentication and Authorization Tests
+
+- Authenticated authorized user.
+- Unauthenticated user.
+- User without business access.
+- User with insufficient permissions.
+- Suspended agent.
+- Unapproved agent.
+- Unauthorized tool request.
+
+## 22.3 Tenant Isolation Tests
+
+- Tenant A cannot read Tenant B inventory.
+- Tenant A cannot read Tenant B conversations.
+- Tenant A cannot access Tenant B memory.
+- Tenant A cannot execute tools on Tenant B resources.
+- One business cannot modify another business's records.
+- Context references cannot be reused across unauthorized tenants.
+
+## 22.4 Runtime Tests
+
+- Successful synchronous execution.
+- Successful asynchronous execution.
+- Streaming interruption.
+- Tool timeout.
+- Model-provider failure.
+- Context retrieval failure.
+- Agent unavailable.
+- User cancellation.
+- Runtime cancellation.
+- Duplicate write request.
+- Retry after temporary failure.
+
+## 22.5 Safety Tests
+
+- Prompt injection attempt.
+- Unauthorized financial action.
+- Unauthorized stock adjustment.
+- Malicious uploaded content.
+- Cross-agent access attempt.
+- Sensitive-data disclosure attempt.
+- False tool-success claim.
+- Invalid approval reference.
+
+## 22.6 29-Agent Compliance Tests
+
+Each agent must pass:
+- Identity validation.
+- Category mapping validation.
+- Contract validation.
+- Capability boundary validation.
+- Tool permission validation.
+- Tenant isolation validation.
+- Response schema validation.
+- Error handling validation.
+
+A single agent passing does not prove that all 29 agents are compliant.
+
+---
+
+# PART 23 — REQUIRED DELIVERABLES
+
+The builder must prepare these documents:
+
+1. Agent Contract Architecture.
+2. Standard Agent Identity Contract.
+3. Standard Request Contract.
+4. Agent Context Contract.
+5. Capability Contract.
+6. Tool Invocation Contract.
+7. Standard Response Contract.
+8. Standard Error Contract.
+9. Runtime Architecture Specification.
+10. Runtime Execution Lifecycle.
+11. Runtime State Machine.
+12. Execution Modes Specification.
+13. Memory and Conversation Runtime Specification.
+14. Security and Authorization Specification.
+15. Tenant Isolation Specification.
+16. Reliability and Performance Specification.
+17. Observability and Audit Contract.
+18. 29-Agent Contract Compliance Matrix.
+19. Agent-Specific Configuration Manifest Template.
+20. Contract Versioning and Compatibility Policy.
+21. Future Testing and Validation Plan.
+22. Existing-System Compatibility Assessment.
+23. Architecture Risk Register.
+24. Evidence and Reference Index.
+25. Step 06 Completion Report.
+
+All documents must use the actual project structure and verified findings wherever applicable.
+
+---
+
+# PART 24 — ACCEPTANCE CRITERIA
+
+Step 06 is complete only when:
+
+- [ ] The common agent contract is defined.
+- [ ] Identity contract is defined.
+- [ ] Request contract is defined.
+- [ ] Context contract is defined.
+- [ ] Capability contract is defined.
+- [ ] Tool invocation contract is defined.
+- [ ] Response contract is defined.
+- [ ] Error contract is defined.
+- [ ] Runtime architecture is documented.
+- [ ] Runtime execution lifecycle is documented.
+- [ ] Runtime state transitions are documented.
+- [ ] Synchronous execution is specified.
+- [ ] Asynchronous execution is specified.
+- [ ] Streaming execution is specified.
+- [ ] Draft and controlled-write modes are specified.
+- [ ] Memory separation is defined.
+- [ ] Tenant isolation requirements are defined.
+- [ ] Security and approval boundaries are defined.
+- [ ] Reliability and failure-handling policies are documented.
+- [ ] Observability requirements are documented.
+- [ ] Versioning and compatibility rules are defined.
+- [ ] All 29 agents are covered by the common contract.
+- [ ] Agent-specific configuration requirements are documented.
+- [ ] Existing-system compatibility is assessed.
+- [ ] All unresolved technical decisions are recorded.
+- [ ] No unauthorized implementation changes have occurred.
+
+---
+
+# PART 25 — COMPLETION REPORT
+
+At the end, provide:
+
+**Step:** 06 — Agent Contract & Runtime Specification Finalization
+
+**Status:** Completed / Partially Completed / Blocked
+
+### Contract Summary
+- Contract version:
+- Identity contract:
+- Request contract:
+- Context contract:
+- Capability contract:
+- Tool contract:
+- Response contract:
+- Error contract:
+
+### Runtime Summary
+- Runtime architecture:
+- Execution lifecycle:
+- State machine:
+- Execution modes:
+- Memory isolation:
+- Tenant isolation:
+- Security boundaries:
+- Observability:
+
+### 29-Agent Compliance
+- Total agents covered:
+- Fully specified:
+- Partially specified:
+- Unresolved:
+- Contract compatibility issues:
+
+### Existing-System Compatibility
+- Verified existing components:
+- Proposed components:
+- Missing components:
+- Unverified components:
+- Potential integration risks:
+
+### Deliverables
+List every created or updated documentation file using its actual path.
+
+### Change Confirmation
+Explicitly confirm whether any existing application code, database objects, API contracts, configurations, dependencies or deployments were modified.
+
+Expected outcome: No changes.
+
+### Next Step
+Await explicit user authorization.
+
+---
+
+# FINAL EXECUTION INSTRUCTION
+
+Finalize the common Agent Contract and Runtime Specification for all 29 GeFlow agents.
+
+Maintain one standardized contract while preserving the unique identity, category specialization, permissions, knowledge boundaries and isolated business context of every agent.
+
+Use evidence from the actual GeFlow project wherever possible.
+
+Do not assume that a proposed runtime component, API, tool, database structure or execution feature already exists.
+
+**This step authorizes specification and documentation only. It does not authorize implementation.**
+
+Complete Step 06, submit the completion report and STOP.
+
+Wait for the user's explicit authorization before proceeding to the next step.

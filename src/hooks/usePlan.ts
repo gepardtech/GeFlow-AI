@@ -22,30 +22,39 @@ export interface PlanState {
   refreshPlan: () => Promise<void>;
 }
 
-const PLAN_LABELS: Record<PlanId, string> = {
+const PLAN_LABELS: Record<string, string> = {
   free: "Free",
   standard: "Standard",
+  standard_monthly: "Standard (Monthly)",
+  standard_yearly: "Standard (Yearly)",
+  standard_lifetime: "Standard (Lifetime)",
   premium: "Premium",
+  premium_monthly: "Premium (Monthly)",
+  premium_yearly: "Premium (Yearly)",
+  premium_lifetime: "Premium (Lifetime)",
   lifetime: "Lifetime VIP",
+  unlimited: "Unlimited Lifetime",
 };
 
 export const normalizePlan = (raw?: string | null): PlanId => {
   const p = (raw || "free").toLowerCase().trim();
-  if (p === "standard") return "standard";
-  if (p === "premium") return "premium";
+  if (!p || p === "free") return "free";
   if (p === "lifetime" || p === "unlimited") return "lifetime";
+  if (p === "premium_lifetime" || p.startsWith("premium") || p.includes("premium")) return "premium";
+  if (p === "standard_lifetime" || p.startsWith("standard") || p.includes("standard")) return "standard";
   return "free";
 };
 
-const toSummary = (id: PlanId): PlanSummary => ({
+const toSummary = (id: PlanId, raw?: string): PlanSummary => ({
   id,
-  label: PLAN_LABELS[id],
+  label: (raw && PLAN_LABELS[raw.toLowerCase()]) || PLAN_LABELS[id] || "Standard",
 });
 
 interface InternalPlanStore {
   loading: boolean;
   hasLoadedFromSupabase: boolean;
   planId: PlanId;
+  rawPlan: string;
   fullName: string | null;
   email: string | null;
   userId: string | null;
@@ -55,6 +64,7 @@ const planStore: InternalPlanStore = {
   loading: true,
   hasLoadedFromSupabase: false,
   planId: "free",
+  rawPlan: "free",
   fullName: null,
   email: null,
   userId: null,
@@ -134,51 +144,57 @@ async function fetchAuthoritativePlan(): Promise<void> {
         .maybeSingle();
 
       let resolvedPlan: PlanId = "free";
+      let resolvedRaw = "free";
 
       if (isAdmin) {
         resolvedPlan = "lifetime";
+        resolvedRaw = "lifetime";
       } else {
-        const subPlan = subData?.tier ? normalizePlan(subData.tier) : null;
-        const profPlan = profData?.plan ? normalizePlan(profData.plan) : null;
-        const metaPlan = user.user_metadata?.plan
-          ? normalizePlan(user.user_metadata.plan as string)
-          : null;
+        const candidateList: { raw: string; plan: PlanId }[] = [];
+        if (profData?.plan) candidateList.push({ raw: profData.plan, plan: normalizePlan(profData.plan) });
+        if (subData?.tier) candidateList.push({ raw: subData.tier, plan: normalizePlan(subData.tier) });
+        if (user.user_metadata?.plan) candidateList.push({ raw: String(user.user_metadata.plan), plan: normalizePlan(String(user.user_metadata.plan)) });
 
-        // Authoritative precedence: 1) Admin profile record, 2) active subscription, 3) auth metadata
-        if (profPlan) {
-          resolvedPlan = profPlan;
-        } else if (subPlan) {
-          resolvedPlan = subPlan;
-        } else if (metaPlan) {
-          resolvedPlan = metaPlan;
+        // Find the first paid tier among the sources
+        const paidCandidate = candidateList.find((c) => c.plan !== "free");
+        if (paidCandidate) {
+          resolvedPlan = paidCandidate.plan;
+          resolvedRaw = paidCandidate.raw;
+        } else if (candidateList.length > 0) {
+          resolvedPlan = candidateList[0].plan;
+          resolvedRaw = candidateList[0].raw;
         } else {
           resolvedPlan = "free";
+          resolvedRaw = "free";
         }
 
-        // Optional server route if RLS blocks client reads
-        if (resolvedPlan === "free") {
-          try {
-            const { data: sessionData } = await supabase.auth.getSession();
-            const token = sessionData?.session?.access_token;
-            if (token) {
-              const planRes = await fetch("/api/user/plan", {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (planRes.ok) {
-                const planJson = await planRes.json();
-                if (planJson?.success && planJson.planId) {
-                  resolvedPlan = normalizePlan(planJson.planId);
-                  if (planJson.fullName) planStore.fullName = planJson.fullName;
+        // Authoritative server check to bypass any client RLS restrictions or caching delays
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData?.session?.access_token;
+          if (token) {
+            const planRes = await fetch("/api/user/plan", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (planRes.ok) {
+              const planJson = await planRes.json();
+              if (planJson?.success && planJson.planId) {
+                const apiPlan = normalizePlan(planJson.planId);
+                if (apiPlan !== "free" || resolvedPlan === "free") {
+                  resolvedPlan = apiPlan;
+                  resolvedRaw = planJson.rawPlan || planJson.planId;
                 }
+                if (planJson.fullName) planStore.fullName = planJson.fullName;
               }
             }
-          } catch {
-            /* ignore */
           }
+        } catch {
+          /* ignore network errors */
         }
       }
 
       planStore.planId = resolvedPlan;
+      planStore.rawPlan = resolvedRaw;
       planStore.hasLoadedFromSupabase = true;
       planStore.loading = false;
     } catch (err) {
@@ -272,15 +288,16 @@ export const usePlan = (): PlanState => {
   }, []);
 
   const planId = planStore.planId;
+  const rawPlan = planStore.rawPlan || planId;
   const isPremiumOrLifetime = planId === "premium" || planId === "lifetime";
   const isStandardOrHigher = planId === "standard" || isPremiumOrLifetime;
-  const isLifetime = planId === "lifetime";
-  const isPaid = planId !== "free";
+  const isLifetime = planId === "lifetime" || rawPlan.includes("lifetime") || rawPlan === "unlimited";
+  const isPaid = planId !== "free" && rawPlan !== "free";
 
   return {
     loading: planStore.loading,
     planId,
-    plan: toSummary(planId),
+    plan: toSummary(planId, rawPlan),
     fullName: planStore.fullName,
     email: planStore.email,
     userId: planStore.userId,

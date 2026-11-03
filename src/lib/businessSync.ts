@@ -150,7 +150,26 @@ export async function fetchSyncedProducts(
     console.warn("Supabase direct query:", err);
   }
 
-  // 2. Fetch from the dedicated Operational Sync Engine
+  // 2. Fetch from authoritative PostgreSQL products endpoint
+  try {
+    const res = await fetch(`/api/user/products?businessId=${encodeURIComponent(businessId)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.products) && data.products.length > 0) {
+        let cleanProducts = (data.products as SyncedProductItem[]).filter((p) => !isDemoProduct(p));
+        if (options.statusOnly) {
+          cleanProducts = cleanProducts.filter((p) => p.status === options.statusOnly);
+        }
+        if (cleanProducts.length > 0) {
+          return cleanProducts;
+        }
+      }
+    }
+  } catch (apiErr) {
+    console.warn("Notice querying /api/user/products:", apiErr);
+  }
+
+  // 3. Fetch from the dedicated Operational Sync Engine
   try {
     const res = await fetch(`/api/sync/business-data?businessId=${encodeURIComponent(businessId)}&role=${encodeURIComponent(options.role || "manager")}`);
     if (res.ok) {

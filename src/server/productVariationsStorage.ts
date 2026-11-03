@@ -260,11 +260,16 @@ class ProductVariationsStorage {
   }
 
   public getByProduct(productId: string): ProductVariationsConfig | null {
-    return this.cache[productId] || null;
+    if (this.cache[productId]) return this.cache[productId];
+    // Check if any product has this ID with different case or string
+    const match = Object.values(this.cache).find((c) => String(c.product_id) === String(productId));
+    return match || null;
   }
 
   public getByBusiness(businessId: string): ProductVariationsConfig[] {
-    return Object.values(this.cache).filter((c) => c.business_id === businessId);
+    return Object.values(this.cache).filter(
+      (c) => String(c.business_id) === String(businessId)
+    );
   }
 
   public saveConfig(config: ProductVariationsConfig): ProductVariationsConfig {

@@ -945,6 +945,47 @@ export const UserSubscription = () => {
     }
   };
 
+  // Change upcoming billing cycle (e.g. from yearly to monthly or monthly to yearly)
+  const [updatingUpcomingCycle, setUpdatingUpcomingCycle] = useState(false);
+
+  const handleChangeUpcomingCycle = async (newCycle: "monthly" | "yearly") => {
+    if (currentPlanNormalized === "free" || currentPlanNormalized === "lifetime") return;
+    setUpdatingUpcomingCycle(true);
+    try {
+      const res = await fetch("/api/user/subscription/change-upcoming-cycle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          upcomingCycle: newCycle,
+          upcomingTier: currentPlanNormalized,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast({
+          title: `Upcoming Renewal Changed to ${newCycle.toUpperCase()}`,
+          description: `Your subscription will renew on the ${newCycle.toUpperCase()} schedule on ${nextAuditDate}. If you do not change it again, it will automatically renew as ${newCycle.toUpperCase()}.`,
+        });
+        await loadSubscriptionData();
+      } else {
+        toast({
+          title: "Could Not Update Renewal",
+          description: json.error || "Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (e: any) {
+      toast({
+        title: "Update Failed",
+        description: e.message || "Failed to update upcoming renewal cycle.",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingUpcomingCycle(false);
+    }
+  };
+
   return (
     <UserPanelGate pageTitle="Subscription" module="subscription">
       <div className="w-full space-y-10 min-w-0 pb-16">
@@ -1140,6 +1181,100 @@ export const UserSubscription = () => {
             </div>
           </div>
         </div>
+
+        {/* ========================================================================= */}
+        {/* SECTION: UPCOMING PLAN RENEWAL & BILLING CYCLE MANAGEMENT                 */}
+        {/* ========================================================================= */}
+        {currentPlanNormalized !== "free" && currentPlanNormalized !== "lifetime" && activeSub?.cycle !== "lifetime" && (
+          <div className="p-5 sm:p-6 rounded-3xl bg-card border border-border/80 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0 border border-sky-500/20">
+                  <RefreshCw className={`w-5 h-5 ${updatingUpcomingCycle ? "animate-spin" : ""}`} />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-foreground">
+                    Upcoming Renewal & Plan Cycle Management
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Your next renewal date is <strong className="text-foreground">{nextAuditDate}</strong> ({daysRemaining > 0 ? `${daysRemaining} days remaining` : "Renewal due"}).
+                  </p>
+                </div>
+              </div>
+
+              {/* Cycle Status Badge */}
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
+                  NEXT BILLING: {activeSub?.cycle === "yearly" ? "YEARLY PLAN" : "MONTHLY PLAN"}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-muted/30 border border-border/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1 max-w-xl">
+                <p className="text-xs font-bold text-foreground">
+                  Switch Your Upcoming Renewal Schedule:
+                </p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Before your plan ends, you can switch between <strong>Yearly</strong> and <strong>Monthly</strong> billing.
+                  If you do not change it, your subscription will automatically renew on the same{" "}
+                  <strong className="text-foreground uppercase">{activeSub?.cycle === "yearly" ? "Yearly" : "Monthly"}</strong> cycle as configured.
+                </p>
+              </div>
+
+              {/* Toggle Buttons to Change Cycle */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  disabled={updatingUpcomingCycle || activeSub?.cycle === "monthly"}
+                  onClick={() => handleChangeUpcomingCycle("monthly")}
+                  className={`h-10 px-4 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                    activeSub?.cycle === "monthly"
+                      ? "bg-primary text-primary-foreground border-primary shadow-xs cursor-default"
+                      : "bg-card border-border hover:bg-muted text-foreground"
+                  }`}
+                >
+                  <span>Monthly</span>
+                  <span className="font-mono text-[10px] opacity-80">
+                    (${planPricing[currentPlanNormalized as "standard" | "premium"]?.monthly || 9.99}/mo)
+                  </span>
+                  {activeSub?.cycle === "monthly" && <Check className="w-3.5 h-3.5" />}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={updatingUpcomingCycle || activeSub?.cycle === "yearly"}
+                  onClick={() => handleChangeUpcomingCycle("yearly")}
+                  className={`h-10 px-4 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                    activeSub?.cycle === "yearly"
+                      ? "bg-primary text-primary-foreground border-primary shadow-xs cursor-default"
+                      : "bg-card border-border hover:bg-muted text-foreground"
+                  }`}
+                >
+                  <span>Yearly</span>
+                  <span className="font-mono text-[10px] opacity-80">
+                    (${planPricing[currentPlanNormalized as "standard" | "premium"]?.yearly || 99.9}/yr)
+                  </span>
+                  <span className="px-1 py-0.2 rounded text-[9px] font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                    -20%
+                  </span>
+                  {activeSub?.cycle === "yearly" && <Check className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Clear System Guarantee Rule */}
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground px-1">
+              <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+              <span>
+                <strong>Automatic Renewal Guarantee:</strong> If unchanged, your workspace automatically renews on the current{" "}
+                <strong className="text-foreground uppercase">{activeSub?.cycle === "yearly" ? "Yearly" : "Monthly"}</strong> cycle at{" "}
+                <strong className="text-foreground">${currentRenewalRate.toFixed(2)}</strong> on{" "}
+                <strong className="text-foreground">{nextAuditDate}</strong>.
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* ========================================================================= */}
         {/* SECTION: EXPAND YOUR CAPABILITIES (PRICING TIERS)                         */}
