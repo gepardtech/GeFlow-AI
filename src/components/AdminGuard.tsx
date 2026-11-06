@@ -23,7 +23,10 @@ const AdminGuard = ({ children }: Props) => {
         cachedIsAdmin = true;
         return true;
       }
-      const raw = localStorage.getItem("sb-gvkvljxhufsrgyfsqrkc-auth-token") || localStorage.getItem("supabase.auth.token");
+      const raw =
+        localStorage.getItem("sb-jwdztevnodxoeyhcmrnf-auth-token") ||
+        localStorage.getItem("sb-gvkvljxhufsrgyfsqrkc-auth-token") ||
+        localStorage.getItem("supabase.auth.token");
       if (raw && (raw.includes("gepardwebs@gmail.com") || raw.includes('"role":"admin"'))) {
         cachedIsAdmin = true;
         return true;

@@ -1,0 +1,2817 @@
+[
+  {
+    "execution_id": "exec_1793978200273_a81d311b",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "inventory_audit",
+    "task_input": {
+      "sku": "MILK-001"
+    },
+    "requested_tool_ids": [
+      "inv_get_stock_level",
+      "inv_list_low_stock"
+    ],
+    "status": "failed",
+    "correlation_id": "corr_1793978200273_db0e39",
+    "idempotency_key": "idem_audit_001",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978200273_d08840",
+        "execution_id": "exec_1793978200273_a81d311b",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task inventory_audit",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.273Z"
+      },
+      {
+        "event_id": "evt_1793978200274_46079a",
+        "execution_id": "exec_1793978200273_a81d311b",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.274Z"
+      },
+      {
+        "event_id": "evt_1793978200499_4121ab",
+        "execution_id": "exec_1793978200273_a81d311b",
+        "event_type": "execution_failed",
+        "detail": "Required tool 'inv_get_stock_level' is not found in the Shared Tool Catalog.",
+        "from_status": "validating",
+        "to_status": "failed",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.499Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:16:40.273Z",
+    "updated_at": "2026-11-06T15:16:40.499Z",
+    "failure_code": "tool_execution_error",
+    "failure_reason": "Required tool 'inv_get_stock_level' is not found in the Shared Tool Catalog.",
+    "completed_at": "2026-11-06T15:16:40.499Z"
+  },
+  {
+    "execution_id": "exec_1793978200511_d0060866",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "inventory_audit",
+    "task_input": {
+      "sku": "MILK-001"
+    },
+    "requested_tool_ids": [
+      "inv_get_stock_level",
+      "inv_list_low_stock"
+    ],
+    "status": "failed",
+    "correlation_id": "corr_1793978200511_047ca4",
+    "idempotency_key": "idem_audit_001",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978200511_b9e725",
+        "execution_id": "exec_1793978200511_d0060866",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task inventory_audit",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.511Z"
+      },
+      {
+        "event_id": "evt_1793978200511_6762f2",
+        "execution_id": "exec_1793978200511_d0060866",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.511Z"
+      },
+      {
+        "event_id": "evt_1793978200627_339233",
+        "execution_id": "exec_1793978200511_d0060866",
+        "event_type": "execution_failed",
+        "detail": "Required tool 'inv_get_stock_level' is not found in the Shared Tool Catalog.",
+        "from_status": "validating",
+        "to_status": "failed",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.627Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:16:40.511Z",
+    "updated_at": "2026-11-06T15:16:40.627Z",
+    "failure_code": "tool_execution_error",
+    "failure_reason": "Required tool 'inv_get_stock_level' is not found in the Shared Tool Catalog.",
+    "completed_at": "2026-11-06T15:16:40.627Z"
+  },
+  {
+    "execution_id": "exec_1793978200629_1e9878d0",
+    "agent_id": "AGT-999",
+    "agent_name": "Unknown Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "diagnostic_echo",
+    "task_input": {},
+    "requested_tool_ids": [],
+    "status": "rejected",
+    "correlation_id": "corr_1793978200629_1487c1",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978200629_000cf4",
+        "execution_id": "exec_1793978200629_1e9878d0",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task diagnostic_echo",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.629Z"
+      },
+      {
+        "event_id": "evt_1793978200630_d731de",
+        "execution_id": "exec_1793978200629_1e9878d0",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.630Z"
+      },
+      {
+        "event_id": "evt_1793978200630_a69ae1",
+        "execution_id": "exec_1793978200629_1e9878d0",
+        "event_type": "execution_rejected",
+        "detail": "Agent 'AGT-999' is not registered in the 29-Agent Master Registry.",
+        "from_status": "validating",
+        "to_status": "rejected",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.630Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:16:40.629Z",
+    "updated_at": "2026-11-06T15:16:40.630Z",
+    "failure_code": "agent_unavailable",
+    "failure_reason": "Agent 'AGT-999' is not registered in the 29-Agent Master Registry.",
+    "completed_at": "2026-11-06T15:16:40.630Z"
+  },
+  {
+    "execution_id": "exec_1793978200631_d2fb61ca",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "diagnostic_echo",
+    "task_input": {},
+    "requested_tool_ids": [],
+    "status": "rejected",
+    "correlation_id": "corr_1793978200631_375d38",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978200631_ed5b02",
+        "execution_id": "exec_1793978200631_d2fb61ca",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task diagnostic_echo",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.631Z"
+      },
+      {
+        "event_id": "evt_1793978200631_5dc5fc",
+        "execution_id": "exec_1793978200631_d2fb61ca",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.631Z"
+      },
+      {
+        "event_id": "evt_1793978200631_f32a26",
+        "execution_id": "exec_1793978200631_d2fb61ca",
+        "event_type": "execution_rejected",
+        "detail": "Requested agent configuration version '9.9.9' does not match active approved version '1.0.0'.",
+        "from_status": "validating",
+        "to_status": "rejected",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.631Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:16:40.631Z",
+    "updated_at": "2026-11-06T15:16:40.631Z",
+    "failure_code": "configuration_error",
+    "failure_reason": "Requested agent configuration version '9.9.9' does not match active approved version '1.0.0'.",
+    "completed_at": "2026-11-06T15:16:40.631Z"
+  },
+  {
+    "execution_id": "exec_1793978200632_2e9e8316",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "diagnostic_echo",
+    "task_input": {},
+    "requested_tool_ids": [],
+    "status": "rejected",
+    "correlation_id": "corr_1793978200632_8e369e",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978200632_e40e7c",
+        "execution_id": "exec_1793978200632_2e9e8316",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task diagnostic_echo",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.632Z"
+      },
+      {
+        "event_id": "evt_1793978200633_7dc216",
+        "execution_id": "exec_1793978200632_2e9e8316",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.633Z"
+      },
+      {
+        "event_id": "evt_1793978200633_50fe15",
+        "execution_id": "exec_1793978200632_2e9e8316",
+        "event_type": "execution_rejected",
+        "detail": "Requested contract version '99.0' is incompatible with active contract '1.0'.",
+        "from_status": "validating",
+        "to_status": "rejected",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.633Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:16:40.632Z",
+    "updated_at": "2026-11-06T15:16:40.633Z",
+    "failure_code": "configuration_error",
+    "failure_reason": "Requested contract version '99.0' is incompatible with active contract '1.0'.",
+    "completed_at": "2026-11-06T15:16:40.633Z"
+  },
+  {
+    "execution_id": "exec_1793978200634_85cbfcad",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_outsider",
+    "requesting_user_email": "outsider@evil.test",
+    "task_type": "inventory_audit",
+    "task_input": {
+      "sku": "MILK-001"
+    },
+    "requested_tool_ids": [],
+    "status": "rejected",
+    "correlation_id": "corr_1793978200634_212ba0",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978200634_842e24",
+        "execution_id": "exec_1793978200634_85cbfcad",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task inventory_audit",
+        "actor_id": "user_step11_outsider",
+        "timestamp": "2026-11-06T15:16:40.634Z"
+      },
+      {
+        "event_id": "evt_1793978200634_520514",
+        "execution_id": "exec_1793978200634_85cbfcad",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_outsider",
+        "timestamp": "2026-11-06T15:16:40.634Z"
+      },
+      {
+        "event_id": "evt_1793978200669_2e9f3b",
+        "execution_id": "exec_1793978200634_85cbfcad",
+        "event_type": "execution_rejected",
+        "detail": "Organization authorization denied: User has no authorized ownership or active membership in this organization.",
+        "from_status": "validating",
+        "to_status": "rejected",
+        "actor_id": "user_step11_outsider",
+        "timestamp": "2026-11-06T15:16:40.670Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:16:40.634Z",
+    "updated_at": "2026-11-06T15:16:40.670Z",
+    "failure_code": "authorization_error",
+    "failure_reason": "Organization authorization denied: User has no authorized ownership or active membership in this organization.",
+    "completed_at": "2026-11-06T15:16:40.669Z"
+  },
+  {
+    "execution_id": "exec_1793978200671_2c8b8675",
+    "agent_id": "AGT-002",
+    "agent_name": "Agriculture & Farming Supplies Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-002",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "catalog_lookup",
+    "task_input": {
+      "sku": "MILK-001"
+    },
+    "requested_tool_ids": [],
+    "status": "rejected",
+    "correlation_id": "corr_1793978200671_3f1a8f",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978200671_773103",
+        "execution_id": "exec_1793978200671_2c8b8675",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task catalog_lookup",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.671Z"
+      },
+      {
+        "event_id": "evt_1793978200671_807cc3",
+        "execution_id": "exec_1793978200671_2c8b8675",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.671Z"
+      },
+      {
+        "event_id": "evt_1793978200744_11ca1e",
+        "execution_id": "exec_1793978200671_2c8b8675",
+        "event_type": "execution_rejected",
+        "detail": "Category authorization denied for CAT-002: Agent 'AGT-002' is not authorized for business category 'General Retail & Department Store' (Authorized: AGT-001). Cross-category access denied.",
+        "from_status": "validating",
+        "to_status": "rejected",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.744Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:16:40.671Z",
+    "updated_at": "2026-11-06T15:16:40.744Z",
+    "failure_code": "authorization_error",
+    "failure_reason": "Category authorization denied for CAT-002: Agent 'AGT-002' is not authorized for business category 'General Retail & Department Store' (Authorized: AGT-001). Cross-category access denied.",
+    "completed_at": "2026-11-06T15:16:40.744Z"
+  },
+  {
+    "execution_id": "exec_1793978200746_9a9ec53d",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "stock_adjustment",
+    "task_input": {
+      "sku": "MILK-001",
+      "quantity_delta": -50,
+      "reason": "Bulk spoilage write-off"
+    },
+    "requested_tool_ids": [
+      "inv_adjust_stock"
+    ],
+    "status": "failed",
+    "correlation_id": "corr_1793978200746_d95f75",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978200746_cd4492",
+        "execution_id": "exec_1793978200746_9a9ec53d",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task stock_adjustment",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.746Z"
+      },
+      {
+        "event_id": "evt_1793978200746_10cf03",
+        "execution_id": "exec_1793978200746_9a9ec53d",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.746Z"
+      },
+      {
+        "event_id": "evt_1793978200844_cd595b",
+        "execution_id": "exec_1793978200746_9a9ec53d",
+        "event_type": "execution_failed",
+        "detail": "Required tool 'inv_adjust_stock' is not found in the Shared Tool Catalog.",
+        "from_status": "validating",
+        "to_status": "failed",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.844Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:16:40.746Z",
+    "updated_at": "2026-11-06T15:16:40.844Z",
+    "failure_code": "tool_execution_error",
+    "failure_reason": "Required tool 'inv_adjust_stock' is not found in the Shared Tool Catalog.",
+    "completed_at": "2026-11-06T15:16:40.844Z"
+  },
+  {
+    "execution_id": "exec_1793978200847_69886ae4",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "stock_adjustment",
+    "task_input": {
+      "sku": "MILK-001",
+      "quantity_delta": 5,
+      "reason": "Restock from distributor"
+    },
+    "requested_tool_ids": [
+      "inv_adjust_stock"
+    ],
+    "status": "failed",
+    "correlation_id": "corr_1793978200846_8585d4",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978200847_3fe29f",
+        "execution_id": "exec_1793978200847_69886ae4",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task stock_adjustment",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.847Z"
+      },
+      {
+        "event_id": "evt_1793978200847_ad3eb1",
+        "execution_id": "exec_1793978200847_69886ae4",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.847Z"
+      },
+      {
+        "event_id": "evt_1793978200942_e292a2",
+        "execution_id": "exec_1793978200847_69886ae4",
+        "event_type": "execution_failed",
+        "detail": "Required tool 'inv_adjust_stock' is not found in the Shared Tool Catalog.",
+        "from_status": "validating",
+        "to_status": "failed",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.942Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:16:40.846Z",
+    "updated_at": "2026-11-06T15:16:40.942Z",
+    "failure_code": "tool_execution_error",
+    "failure_reason": "Required tool 'inv_adjust_stock' is not found in the Shared Tool Catalog.",
+    "completed_at": "2026-11-06T15:16:40.942Z"
+  },
+  {
+    "execution_id": "exec_1793978200946_f39621b9",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "stock_adjustment",
+    "task_input": {
+      "sku": "MILK-001",
+      "quantity_delta": -20,
+      "reason": "Unverified discrepancy"
+    },
+    "requested_tool_ids": [
+      "inv_adjust_stock"
+    ],
+    "status": "failed",
+    "correlation_id": "corr_1793978200946_75d5d1",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978200946_4278ec",
+        "execution_id": "exec_1793978200946_f39621b9",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task stock_adjustment",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.946Z"
+      },
+      {
+        "event_id": "evt_1793978200946_40ecc8",
+        "execution_id": "exec_1793978200946_f39621b9",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:40.946Z"
+      },
+      {
+        "event_id": "evt_1793978201031_a43b50",
+        "execution_id": "exec_1793978200946_f39621b9",
+        "event_type": "execution_failed",
+        "detail": "Required tool 'inv_adjust_stock' is not found in the Shared Tool Catalog.",
+        "from_status": "validating",
+        "to_status": "failed",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:41.031Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:16:40.946Z",
+    "updated_at": "2026-11-06T15:16:41.031Z",
+    "failure_code": "tool_execution_error",
+    "failure_reason": "Required tool 'inv_adjust_stock' is not found in the Shared Tool Catalog.",
+    "completed_at": "2026-11-06T15:16:41.031Z"
+  },
+  {
+    "execution_id": "exec_1793978201034_c656b367",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "stock_adjustment",
+    "task_input": {
+      "sku": "MILK-001",
+      "quantity_delta": -10,
+      "reason": "Pending test"
+    },
+    "requested_tool_ids": [
+      "inv_adjust_stock"
+    ],
+    "status": "failed",
+    "correlation_id": "corr_1793978201034_97fb74",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978201034_b3e245",
+        "execution_id": "exec_1793978201034_c656b367",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task stock_adjustment",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:41.034Z"
+      },
+      {
+        "event_id": "evt_1793978201034_2b4d9f",
+        "execution_id": "exec_1793978201034_c656b367",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:41.034Z"
+      },
+      {
+        "event_id": "evt_1793978201113_b59883",
+        "execution_id": "exec_1793978201034_c656b367",
+        "event_type": "execution_failed",
+        "detail": "Required tool 'inv_adjust_stock' is not found in the Shared Tool Catalog.",
+        "from_status": "validating",
+        "to_status": "failed",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:41.113Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:16:41.034Z",
+    "updated_at": "2026-11-06T15:16:41.113Z",
+    "failure_code": "tool_execution_error",
+    "failure_reason": "Required tool 'inv_adjust_stock' is not found in the Shared Tool Catalog.",
+    "completed_at": "2026-11-06T15:16:41.113Z"
+  },
+  {
+    "execution_id": "exec_1793978201115_5b72605d",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "diagnostic_echo",
+    "task_input": {
+      "message": "Ping"
+    },
+    "requested_tool_ids": [
+      "sys_diagnostic_echo"
+    ],
+    "status": "failed",
+    "correlation_id": "corr_1793978201115_40a109",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978201115_23f174",
+        "execution_id": "exec_1793978201115_5b72605d",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task diagnostic_echo",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:41.115Z"
+      },
+      {
+        "event_id": "evt_1793978201115_2f2b90",
+        "execution_id": "exec_1793978201115_5b72605d",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:41.115Z"
+      },
+      {
+        "event_id": "evt_1793978201177_f57bc8",
+        "execution_id": "exec_1793978201115_5b72605d",
+        "event_type": "execution_failed",
+        "detail": "Required tool 'sys_diagnostic_echo' is not found in the Shared Tool Catalog.",
+        "from_status": "validating",
+        "to_status": "failed",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:41.177Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:16:41.115Z",
+    "updated_at": "2026-11-06T15:16:41.177Z",
+    "failure_code": "tool_execution_error",
+    "failure_reason": "Required tool 'sys_diagnostic_echo' is not found in the Shared Tool Catalog.",
+    "completed_at": "2026-11-06T15:16:41.177Z"
+  },
+  {
+    "execution_id": "exec_1793978210335_b5122334",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "task_type": "inventory_audit",
+    "task_input": {
+      "sku": "MILK-001"
+    },
+    "requested_tool_ids": [
+      "inv_get_stock_level",
+      "inv_list_low_stock"
+    ],
+    "status": "failed",
+    "correlation_id": "corr_1793978210335_c240af",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978210335_ed6a37",
+        "execution_id": "exec_1793978210335_b5122334",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task inventory_audit",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:50.335Z"
+      },
+      {
+        "event_id": "evt_1793978210336_adba97",
+        "execution_id": "exec_1793978210335_b5122334",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:50.336Z"
+      },
+      {
+        "event_id": "evt_1793978210509_4e8358",
+        "execution_id": "exec_1793978210335_b5122334",
+        "event_type": "execution_failed",
+        "detail": "Required tool 'inv_get_stock_level' is not found in the Shared Tool Catalog.",
+        "from_status": "validating",
+        "to_status": "failed",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:16:50.509Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:16:50.335Z",
+    "updated_at": "2026-11-06T15:16:50.509Z",
+    "failure_code": "tool_execution_error",
+    "failure_reason": "Required tool 'inv_get_stock_level' is not found in the Shared Tool Catalog.",
+    "completed_at": "2026-11-06T15:16:50.509Z"
+  },
+  {
+    "execution_id": "exec_1793978465827_914bcc86",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "inventory_audit",
+    "task_input": {
+      "sku": "MILK-001"
+    },
+    "requested_tool_ids": [
+      "inventory.product.get"
+    ],
+    "status": "completed",
+    "correlation_id": "corr_1793978465827_e537ce",
+    "idempotency_key": "idem_audit_001",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [
+      {
+        "invocation_id": "invk_1793978466615_d67a63",
+        "execution_id": "exec_1793978465827_914bcc86",
+        "tool_id": "inventory.product.get",
+        "tool_version": "1.0.0",
+        "parameters": {
+          "sku": "MILK-001",
+          "productId": "prod_milk"
+        },
+        "status": "success",
+        "duration_ms": 175,
+        "result_data": {
+          "product": {
+            "id": "prod_milk",
+            "name": "Fresh Whole Milk 1L",
+            "status": "active"
+          }
+        },
+        "timestamp": "2026-11-06T15:21:06.615Z"
+      }
+    ],
+    "events": [
+      {
+        "event_id": "evt_1793978465827_b6479d",
+        "execution_id": "exec_1793978465827_914bcc86",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task inventory_audit",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:05.827Z"
+      },
+      {
+        "event_id": "evt_1793978465828_60f164",
+        "execution_id": "exec_1793978465827_914bcc86",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:05.828Z"
+      },
+      {
+        "event_id": "evt_1793978466439_427643",
+        "execution_id": "exec_1793978465827_914bcc86",
+        "event_type": "execution_queued",
+        "detail": "Execution validated and placed in run queue",
+        "from_status": "validating",
+        "to_status": "queued",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.439Z"
+      },
+      {
+        "event_id": "evt_1793978466439_bcdc3c",
+        "execution_id": "exec_1793978465827_914bcc86",
+        "event_type": "execution_started",
+        "detail": "Starting execution of tools",
+        "from_status": "queued",
+        "to_status": "running",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.439Z"
+      },
+      {
+        "event_id": "evt_1793978466440_456152",
+        "execution_id": "exec_1793978465827_914bcc86",
+        "event_type": "tool_invoked",
+        "detail": "Invoking tool 'inventory.product.get' (attempt 1/3)",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.440Z"
+      },
+      {
+        "event_id": "evt_1793978466615_7d3c7d",
+        "execution_id": "exec_1793978465827_914bcc86",
+        "event_type": "tool_succeeded",
+        "detail": "Tool 'inventory.product.get' completed successfully in 175ms.",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.615Z"
+      },
+      {
+        "event_id": "evt_1793978466615_5d4d70",
+        "execution_id": "exec_1793978465827_914bcc86",
+        "event_type": "execution_completed",
+        "detail": "All requested tasks and tools executed successfully.",
+        "from_status": "running",
+        "to_status": "completed",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.615Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:05.827Z",
+    "updated_at": "2026-11-06T15:21:06.615Z",
+    "started_at": "2026-11-06T15:21:06.439Z",
+    "result_data": {
+      "inventory.product.get": {
+        "product": {
+          "id": "prod_milk",
+          "name": "Fresh Whole Milk 1L",
+          "status": "active"
+        }
+      },
+      "inv_get_stock_level": {
+        "product": {
+          "id": "prod_milk",
+          "name": "Fresh Whole Milk 1L",
+          "status": "active"
+        }
+      }
+    },
+    "completed_at": "2026-11-06T15:21:06.615Z",
+    "duration_ms": 175
+  },
+  {
+    "execution_id": "exec_1793978466618_ee60ac85",
+    "agent_id": "AGT-999",
+    "agent_name": "Unknown Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "diagnostic_echo",
+    "task_input": {},
+    "requested_tool_ids": [],
+    "status": "rejected",
+    "correlation_id": "corr_1793978466618_f8f2c9",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978466618_7a2b5e",
+        "execution_id": "exec_1793978466618_ee60ac85",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task diagnostic_echo",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.618Z"
+      },
+      {
+        "event_id": "evt_1793978466618_cb0bfd",
+        "execution_id": "exec_1793978466618_ee60ac85",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.619Z"
+      },
+      {
+        "event_id": "evt_1793978466619_4a0a96",
+        "execution_id": "exec_1793978466618_ee60ac85",
+        "event_type": "execution_rejected",
+        "detail": "Agent 'AGT-999' is not registered in the 29-Agent Master Registry.",
+        "from_status": "validating",
+        "to_status": "rejected",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.619Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:06.618Z",
+    "updated_at": "2026-11-06T15:21:06.619Z",
+    "failure_code": "agent_unavailable",
+    "failure_reason": "Agent 'AGT-999' is not registered in the 29-Agent Master Registry.",
+    "completed_at": "2026-11-06T15:21:06.619Z"
+  },
+  {
+    "execution_id": "exec_1793978466620_551fb4f9",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "diagnostic_echo",
+    "task_input": {},
+    "requested_tool_ids": [],
+    "status": "rejected",
+    "correlation_id": "corr_1793978466620_779950",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978466620_e7b49e",
+        "execution_id": "exec_1793978466620_551fb4f9",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task diagnostic_echo",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.620Z"
+      },
+      {
+        "event_id": "evt_1793978466620_d4f679",
+        "execution_id": "exec_1793978466620_551fb4f9",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.620Z"
+      },
+      {
+        "event_id": "evt_1793978466621_414cb2",
+        "execution_id": "exec_1793978466620_551fb4f9",
+        "event_type": "execution_rejected",
+        "detail": "Requested agent configuration version '9.9.9' does not match active approved version '1.0.0'.",
+        "from_status": "validating",
+        "to_status": "rejected",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.621Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:06.620Z",
+    "updated_at": "2026-11-06T15:21:06.621Z",
+    "failure_code": "configuration_error",
+    "failure_reason": "Requested agent configuration version '9.9.9' does not match active approved version '1.0.0'.",
+    "completed_at": "2026-11-06T15:21:06.621Z"
+  },
+  {
+    "execution_id": "exec_1793978466622_038bed4e",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "diagnostic_echo",
+    "task_input": {},
+    "requested_tool_ids": [],
+    "status": "rejected",
+    "correlation_id": "corr_1793978466622_6e47f3",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978466622_665308",
+        "execution_id": "exec_1793978466622_038bed4e",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task diagnostic_echo",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.622Z"
+      },
+      {
+        "event_id": "evt_1793978466623_54f97e",
+        "execution_id": "exec_1793978466622_038bed4e",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.623Z"
+      },
+      {
+        "event_id": "evt_1793978466623_b389a6",
+        "execution_id": "exec_1793978466622_038bed4e",
+        "event_type": "execution_rejected",
+        "detail": "Requested contract version '99.0' is incompatible with active contract '1.0'.",
+        "from_status": "validating",
+        "to_status": "rejected",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.623Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:06.622Z",
+    "updated_at": "2026-11-06T15:21:06.623Z",
+    "failure_code": "configuration_error",
+    "failure_reason": "Requested contract version '99.0' is incompatible with active contract '1.0'.",
+    "completed_at": "2026-11-06T15:21:06.623Z"
+  },
+  {
+    "execution_id": "exec_1793978466625_8a59c331",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_outsider",
+    "requesting_user_email": "outsider@evil.test",
+    "task_type": "inventory_audit",
+    "task_input": {
+      "sku": "MILK-001"
+    },
+    "requested_tool_ids": [],
+    "status": "rejected",
+    "correlation_id": "corr_1793978466625_d506c6",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978466625_d602a8",
+        "execution_id": "exec_1793978466625_8a59c331",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task inventory_audit",
+        "actor_id": "user_step11_outsider",
+        "timestamp": "2026-11-06T15:21:06.625Z"
+      },
+      {
+        "event_id": "evt_1793978466625_3119ea",
+        "execution_id": "exec_1793978466625_8a59c331",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_outsider",
+        "timestamp": "2026-11-06T15:21:06.625Z"
+      },
+      {
+        "event_id": "evt_1793978466667_f54916",
+        "execution_id": "exec_1793978466625_8a59c331",
+        "event_type": "execution_rejected",
+        "detail": "Organization authorization denied: User has no authorized ownership or active membership in this organization.",
+        "from_status": "validating",
+        "to_status": "rejected",
+        "actor_id": "user_step11_outsider",
+        "timestamp": "2026-11-06T15:21:06.667Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:06.625Z",
+    "updated_at": "2026-11-06T15:21:06.667Z",
+    "failure_code": "authorization_error",
+    "failure_reason": "Organization authorization denied: User has no authorized ownership or active membership in this organization.",
+    "completed_at": "2026-11-06T15:21:06.667Z"
+  },
+  {
+    "execution_id": "exec_1793978466668_f2c0d1f6",
+    "agent_id": "AGT-002",
+    "agent_name": "Agriculture & Farming Supplies Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-002",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "catalog_lookup",
+    "task_input": {
+      "sku": "MILK-001"
+    },
+    "requested_tool_ids": [],
+    "status": "rejected",
+    "correlation_id": "corr_1793978466668_98d1f7",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978466668_e7e46e",
+        "execution_id": "exec_1793978466668_f2c0d1f6",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task catalog_lookup",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.668Z"
+      },
+      {
+        "event_id": "evt_1793978466669_9f0ec9",
+        "execution_id": "exec_1793978466668_f2c0d1f6",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.669Z"
+      },
+      {
+        "event_id": "evt_1793978466742_484f77",
+        "execution_id": "exec_1793978466668_f2c0d1f6",
+        "event_type": "execution_rejected",
+        "detail": "Category authorization denied for CAT-002: Agent 'AGT-002' is not authorized for business category 'General Retail & Department Store' (Authorized: AGT-001). Cross-category access denied.",
+        "from_status": "validating",
+        "to_status": "rejected",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.742Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:06.668Z",
+    "updated_at": "2026-11-06T15:21:06.742Z",
+    "failure_code": "authorization_error",
+    "failure_reason": "Category authorization denied for CAT-002: Agent 'AGT-002' is not authorized for business category 'General Retail & Department Store' (Authorized: AGT-001). Cross-category access denied.",
+    "completed_at": "2026-11-06T15:21:06.742Z"
+  },
+  {
+    "execution_id": "exec_1793978466744_c122a11e",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "stock_adjustment",
+    "task_input": {
+      "sku": "MILK-001",
+      "quantity_delta": -100,
+      "reason": "Bulk spoilage write-off"
+    },
+    "requested_tool_ids": [
+      "inventory.stock.adjust"
+    ],
+    "status": "awaiting_approval",
+    "correlation_id": "corr_1793978466744_c6e310",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [
+      {
+        "invocation_id": "invk_1793978466876_16be92",
+        "execution_id": "exec_1793978466744_c122a11e",
+        "tool_id": "inventory.stock.adjust",
+        "tool_version": "1.0.0",
+        "parameters": {
+          "reason": "Bulk spoilage write-off",
+          "productId": "prod_milk",
+          "deltaQuantity": 100,
+          "type": "out"
+        },
+        "status": "pending_approval",
+        "duration_ms": 75,
+        "result_data": {
+          "approval_id": "appr_1793978466875_5eac2d8f",
+          "status": "pending",
+          "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+          "approver_role": "manager"
+        },
+        "error_message": "Tool 'inventory.stock.adjust' requires authorization before execution: Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+        "approval_id": "appr_1793978466875_5eac2d8f",
+        "timestamp": "2026-11-06T15:21:06.876Z"
+      }
+    ],
+    "events": [
+      {
+        "event_id": "evt_1793978466744_52ffbc",
+        "execution_id": "exec_1793978466744_c122a11e",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task stock_adjustment",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.744Z"
+      },
+      {
+        "event_id": "evt_1793978466745_fd7985",
+        "execution_id": "exec_1793978466744_c122a11e",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.745Z"
+      },
+      {
+        "event_id": "evt_1793978466800_b8b058",
+        "execution_id": "exec_1793978466744_c122a11e",
+        "event_type": "execution_queued",
+        "detail": "Execution validated and placed in run queue",
+        "from_status": "validating",
+        "to_status": "queued",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.800Z"
+      },
+      {
+        "event_id": "evt_1793978466800_219e9b",
+        "execution_id": "exec_1793978466744_c122a11e",
+        "event_type": "execution_started",
+        "detail": "Starting execution of tools",
+        "from_status": "queued",
+        "to_status": "running",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.800Z"
+      },
+      {
+        "event_id": "evt_1793978466801_855161",
+        "execution_id": "exec_1793978466744_c122a11e",
+        "event_type": "tool_invoked",
+        "detail": "Invoking tool 'inventory.stock.adjust' (attempt 1/3)",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.801Z"
+      },
+      {
+        "event_id": "evt_1793978466876_2a7f45",
+        "execution_id": "exec_1793978466744_c122a11e",
+        "event_type": "approval_requested",
+        "detail": "Tool 'inventory.stock.adjust' requires approval. Approval ID: appr_1793978466875_5eac2d8f",
+        "from_status": "running",
+        "to_status": "awaiting_approval",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.876Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:06.744Z",
+    "updated_at": "2026-11-06T15:21:06.876Z",
+    "started_at": "2026-11-06T15:21:06.800Z",
+    "approval_reference": "appr_1793978466875_5eac2d8f"
+  },
+  {
+    "execution_id": "exec_1793978466877_92a32ff8",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "stock_adjustment",
+    "task_input": {
+      "sku": "MILK-001",
+      "quantity_delta": 100,
+      "reason": "Restock from distributor"
+    },
+    "requested_tool_ids": [
+      "inventory.stock.adjust"
+    ],
+    "status": "awaiting_approval",
+    "correlation_id": "corr_1793978466877_33871f",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [
+      {
+        "invocation_id": "invk_1793978467023_df6214",
+        "execution_id": "exec_1793978466877_92a32ff8",
+        "tool_id": "inventory.stock.adjust",
+        "tool_version": "1.0.0",
+        "parameters": {
+          "reason": "Restock from distributor",
+          "productId": "prod_milk",
+          "deltaQuantity": 100,
+          "type": "in"
+        },
+        "status": "pending_approval",
+        "duration_ms": 55,
+        "result_data": {
+          "approval_id": "appr_1793978467023_c76b9079",
+          "status": "pending",
+          "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+          "approver_role": "manager"
+        },
+        "error_message": "Tool 'inventory.stock.adjust' requires authorization before execution: Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+        "approval_id": "appr_1793978467023_c76b9079",
+        "timestamp": "2026-11-06T15:21:07.023Z"
+      },
+      {
+        "invocation_id": "invk_1793978467139_6c7cf4",
+        "execution_id": "exec_1793978466877_92a32ff8",
+        "tool_id": "inventory.stock.adjust",
+        "tool_version": "1.0.0",
+        "parameters": {
+          "reason": "Restock from distributor",
+          "productId": "prod_milk",
+          "deltaQuantity": 100,
+          "type": "in"
+        },
+        "status": "pending_approval",
+        "duration_ms": 114,
+        "result_data": {
+          "approval_id": "appr_1793978467138_100e2936",
+          "status": "pending",
+          "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+          "approver_role": "manager"
+        },
+        "error_message": "Tool 'inventory.stock.adjust' requires authorization before execution: Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+        "approval_id": "appr_1793978467138_100e2936",
+        "timestamp": "2026-11-06T15:21:07.139Z"
+      }
+    ],
+    "events": [
+      {
+        "event_id": "evt_1793978466877_2f62f2",
+        "execution_id": "exec_1793978466877_92a32ff8",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task stock_adjustment",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.877Z"
+      },
+      {
+        "event_id": "evt_1793978466878_391517",
+        "execution_id": "exec_1793978466877_92a32ff8",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.878Z"
+      },
+      {
+        "event_id": "evt_1793978466967_32fdc3",
+        "execution_id": "exec_1793978466877_92a32ff8",
+        "event_type": "execution_queued",
+        "detail": "Execution validated and placed in run queue",
+        "from_status": "validating",
+        "to_status": "queued",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.967Z"
+      },
+      {
+        "event_id": "evt_1793978466967_62a9cc",
+        "execution_id": "exec_1793978466877_92a32ff8",
+        "event_type": "execution_started",
+        "detail": "Starting execution of tools",
+        "from_status": "queued",
+        "to_status": "running",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.967Z"
+      },
+      {
+        "event_id": "evt_1793978466968_f0d637",
+        "execution_id": "exec_1793978466877_92a32ff8",
+        "event_type": "tool_invoked",
+        "detail": "Invoking tool 'inventory.stock.adjust' (attempt 1/3)",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:06.968Z"
+      },
+      {
+        "event_id": "evt_1793978467023_b062d3",
+        "execution_id": "exec_1793978466877_92a32ff8",
+        "event_type": "approval_requested",
+        "detail": "Tool 'inventory.stock.adjust' requires approval. Approval ID: appr_1793978467023_c76b9079",
+        "from_status": "running",
+        "to_status": "awaiting_approval",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.023Z"
+      },
+      {
+        "event_id": "evt_1793978467025_a1e9df",
+        "execution_id": "exec_1793978466877_92a32ff8",
+        "event_type": "approval_granted",
+        "detail": "Approval granted by user user_step11_manager. Resuming tool execution.",
+        "from_status": "awaiting_approval",
+        "to_status": "approved",
+        "actor_id": "user_step11_manager",
+        "timestamp": "2026-11-06T15:21:07.025Z"
+      },
+      {
+        "event_id": "evt_1793978467025_9d5425",
+        "execution_id": "exec_1793978466877_92a32ff8",
+        "event_type": "execution_started",
+        "detail": "Resuming tool execution after approval",
+        "from_status": "approved",
+        "to_status": "running",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.025Z"
+      },
+      {
+        "event_id": "evt_1793978467025_9d7cb6",
+        "execution_id": "exec_1793978466877_92a32ff8",
+        "event_type": "tool_invoked",
+        "detail": "Invoking tool 'inventory.stock.adjust' (attempt 1/3)",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.025Z"
+      },
+      {
+        "event_id": "evt_1793978467139_05fde0",
+        "execution_id": "exec_1793978466877_92a32ff8",
+        "event_type": "approval_requested",
+        "detail": "Tool 'inventory.stock.adjust' requires approval. Approval ID: appr_1793978467138_100e2936",
+        "from_status": "running",
+        "to_status": "awaiting_approval",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.139Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:06.877Z",
+    "updated_at": "2026-11-06T15:21:07.139Z",
+    "started_at": "2026-11-06T15:21:06.967Z",
+    "approval_reference": "appr_1793978467138_100e2936"
+  },
+  {
+    "execution_id": "exec_1793978467150_11214179",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "stock_adjustment",
+    "task_input": {
+      "sku": "MILK-001",
+      "quantity_delta": -100,
+      "reason": "Unverified discrepancy"
+    },
+    "requested_tool_ids": [
+      "inventory.stock.adjust"
+    ],
+    "status": "rejected",
+    "correlation_id": "corr_1793978467150_d10298",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [
+      {
+        "invocation_id": "invk_1793978467333_d73a06",
+        "execution_id": "exec_1793978467150_11214179",
+        "tool_id": "inventory.stock.adjust",
+        "tool_version": "1.0.0",
+        "parameters": {
+          "reason": "Unverified discrepancy",
+          "productId": "prod_milk",
+          "deltaQuantity": 100,
+          "type": "out"
+        },
+        "status": "pending_approval",
+        "duration_ms": 76,
+        "result_data": {
+          "approval_id": "appr_1793978467332_1c70b1de",
+          "status": "pending",
+          "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+          "approver_role": "manager"
+        },
+        "error_message": "Tool 'inventory.stock.adjust' requires authorization before execution: Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+        "approval_id": "appr_1793978467332_1c70b1de",
+        "timestamp": "2026-11-06T15:21:07.333Z"
+      }
+    ],
+    "events": [
+      {
+        "event_id": "evt_1793978467150_aca2ba",
+        "execution_id": "exec_1793978467150_11214179",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task stock_adjustment",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.150Z"
+      },
+      {
+        "event_id": "evt_1793978467151_8c9376",
+        "execution_id": "exec_1793978467150_11214179",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.151Z"
+      },
+      {
+        "event_id": "evt_1793978467256_4f15c6",
+        "execution_id": "exec_1793978467150_11214179",
+        "event_type": "execution_queued",
+        "detail": "Execution validated and placed in run queue",
+        "from_status": "validating",
+        "to_status": "queued",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.256Z"
+      },
+      {
+        "event_id": "evt_1793978467256_9715c1",
+        "execution_id": "exec_1793978467150_11214179",
+        "event_type": "execution_started",
+        "detail": "Starting execution of tools",
+        "from_status": "queued",
+        "to_status": "running",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.256Z"
+      },
+      {
+        "event_id": "evt_1793978467257_01ff1e",
+        "execution_id": "exec_1793978467150_11214179",
+        "event_type": "tool_invoked",
+        "detail": "Invoking tool 'inventory.stock.adjust' (attempt 1/3)",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.257Z"
+      },
+      {
+        "event_id": "evt_1793978467333_230f71",
+        "execution_id": "exec_1793978467150_11214179",
+        "event_type": "approval_requested",
+        "detail": "Tool 'inventory.stock.adjust' requires approval. Approval ID: appr_1793978467332_1c70b1de",
+        "from_status": "running",
+        "to_status": "awaiting_approval",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.333Z"
+      },
+      {
+        "event_id": "evt_1793978467334_a58be7",
+        "execution_id": "exec_1793978467150_11214179",
+        "event_type": "approval_rejected",
+        "detail": "Stock count doesn't match physical count",
+        "from_status": "awaiting_approval",
+        "to_status": "rejected",
+        "actor_id": "user_step11_manager",
+        "timestamp": "2026-11-06T15:21:07.334Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:07.150Z",
+    "updated_at": "2026-11-06T15:21:07.334Z",
+    "started_at": "2026-11-06T15:21:07.256Z",
+    "approval_reference": "appr_1793978467332_1c70b1de",
+    "failure_code": "approval_rejected",
+    "failure_reason": "Stock count doesn't match physical count"
+  },
+  {
+    "execution_id": "exec_1793978467335_ba1516e7",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "stock_adjustment",
+    "task_input": {
+      "sku": "MILK-001",
+      "quantity_delta": -100,
+      "reason": "Pending test"
+    },
+    "requested_tool_ids": [
+      "inventory.stock.adjust"
+    ],
+    "status": "cancelled",
+    "correlation_id": "corr_1793978467335_afde53",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [
+      {
+        "invocation_id": "invk_1793978467450_c38d4f",
+        "execution_id": "exec_1793978467335_ba1516e7",
+        "tool_id": "inventory.stock.adjust",
+        "tool_version": "1.0.0",
+        "parameters": {
+          "reason": "Pending test",
+          "productId": "prod_milk",
+          "deltaQuantity": 100,
+          "type": "out"
+        },
+        "status": "pending_approval",
+        "duration_ms": 53,
+        "result_data": {
+          "approval_id": "appr_1793978467450_fe591b3d",
+          "status": "pending",
+          "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+          "approver_role": "manager"
+        },
+        "error_message": "Tool 'inventory.stock.adjust' requires authorization before execution: Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+        "approval_id": "appr_1793978467450_fe591b3d",
+        "timestamp": "2026-11-06T15:21:07.450Z"
+      }
+    ],
+    "events": [
+      {
+        "event_id": "evt_1793978467335_f8792c",
+        "execution_id": "exec_1793978467335_ba1516e7",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task stock_adjustment",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.335Z"
+      },
+      {
+        "event_id": "evt_1793978467335_b37332",
+        "execution_id": "exec_1793978467335_ba1516e7",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.335Z"
+      },
+      {
+        "event_id": "evt_1793978467396_4ce2e5",
+        "execution_id": "exec_1793978467335_ba1516e7",
+        "event_type": "execution_queued",
+        "detail": "Execution validated and placed in run queue",
+        "from_status": "validating",
+        "to_status": "queued",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.396Z"
+      },
+      {
+        "event_id": "evt_1793978467396_e528a0",
+        "execution_id": "exec_1793978467335_ba1516e7",
+        "event_type": "execution_started",
+        "detail": "Starting execution of tools",
+        "from_status": "queued",
+        "to_status": "running",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.396Z"
+      },
+      {
+        "event_id": "evt_1793978467397_e3b1ce",
+        "execution_id": "exec_1793978467335_ba1516e7",
+        "event_type": "tool_invoked",
+        "detail": "Invoking tool 'inventory.stock.adjust' (attempt 1/3)",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.397Z"
+      },
+      {
+        "event_id": "evt_1793978467450_a84ae0",
+        "execution_id": "exec_1793978467335_ba1516e7",
+        "event_type": "approval_requested",
+        "detail": "Tool 'inventory.stock.adjust' requires approval. Approval ID: appr_1793978467450_fe591b3d",
+        "from_status": "running",
+        "to_status": "awaiting_approval",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.450Z"
+      },
+      {
+        "event_id": "evt_1793978467451_2cae7c",
+        "execution_id": "exec_1793978467335_ba1516e7",
+        "event_type": "execution_cancelled",
+        "detail": "Execution cancelled by user_step11_owner. Reason: User cancelled pending task",
+        "from_status": "awaiting_approval",
+        "to_status": "cancelled",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.451Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:07.335Z",
+    "updated_at": "2026-11-06T15:21:07.451Z",
+    "started_at": "2026-11-06T15:21:07.396Z",
+    "approval_reference": "appr_1793978467450_fe591b3d",
+    "cancellation_reason": "User cancelled pending task",
+    "cancelled_by": "user_step11_owner",
+    "completed_at": "2026-11-06T15:21:07.451Z"
+  },
+  {
+    "execution_id": "exec_1793978467452_fad81b55",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "diagnostic_echo",
+    "task_input": {
+      "message": "Ping"
+    },
+    "requested_tool_ids": [
+      "system.echo.test"
+    ],
+    "status": "completed",
+    "correlation_id": "corr_1793978467452_27ef2d",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [
+      {
+        "invocation_id": "invk_1793978467597_4601d5",
+        "execution_id": "exec_1793978467452_fad81b55",
+        "tool_id": "system.echo.test",
+        "tool_version": "1.0.0",
+        "parameters": {
+          "echo": "Ping"
+        },
+        "status": "success",
+        "duration_ms": 67,
+        "result_data": {
+          "echo": "Ping",
+          "timestamp": "2026-11-06T15:21:07.596Z",
+          "context": {
+            "agent_id": "AGT-001",
+            "business_id": "biz_step11_execution_test"
+          }
+        },
+        "timestamp": "2026-11-06T15:21:07.597Z"
+      }
+    ],
+    "events": [
+      {
+        "event_id": "evt_1793978467452_8ab61e",
+        "execution_id": "exec_1793978467452_fad81b55",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task diagnostic_echo",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.452Z"
+      },
+      {
+        "event_id": "evt_1793978467452_3e748e",
+        "execution_id": "exec_1793978467452_fad81b55",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.452Z"
+      },
+      {
+        "event_id": "evt_1793978467529_93da5c",
+        "execution_id": "exec_1793978467452_fad81b55",
+        "event_type": "execution_queued",
+        "detail": "Execution validated and placed in run queue",
+        "from_status": "validating",
+        "to_status": "queued",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.529Z"
+      },
+      {
+        "event_id": "evt_1793978467529_5ae264",
+        "execution_id": "exec_1793978467452_fad81b55",
+        "event_type": "execution_started",
+        "detail": "Starting execution of tools",
+        "from_status": "queued",
+        "to_status": "running",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.529Z"
+      },
+      {
+        "event_id": "evt_1793978467530_854720",
+        "execution_id": "exec_1793978467452_fad81b55",
+        "event_type": "tool_invoked",
+        "detail": "Invoking tool 'system.echo.test' (attempt 1/3)",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.530Z"
+      },
+      {
+        "event_id": "evt_1793978467597_72f27c",
+        "execution_id": "exec_1793978467452_fad81b55",
+        "event_type": "tool_succeeded",
+        "detail": "Tool 'system.echo.test' completed successfully in 67ms.",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.597Z"
+      },
+      {
+        "event_id": "evt_1793978467597_654656",
+        "execution_id": "exec_1793978467452_fad81b55",
+        "event_type": "execution_completed",
+        "detail": "All requested tasks and tools executed successfully.",
+        "from_status": "running",
+        "to_status": "completed",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:07.597Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:07.452Z",
+    "updated_at": "2026-11-06T15:21:07.597Z",
+    "started_at": "2026-11-06T15:21:07.529Z",
+    "result_data": {
+      "system.echo.test": {
+        "echo": "Ping",
+        "timestamp": "2026-11-06T15:21:07.596Z",
+        "context": {
+          "agent_id": "AGT-001",
+          "business_id": "biz_step11_execution_test"
+        }
+      },
+      "sys_diagnostic_echo": {
+        "echo": "Ping",
+        "timestamp": "2026-11-06T15:21:07.596Z",
+        "context": {
+          "agent_id": "AGT-001",
+          "business_id": "biz_step11_execution_test"
+        }
+      }
+    },
+    "completed_at": "2026-11-06T15:21:07.597Z",
+    "duration_ms": 67
+  },
+  {
+    "execution_id": "exec_1793978512642_fc692648",
+    "agent_id": "AGT-999",
+    "agent_name": "Unknown Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "diagnostic_echo",
+    "task_input": {},
+    "requested_tool_ids": [],
+    "status": "rejected",
+    "correlation_id": "corr_1793978512642_d4c516",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978512642_d8e373",
+        "execution_id": "exec_1793978512642_fc692648",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task diagnostic_echo",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:52.642Z"
+      },
+      {
+        "event_id": "evt_1793978512644_b8cb1d",
+        "execution_id": "exec_1793978512642_fc692648",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:52.644Z"
+      },
+      {
+        "event_id": "evt_1793978512648_835115",
+        "execution_id": "exec_1793978512642_fc692648",
+        "event_type": "execution_rejected",
+        "detail": "Agent 'AGT-999' is not registered in the 29-Agent Master Registry.",
+        "from_status": "validating",
+        "to_status": "rejected",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:52.648Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:52.642Z",
+    "updated_at": "2026-11-06T15:21:52.648Z",
+    "failure_code": "agent_unavailable",
+    "failure_reason": "Agent 'AGT-999' is not registered in the 29-Agent Master Registry.",
+    "completed_at": "2026-11-06T15:21:52.648Z"
+  },
+  {
+    "execution_id": "exec_1793978512652_68bc5e50",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "diagnostic_echo",
+    "task_input": {},
+    "requested_tool_ids": [],
+    "status": "rejected",
+    "correlation_id": "corr_1793978512652_b2cb21",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978512652_142dfe",
+        "execution_id": "exec_1793978512652_68bc5e50",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task diagnostic_echo",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:52.652Z"
+      },
+      {
+        "event_id": "evt_1793978512652_7dff47",
+        "execution_id": "exec_1793978512652_68bc5e50",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:52.652Z"
+      },
+      {
+        "event_id": "evt_1793978512660_cccd9e",
+        "execution_id": "exec_1793978512652_68bc5e50",
+        "event_type": "execution_rejected",
+        "detail": "Requested agent configuration version '9.9.9' does not match active approved version '1.0.0'.",
+        "from_status": "validating",
+        "to_status": "rejected",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:52.660Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:52.652Z",
+    "updated_at": "2026-11-06T15:21:52.660Z",
+    "failure_code": "configuration_error",
+    "failure_reason": "Requested agent configuration version '9.9.9' does not match active approved version '1.0.0'.",
+    "completed_at": "2026-11-06T15:21:52.660Z"
+  },
+  {
+    "execution_id": "exec_1793978512670_a5f3182f",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "diagnostic_echo",
+    "task_input": {},
+    "requested_tool_ids": [],
+    "status": "rejected",
+    "correlation_id": "corr_1793978512670_f0fdc2",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978512670_fa2027",
+        "execution_id": "exec_1793978512670_a5f3182f",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task diagnostic_echo",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:52.670Z"
+      },
+      {
+        "event_id": "evt_1793978512671_22a9b4",
+        "execution_id": "exec_1793978512670_a5f3182f",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:52.671Z"
+      },
+      {
+        "event_id": "evt_1793978512678_82bde3",
+        "execution_id": "exec_1793978512670_a5f3182f",
+        "event_type": "execution_rejected",
+        "detail": "Requested contract version '99.0' is incompatible with active contract '1.0'.",
+        "from_status": "validating",
+        "to_status": "rejected",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:52.678Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:52.670Z",
+    "updated_at": "2026-11-06T15:21:52.678Z",
+    "failure_code": "configuration_error",
+    "failure_reason": "Requested contract version '99.0' is incompatible with active contract '1.0'.",
+    "completed_at": "2026-11-06T15:21:52.678Z"
+  },
+  {
+    "execution_id": "exec_1793978512686_a59311ac",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_outsider",
+    "requesting_user_email": "outsider@evil.test",
+    "task_type": "inventory_audit",
+    "task_input": {
+      "sku": "MILK-001"
+    },
+    "requested_tool_ids": [],
+    "status": "rejected",
+    "correlation_id": "corr_1793978512685_8ddca3",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978512686_f37509",
+        "execution_id": "exec_1793978512686_a59311ac",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task inventory_audit",
+        "actor_id": "user_step11_outsider",
+        "timestamp": "2026-11-06T15:21:52.686Z"
+      },
+      {
+        "event_id": "evt_1793978512686_d1e18e",
+        "execution_id": "exec_1793978512686_a59311ac",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_outsider",
+        "timestamp": "2026-11-06T15:21:52.686Z"
+      },
+      {
+        "event_id": "evt_1793978514059_d7e790",
+        "execution_id": "exec_1793978512686_a59311ac",
+        "event_type": "execution_rejected",
+        "detail": "Organization authorization denied: User has no authorized ownership or active membership in this organization.",
+        "from_status": "validating",
+        "to_status": "rejected",
+        "actor_id": "user_step11_outsider",
+        "timestamp": "2026-11-06T15:21:54.059Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:52.686Z",
+    "updated_at": "2026-11-06T15:21:54.059Z",
+    "failure_code": "authorization_error",
+    "failure_reason": "Organization authorization denied: User has no authorized ownership or active membership in this organization.",
+    "completed_at": "2026-11-06T15:21:54.059Z"
+  },
+  {
+    "execution_id": "exec_1793978514061_d4397631",
+    "agent_id": "AGT-002",
+    "agent_name": "Agriculture & Farming Supplies Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-002",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "catalog_lookup",
+    "task_input": {
+      "sku": "MILK-001"
+    },
+    "requested_tool_ids": [],
+    "status": "rejected",
+    "correlation_id": "corr_1793978514061_7647cf",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [],
+    "events": [
+      {
+        "event_id": "evt_1793978514061_30d47d",
+        "execution_id": "exec_1793978514061_d4397631",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task catalog_lookup",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.061Z"
+      },
+      {
+        "event_id": "evt_1793978514061_72b4e3",
+        "execution_id": "exec_1793978514061_d4397631",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.061Z"
+      },
+      {
+        "event_id": "evt_1793978514146_02ac13",
+        "execution_id": "exec_1793978514061_d4397631",
+        "event_type": "execution_rejected",
+        "detail": "Category authorization denied for CAT-002: Agent 'AGT-002' is not authorized for business category 'General Retail & Department Store' (Authorized: AGT-001). Cross-category access denied.",
+        "from_status": "validating",
+        "to_status": "rejected",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.146Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:54.061Z",
+    "updated_at": "2026-11-06T15:21:54.146Z",
+    "failure_code": "authorization_error",
+    "failure_reason": "Category authorization denied for CAT-002: Agent 'AGT-002' is not authorized for business category 'General Retail & Department Store' (Authorized: AGT-001). Cross-category access denied.",
+    "completed_at": "2026-11-06T15:21:54.146Z"
+  },
+  {
+    "execution_id": "exec_1793978514149_a3bae295",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "stock_adjustment",
+    "task_input": {
+      "sku": "MILK-001",
+      "quantity_delta": -100,
+      "reason": "Bulk spoilage write-off"
+    },
+    "requested_tool_ids": [
+      "inventory.stock.adjust"
+    ],
+    "status": "awaiting_approval",
+    "correlation_id": "corr_1793978514149_0b8479",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [
+      {
+        "invocation_id": "invk_1793978514258_86d4bf",
+        "execution_id": "exec_1793978514149_a3bae295",
+        "tool_id": "inventory.stock.adjust",
+        "tool_version": "1.0.0",
+        "parameters": {
+          "reason": "Bulk spoilage write-off",
+          "productId": "prod_milk",
+          "deltaQuantity": 100,
+          "type": "out"
+        },
+        "status": "pending_approval",
+        "duration_ms": 54,
+        "result_data": {
+          "approval_id": "appr_1793978514256_03d7c487",
+          "status": "pending",
+          "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+          "approver_role": "manager"
+        },
+        "error_message": "Tool 'inventory.stock.adjust' requires authorization before execution: Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+        "approval_id": "appr_1793978514256_03d7c487",
+        "timestamp": "2026-11-06T15:21:54.258Z"
+      }
+    ],
+    "events": [
+      {
+        "event_id": "evt_1793978514149_7c4150",
+        "execution_id": "exec_1793978514149_a3bae295",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task stock_adjustment",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.149Z"
+      },
+      {
+        "event_id": "evt_1793978514149_6e4396",
+        "execution_id": "exec_1793978514149_a3bae295",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.149Z"
+      },
+      {
+        "event_id": "evt_1793978514202_122f03",
+        "execution_id": "exec_1793978514149_a3bae295",
+        "event_type": "execution_queued",
+        "detail": "Execution validated and placed in run queue",
+        "from_status": "validating",
+        "to_status": "queued",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.202Z"
+      },
+      {
+        "event_id": "evt_1793978514202_91920a",
+        "execution_id": "exec_1793978514149_a3bae295",
+        "event_type": "execution_started",
+        "detail": "Starting execution of tools",
+        "from_status": "queued",
+        "to_status": "running",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.202Z"
+      },
+      {
+        "event_id": "evt_1793978514204_d5d5ec",
+        "execution_id": "exec_1793978514149_a3bae295",
+        "event_type": "tool_invoked",
+        "detail": "Invoking tool 'inventory.stock.adjust' (attempt 1/3)",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.204Z"
+      },
+      {
+        "event_id": "evt_1793978514258_6e4b75",
+        "execution_id": "exec_1793978514149_a3bae295",
+        "event_type": "approval_requested",
+        "detail": "Tool 'inventory.stock.adjust' requires approval. Approval ID: appr_1793978514256_03d7c487",
+        "from_status": "running",
+        "to_status": "awaiting_approval",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.258Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:54.149Z",
+    "updated_at": "2026-11-06T15:21:54.258Z",
+    "started_at": "2026-11-06T15:21:54.202Z",
+    "approval_reference": "appr_1793978514256_03d7c487"
+  },
+  {
+    "execution_id": "exec_1793978514260_fae6e9ca",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "stock_adjustment",
+    "task_input": {
+      "sku": "MILK-001",
+      "quantity_delta": 100,
+      "reason": "Restock from distributor"
+    },
+    "requested_tool_ids": [
+      "inventory.stock.adjust"
+    ],
+    "status": "completed",
+    "correlation_id": "corr_1793978514260_dbb8c9",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [
+      {
+        "invocation_id": "invk_1793978514386_edc98c",
+        "execution_id": "exec_1793978514260_fae6e9ca",
+        "tool_id": "inventory.stock.adjust",
+        "tool_version": "1.0.0",
+        "parameters": {
+          "reason": "Restock from distributor",
+          "productId": "prod_milk",
+          "deltaQuantity": 100,
+          "type": "in"
+        },
+        "status": "pending_approval",
+        "duration_ms": 67,
+        "result_data": {
+          "approval_id": "appr_1793978514386_0ac05ba1",
+          "status": "pending",
+          "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+          "approver_role": "manager"
+        },
+        "error_message": "Tool 'inventory.stock.adjust' requires authorization before execution: Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+        "approval_id": "appr_1793978514386_0ac05ba1",
+        "timestamp": "2026-11-06T15:21:54.386Z"
+      },
+      {
+        "invocation_id": "invk_1793978514593_ac08b1",
+        "execution_id": "exec_1793978514260_fae6e9ca",
+        "tool_id": "inventory.stock.adjust",
+        "tool_version": "1.0.0",
+        "parameters": {
+          "reason": "Restock from distributor",
+          "productId": "prod_milk",
+          "deltaQuantity": 100,
+          "type": "in"
+        },
+        "status": "success",
+        "duration_ms": 90,
+        "result_data": {
+          "success": true,
+          "newStock": null,
+          "product_id": "prod_milk",
+          "type": "in",
+          "delta": 100
+        },
+        "timestamp": "2026-11-06T15:21:54.594Z"
+      }
+    ],
+    "events": [
+      {
+        "event_id": "evt_1793978514260_467a13",
+        "execution_id": "exec_1793978514260_fae6e9ca",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task stock_adjustment",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.260Z"
+      },
+      {
+        "event_id": "evt_1793978514260_832211",
+        "execution_id": "exec_1793978514260_fae6e9ca",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.260Z"
+      },
+      {
+        "event_id": "evt_1793978514318_028062",
+        "execution_id": "exec_1793978514260_fae6e9ca",
+        "event_type": "execution_queued",
+        "detail": "Execution validated and placed in run queue",
+        "from_status": "validating",
+        "to_status": "queued",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.318Z"
+      },
+      {
+        "event_id": "evt_1793978514318_602c84",
+        "execution_id": "exec_1793978514260_fae6e9ca",
+        "event_type": "execution_started",
+        "detail": "Starting execution of tools",
+        "from_status": "queued",
+        "to_status": "running",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.318Z"
+      },
+      {
+        "event_id": "evt_1793978514319_600483",
+        "execution_id": "exec_1793978514260_fae6e9ca",
+        "event_type": "tool_invoked",
+        "detail": "Invoking tool 'inventory.stock.adjust' (attempt 1/3)",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.319Z"
+      },
+      {
+        "event_id": "evt_1793978514387_809614",
+        "execution_id": "exec_1793978514260_fae6e9ca",
+        "event_type": "approval_requested",
+        "detail": "Tool 'inventory.stock.adjust' requires approval. Approval ID: appr_1793978514386_0ac05ba1",
+        "from_status": "running",
+        "to_status": "awaiting_approval",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.387Z"
+      },
+      {
+        "event_id": "evt_1793978514502_3ad4cf",
+        "execution_id": "exec_1793978514260_fae6e9ca",
+        "event_type": "approval_granted",
+        "detail": "Approval granted by user user_step11_manager. Resuming tool execution.",
+        "from_status": "awaiting_approval",
+        "to_status": "approved",
+        "actor_id": "user_step11_manager",
+        "timestamp": "2026-11-06T15:21:54.502Z"
+      },
+      {
+        "event_id": "evt_1793978514503_93e08a",
+        "execution_id": "exec_1793978514260_fae6e9ca",
+        "event_type": "execution_started",
+        "detail": "Resuming tool execution after approval",
+        "from_status": "approved",
+        "to_status": "running",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.503Z"
+      },
+      {
+        "event_id": "evt_1793978514503_1a533c",
+        "execution_id": "exec_1793978514260_fae6e9ca",
+        "event_type": "tool_invoked",
+        "detail": "Invoking tool 'inventory.stock.adjust' (attempt 1/3)",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.503Z"
+      },
+      {
+        "event_id": "evt_1793978514594_a3eb9f",
+        "execution_id": "exec_1793978514260_fae6e9ca",
+        "event_type": "tool_succeeded",
+        "detail": "Tool 'inventory.stock.adjust' completed successfully in 90ms.",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.594Z"
+      },
+      {
+        "event_id": "evt_1793978514594_187404",
+        "execution_id": "exec_1793978514260_fae6e9ca",
+        "event_type": "execution_completed",
+        "detail": "All requested tasks and tools executed successfully.",
+        "from_status": "running",
+        "to_status": "completed",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.594Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:54.260Z",
+    "updated_at": "2026-11-06T15:21:54.594Z",
+    "started_at": "2026-11-06T15:21:54.318Z",
+    "approval_reference": "appr_1793978514386_0ac05ba1",
+    "result_data": {
+      "inventory.stock.adjust": {
+        "success": true,
+        "newStock": null,
+        "product_id": "prod_milk",
+        "type": "in",
+        "delta": 100
+      },
+      "inv_adjust_stock": {
+        "success": true,
+        "newStock": null,
+        "product_id": "prod_milk",
+        "type": "in",
+        "delta": 100
+      }
+    },
+    "completed_at": "2026-11-06T15:21:54.594Z",
+    "duration_ms": 91
+  },
+  {
+    "execution_id": "exec_1793978514596_9e86e78f",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "stock_adjustment",
+    "task_input": {
+      "sku": "MILK-001",
+      "quantity_delta": -100,
+      "reason": "Unverified discrepancy"
+    },
+    "requested_tool_ids": [
+      "inventory.stock.adjust"
+    ],
+    "status": "rejected",
+    "correlation_id": "corr_1793978514596_4f2684",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [
+      {
+        "invocation_id": "invk_1793978514683_797c42",
+        "execution_id": "exec_1793978514596_9e86e78f",
+        "tool_id": "inventory.stock.adjust",
+        "tool_version": "1.0.0",
+        "parameters": {
+          "reason": "Unverified discrepancy",
+          "productId": "prod_milk",
+          "deltaQuantity": 100,
+          "type": "out"
+        },
+        "status": "pending_approval",
+        "duration_ms": 41,
+        "result_data": {
+          "approval_id": "appr_1793978514682_b4491a23",
+          "status": "pending",
+          "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+          "approver_role": "manager"
+        },
+        "error_message": "Tool 'inventory.stock.adjust' requires authorization before execution: Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+        "approval_id": "appr_1793978514682_b4491a23",
+        "timestamp": "2026-11-06T15:21:54.683Z"
+      }
+    ],
+    "events": [
+      {
+        "event_id": "evt_1793978514596_278be3",
+        "execution_id": "exec_1793978514596_9e86e78f",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task stock_adjustment",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.596Z"
+      },
+      {
+        "event_id": "evt_1793978514597_2eadc9",
+        "execution_id": "exec_1793978514596_9e86e78f",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.597Z"
+      },
+      {
+        "event_id": "evt_1793978514641_f549ad",
+        "execution_id": "exec_1793978514596_9e86e78f",
+        "event_type": "execution_queued",
+        "detail": "Execution validated and placed in run queue",
+        "from_status": "validating",
+        "to_status": "queued",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.641Z"
+      },
+      {
+        "event_id": "evt_1793978514641_b40bbc",
+        "execution_id": "exec_1793978514596_9e86e78f",
+        "event_type": "execution_started",
+        "detail": "Starting execution of tools",
+        "from_status": "queued",
+        "to_status": "running",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.641Z"
+      },
+      {
+        "event_id": "evt_1793978514642_fa0989",
+        "execution_id": "exec_1793978514596_9e86e78f",
+        "event_type": "tool_invoked",
+        "detail": "Invoking tool 'inventory.stock.adjust' (attempt 1/3)",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.642Z"
+      },
+      {
+        "event_id": "evt_1793978514683_057ab5",
+        "execution_id": "exec_1793978514596_9e86e78f",
+        "event_type": "approval_requested",
+        "detail": "Tool 'inventory.stock.adjust' requires approval. Approval ID: appr_1793978514682_b4491a23",
+        "from_status": "running",
+        "to_status": "awaiting_approval",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.683Z"
+      },
+      {
+        "event_id": "evt_1793978514684_f27bb0",
+        "execution_id": "exec_1793978514596_9e86e78f",
+        "event_type": "approval_rejected",
+        "detail": "Stock count doesn't match physical count",
+        "from_status": "awaiting_approval",
+        "to_status": "rejected",
+        "actor_id": "user_step11_manager",
+        "timestamp": "2026-11-06T15:21:54.684Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:54.596Z",
+    "updated_at": "2026-11-06T15:21:54.684Z",
+    "started_at": "2026-11-06T15:21:54.641Z",
+    "approval_reference": "appr_1793978514682_b4491a23",
+    "failure_code": "approval_rejected",
+    "failure_reason": "Stock count doesn't match physical count"
+  },
+  {
+    "execution_id": "exec_1793978514686_d72e6133",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "stock_adjustment",
+    "task_input": {
+      "sku": "MILK-001",
+      "quantity_delta": -100,
+      "reason": "Pending test"
+    },
+    "requested_tool_ids": [
+      "inventory.stock.adjust"
+    ],
+    "status": "cancelled",
+    "correlation_id": "corr_1793978514686_399b49",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [
+      {
+        "invocation_id": "invk_1793978514780_5f2b2f",
+        "execution_id": "exec_1793978514686_d72e6133",
+        "tool_id": "inventory.stock.adjust",
+        "tool_version": "1.0.0",
+        "parameters": {
+          "reason": "Pending test",
+          "productId": "prod_milk",
+          "deltaQuantity": 100,
+          "type": "out"
+        },
+        "status": "pending_approval",
+        "duration_ms": 45,
+        "result_data": {
+          "approval_id": "appr_1793978514780_717a6039",
+          "status": "pending",
+          "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+          "approver_role": "manager"
+        },
+        "error_message": "Tool 'inventory.stock.adjust' requires authorization before execution: Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+        "approval_id": "appr_1793978514780_717a6039",
+        "timestamp": "2026-11-06T15:21:54.780Z"
+      }
+    ],
+    "events": [
+      {
+        "event_id": "evt_1793978514686_683a6a",
+        "execution_id": "exec_1793978514686_d72e6133",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task stock_adjustment",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.686Z"
+      },
+      {
+        "event_id": "evt_1793978514686_949be1",
+        "execution_id": "exec_1793978514686_d72e6133",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.686Z"
+      },
+      {
+        "event_id": "evt_1793978514734_38c331",
+        "execution_id": "exec_1793978514686_d72e6133",
+        "event_type": "execution_queued",
+        "detail": "Execution validated and placed in run queue",
+        "from_status": "validating",
+        "to_status": "queued",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.734Z"
+      },
+      {
+        "event_id": "evt_1793978514734_81bf4c",
+        "execution_id": "exec_1793978514686_d72e6133",
+        "event_type": "execution_started",
+        "detail": "Starting execution of tools",
+        "from_status": "queued",
+        "to_status": "running",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.734Z"
+      },
+      {
+        "event_id": "evt_1793978514735_3b54fc",
+        "execution_id": "exec_1793978514686_d72e6133",
+        "event_type": "tool_invoked",
+        "detail": "Invoking tool 'inventory.stock.adjust' (attempt 1/3)",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.735Z"
+      },
+      {
+        "event_id": "evt_1793978514781_edec6b",
+        "execution_id": "exec_1793978514686_d72e6133",
+        "event_type": "approval_requested",
+        "detail": "Tool 'inventory.stock.adjust' requires approval. Approval ID: appr_1793978514780_717a6039",
+        "from_status": "running",
+        "to_status": "awaiting_approval",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.781Z"
+      },
+      {
+        "event_id": "evt_1793978514782_8e1b7e",
+        "execution_id": "exec_1793978514686_d72e6133",
+        "event_type": "execution_cancelled",
+        "detail": "Execution cancelled by user_step11_owner. Reason: User cancelled pending task",
+        "from_status": "awaiting_approval",
+        "to_status": "cancelled",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.782Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:54.686Z",
+    "updated_at": "2026-11-06T15:21:54.782Z",
+    "started_at": "2026-11-06T15:21:54.734Z",
+    "approval_reference": "appr_1793978514780_717a6039",
+    "cancellation_reason": "User cancelled pending task",
+    "cancelled_by": "user_step11_owner",
+    "completed_at": "2026-11-06T15:21:54.782Z"
+  },
+  {
+    "execution_id": "exec_1793978514783_b61e1cb0",
+    "agent_id": "AGT-001",
+    "agent_name": "General Retail Agent",
+    "agent_configuration_version": "1.0.0",
+    "contract_version": "1.0",
+    "business_id": "biz_step11_execution_test",
+    "category_id": "CAT-001",
+    "requesting_user_id": "user_step11_owner",
+    "requesting_user_email": "owner@geflow.test",
+    "task_type": "diagnostic_echo",
+    "task_input": {
+      "message": "Ping"
+    },
+    "requested_tool_ids": [
+      "system.echo.test"
+    ],
+    "status": "completed",
+    "correlation_id": "corr_1793978514783_6115b6",
+    "retry_count": 0,
+    "max_retries": 2,
+    "timeout_ms": 30000,
+    "tool_invocations": [
+      {
+        "invocation_id": "invk_1793978514935_ad98d6",
+        "execution_id": "exec_1793978514783_b61e1cb0",
+        "tool_id": "system.echo.test",
+        "tool_version": "1.0.0",
+        "parameters": {
+          "echo": "Ping"
+        },
+        "status": "success",
+        "duration_ms": 74,
+        "result_data": {
+          "echo": "Ping",
+          "timestamp": "2026-11-06T15:21:54.934Z",
+          "context": {
+            "agent_id": "AGT-001",
+            "business_id": "biz_step11_execution_test"
+          }
+        },
+        "timestamp": "2026-11-06T15:21:54.935Z"
+      }
+    ],
+    "events": [
+      {
+        "event_id": "evt_1793978514783_71cf67",
+        "execution_id": "exec_1793978514783_b61e1cb0",
+        "event_type": "execution_requested",
+        "detail": "Execution requested for task diagnostic_echo",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.783Z"
+      },
+      {
+        "event_id": "evt_1793978514784_e00e85",
+        "execution_id": "exec_1793978514783_b61e1cb0",
+        "event_type": "execution_validated",
+        "detail": "Starting identity, version, and authorization checks",
+        "from_status": "pending",
+        "to_status": "validating",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.784Z"
+      },
+      {
+        "event_id": "evt_1793978514860_f2d6fd",
+        "execution_id": "exec_1793978514783_b61e1cb0",
+        "event_type": "execution_queued",
+        "detail": "Execution validated and placed in run queue",
+        "from_status": "validating",
+        "to_status": "queued",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.860Z"
+      },
+      {
+        "event_id": "evt_1793978514860_23e253",
+        "execution_id": "exec_1793978514783_b61e1cb0",
+        "event_type": "execution_started",
+        "detail": "Starting execution of tools",
+        "from_status": "queued",
+        "to_status": "running",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.860Z"
+      },
+      {
+        "event_id": "evt_1793978514861_a5082a",
+        "execution_id": "exec_1793978514783_b61e1cb0",
+        "event_type": "tool_invoked",
+        "detail": "Invoking tool 'system.echo.test' (attempt 1/3)",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.861Z"
+      },
+      {
+        "event_id": "evt_1793978514935_fba567",
+        "execution_id": "exec_1793978514783_b61e1cb0",
+        "event_type": "tool_succeeded",
+        "detail": "Tool 'system.echo.test' completed successfully in 74ms.",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.935Z"
+      },
+      {
+        "event_id": "evt_1793978514935_bd428c",
+        "execution_id": "exec_1793978514783_b61e1cb0",
+        "event_type": "execution_completed",
+        "detail": "All requested tasks and tools executed successfully.",
+        "from_status": "running",
+        "to_status": "completed",
+        "actor_id": "user_step11_owner",
+        "timestamp": "2026-11-06T15:21:54.935Z"
+      }
+    ],
+    "created_at": "2026-11-06T15:21:54.783Z",
+    "updated_at": "2026-11-06T15:21:54.935Z",
+    "started_at": "2026-11-06T15:21:54.860Z",
+    "result_data": {
+      "system.echo.test": {
+        "echo": "Ping",
+        "timestamp": "2026-11-06T15:21:54.934Z",
+        "context": {
+          "agent_id": "AGT-001",
+          "business_id": "biz_step11_execution_test"
+        }
+      },
+      "sys_diagnostic_echo": {
+        "echo": "Ping",
+        "timestamp": "2026-11-06T15:21:54.934Z",
+        "context": {
+          "agent_id": "AGT-001",
+          "business_id": "biz_step11_execution_test"
+        }
+      }
+    },
+    "completed_at": "2026-11-06T15:21:54.935Z",
+    "duration_ms": 74
+  }
+]

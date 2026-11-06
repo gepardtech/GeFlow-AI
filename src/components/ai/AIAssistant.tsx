@@ -27,6 +27,9 @@ import {
   AlertCircle,
   Clock,
   ChevronRight,
+  ChevronLeft,
+  PanelLeftClose,
+  PanelLeft,
   ShieldAlert,
 } from "lucide-react";
 import {
@@ -711,9 +714,12 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
                   <button
                     type="button"
                     onClick={() => setShowHistory(false)}
-                    className="sm:hidden p-1 rounded hover:bg-muted text-muted-foreground"
+                    className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition flex items-center gap-1 text-[11px] font-medium cursor-pointer"
+                    title="Collapse history sidebar"
+                    aria-label="Collapse history sidebar"
                   >
-                    <X className="h-4 w-4" />
+                    <ChevronLeft className="h-4 w-4" />
+                    <span className="hidden sm:inline text-[10px]">Collapse</span>
                   </button>
                 </div>
               </div>
@@ -831,7 +837,23 @@ const AIAssistant: React.FC<Props> = ({ open, onOpenChange }) => {
           )}
 
           {/* Right Area: Messages + Mode Selector + Composer */}
-          <div className="flex-1 flex flex-col min-w-0 bg-background overflow-hidden">
+          <div className="flex-1 flex flex-col min-w-0 bg-background overflow-hidden relative">
+            {/* Uncollapse History Button when sidebar is collapsed */}
+            {!showHistory && (
+              <div className="px-3 pt-2 -mb-1 flex items-center justify-between z-10">
+                <button
+                  type="button"
+                  onClick={() => setShowHistory(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-muted/60 hover:bg-muted border border-border text-[11px] font-bold text-muted-foreground hover:text-foreground transition cursor-pointer shadow-xs"
+                  title="Expand chat history sidebar"
+                  aria-label="Expand chat history sidebar"
+                >
+                  <PanelLeft className="h-3.5 w-3.5 text-primary" />
+                  <span>Show History ({sessions.length})</span>
+                </button>
+              </div>
+            )}
+
             {/* Mode selector bar */}
             <div className="grid grid-cols-2 gap-2 p-2.5 sm:p-3 border-b border-border bg-muted/20 shrink-0">
               {MODES.map((m) => {

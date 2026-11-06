@@ -453,41 +453,55 @@ export async function fetchLiveBusinessAnalytics(businessId: string): Promise<Bu
 }
 
 /**
- * Detect language of user query (English, Roman Urdu, Urdu script, Arabic, Spanish, etc.)
+ * Detect language of user query (English, French, Hindi, Urdu, Roman Urdu, Arabic, Spanish, etc.)
  */
-export function detectQueryLanguage(text: string): "english" | "roman_urdu" | "urdu" | "arabic" | "spanish" | "other" {
+export function detectQueryLanguage(text: string): string {
   const t = text.trim().toLowerCase();
 
-  // Devanagari script (Hindi)
+  // 1. Devanagari script (Hindi / Marathi / Sanskrit)
   if (/[\u0900-\u097F]/.test(t)) {
     return "hindi";
   }
 
-  // Chinese characters
+  // 2. Chinese characters
   if (/[\u4E00-\u9FFF]/.test(t)) {
     return "chinese";
   }
 
-  // Arabic / Urdu unicode scripts
+  // 3. Perso-Arabic / Urdu script
   if (/[\u0600-\u06FF]/.test(t)) {
-    if (
-      /[\u0679\u067E\u0686\u0688\u0691\u06BA\u06BE\u06C1\u06D2]/.test(t) ||
-      t.includes("ہے") ||
-      t.includes("کیا") ||
-      t.includes("میرا") ||
-      t.includes("کتنا") ||
-      t.includes("منافع") ||
-      t.includes("دکان") ||
-      t.includes("سیل") ||
-      t.includes("فروخت") ||
-      t.includes("بڑھائیں")
-    ) {
-      return "urdu";
+    // Check specific Arabic vocabulary
+    const arabicSpecificWords = ["كيف", "مرحبا", "ارباح", "مبيعات", "متجر", "مخزون", "كم", "شكرا", "فاتورة", "تسجيل"];
+    const isExplicitArabic = arabicSpecificWords.some((w) => t.includes(w));
+    if (isExplicitArabic && !/[\u0679\u067E\u0686\u0688\u0691\u06BA\u06BE\u06C1\u06D2]/.test(t)) {
+      return "arabic";
     }
-    return "arabic";
+    // Default to Urdu for Perso-Arabic in GeFlow workspace
+    return "urdu";
   }
 
-  // Distinctive Roman Urdu markers that NEVER appear in valid English sentences
+  // 4. French detection (Vocabulary, interrogatives, business terms, accents)
+  const frenchMarkers = [
+    "bonjour", "salut", "merci", "s'il vous plaît", "s'il vous plait", "svp",
+    "comment", "pourquoi", "combien", "quel", "quelle", "quels", "quelles",
+    "est-ce", "aidez", "aider", "aide", "ventes", "vente", "bénéfice", "bénéfices",
+    "profit", "profits", "magasin", "boutique", "produit", "produits", "stock",
+    "stocks", "caisse", "caissier", "facture", "prix", "argent", "chiffre d'affaires",
+    "mon magasin", "mes ventes", "mon profit", "mon bénéfice", "notre magasin",
+    "augmenter", "recette", "dépense", "coût", "trésorerie", "client", "clients"
+  ];
+  const hasFrenchMarker = frenchMarkers.some((m) => t.includes(m));
+  const frenchAccents = /[éèêëàâäôöûüç]/i;
+  const hasFrenchAccent = frenchAccents.test(t);
+  const frenchWords = t.split(/[\s,?.!;:()]+/).filter(Boolean);
+  const commonFrenchSmallWords = ["le", "la", "les", "un", "une", "des", "du", "de", "dans", "en", "pour", "avec", "est", "sont", "mon", "ma", "mes", "ce", "cette"];
+  const matchedSmallFrench = frenchWords.filter((w) => commonFrenchSmallWords.includes(w)).length;
+
+  if (hasFrenchMarker || (hasFrenchAccent && matchedSmallFrench >= 1) || matchedSmallFrench >= 3) {
+    return "french";
+  }
+
+  // 5. Distinctive Roman Urdu markers that NEVER appear in valid English sentences
   const strongRomanUrduMarkers = [
     "mujhy", "mujhe", "mujy",
     "btao", "batao", "bataen", "batayein",
@@ -505,7 +519,18 @@ export function detectQueryLanguage(text: string): "english" | "roman_urdu" | "u
     return "roman_urdu";
   }
 
-  // Broader Roman Urdu word list (requiring at least 2 matches to prevent false positives)
+  // 6. Roman Hindi / Hinglish indicators
+  const romanHindiMarkers = [
+    "namaste", "namaskar", "dhanyawad", "dhanyavad", "shukriya",
+    "meri bikri", "mera munafa", "mera profit", "kaise badhaye", "kaise badhayein",
+    "aaj ki sale", "aaj ka munafa", "aaj kitna", "kitna hai", "kripya", "kripa",
+    "madad karein", "madad karo", "paisa", "kamai", "dukaan me", "dukan me"
+  ];
+  if (romanHindiMarkers.some((m) => t.includes(m))) {
+    return "hindi";
+  }
+
+  // 7. Broader Roman Urdu / Hindi shared words
   const broaderRomanUrduWords = [
     "kya", "kyun", "kyon", "kab", "kahan", "kidhar", "konsa", "konsi", "konse",
     "karna", "karein", "karo", "skta", "sakti", "sakte", "sakta",
@@ -517,20 +542,14 @@ export function detectQueryLanguage(text: string): "english" | "roman_urdu" | "u
     return "roman_urdu";
   }
 
-  // Spanish heuristics
-  const spanishMarkers = ["cómo", "como aumentar", "ventas", "ganancia", "beneficio", "tienda", "hola", "inventario", "cuanto"];
+  // 8. Spanish heuristics
+  const spanishMarkers = ["cómo", "como aumentar", "ventas", "ganancia", "beneficio", "tienda", "hola", "inventario", "cuanto", "cuánto", "ayuda", "por favor", "gracias"];
   if (spanishMarkers.some((m) => t.includes(m))) {
     return "spanish";
   }
 
-  // French heuristics
-  const frenchMarkers = ["comment", "ventes", "bénéfice", "magasin", "bonjour", "combien"];
-  if (frenchMarkers.some((m) => t.includes(m))) {
-    return "french";
-  }
-
-  // German heuristics
-  const germanMarkers = ["wie", "umsatz", "gewinn", "geschäft", "hallo", "wieviel"];
+  // 9. German heuristics
+  const germanMarkers = ["wie", "umsatz", "gewinn", "geschäft", "hallo", "wieviel", "bitte", "danke"];
   if (germanMarkers.some((m) => t.includes(m))) {
     return "german";
   }
@@ -1295,6 +1314,91 @@ export function generateLocalBusinessAnalysis(
     ].join("\n");
   }
 
+  // Plan Renewal or Billing Cycle Query
+  const isPlanRenewal =
+    q.includes("expir") ||
+    q.includes("renew") ||
+    q.includes("after expiry") ||
+    q.includes("monthly or yearly") ||
+    q.includes("yearly or monthly") ||
+    q.includes("pay as monthly") ||
+    q.includes("pay as yearly") ||
+    q.includes("billing cycle") ||
+    q.includes("auto-renew") ||
+    q.includes("cycle") ||
+    q.includes("khatam hone") ||
+    q.includes("tajdeed") ||
+    q.includes("تجديد") ||
+    q.includes("انتهاء");
+
+  if (isPlanRenewal) {
+    if (lang === "roman_urdu") {
+      return [
+        `### 🔄 GeFlow AI Agent: Plan Renewal & Billing Cycle Rules`,
+        `Aapke subscription plan ke renewal aur billing cycle ka rule bilkul clear hai:`,
+        ``,
+        `• **Same Cycle Auto-Renewal**: Agar aapka plan Yearly hai, to expiry par woh automatically **Yearly plan** ke tor par hi renew hoga (discounted annual rate ke sath).`,
+        `• **Cycle Switch Option**: Expiry se pehle aap chahein to apna cycle **Yearly se Monthly** ya vice versa tabdeel kar sakte hain (**Subscription > Manage Cycle** se).`,
+        `• **Guaranteed Preservation**: Agar aap koi tabdeeli nahi karte to aapka same Yearly plan seamlessly jari rahega, koi unexpected plan change ya interruption nahi aayegi.`,
+        ``,
+        `💡 **Customer Guidance**: Expiry date aur billing cycle check karne ke liye **Subscription** page par jayein.`
+      ].join("\n");
+    }
+
+    if (lang === "urdu") {
+      return [
+        `### 🔄 تجدید اور بلنگ سائیکل کے قواعد`,
+        `آپ کے سبسکرپشن پلان کی تجدید کا طریقہ کار انتہائی واضح اور شفاف ہے:`,
+        ``,
+        `• **اسی پلان کی تجدید:** اگر آپ کا پلان سالانہ (Yearly) ہے، تو مدت ختم ہونے پر یہ خودکار طور پر سالانہ پلان کے تحت ہی تجدید ہوگا تاکہ آپ کو ڈسکاؤنٹ ریٹ ملتا رہے۔`,
+        `• **سائیکل تبدیل کرنے کی سہولت:** ختم ہونے سے قبل آپ جب چاہیں سالانہ سے ماہانہ یا ماہانہ سے سالانہ سائیکل تبدیل کر سکتے ہیں۔`,
+        `• **بغیر کسی رکاوٹ کے تسلسل:** اگر آپ کوئی تبدیلی نہیں کرتے تو آپ کا موجودہ سالانہ پلان ہی جاری رہے گا اور سسٹم میں کوئی رکاوٹ نہیں آئے گی۔`,
+        ``,
+        `💡 **رہنمائی:** اپنے پلان کی تفصیلات کے لیے یوزر پینل میں **سبسکرپشن** پیج وزٹ کریں۔`
+      ].join("\n");
+    }
+
+    return [
+      `### 🔄 GeFlow AI Agent: Plan Renewal & Billing Cycle Architecture`,
+      `Clear answers regarding your subscription renewal and billing cycles:`,
+      ``,
+      `• **Same-Cycle Auto-Renewal**: If your subscription is on a **Yearly plan**, it automatically renews as **Yearly** upon expiry at the discounted annual rate. You will not be randomly switched to a monthly rate.`,
+      `• **Flexible Cycle Switch**: Before your renewal date, you can easily change your upcoming billing cadence from **Yearly to Monthly** (or vice versa) under **Subscription > Manage Plan & Cycle**.`,
+      `• **Guaranteed Preservation**: If you make no changes, your plan seamlessly continues with the exact same Yearly terms with zero interruption to your store POS, inventory, or AI agent operations.`,
+      ``,
+      `💡 **Customer Guidance**: View your renewal countdown, invoice history, and billing cadence at any time under **Subscription** in your navigation menu.`
+    ].join("\n");
+  }
+
+  // Pricing Plan Tiers Query
+  if (q.includes("pricing") || (q.includes("plan") && !q.includes("product") && !q.includes("action")) || q.includes("subscription tier") || q.includes("standard plan") || q.includes("premium plan") || q.includes("lifetime plan")) {
+    if (lang === "roman_urdu") {
+      return [
+        `### 🌟 GeFlow AI Agent: Subscription Plans & Capabilities Overview`,
+        `GeFlow business subscription tiers aur feature details:`,
+        ``,
+        `• **Free Tier**: 1 Business/Store, Analyst AI intelligence model, basic sales reporting, aur POS checkout.`,
+        `• **Standard Plan**: Up to 3 Businesses/Stores, Analyst + Operator AI models, 10 active chat histories, aur weekly deep audits.`,
+        `• **Premium Plan**: Up to 7 Businesses/Stores, tamam 4 AI models (Analyst, Operator, Knowledge, Advisor), 20 chat histories, daily VIP audits, aur priority synchronization.`,
+        `• **Lifetime Plan**: Unlimited chat sessions, up to 10 Businesses/Stores, VIP perpetual access, aur priority roadmap features.`,
+        ``,
+        `💡 **Customer Guidance**: Apna plan check ya upgrade karne ke liye navigation se **Subscription** page open karein.`
+      ].join("\n");
+    }
+
+    return [
+      `### 🌟 GeFlow AI Agent: Subscription Tiers & Feature Comparison`,
+      `GeFlow subscription plans designed for independent businesses and growing retail chains:`,
+      ``,
+      `• **Free Tier**: 1 Business / Store location, Analyst AI intelligence model (2 active chats), basic sales reporting, and counter POS checkout.`,
+      `• **Standard Plan**: Up to 3 Stores, Analyst + Operator AI models, 10 active chat sessions, and weekly deep business performance reports.`,
+      `• **Premium Plan**: Up to 7 Stores, full unlock of all 4 AI models (Analyst, Operator, Knowledge Base, Executive Advisor), 20 chat sessions, daily VIP business audits, and multi-tender split payments.`,
+      `• **Lifetime Plan**: Unlimited chat sessions, up to 10 Stores, perpetual access, VIP direct support, and all future AI roadmap releases.`,
+      ``,
+      `💡 **Customer Guidance**: To compare options, upgrade, or switch cycles, navigate to the **Subscription** page in your user panel.`
+    ].join("\n");
+  }
+
   // Business Limit according to plan
   if (q.includes("limit") || q.includes("kitne business") || q.includes("store limit") || q.includes("how many business")) {
     return [
@@ -1342,6 +1446,39 @@ export function generateLocalBusinessAnalysis(
   }
 
   // 6. ADAPTIVE BUSINESS AUDIT & TARGETED RESOLUTION
+  if (lang === "french") {
+    return [
+      `### ⚡ GeFlow AI Agent: Audit Opérationnel Exécutif pour **${ctx.business.name}**`,
+      `• **Profil du Magasin**: Établissement: **${ctx.business.name}** | Devise: **${ctx.business.currency}** | Taux de Taxe: **${ctx.business.taxRate}%** | Alerte Stock: **${ctx.business.stockAlertLimit} unités**`,
+      `• **Performance Financière**: Ventes du Jour: **${fmt(ctx.sales.todayRevenue)}** (${ctx.sales.todayTransactions} commandes) | Bénéfice Net du Jour: **${fmt(ctx.sales.todayProfit)}** | Ventes 30 Jours: **${fmt(ctx.sales.monthRevenue)}** (${fmt(ctx.sales.monthProfit)} de profit, marge de **${ctx.sales.netProfitMargin.toFixed(1)}%**)`,
+      `• **État du Stock**: **${ctx.inventory.activeProducts} produits actifs** au catalogue (${ctx.inventory.totalUnitsInStock} unités). Valorisation au Coût: **${fmt(ctx.inventory.inventoryCostValue)}** | **${ctx.inventory.lowStockCount} articles** sous le seuil d'alerte`,
+      `• **Directives Opérationnelles**: Les plats préparés à la commande fonctionnent sans blocage de stock, les matrices de variantes gèrent les prix par taille et la caisse POS gère les paiements fractionnés.`,
+      `• **Recommandation**: Posez toute question spécifique sur les marges, stocks, caisse, recettes ou gestion des employés pour un guidage instantané.`
+    ].join("\n");
+  }
+
+  if (lang === "urdu") {
+    return [
+      `### ⚡ GeFlow AI Agent: کاروباری آڈٹ برائے **${ctx.business.name}**`,
+      `• **اسٹور تفصیلات**: ادارہ: **${ctx.business.name}** | کرنسی: **${ctx.business.currency}** | ٹیکس کی شرح: **${ctx.business.taxRate}%** | اسٹاک الرٹ: **${ctx.business.stockAlertLimit} اشیاء**`,
+      `• **مالیاتی کارکردگی**: آج کی فروخت: **${fmt(ctx.sales.todayRevenue)}** (${ctx.sales.todayTransactions} آرڈرز) | آج کا خالص منافع: **${fmt(ctx.sales.todayProfit)}** | 30 دن کی فروخت: **${fmt(ctx.sales.monthRevenue)}** (${fmt(ctx.sales.monthProfit)} منافع، **${ctx.sales.netProfitMargin.toFixed(1)}% مارجن**)`,
+      `• **اسٹاک کی صورتحال**: **${ctx.inventory.activeProducts} فعال پراڈکٹس** کیٹلاگ میں موجود ہیں (${ctx.inventory.totalUnitsInStock} کل یونٹس)۔ لاگت ویلیو: **${fmt(ctx.inventory.inventoryCostValue)}** | **${ctx.inventory.lowStockCount} اشیاء** کا اسٹاک کم ہے۔`,
+      `• **سسٹم کنٹرول**: آرڈر پر تیار ہونے والی ڈشز بغیر اسٹاک رکاوٹ کے چلتی ہیں، ورائٹیز میٹرکس لاگو ہے اور پی او ایس مکمل فعال ہے۔`,
+      `• **رہنمائی**: انوینٹری، منافع، کاؤنٹر آپریشنز یا عملے کی اجازتوں کے بارے میں کوئی بھی مخصوص سوال پوچھ سکتے ہیں۔`
+    ].join("\n");
+  }
+
+  if (lang === "hindi") {
+    return [
+      `### ⚡ GeFlow AI Agent: कार्यकारी व्यवसाय ऑडिट रिपोर्ट - **${ctx.business.name}**`,
+      `• **स्टोर प्रोफाइल**: प्रतिष्ठान: **${ctx.business.name}** | मुद्रा: **${ctx.business.currency}** | टैक्स दर: **${ctx.business.taxRate}%** | स्टॉक अलर्ट सीमा: **${ctx.business.stockAlertLimit} यूनिट्स**`,
+      `• **वित्तीय प्रदर्शन**: आज की बिक्री: **${fmt(ctx.sales.todayRevenue)}** (${ctx.sales.todayTransactions} ऑर्डर्स) | आज का शुद्ध मुनाफा: **${fmt(ctx.sales.todayProfit)}** | 30 दिनों की कुल बिक्री: **${fmt(ctx.sales.monthRevenue)}** (${fmt(ctx.sales.monthProfit)} मुनाफा, **${ctx.sales.netProfitMargin.toFixed(1)}% मार्जिन**)`,
+      `• **इन्वेंटरी स्थिति**: कैटलॉग में **${ctx.inventory.activeProducts} सक्रिय उत्पाद** हैं (${ctx.inventory.totalUnitsInStock} कुल इकाइयाँ)। लागत मूल्य: **${fmt(ctx.inventory.inventoryCostValue)}** | **${ctx.inventory.lowStockCount} उत्पाद** न्यूनतम स्तर से नीचे हैं।`,
+      `• **परिचालन नियंत्रण**: ऑर्डर पर तैयार होने वाले व्यंजन बिना स्टॉक बाधा के चलते हैं, वैरायटी प्राइसिंग मैट्रिक्स सक्रिय है और पीओएस काउंटर सुचारू रूप से कार्य कर रहा है।`,
+      `• **निर्देश**: मुनाफे, स्टॉक, रसीद प्रिंटिंग, कर्मचारियों की अनुमति या डिस्काउंट से संबंधित कोई भी विशिष्ट प्रश्न पूछें।`
+    ].join("\n");
+  }
+
   if (lang === "roman_urdu") {
     return [
       `### ⚡ GeFlow AI Agent: Executive Operations Audit for **${ctx.business.name}**`,

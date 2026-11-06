@@ -37,6 +37,41 @@
       "isActive": true,
       "createdAt": "2026-10-26T14:56:55.508Z",
       "updatedAt": "2026-10-26T14:56:55.508Z"
+    },
+    {
+      "id": "mem_1793978156039_7bqts1y",
+      "businessId": "biz_step11_execution_test",
+      "businessName": "Store",
+      "currency": "USD",
+      "userId": "user_step11_manager",
+      "userEmail": "manager@geflow.test",
+      "userName": "Execution Manager",
+      "ownerId": "user_step11_owner",
+      "role": "manager",
+      "permissions": [
+        "full"
+      ],
+      "isActive": true,
+      "createdAt": "2026-11-06T15:15:56.038Z",
+      "updatedAt": "2026-11-06T15:21:52.619Z"
+    },
+    {
+      "id": "mem_1793978156042_n1byfcw",
+      "businessId": "biz_step11_execution_test",
+      "businessName": "Store",
+      "currency": "USD",
+      "userId": "user_step11_member",
+      "userEmail": "member@geflow.test",
+      "userName": "Execution Member",
+      "ownerId": "user_step11_owner",
+      "role": "cashier",
+      "permissions": [
+        "pos",
+        "inventory"
+      ],
+      "isActive": true,
+      "createdAt": "2026-11-06T15:15:56.042Z",
+      "updatedAt": "2026-11-06T15:21:52.622Z"
     }
   ],
   "notifications": []

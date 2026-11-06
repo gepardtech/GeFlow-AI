@@ -35,6 +35,12 @@ import { GoogleGenAI } from "@google/genai";
 import fs from "fs";
 import { storeCreditsStorage } from "./src/server/storeCreditsStorage";
 import { productVariationsStorage, CATEGORY_TEMPLATES } from "./src/server/productVariationsStorage";
+import { organizationAuthService } from "./src/server/auth/organizationAuthService";
+import { agentRegistryService } from "./src/server/agents/agentRegistryService";
+import { agentVersioningService } from "./src/server/agents/agentVersioningService";
+import { toolGatewayService } from "./src/server/tools/toolGatewayService";
+import { agentExecutionEngine } from "./src/server/executions/agentExecutionEngine";
+import { agentAuditService } from "./src/server/executions/agentAuditService";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -1476,6 +1482,25 @@ app.get("/api/sync/business-data", async (req: Request, res: Response) => {
     if (!businessId) {
       return res.status(400).json({ success: false, error: "businessId query parameter is required." });
     }
+
+    // Step 07: Organization-Level Authorization check
+    const user = await organizationAuthService.resolveUser(req);
+    if (user) {
+      const authDec = await organizationAuthService.authorizeOrganizationAccess({
+        userId: user.userId,
+        businessId,
+        isPlatformAdmin: user.isPlatformAdmin,
+      });
+
+      if (!authDec.allowed) {
+        return res.status(403).json({
+          success: false,
+          code: "ORG_ACCESS_DENIED",
+          error: authDec.reason || "Unauthorized access to target organization data.",
+        });
+      }
+    }
+
     let data = businessDataSyncService.getBusinessData(businessId, role);
     if (!data.products || data.products.length === 0) {
       try {
@@ -2427,12 +2452,14 @@ app.get("/api/sync/product-variations", async (req: Request, res: Response) => {
               config = productVariationsStorage.saveConfig(parsed);
             }
           }
-        } catch {}
+        } catch (_e) {
+          /* ignore parse error */
+        }
       }
       return res.json({ success: true, config });
     }
     if (businessId) {
-      let configs = productVariationsStorage.getByBusiness(businessId);
+      const configs = productVariationsStorage.getByBusiness(businessId);
       try {
         const { data: prods } = await serverSupabase
           .from("products")
@@ -2448,12 +2475,16 @@ app.get("/api/sync/product-variations", async (req: Request, res: Response) => {
                   const parsed = JSON.parse(decodeURIComponent(m[1].trim()));
                   productVariationsStorage.saveConfig(parsed);
                   configs.push(parsed);
-                } catch {}
+                } catch (_pe) {
+                  /* ignore item parse error */
+                }
               }
             }
           });
         }
-      } catch {}
+      } catch (_qe) {
+        /* ignore query error */
+      }
       return res.json({ success: true, configs });
     }
     return res.status(400).json({ success: false, error: "productId or businessId is required." });
@@ -4844,6 +4875,843 @@ app.delete("/api/admin/business-categories/:id", async (req: Request, res: Respo
   }
 });
 
+// ============================================================
+// AGENT REGISTRY BACKEND (Step 08 — 29-Agent Master Registry)
+// ============================================================
+
+// 1. Get all registered agents (Supports status & category filtering, authorized for operators)
+app.get("/api/agents", async (req: Request, res: Response) => {
+  try {
+    const status = req.query.status as any;
+    const categoryId = req.query.categoryId as string | undefined;
+    const agents = agentRegistryService.getAllAgents({ status, categoryId });
+    return res.json({ success: true, count: agents.length, agents });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 2. Get registry version and metrics
+app.get("/api/agents/version", async (_req: Request, res: Response) => {
+  try {
+    const info = agentRegistryService.getRegistryVersionInfo();
+    const integrity = agentRegistryService.validateRegistryIntegrity();
+    return res.json({ success: true, ...info, integrity });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3. Get all Category-to-Agent 1:1 associations
+app.get("/api/agents/associations", async (_req: Request, res: Response) => {
+  try {
+    const associations = agentRegistryService.getAllAssociations();
+    return res.json({ success: true, count: associations.length, associations });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 4. Get primary agent for a category (by standard ID, DB UUID, or category name)
+app.get("/api/agents/category/:categoryId", async (req: Request, res: Response) => {
+  try {
+    const { categoryId } = req.params;
+    const agent = agentRegistryService.getPrimaryAgentForCategory(categoryId);
+    if (!agent) {
+      return res.status(404).json({ success: false, error: `No active primary agent found for category '${categoryId}'.` });
+    }
+    return res.json({ success: true, agent });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5. Get agent by permanent ID (e.g. AGT-001) or internal UUID
+app.get("/api/agents/:agentId", async (req: Request, res: Response, next) => {
+  try {
+    const { agentId } = req.params;
+    if (["executions", "audit-events", "version", "associations", "contracts"].includes(agentId)) {
+      return next();
+    }
+    const agent = agentRegistryService.getAgentById(agentId);
+    if (!agent) {
+      return res.status(404).json({ success: false, error: `Agent '${agentId}' not found in registry.` });
+    }
+    return res.json({ success: true, agent });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 6. Get agent configuration
+app.get("/api/agents/:agentId/configuration", async (req: Request, res: Response) => {
+  try {
+    const { agentId } = req.params;
+    const config = agentRegistryService.getAgentConfiguration(agentId);
+    if (!config) {
+      return res.status(404).json({ success: false, error: `Configuration for agent '${agentId}' not found.` });
+    }
+    return res.json({ success: true, agent_id: agentId, configuration: config });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 7. Get agent change history / audit trail (Authorized platform admin only)
+app.get("/api/agents/:agentId/history", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user?.isPlatformAdmin) {
+      return res.status(403).json({ success: false, error: "Only platform administrators can view registry audit history." });
+    }
+    const { agentId } = req.params;
+    const history = agentRegistryService.getAuditHistory(agentId);
+    return res.json({ success: true, agent_id: agentId, history });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 8. Update agent lifecycle status (Authorized platform admin only)
+app.patch("/api/agents/:agentId/status", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user?.isPlatformAdmin) {
+      return res.status(403).json({ success: false, error: "Only platform administrators can update agent lifecycle status." });
+    }
+    const { agentId } = req.params;
+    const { status, reason } = req.body || {};
+    if (!status) {
+      return res.status(400).json({ success: false, error: "Lifecycle status is required." });
+    }
+    const result = agentRegistryService.updateAgentStatus({
+      agentId,
+      newStatus: status,
+      actorId: user.userId,
+      actorEmail: user.email,
+      reason,
+    });
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 9. Update agent configuration & capabilities (Authorized platform admin only)
+app.patch("/api/agents/:agentId/configuration", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user?.isPlatformAdmin) {
+      return res.status(403).json({ success: false, error: "Only platform administrators can modify agent configurations." });
+    }
+    const { agentId } = req.params;
+    const { configuration, capabilities, permissions, reason } = req.body || {};
+    const result = agentRegistryService.updateAgentConfiguration({
+      agentId,
+      configuration,
+      capabilities,
+      permissions,
+      actorId: user.userId,
+      actorEmail: user.email,
+      reason,
+    });
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================================
+// AGENT VERSIONING OPERATIONS (Step 09 — Configuration Snapshots & Controlled Rollback)
+// ============================================================
+
+// Contract Version Definitions (Registered before :agentId parameter)
+app.get("/api/agents/contracts/versions", async (_req: Request, res: Response) => {
+  try {
+    const contracts = agentRegistryService.getContractVersions();
+    return res.json({ success: true, count: contracts.length, contracts });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 10. Get all configuration version records for an agent
+app.get("/api/agents/:agentId/versions", async (req: Request, res: Response) => {
+  try {
+    const { agentId } = req.params;
+    const history = agentVersioningService.getAgentVersionHistory(agentId);
+    const active = agentVersioningService.getActiveVersion(agentId);
+    return res.json({ success: true, agent_id: agentId, total: history.length, active_version: active?.version, versions: history });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 11. Get specific configuration version snapshot for an agent
+app.get("/api/agents/:agentId/versions/:version", async (req: Request, res: Response) => {
+  try {
+    const { agentId, version } = req.params;
+    const record = agentVersioningService.getAgentVersion(agentId, version);
+    if (!record) {
+      return res.status(404).json({ success: false, error: `Version '${version}' not found for agent '${agentId}'.` });
+    }
+    return res.json({ success: true, version_record: record });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 12. Compare two configuration versions of an agent (Structured Diff)
+app.get("/api/agents/:agentId/compare", async (req: Request, res: Response) => {
+  try {
+    const { agentId } = req.params;
+    const fromVersion = req.query.from as string;
+    const toVersion = req.query.to as string;
+
+    if (!fromVersion || !toVersion) {
+      return res.status(400).json({ success: false, error: "Query parameters 'from' and 'to' are required." });
+    }
+
+    const diff = agentVersioningService.compareVersions(agentId, fromVersion, toVersion);
+    if (!diff) {
+      return res.status(404).json({ success: false, error: `Could not compare: One or both versions not found for agent '${agentId}'.` });
+    }
+    return res.json({ success: true, comparison: diff });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 13. Create a new configuration version (Validated Draft, Authorized Platform Admin only)
+app.post("/api/agents/:agentId/versions", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user?.isPlatformAdmin) {
+      return res.status(403).json({ success: false, error: "Only platform administrators can create agent configuration versions." });
+    }
+    const { agentId } = req.params;
+    const { version, contractVersion, changeType, changeSummary, configuration, capabilities, permissions } = req.body || {};
+
+    if (!version || !changeType) {
+      return res.status(400).json({ success: false, error: "Fields 'version' and 'changeType' (major|minor|patch) are required." });
+    }
+
+    const result = agentVersioningService.createVersion({
+      agentId,
+      version,
+      contractVersion,
+      changeType,
+      changeSummary: changeSummary || `Version ${version} created`,
+      configuration: configuration || {},
+      capabilities,
+      permissions,
+      actorId: user.userId,
+      actorEmail: user.email,
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 14. Approve a validated version (Authorized Platform Admin only)
+app.post("/api/agents/:agentId/versions/:version/approve", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user?.isPlatformAdmin) {
+      return res.status(403).json({ success: false, error: "Only platform administrators can approve agent versions." });
+    }
+    const { agentId, version } = req.params;
+    const { notes } = req.body || {};
+
+    const result = agentVersioningService.approveVersion({
+      agentId,
+      version,
+      actorId: user.userId,
+      actorEmail: user.email,
+      notes,
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 15. Activate an approved version (Authorized Platform Admin only)
+app.post("/api/agents/:agentId/versions/:version/activate", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user?.isPlatformAdmin) {
+      return res.status(403).json({ success: false, error: "Only platform administrators can activate agent versions." });
+    }
+    const { agentId, version } = req.params;
+    const { reason } = req.body || {};
+
+    const result = agentVersioningService.activateVersion({
+      agentId,
+      version,
+      actorId: user.userId,
+      actorEmail: user.email,
+      reason,
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 16. Controlled Rollback to a historical version (Creates NEW version record, Authorized Platform Admin only)
+app.post("/api/agents/:agentId/rollback", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user?.isPlatformAdmin) {
+      return res.status(403).json({ success: false, error: "Only platform administrators can trigger agent rollback." });
+    }
+    const { agentId } = req.params;
+    const { targetVersion, rollbackReason } = req.body || {};
+
+    if (!targetVersion || !rollbackReason) {
+      return res.status(400).json({ success: false, error: "Both 'targetVersion' and 'rollbackReason' are required for rollback accountability." });
+    }
+
+    const result = agentVersioningService.rollbackVersion({
+      agentId,
+      targetVersion,
+      rollbackReason,
+      actorId: user.userId,
+      actorEmail: user.email,
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// SHARED TOOL GATEWAY ENDPOINTS (STEP 10)
+// ==========================================
+
+// 1. Tool Discovery: List permitted tools filtered by caller's agent, business, and category
+app.get("/api/tools", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    const agentId = req.query.agentId as string | undefined;
+    const businessId = (req.query.businessId as string) || (req.headers["x-business-id"] as string);
+    const moduleId = req.query.moduleId as string | undefined;
+    const category = req.query.category as string | undefined;
+
+    const tools = await toolGatewayService.discoverTools({
+      agent_id: agentId,
+      business_id: businessId,
+      user_id: user?.userId,
+      module_id: moduleId,
+      category,
+    });
+
+    return res.json({
+      success: true,
+      count: tools.length,
+      tools,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 2. Tool Invocation: Secure, multi-layer validated tool execution
+app.post("/api/tools/invoke", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: { code: "UNAUTHENTICATED", message: "Missing or invalid authentication credentials." },
+      });
+    }
+
+    const {
+      tool_id,
+      tool_version,
+      parameters,
+      agent_id,
+      agent_version,
+      contract_version,
+      business_id,
+      correlation_id,
+    } = req.body || {};
+
+    const targetBusinessId = business_id || (req.headers["x-business-id"] as string);
+    const requestId = (req.headers["x-request-id"] as string) || `req_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    const execContext = {
+      agent_id: agent_id || "",
+      agent_version: agent_version || "",
+      contract_version: contract_version || "1.0",
+      business_id: targetBusinessId || "",
+      actor_id: user.userId,
+      actor_email: user.email,
+      is_platform_admin: user.isPlatformAdmin,
+      request_id: requestId,
+      correlation_id: correlation_id || requestId,
+    };
+
+    const invocationResponse = await toolGatewayService.invokeTool(
+      {
+        tool_id,
+        tool_version,
+        parameters: parameters || {},
+      },
+      execContext
+    );
+
+    // Map error code to appropriate HTTP status while maintaining structured envelope
+    let statusCode = 200;
+    if (!invocationResponse.success) {
+      switch (invocationResponse.error?.code) {
+        case "UNAUTHENTICATED":
+          statusCode = 401;
+          break;
+        case "ORGANIZATION_ACCESS_DENIED":
+        case "CATEGORY_ACCESS_DENIED":
+        case "TOOL_NOT_ALLOWED":
+        case "RESOURCE_ACCESS_DENIED":
+          statusCode = 403;
+          break;
+        case "TOOL_NOT_FOUND":
+          statusCode = 404;
+          break;
+        case "APPROVAL_REQUIRED":
+          statusCode = 202; // Accepted / Pending Approval
+          break;
+        case "RATE_LIMIT_EXCEEDED":
+          statusCode = 429;
+          break;
+        case "EXECUTION_TIMEOUT":
+          statusCode = 504;
+          break;
+        case "INVALID_REQUEST":
+        case "VERSION_INCOMPATIBLE":
+        case "AGENT_NOT_REGISTERED":
+        case "AGENT_INACTIVE":
+        case "TOOL_INACTIVE":
+        default:
+          statusCode = 400;
+          break;
+      }
+    }
+
+    return res.status(statusCode).json(invocationResponse);
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: { code: "EXECUTION_FAILED", message: err.message },
+    });
+  }
+});
+
+// 4. List Pending Approvals for a business
+app.get("/api/tools/approvals", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Authentication required." });
+    }
+
+    const businessId = (req.query.businessId as string) || (req.headers["x-business-id"] as string);
+    const status = req.query.status as any;
+
+    if (businessId && !user.isPlatformAdmin) {
+      const auth = await organizationAuthService.authorizeOrganizationAccess({
+        userId: user.userId,
+        businessId,
+        requiredRole: "manager",
+      });
+      if (!auth.allowed) {
+        return res.status(403).json({ success: false, error: auth.reason });
+      }
+    }
+
+    const approvals = toolGatewayService.listApprovals({ businessId, status });
+    return res.json({ success: true, count: approvals.length, approvals });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5. Decide (Approve / Reject) a pending tool approval
+app.post("/api/tools/approvals/:approvalId/decide", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Authentication required." });
+    }
+
+    const { approvalId } = req.params;
+    const { decision, reason } = req.body || {};
+
+    if (!decision || (decision !== "approved" && decision !== "rejected")) {
+      return res.status(400).json({ success: false, error: "Decision must be 'approved' or 'rejected'." });
+    }
+
+    const result = await toolGatewayService.decideApproval({
+      approvalId,
+      decision,
+      approverUserId: user.userId,
+      approverEmail: user.email,
+      decisionReason: reason,
+      isPlatformAdmin: user.isPlatformAdmin,
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 6. Tool Execution Audit History
+app.get("/api/tools/audit", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Authentication required." });
+    }
+
+    const businessId = (req.query.businessId as string) || (req.headers["x-business-id"] as string);
+    const agentId = req.query.agentId as string | undefined;
+    const toolId = req.query.toolId as string | undefined;
+    const status = req.query.status as string | undefined;
+    const limit = Number(req.query.limit) || 50;
+
+    if (businessId && !user.isPlatformAdmin) {
+      const auth = await organizationAuthService.authorizeOrganizationAccess({
+        userId: user.userId,
+        businessId,
+        requiredRole: "manager",
+      });
+      if (!auth.allowed) {
+        return res.status(403).json({ success: false, error: auth.reason });
+      }
+    }
+
+    const audit = toolGatewayService.getAuditHistory({
+      businessId,
+      agentId,
+      toolId,
+      status,
+      limit,
+    });
+
+    return res.json({ success: true, count: audit.length, audit });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 6. Tool Definition: Get contract schema for a specific tool (placed after specific subroutes)
+app.get("/api/tools/:toolId", async (req: Request, res: Response) => {
+  try {
+    const { toolId } = req.params;
+    const tool = toolGatewayService.getToolById(toolId);
+    if (!tool) {
+      return res.status(404).json({ success: false, error: `Tool '${toolId}' not found.` });
+    }
+    return res.json({ success: true, tool });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// STEP 11: AGENT EXECUTION & AUDIT LOGGING API
+// ==========================================
+
+// 1. Submit Agent Execution
+app.post("/api/agents/executions", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: { code: "UNAUTHENTICATED", message: "Missing or invalid authentication credentials." },
+      });
+    }
+
+    const {
+      agent_id,
+      business_id,
+      task_type,
+      task_input,
+      requested_tool_ids,
+      agent_version,
+      contract_version,
+      idempotency_key,
+      correlation_id,
+      timeout_ms,
+    } = req.body || {};
+
+    const targetBusinessId = business_id || (req.headers["x-business-id"] as string);
+
+    const result = await agentExecutionEngine.submitExecution(
+      {
+        agent_id,
+        business_id: targetBusinessId,
+        task_type,
+        task_input,
+        requested_tool_ids,
+        agent_version,
+        contract_version,
+        idempotency_key,
+        correlation_id,
+        timeout_ms,
+      },
+      {
+        userId: user.userId,
+        email: user.email,
+        isPlatformAdmin: user.isPlatformAdmin,
+      }
+    );
+
+    return res.json({
+      success: result.execution.status === "completed" || result.execution.status === "awaiting_approval" || result.execution.status === "running",
+      is_idempotent_replay: Boolean(result.is_idempotent_replay),
+      in_progress: Boolean(result.in_progress),
+      execution: result.execution,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 2. Execution Observability Metrics (Precedence: before /:executionId)
+app.get("/api/agents/executions/metrics", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const businessId = (req.query.business_id as string) || (req.headers["x-business-id"] as string);
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "business_id is required" });
+    }
+
+    const metrics = await agentExecutionEngine.getExecutionMetrics(businessId, {
+      userId: user.userId,
+      isPlatformAdmin: user.isPlatformAdmin,
+    });
+
+    return res.json({ success: true, metrics });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3. List Executions with Filtering and Pagination
+app.get("/api/agents/executions", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const businessId = (req.query.business_id as string) || (req.headers["x-business-id"] as string);
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "business_id is required" });
+    }
+
+    const filter = {
+      business_id: businessId,
+      agent_id: req.query.agent_id as string | undefined,
+      category_id: req.query.category_id as string | undefined,
+      status: req.query.status as any,
+      task_type: req.query.task_type as any,
+      requesting_user_id: req.query.requesting_user_id as string | undefined,
+      start_date: req.query.start_date as string | undefined,
+      end_date: req.query.end_date as string | undefined,
+      limit: req.query.limit ? Number(req.query.limit) : 50,
+      offset: req.query.offset ? Number(req.query.offset) : 0,
+    };
+
+    const result = await agentExecutionEngine.listExecutions(filter, {
+      userId: user.userId,
+      isPlatformAdmin: user.isPlatformAdmin,
+    });
+
+    return res.json({ success: true, ...result });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 4. Retrieve Specific Execution by ID
+app.get("/api/agents/executions/:executionId", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const { executionId } = req.params;
+    const businessId = (req.query.business_id as string) || (req.headers["x-business-id"] as string);
+
+    const execution = agentExecutionEngine.getExecutionById(executionId, businessId, user.isPlatformAdmin);
+    if (!execution) {
+      return res.status(404).json({ success: false, error: `Execution '${executionId}' not found or access denied.` });
+    }
+
+    return res.json({ success: true, execution });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5. Cancel an Active or Pending Execution
+app.post("/api/agents/executions/:executionId/cancel", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const { executionId } = req.params;
+    const { business_id, reason } = req.body || {};
+    const targetBusinessId = business_id || (req.headers["x-business-id"] as string);
+
+    const result = await agentExecutionEngine.cancelExecution({
+      executionId,
+      businessId: targetBusinessId,
+      userId: user.userId,
+      reason,
+      isPlatformAdmin: user.isPlatformAdmin,
+    });
+
+    if (result.error) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    return res.json({ success: true, execution: result.execution });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 6. Resume Execution Awaiting Approval
+app.post("/api/agents/executions/:executionId/resume", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const { executionId } = req.params;
+    const { approval_id, decision, notes } = req.body || {};
+
+    if (!approval_id) {
+      return res.status(400).json({ success: false, error: "approval_id is required." });
+    }
+
+    const result = await agentExecutionEngine.resumeApprovedExecution({
+      executionId,
+      approvalId: approval_id,
+      decision: decision === "rejected" ? "rejected" : "approved",
+      notes,
+      caller: {
+        userId: user.userId,
+        email: user.email,
+        isPlatformAdmin: user.isPlatformAdmin,
+      },
+    });
+
+    if (result.error) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+
+    return res.json({ success: true, execution: result.execution });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 7. Verify Audit Ledger Cryptographic Integrity (Precedence: before /audit-events)
+app.get("/api/agents/audit-events/integrity", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user || (!user.isPlatformAdmin && !req.headers["x-admin-key"])) {
+      return res.status(403).json({ success: false, error: "Integrity verification requires Platform Administrator access." });
+    }
+
+    const verification = agentAuditService.verifyAuditIntegrity();
+    return res.json({ success: true, verification });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 8. Query Centralized Audit Events
+app.get("/api/agents/audit-events", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const businessId = (req.query.business_id as string) || (req.headers["x-business-id"] as string);
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "business_id is required." });
+    }
+
+    const filter = {
+      business_id: businessId,
+      agent_id: req.query.agent_id as string | undefined,
+      category_id: req.query.category_id as string | undefined,
+      execution_id: req.query.execution_id as string | undefined,
+      event_category: req.query.event_category as any,
+      event_type: req.query.event_type as string | undefined,
+      actor_id: req.query.actor_id as string | undefined,
+      target_id: req.query.target_id as string | undefined,
+      start_date: req.query.start_date as string | undefined,
+      end_date: req.query.end_date as string | undefined,
+      limit: req.query.limit ? Number(req.query.limit) : 50,
+      offset: req.query.offset ? Number(req.query.offset) : 0,
+    };
+
+    const result = await agentAuditService.getAuditEvents(filter, {
+      userId: user.userId,
+      isPlatformAdmin: user.isPlatformAdmin,
+    });
+
+    return res.json({ success: true, ...result });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // 2. Product Categories
 app.get("/api/admin/product-categories", async (_req: Request, res: Response) => {
   try {
@@ -6395,9 +7263,32 @@ function getGeminiClient() {
 
 app.post("/api/ai/assistant", async (req: Request, res: Response) => {
   try {
-    const { messages, mode, businessId, planId, businessContext, selectedLanguage = "english" } = req.body || {};
+    const { messages, mode, businessId, planId, businessContext, selectedLanguage = "english", requestedAgentId } = req.body || {};
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ success: false, error: "messages array is required" });
+    }
+
+    // Step 07: Organization-Level & Category-Level Server Authorization Validation
+    if (businessId) {
+      const user = await organizationAuthService.resolveUser(req);
+      if (user) {
+        const authDecision = await organizationAuthService.evaluateAuthorization({
+          userId: user.userId,
+          businessId,
+          requestedAgentId,
+          isPlatformAdmin: user.isPlatformAdmin,
+        });
+
+        if (!authDecision.allowed) {
+          return res.status(403).json({
+            success: false,
+            code: authDecision.code,
+            error: authDecision.reason,
+            actor: authDecision.actor,
+            timestamp: authDecision.timestamp,
+          });
+        }
+      }
     }
 
     const lastUserMessage = messages[messages.length - 1]?.content || "";
@@ -6413,75 +7304,84 @@ app.post("/api/ai/assistant", async (req: Request, res: Response) => {
     if (isExplicitLanguage) {
       targetLanguage = selectedLanguage;
     } else {
-      // 2. Default is English (UK). If user directly writes in Roman Urdu, Urdu script, Arabic, Spanish, etc.,
-      // adapt to the user's message language!
-      const isUrduScript =
-        /[\u0600-\u06FF]/.test(lastUserMessage) &&
-        (/[\u0679\u067E\u0686\u0688\u0691\u06BA\u06BE\u06C1\u06D2]/.test(lastUserMessage) ||
-          lowerQuery.includes("ہے") ||
-          lowerQuery.includes("کیا") ||
-          lowerQuery.includes("کتنا") ||
-          lowerQuery.includes("منافع") ||
-          lowerQuery.includes("دکان") ||
-          lowerQuery.includes("سیل") ||
-          lowerQuery.includes("فروخت") ||
-          lowerQuery.includes("بڑھائیں"));
-      const isArabicScript = /[\u0600-\u06FF]/.test(lastUserMessage) && !isUrduScript;
-
-      // Unambiguous Roman Urdu indicators (never in standard English)
-      const strongRomanUrduMarkers = [
-        "mujhy", "mujhe", "mujy",
-        "btao", "batao", "bataen", "batayein",
-        "kesy", "kese", "kaise", "kaisay",
-        "apni", "apna", "apne",
-        "karobar", "karobaar",
-        "bikri", "munafa", "munafah",
-        "kamai", "bachat", "grahak",
-        "barhana", "barhao", "barhaoon",
-        "sale barha", "bikri barha", "apni sale", "kesy apni", "kese apni", "kaise apni",
-        "udhar", "khata", "dukan", "dukaan"
-      ];
-      const hasStrongRomanUrdu = strongRomanUrduMarkers.some((m) => lowerQuery.includes(m));
-
-      const broaderRomanUrduWords = [
-        "kya", "kyun", "kyon", "kab", "kahan", "kidhar", "konsa", "konsi", "konse",
-        "karna", "karein", "karo", "skta", "sakti", "sakte", "sakta",
-        "hoon", "hain", "shukriya", "meherbani", "theek", "acha", "achi"
-      ];
-      const queryTokens = lowerQuery.split(/[\s,?.!;:()]+/).filter(Boolean);
-      const matchedTokens = queryTokens.filter((w) => broaderRomanUrduWords.includes(w)).length;
-
-      if (isUrduScript) {
-        targetLanguage = "urdu";
-      } else if (isArabicScript) {
-        targetLanguage = "arabic";
-      } else if (hasStrongRomanUrdu || matchedTokens >= 2) {
-        targetLanguage = "roman_urdu";
-      } else if (
-        lowerQuery.includes("cómo") ||
-        lowerQuery.includes("como aumentar") ||
-        lowerQuery.includes("ventas") ||
-        lowerQuery.includes("ganancia") ||
-        lowerQuery.includes("beneficio")
-      ) {
-        targetLanguage = "spanish";
-      } else if (
-        lowerQuery.includes("comment") ||
-        lowerQuery.includes("bénéfice") ||
-        lowerQuery.includes("magasin")
-      ) {
-        targetLanguage = "french";
-      } else if (
-        lowerQuery.includes("wie") &&
-        (lowerQuery.includes("umsatz") || lowerQuery.includes("gewinn"))
-      ) {
-        targetLanguage = "german";
-      } else if (/[\u0900-\u097F]/.test(lastUserMessage)) {
+      // 2. Automatic language detection:
+      // Devanagari script (Hindi / Marathi)
+      if (/[\u0900-\u097F]/.test(lastUserMessage)) {
         targetLanguage = "hindi";
       } else if (/[\u4E00-\u9FFF]/.test(lastUserMessage)) {
         targetLanguage = "chinese";
+      } else if (/[\u0600-\u06FF]/.test(lastUserMessage)) {
+        const arabicSpecificWords = ["كيف", "مرحبا", "ارباح", "مبيعات", "متجر", "مخزون", "كم", "شكرا", "فاتورة", "تسجيل"];
+        const isExplicitArabic = arabicSpecificWords.some((w) => lowerQuery.includes(w));
+        if (isExplicitArabic && !/[\u0679\u067E\u0686\u0688\u0691\u06BA\u06BE\u06C1\u06D2]/.test(lastUserMessage)) {
+          targetLanguage = "arabic";
+        } else {
+          targetLanguage = "urdu";
+        }
       } else {
-        targetLanguage = "english";
+        // French detection
+        const frenchMarkers = [
+          "bonjour", "salut", "merci", "s'il vous plaît", "s'il vous plait", "svp",
+          "comment", "pourquoi", "combien", "quel", "quelle", "quels", "quelles",
+          "est-ce", "aidez", "aider", "aide", "ventes", "vente", "bénéfice", "bénéfices",
+          "profit", "profits", "magasin", "boutique", "produit", "produits", "stock",
+          "stocks", "caisse", "caissier", "facture", "prix", "argent", "chiffre d'affaires",
+          "mon magasin", "mes ventes", "mon profit", "notre magasin", "augmenter"
+        ];
+        const hasFrenchMarker = frenchMarkers.some((m) => lowerQuery.includes(m));
+        const hasFrenchAccent = /[éèêëàâäôöûüç]/i.test(lastUserMessage);
+        const queryWords = lowerQuery.split(/[\s,?.!;:()]+/).filter(Boolean);
+        const smallFrenchWords = ["le", "la", "les", "un", "une", "des", "du", "de", "dans", "en", "pour", "avec", "est", "sont", "mon", "ma", "mes"];
+        const matchedFrenchSmall = queryWords.filter((w) => smallFrenchWords.includes(w)).length;
+
+        // Roman Urdu indicators
+        const strongRomanUrduMarkers = [
+          "mujhy", "mujhe", "mujy", "btao", "batao", "bataen", "batayein",
+          "kesy", "kese", "kaise", "kaisay", "apni", "apna", "apne",
+          "karobar", "karobaar", "bikri", "munafa", "munafah", "kamai",
+          "bachat", "grahak", "barhana", "barhao", "barhaoon", "sale barha",
+          "bikri barha", "apni sale", "kesy apni", "kese apni", "kaise apni",
+          "udhar", "khata", "dukan", "dukaan"
+        ];
+        const hasStrongRomanUrdu = strongRomanUrduMarkers.some((m) => lowerQuery.includes(m));
+
+        // Roman Hindi indicators
+        const romanHindiMarkers = [
+          "namaste", "namaskar", "dhanyawad", "dhanyavad",
+          "meri bikri", "mera munafa", "mera profit", "kaise badhaye",
+          "aaj ki sale", "aaj ka munafa", "kitna hai", "kripya", "madad karein"
+        ];
+        const hasRomanHindi = romanHindiMarkers.some((m) => lowerQuery.includes(m));
+
+        // Broader South Asian words
+        const broaderRomanWords = [
+          "kya", "kyun", "kyon", "kab", "kahan", "kidhar", "konsa", "konsi", "konse",
+          "karna", "karein", "karo", "skta", "sakti", "sakte", "sakta",
+          "hoon", "hain", "shukriya", "meherbani", "theek", "acha", "achi"
+        ];
+        const matchedBroader = queryWords.filter((w) => broaderRomanWords.includes(w)).length;
+
+        // Spanish markers
+        const spanishMarkers = ["cómo", "como aumentar", "ventas", "ganancia", "beneficio", "tienda", "hola", "inventario", "cuanto", "cuánto", "ayuda", "por favor", "gracias"];
+        const hasSpanish = spanishMarkers.some((m) => lowerQuery.includes(m));
+
+        // German markers
+        const germanMarkers = ["wie", "umsatz", "gewinn", "geschäft", "hallo", "wieviel", "bitte", "danke"];
+        const hasGerman = germanMarkers.some((m) => lowerQuery.includes(m));
+
+        if (hasFrenchMarker || (hasFrenchAccent && matchedFrenchSmall >= 1) || matchedFrenchSmall >= 3) {
+          targetLanguage = "french";
+        } else if (hasRomanHindi) {
+          targetLanguage = "hindi";
+        } else if (hasStrongRomanUrdu || matchedBroader >= 2) {
+          targetLanguage = "roman_urdu";
+        } else if (hasSpanish) {
+          targetLanguage = "spanish";
+        } else if (hasGerman) {
+          targetLanguage = "german";
+        } else {
+          targetLanguage = "english";
+        }
       }
     }
 
@@ -6742,19 +7642,36 @@ CRITICAL RULES:
       lowerQuery.includes("بوابة دفع") ||
       lowerQuery.includes("ادائیگی گیٹ وے");
 
+    const isPlanRenewalOrCycleQuery =
+      lowerQuery.includes("expir") ||
+      lowerQuery.includes("renew") ||
+      lowerQuery.includes("after expiry") ||
+      lowerQuery.includes("monthly or yearly") ||
+      lowerQuery.includes("yearly or monthly") ||
+      lowerQuery.includes("pay as monthly") ||
+      lowerQuery.includes("pay as yearly") ||
+      lowerQuery.includes("billing cycle") ||
+      lowerQuery.includes("auto-renew") ||
+      lowerQuery.includes("cycle") ||
+      lowerQuery.includes("khatam hone") ||
+      lowerQuery.includes("tajdeed") ||
+      lowerQuery.includes("تجديد") ||
+      lowerQuery.includes("انتهاء");
+
     const isPricingPlanOrBillingQuery =
-      lowerQuery.includes("pricing") ||
-      lowerQuery.includes("plan") ||
-      lowerQuery.includes("subscription") ||
-      lowerQuery.includes("standard") ||
-      lowerQuery.includes("premium") ||
-      lowerQuery.includes("lifetime") ||
-      lowerQuery.includes("billing") ||
-      lowerQuery.includes("badge") ||
-      lowerQuery.includes("seat") ||
-      lowerQuery.includes("خطة") ||
-      lowerQuery.includes("اشتراك") ||
-      lowerQuery.includes("پلان");
+      !isPlanRenewalOrCycleQuery &&
+      (lowerQuery.includes("pricing") ||
+        lowerQuery.includes("plan") ||
+        lowerQuery.includes("subscription") ||
+        lowerQuery.includes("standard") ||
+        lowerQuery.includes("premium") ||
+        lowerQuery.includes("lifetime") ||
+        lowerQuery.includes("billing") ||
+        lowerQuery.includes("badge") ||
+        lowerQuery.includes("seat") ||
+        lowerQuery.includes("خطة") ||
+        lowerQuery.includes("اشتراك") ||
+        lowerQuery.includes("پلان"));
 
     const isUdharQuery =
       lowerQuery.includes("udhar") ||
@@ -6861,14 +7778,23 @@ CRITICAL RULES:
           `• **Gateway Status Sync**: Admin panel aur user panel me automated listeners real-time transaction status verify karte hain.\n` +
           `• **Multi-Tender POS**: Counter par Cash, Card, QR, aur Online Payment sab ek sath accept ho sakte hain.\n\n` +
           `💡 **Action Item**: Settings > Payment Gateways me ja kar credentials verify karein.`;
+      } else if (isPlanRenewalOrCycleQuery) {
+        reply =
+          `### 🔄 GeFlow AI Agent: Plan Renewal & Billing Cycle Rules\n\n` +
+          `Aapke subscription plan ke renewal aur billing cycle ka rule bilkul clear hai:\n\n` +
+          `• **Same Cycle Auto-Renewal**: Agar aapka plan Yearly hai, to expiry par woh automatically **Yearly plan** ke tor par hi renew hoga (discounted annual rate ke sath).\n` +
+          `• **Cycle Switch Option**: Expiry se pehle aap chahein to apna cycle **Yearly se Monthly** ya vice versa tabdeel kar sakte hain (**Subscription > Manage Cycle** se).\n` +
+          `• **Guaranteed Preservation**: Agar aap koi tabdeeli nahi karte to aapka same Yearly plan seamlessly jari rahega, koi unexpected plan change ya interruption nahi aayegi.\n\n` +
+          `💡 **Customer Guidance**: Expiry date aur billing cycle check karne ke liye **Subscription** page par jayein.`;
       } else if (isPricingPlanOrBillingQuery) {
         reply =
-          `### 🌟 GeFlow AI Agent: Pricing Plans & Lifetime Badges\n\n` +
-          `Aapke system ke subscription plans aur badge management:\n\n` +
-          `• **Real Admin Created Plans**: System sirf admin ke tayyar kardah verified plans (Standard, Premium, Lifetime) show karta hai.\n` +
-          `• **Lifetime Plan Badges & Countdown**: Lifetime plans par visual highlight badges aur limited seats left counter display hota hai.\n` +
-          `• **Feature Access**: Standard plan par Analyst + Operator modes hain, jabkay Premium/Lifetime par tamam 4 AI models aur VIP reports shamil hain.\n\n` +
-          `💡 **Action Item**: Admin Panel > Billing & Subs se live plans ko configure karein.`;
+          `### 🌟 GeFlow AI Agent: Subscription Plans & Capabilities Overview\n\n` +
+          `GeFlow business subscription tiers aur feature details:\n\n` +
+          `• **Free Tier**: 1 Business/Store, Analyst AI intelligence model, basic sales reporting, aur POS checkout.\n` +
+          `• **Standard Plan**: Up to 3 Businesses/Stores, Analyst + Operator AI models, 10 active chat histories, aur weekly deep audits.\n` +
+          `• **Premium Plan**: Up to 7 Businesses/Stores, tamam 4 AI models (Analyst, Operator, Knowledge, Advisor), 20 chat histories, daily VIP audits, aur priority synchronization.\n` +
+          `• **Lifetime Plan**: Unlimited chat sessions, up to 10 Businesses/Stores, VIP perpetual access, aur priority roadmap features.\n\n` +
+          `💡 **Customer Guidance**: Apna plan check ya upgrade karne ke liye navigation se **Subscription** page open karein.`;
       } else if (isSalesIncreaseQuery) {
         reply =
           `### 📈 GeFlow AI Agent: Dukan Ki Sale aur Bikri Barhanay ke 5 Asaan Tareeqay\n\n` +
@@ -6998,6 +7924,74 @@ CRITICAL RULES:
           `• **Directivas Estratégicas**: Reabastezca insumos críticos y verifique los cierres de caja en cada turno.\n\n` +
           `💡 **Consejo Profesional**: Puede consultar detalles de inventario, márgenes de recetas, permisos o pasarelas de pago.`;
       }
+    } else if (targetLanguage === "french") {
+      if (isCookingOrRestaurantQuery) {
+        reply =
+          `### 🍳 GeFlow AI Agent: Gestion des Plats Préparés à la Commande & Cuisine en Direct\n\n` +
+          `• **Bypass de Stock Commande**: Les plats préparés à la demande (pizzas, burgers, spécialités chef) sont configurés en 'Made on Order' pour ne jamais apparaître en rupture.\n` +
+          `• **Caisse POS Fluide**: Le caissier enregistre la commande instantanément sans blocage d'inventaire.\n` +
+          `• **Coût Matières & Marges**: Enregistrez les ingrédients dans Achats pour surveiller la marge réelle par assiette.\n\n` +
+          `💡 **Directive Opérationnelle**: Activez l'option 'Live Cooking / Made on Order Dish' dans la fiche produit.`;
+      } else if (isProfitQuery) {
+        reply =
+          `### 💰 GeFlow AI Agent: Rapport de Performance Financière pour ${storeName}\n\n` +
+          `• **Ventes du Jour**: ${rev} (${tx} commandes)\n` +
+          `• **Bénéfice Net du Jour**: ${todayProf}\n` +
+          `• **Chiffre d'Affaires 30 Jours**: ${mRev}\n` +
+          `• **Bénéfice Net 30 Jours**: ${mProf}\n` +
+          `• **Devise Active**: ${businessCurrency} (${currencySym})\n\n` +
+          `💡 **Action Recommandée**: Mettez en avant vos articles à plus forte marge en favoris sur le terminal de caisse.`;
+      } else if (isStockQuery) {
+        reply =
+          `### 📦 GeFlow AI Agent: État des Stocks & Inventaire pour ${storeName}\n\n` +
+          `• **Articles au Catalogue**: ${totalProd} produits actifs.\n` +
+          `• **Alerte Stock Faible**: ${lowStock} articles sous le seuil de sécurité.\n` +
+          `• **Plats Cuisine**: Les articles cuisinés sur commande s'exécutent sans verrou de stock.\n` +
+          `• **Réapprovisionnement**: Générez rapidement un bon de commande fournisseur pour les articles en alerte.\n\n` +
+          `💡 **Action Recommandée**: Filtrez les stocks bas dans Inventaire et validez un réapprovisionnement.`;
+      } else {
+        reply =
+          `### ⚡ GeFlow AI Agent: Audit Opérationnel Exécutif pour ${storeName}\n\n` +
+          `• **Statut de l'Établissement**: Organisation: **${storeName}** | Devise: **${businessCurrency}** (${currencySym}) | Catalogue: **${totalProd} produits**\n` +
+          `• **Activité Financière**: Ventes du Jour: **${rev}** (${tx} commandes) | Bénéfice Net Aujourd'hui: **${todayProf}** | Ventes du Mois: **${mRev}** (${mProf} de bénéfice)\n` +
+          `• **Inventaire & Cuisine**: **${lowStock} articles** en stock faible. Les plats à la commande sont immédiatement routés en préparation.\n` +
+          `• **Contrôles Système**: Variations de tailles, caisse POS, sécurité des rôles (Caissier/Gérant/Admin) et synchronisation sont actifs.\n\n` +
+          `💡 **Conseil**: Posez toute question sur vos marges, recettes, permissions ou clôture de caisse pour un guidage précis.`;
+      }
+    } else if (targetLanguage === "hindi") {
+      if (isCookingOrRestaurantQuery) {
+        reply =
+          `### 🍳 GeFlow AI Agent: लाइव कुकिंग और मेड-ऑन-ऑर्डर व्यंजन प्रबंधन\n\n` +
+          `• **ऑर्डर पर तैयारी**: ताज़ा व्यंजन (जैसे पिज़्ज़ा, बर्गर, स्पेशल डिश) 'Made on Order' के रूप में सेट होते हैं ताकि वे कभी आउट ऑफ स्टॉक न दिखें।\n` +
+          `• **पीओएस काउंटर**: कैशियर बिना किसी इन्वेंटरी रुकावट के सीधे ऑर्डर पंच कर सकता है।\n` +
+          `• **लागत प्रबंधन**: कच्चे माल (पनीर, सॉस, मसाले) को Purchases में दर्ज करें ताकि हर डिश का सही मार्जिन दिखे।\n\n` +
+          `💡 **निर्देश**: डिश बनाते समय 'Live Cooking / Made on Order Dish' विकल्प चालू करें।`;
+      } else if (isProfitQuery) {
+        reply =
+          `### 💰 GeFlow AI Agent: वित्तीय प्रदर्शन और मुनाफा रिपोर्ट - ${storeName}\n\n` +
+          `• **आज की कुल बिक्री**: ${rev} (${tx} ऑर्डर्स)\n` +
+          `• **आज का शुद्ध मुनाफा**: ${todayProf}\n` +
+          `• **पिछले 30 दिनों की बिक्री**: ${mRev}\n` +
+          `• **पिछले 30 दिनों का शुद्ध मुनाफा**: ${mProf}\n` +
+          `• **मुद्रा**: सभी आंकड़े **${businessCurrency}** (${currencySym}) में हैं।\n\n` +
+          `💡 **निर्देश**: उच्च मुनाफे वाले उत्पादों को पीओएस काउंटर पर हाइलाइट करें।`;
+      } else if (isStockQuery) {
+        reply =
+          `### 📦 GeFlow AI Agent: इन्वेंटरी और स्टॉक ऑडिट रिपोर्ट - ${storeName}\n\n` +
+          `• **कैटलॉग उत्पाद**: ${totalProd} सक्रिय उत्पाद उपलब्ध हैं।\n` +
+          `• **कम स्टॉक अलर्ट**: ${lowStock} आइटम न्यूनतम सीमा से नीचे हैं।\n` +
+          `• **किचन व्यंजन**: ऑर्डर पर तैयार होने वाले व्यंजन बिना स्टॉक बाधा के सुचारू रूप से चलते हैं।\n` +
+          `• **पुनः ऑर्डर**: कम स्टॉक वाली वस्तुओं का सप्लायर ऑर्डर तुरंत जारी करें।\n\n` +
+          `💡 **निर्देश**: इन्वेंटरी टैब में लो स्टॉक फ़िल्टर चुनकर नया ऑर्डर बनाएं।`;
+      } else {
+        reply =
+          `### ⚡ GeFlow AI Agent: कार्यकारी व्यवसाय ऑडिट रिपोर्ट - ${storeName}\n\n` +
+          `• **स्टोर की स्थिति**: प्रतिष्ठान: **${storeName}** | मुद्रा: **${businessCurrency}** (${currencySym}) | कुल उत्पाद: **${totalProd}**\n` +
+          `• **वित्तीय गति**: आज की बिक्री: **${rev}** (${tx} ऑर्डर्स) | आज का शुद्ध लाभ: **${todayProf}** | मासिक बिक्री: **${mRev}** (${mProf} लाभ)\n` +
+          `• **इन्वेंटरी और किचन**: **${lowStock} उत्पाद** कम स्टॉक में हैं। लाइव किचन ऑर्डर बिना किसी बाधा के तैयार हो रहे हैं।\n` +
+          `• **सिस्टम नियंत्रण**: वैरायटी प्राइसिंग, पीओएस काउंटर, कैशियर रोल्स और पेमेंट गेटवे पूरी तरह सक्रिय हैं।\n\n` +
+          `💡 **सुझाव**: किसी भी उत्पाद के मार्जिन, स्टॉक, रसीद या स्टाफ परमिशन के बारे में विशिष्ट प्रश्न पूछें।`;
+      }
     } else {
       // Professional Executive British English (English UK) - Default GeFlow Business AI Agent
       if (isCookingOrRestaurantQuery) {
@@ -7035,14 +8029,23 @@ CRITICAL RULES:
           `• **Real-Time Gateway Sync**: Webhook handlers and client-side listeners continuously verify transaction completion and update subscription plan states.\n` +
           `• **Multi-Tender POS Capability**: Cashiers can split or accept tenders across Cash, Card, QR, Store Credit (Udhar), and Online Payment Gateways without transaction delays.\n\n` +
           `💡 **Operational Directive**: Verify credentials and test sandbox/live webhooks under **Settings > Payment Gateways**.`;
+      } else if (isPlanRenewalOrCycleQuery) {
+        reply =
+          `### 🔄 GeFlow AI Agent: Plan Renewal & Billing Cycle Architecture\n\n` +
+          `Clear answers regarding your subscription renewal and billing cycles:\n\n` +
+          `• **Same-Cycle Auto-Renewal**: If your subscription is on a **Yearly plan**, it automatically renews as **Yearly** upon expiry at the discounted annual rate. You will not be randomly switched to a monthly rate.\n` +
+          `• **Flexible Cycle Switch**: Before your renewal date, you can easily change your upcoming billing cadence from **Yearly to Monthly** (or vice versa) under **Subscription > Manage Plan & Cycle**.\n` +
+          `• **Guaranteed Preservation**: If you make no changes, your plan seamlessly continues with the exact same Yearly terms with zero interruption to your store POS, inventory, or AI agent operations.\n\n` +
+          `💡 **Customer Guidance**: View your renewal countdown, invoice history, and billing cadence at any time under **Subscription** in your navigation menu.`;
       } else if (isPricingPlanOrBillingQuery) {
         reply =
-          `### 🌟 GeFlow AI Agent: Pricing Plans, Lifetime Badges & Seat Allocations\n\n` +
-          `Subscription tiers and promotional badge configuration:\n\n` +
-          `• **Verified Admin Created Plans**: The system renders only authentic administrator-configured plans (Standard, Premium, Lifetime) and eliminates any demo/mock plans.\n` +
-          `• **Lifetime Promotional Badges**: Lifetime plans feature prominent visual badges and a live countdown showing remaining seat allocations to drive buyer urgency.\n` +
-          `• **Tier Capabilities**: Standard includes Analyst + Operator AI models and weekly reporting; Premium/Lifetime unlocks all 4 AI models, VIP daily auditing, and unlimited agent capabilities.\n\n` +
-          `💡 **Operational Directive**: Manage plan pricing, badge visibility, and seat limits under **Admin Panel > Billing & Subs > Pricing Plans**.`;
+          `### 🌟 GeFlow AI Agent: Subscription Tiers & Feature Comparison\n\n` +
+          `GeFlow subscription plans designed for independent businesses and growing retail chains:\n\n` +
+          `• **Free Tier**: 1 Business / Store location, Analyst AI intelligence model (2 active chats), basic sales reporting, and counter POS checkout.\n` +
+          `• **Standard Plan**: Up to 3 Stores, Analyst + Operator AI models, 10 active chat sessions, and weekly deep business performance reports.\n` +
+          `• **Premium Plan**: Up to 7 Stores, full unlock of all 4 AI models (Analyst, Operator, Knowledge Base, Executive Advisor), 20 chat sessions, daily VIP business audits, and multi-tender split payments.\n` +
+          `• **Lifetime Plan**: Unlimited chat sessions, up to 10 Stores, perpetual access, VIP direct support, and all future AI roadmap releases.\n\n` +
+          `💡 **Customer Guidance**: To compare options, upgrade, or switch cycles, navigate to the **Subscription** page in your user panel.`;
       } else if (isSalesIncreaseQuery) {
         reply =
           `### 📈 GeFlow AI Agent: 5 Strategic Levers to Accelerate Store Revenue\n\n` +

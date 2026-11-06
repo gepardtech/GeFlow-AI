@@ -1,0 +1,1044 @@
+# Step 10 — Shared Tool Gateway Implementation
+
+## 1. Objective
+
+Implement a centralized, secure and reusable Shared Tool Gateway in the existing GeFlow backend.
+
+The Shared Tool Gateway will provide a controlled interface through which authorized GeFlow agents and approved backend components can request access to permitted business operations.
+
+Instead of allowing individual agents to connect directly to databases, APIs or internal business modules, the gateway will act as the central enforcement point for tool discovery, authorization, validation, execution and auditing.
+
+The gateway must support the future integration of all 29 specialized agents while preserving:
+
+- Agent identity.
+- Organization isolation.
+- Business-level access restrictions.
+- Category-level permissions.
+- Resource ownership validation.
+- Agent-specific capability restrictions.
+- Existing GeFlow business logic.
+- Human approval requirements for sensitive operations.
+
+**Core architectural principle: One shared gateway, independently enforced permissions for every agent, organization, category and operation.**
+
+---
+
+## 2. Scope and implementation boundaries
+
+### Included in this step
+
+1. Inspect the existing GeFlow backend and Agent Registry.
+2. Inspect the finalized Agent Contract and versioning implementation.
+3. Inspect existing business services and API operations.
+4. Design and implement the shared tool gateway.
+5. Implement a centralized tool registry.
+6. Implement tool contracts and schemas.
+7. Implement tool discovery and retrieval.
+8. Implement agent-to-tool permission validation.
+9. Implement organization and category authorization integration.
+10. Implement secure tool invocation.
+11. Implement request validation and execution controls.
+12. Implement approval handling for sensitive operations where required.
+13. Implement standardized responses and error handling.
+14. Implement audit logging and execution tracing.
+15. Implement rate limits and execution safeguards.
+16. Add automated security and regression tests.
+17. Produce a factual implementation report.
+
+### Explicitly excluded
+
+Do not implement:
+
+- Central AI orchestrator.
+- Agent reasoning engine.
+- Autonomous agent workflows.
+- Agent-to-agent delegation.
+- Agent memory or conversation storage.
+- LLM provider integrations.
+- Automatic agent task scheduling.
+- Background autonomous business operations.
+- A new POS, inventory or purchasing system.
+- New business workflows.
+- A new authentication framework.
+- A new organization authorization framework.
+- A separate tool server for every agent.
+- Unrestricted database query execution.
+- Shell, terminal or arbitrary code execution.
+- Browser automation.
+- External API integrations that have not been separately approved.
+- New administrative dashboard or UI redesign.
+
+The gateway is an infrastructure layer for controlled tool access. It is not an AI agent runtime or orchestrator.
+
+---
+
+## 3. Mandatory pre-implementation inspection
+
+Before writing code, inspect the actual GeFlow implementation.
+
+Do not assume that earlier roadmap instructions have already been implemented.
+
+### 3.1 Inspect Agent Registry
+
+Verify:
+
+- Whether the Agent Registry backend exists.
+- How the 29 agents are stored.
+- How agent identities are validated.
+- How agent configurations are retrieved.
+- Whether agent capabilities are defined.
+- Whether agent permissions are represented.
+- Whether agent lifecycle statuses are enforced.
+- Whether agent configuration versioning exists.
+- How the active agent configuration is selected.
+
+### 3.2 Inspect authorization
+
+Verify the actual implementation of:
+
+- User authentication.
+- Organization membership.
+- Business ownership and access.
+- Organization roles and permissions.
+- Category-level permissions.
+- Resource ownership.
+- Platform-level administrative permissions.
+
+Reuse existing authorization services.
+
+Do not introduce a parallel authorization system.
+
+### 3.3 Inspect existing business operations
+
+Identify the actual services or backend operations available for:
+
+- Products.
+- Inventory.
+- Stock adjustments.
+- POS and billing.
+- Sales.
+- Purchases.
+- Suppliers.
+- Customers.
+- Reports.
+- Categories.
+- Units of measurement.
+- Other existing business modules.
+
+Record which operations already have reusable backend services and which operations are not yet available.
+
+Do not invent tools for features that do not exist.
+
+### 3.4 Inspect security and infrastructure
+
+Identify:
+
+- Database access patterns.
+- API authentication.
+- Existing transaction handling.
+- Existing rate limiting.
+- Existing audit logging.
+- Existing error handling.
+- Existing background jobs.
+- Existing idempotency mechanisms.
+- Existing request validation.
+- Existing test infrastructure.
+
+If a required dependency is missing, document it before introducing new infrastructure.
+
+---
+
+## 4. Shared Tool Gateway architecture
+
+Implement one centralized gateway within the existing backend architecture.
+
+Conceptual architecture:
+
+```mermaid
+flowchart TD
+    A[Authorized Agent or Backend Caller] --> B[Shared Tool Gateway]
+    B --> C[Request Validation]
+    C --> D[Agent Identity and Version Validation]
+    D --> E[Organization and Category Authorization]
+    E --> F[Tool Registry]
+    F --> G[Tool Permission Validation]
+    G --> H[Resource Ownership Validation]
+    H --> I{Approval Required?}
+    I -->|Yes| J[Approval Workflow]
+    I -->|No| K[Tool Execution Service]
+    J -->|Approved| K
+    J -->|Rejected| L[Rejected Result]
+    K --> M[Existing GeFlow Business Services]
+    M --> N[Standardized Tool Response]
+    N --> O[Audit and Execution Trace]
+    L --> O
+```
+
+This is a logical architecture diagram. Reuse the actual application framework, backend services and infrastructure.
+
+Do not build an unnecessary separate microservice if the existing backend can safely host the gateway.
+
+### Gateway responsibilities
+
+The gateway must:
+
+1. Accept an authenticated internal tool invocation.
+2. Validate the caller's identity.
+3. Validate the registered agent.
+4. Validate the agent configuration version.
+5. Validate organization and business context.
+6. Validate category permissions.
+7. Resolve the requested tool.
+8. Check the agent's tool permissions.
+9. Validate the tool input schema.
+10. Check resource ownership and scope.
+11. Enforce approval requirements.
+12. Execute only the approved operation.
+13. Return a standardized response.
+14. Record the execution event.
+
+No individual agent should be able to bypass these controls by calling internal business services directly.
+
+---
+
+## 5. Centralized Tool Registry
+
+Implement a persistent or code-defined tool registry using the existing architecture.
+
+First inspect whether an equivalent registry already exists.
+
+The registry will describe which tools are available, their input/output contracts, permissions and execution policies.
+
+### 5.1 Logical tool record
+
+| Field | Purpose |
+|---|---|
+| tool_id | Permanent unique tool identifier |
+| tool_name | Human-readable tool name |
+| description | Purpose of the tool |
+| category | Functional tool grouping |
+| module_id | Associated GeFlow module |
+| version | Tool contract version |
+| status | Tool availability status |
+| input_schema | Input validation schema |
+| output_schema | Expected response schema |
+| required_permissions | Required permission references |
+| allowed_agent_ids | Agent access policy |
+| approval_policy | Whether approval is required |
+| execution_policy | Execution restrictions |
+| timeout_policy | Execution timeout configuration |
+| idempotency_policy | Duplicate execution handling |
+| created_at | Creation timestamp |
+| updated_at | Last update timestamp |
+
+Actual field types and storage must follow the existing database conventions.
+
+### 5.2 Tool identity
+
+Use stable tool identifiers.
+
+Examples:
+
+- `inventory.product.get`
+- `inventory.stock.get`
+- `inventory.stock.adjust`
+- `sales.invoice.get`
+- `sales.invoice.create`
+- `purchases.purchase.get`
+- `customers.customer.get`
+- `suppliers.supplier.get`
+- `reports.sales.summary`
+
+These are proposed identifiers, not proof that the corresponding business operations already exist.
+
+Register only tools backed by verified existing functionality or explicitly approved new implementations.
+
+### 5.3 Tool lifecycle
+
+Support logical statuses:
+
+| Status | Meaning |
+|---|---|
+| draft | Tool is being prepared |
+| active | Tool is available to authorized callers |
+| inactive | Tool is temporarily unavailable |
+| deprecated | Tool is being phased out |
+| archived | Tool is retained for historical reference |
+
+Inactive or archived tools must not execute.
+
+A tool must not become available merely because a caller knows its identifier.
+
+---
+
+## 6. Tool contract specification
+
+Every registered tool must have an explicit contract.
+
+### 6.1 Input contract
+
+Define:
+
+- Required parameters.
+- Optional parameters.
+- Parameter data types.
+- Length and range limits.
+- Allowed enumerated values.
+- Organization and business context requirements.
+- Resource identifier validation.
+- Pagination limits where relevant.
+- Input normalization rules.
+
+Reject unexpected or unauthorized fields.
+
+Never trust organization IDs, business IDs, agent IDs or permission claims supplied by an untrusted client.
+
+### 6.2 Output contract
+
+Every tool must return a predictable structure.
+
+Conceptual example:
+
+```json
+{
+  "success": true,
+  "tool_id": "inventory.product.get",
+  "tool_version": "1.0.0",
+  "request_id": "server-generated-id",
+  "data": {},
+  "error": null,
+  "metadata": {
+    "execution_status": "completed"
+  }
+}
+```
+
+This is an illustrative response contract, not a requirement to expose internal implementation details.
+
+### 6.3 Error contract
+
+Use consistent error classifications, such as:
+
+- `INVALID_REQUEST`
+- `UNAUTHENTICATED`
+- `AGENT_NOT_REGISTERED`
+- `AGENT_INACTIVE`
+- `VERSION_INCOMPATIBLE`
+- `ORGANIZATION_ACCESS_DENIED`
+- `CATEGORY_ACCESS_DENIED`
+- `TOOL_NOT_FOUND`
+- `TOOL_INACTIVE`
+- `TOOL_NOT_ALLOWED`
+- `RESOURCE_NOT_FOUND`
+- `RESOURCE_ACCESS_DENIED`
+- `APPROVAL_REQUIRED`
+- `APPROVAL_REJECTED`
+- `EXECUTION_TIMEOUT`
+- `RATE_LIMIT_EXCEEDED`
+- `EXECUTION_FAILED`
+
+Adapt naming to the existing error-handling conventions.
+
+Do not expose SQL errors, stack traces, secrets or internal infrastructure details to callers.
+
+---
+
+## 7. Agent identity and version validation
+
+The gateway must use the actual Agent Registry.
+
+For every request, validate:
+
+1. Agent ID exists.
+2. Agent is registered.
+3. Agent is in an eligible lifecycle status.
+4. Requested configuration version is valid.
+5. Requested version is approved and active where required by the execution policy.
+6. Contract compatibility is satisfied.
+7. The requested tool is declared or permitted for that agent.
+8. The agent's category association is valid.
+
+Do not allow a caller to impersonate another agent by changing an `agent_id` field.
+
+Agent identity must originate from a trusted, authenticated internal invocation context.
+
+If the current architecture has no secure way to establish agent identity, implement the necessary narrow internal authentication mechanism only after reviewing the existing security model and obtaining any required scope approval.
+
+---
+
+## 8. Organization, business and category isolation
+
+The gateway must integrate with the authorization layer established in the earlier roadmap.
+
+Each invocation must carry a trusted execution context containing the relevant identity and scope.
+
+Conceptual context:
+
+```json
+{
+  "agent_id": "AGT-001",
+  "agent_version": "1.0.0",
+  "contract_version": "1.0",
+  "organization_id": "trusted-organization-id",
+  "business_id": "trusted-business-id",
+  "category_id": "trusted-category-id",
+  "actor_id": "authenticated-user-id",
+  "request_id": "server-generated-id"
+}
+```
+
+This is a conceptual internal structure.
+
+Never trust client-supplied context without server-side verification.
+
+### Mandatory authorization checks
+
+- Authenticated actor.
+- Agent identity.
+- Active organization membership.
+- Authorized business access.
+- Organization permission.
+- Category permission.
+- Agent-to-category association.
+- Tool permission.
+- Resource ownership.
+- Approval authorization, if applicable.
+
+### Isolation requirements
+
+- One organization's agent must not access another organization's data.
+- One business must not access another business's resources unless the existing authorization model explicitly permits it.
+- Category permissions must not be bypassed by invoking a tool directly.
+- Agents must not inherit unrestricted organization-owner permissions.
+- Global tool definitions must not contain tenant-specific private data.
+- Organization-specific execution context must not leak into another request.
+
+If organization and business are represented by the same entity in the actual database, preserve that model.
+
+---
+
+## 9. Tool permission model
+
+Implement a central tool access policy.
+
+Access must be determined by multiple constraints, not a single allow/deny field.
+
+Conceptual rule:
+
+`Agent eligibility + Organization authorization + Category permission + Tool permission + Resource ownership = execution authorization`
+
+### 9.1 Permission dimensions
+
+Evaluate:
+
+- Agent identity.
+- Agent configuration.
+- Agent capability.
+- Organization permissions.
+- Category permissions.
+- Tool-specific permission.
+- Operation type.
+- Resource ownership.
+- Approval policy.
+
+### 9.2 Least privilege
+
+Each agent must receive only the tools necessary for its approved responsibilities.
+
+For example:
+
+- A read-only reporting operation must not provide stock modification access.
+- A product lookup operation must not provide permission to delete products.
+- A customer lookup operation must not provide access to unrelated organizations.
+- A pharmacy agent must not automatically receive unrestricted access to every GeFlow module.
+
+These examples describe permission principles, not automatic tool assignments.
+
+Use the finalized Step 04–06 specifications and verified module capabilities to define actual permissions.
+
+Do not assign all tools to all 29 agents.
+
+---
+
+## 10. Tool discovery and retrieval
+
+Implement controlled tool discovery.
+
+Authorized callers should be able to retrieve:
+
+- Available tools.
+- Tool descriptions.
+- Tool input schemas.
+- Tool output schemas.
+- Tool versions.
+- Required permissions.
+- Tool status.
+- Approval requirements.
+
+Discovery must be filtered according to the caller's authorized agent, organization, category and capability context.
+
+### Restrictions
+
+- Do not reveal tools the agent is not permitted to use.
+- Do not expose internal secrets or credentials.
+- Do not reveal unrestricted database access capabilities.
+- Do not allow callers to register new tools through ordinary discovery endpoints.
+- Do not expose inactive or deprecated tools as executable.
+
+Tool discovery does not grant execution permission.
+
+The gateway must independently revalidate all permissions during invocation.
+
+---
+
+## 11. Tool execution engine
+
+Implement a controlled execution dispatcher inside the gateway.
+
+### 11.1 Execution sequence
+
+For every invocation:
+
+1. Receive the internal request.
+2. Generate or validate a request correlation ID.
+3. Establish trusted execution context.
+4. Authenticate the caller.
+5. Validate agent identity and version.
+6. Resolve the tool from the registry.
+7. Validate tool lifecycle status.
+8. Validate tool input.
+9. Enforce organization and category authorization.
+10. Validate agent-specific tool permissions.
+11. Validate resource ownership.
+12. Check approval requirements.
+13. Apply rate limits and execution policies.
+14. Execute the approved backend operation.
+15. Validate the returned result.
+16. Produce a standardized response.
+17. Record the execution audit event.
+
+If any required authorization check fails, the operation must not execute.
+
+### 11.2 Existing business services
+
+Where possible, tools must call existing GeFlow business services.
+
+Example:
+
+```text
+Shared Tool Gateway
+        |
+        v
+Inventory Tool Adapter
+        |
+        v
+Existing Inventory Service
+        |
+        v
+Existing Database Layer
+```
+
+Do not duplicate business logic inside tool handlers.
+
+Do not create a separate inventory or POS implementation for AI agents.
+
+All existing business validation and transaction rules must remain effective.
+
+### 11.3 No unrestricted database access
+
+Agents must not receive:
+
+- Raw database credentials.
+- Direct unrestricted database connections.
+- Arbitrary SQL execution.
+- Unrestricted ORM access.
+- Database administration capabilities.
+- Privileged service-role credentials.
+
+All business data operations must go through approved backend service methods.
+
+---
+
+## 12. Read and write operation policies
+
+Separate tools by operation type.
+
+### 12.1 Read operations
+
+Examples:
+
+- Retrieve a product.
+- Retrieve stock levels.
+- Retrieve a sales summary.
+- Retrieve a supplier.
+- Retrieve a customer.
+- Retrieve purchase information.
+
+Read operations still require authorization and resource ownership validation.
+
+Read access must not mean access to every field in a record.
+
+Return only the fields necessary for the approved operation.
+
+### 12.2 Write operations
+
+Examples:
+
+- Create a product.
+- Update stock.
+- Create a sales invoice.
+- Record a purchase.
+- Update a customer record.
+
+Write operations must require explicit tool permissions.
+
+Additional safeguards may include:
+
+- Input validation.
+- Transactional execution.
+- Idempotency.
+- Duplicate detection.
+- Approval requirements.
+- Audit records.
+- Business rule validation.
+
+### 12.3 Destructive operations
+
+Operations such as deletion, irreversible adjustments or sensitive record modifications must be restricted.
+
+Do not expose destructive tools by default.
+
+Require the appropriate permission and approval policy.
+
+Where possible, prefer reversible or soft-delete operations already supported by GeFlow.
+
+---
+
+## 13. Human approval and confirmation controls
+
+The gateway must support approval policies for sensitive operations.
+
+Examples of potentially approval-sensitive actions:
+
+- Large stock adjustments.
+- Bulk product changes.
+- Financially significant operations.
+- Irreversible deletion.
+- Sensitive business configuration changes.
+- Other high-impact operations defined by the business.
+
+Do not invent universal approval thresholds.
+
+Use existing business rules if they exist.
+
+Where no threshold or approval rule exists, keep the relevant sensitive operation disabled or require explicit authorization rather than assuming approval.
+
+### Approval lifecycle
+
+Conceptual statuses:
+
+- pending.
+- approved.
+- rejected.
+- expired.
+- cancelled.
+
+Approval records must identify:
+
+- Requested operation.
+- Requesting agent.
+- Requesting actor.
+- Organization and business context.
+- Requested resources.
+- Approval policy.
+- Approver.
+- Decision timestamp.
+- Decision reason.
+
+An agent must not approve its own pending operation unless a separately approved policy explicitly allows it.
+
+Approval must be bound to the exact operation and validated inputs. A modified request must require fresh validation and approval.
+
+The approval system must reuse existing authorization and approval infrastructure where available.
+
+---
+
+## 14. Rate limiting and execution safeguards
+
+Implement reasonable execution controls using existing infrastructure.
+
+### Required controls
+
+- Per-agent invocation limits.
+- Per-organization invocation limits.
+- Per-tool invocation limits.
+- Maximum request payload size.
+- Maximum response payload size.
+- Execution timeout.
+- Pagination limits.
+- Concurrent execution limits where needed.
+- Idempotency for supported write operations.
+- Duplicate request detection where supported.
+
+Do not invent arbitrary limits without inspecting existing infrastructure and expected workload.
+
+Define configurable defaults only where justified.
+
+### Failure handling
+
+- A timed-out operation must not be reported as successful.
+- A failed write must not leave partial data where transactional behavior is available.
+- Retry only operations known to be safe to retry.
+- Do not automatically repeat non-idempotent financial or inventory operations.
+- Do not expose internal exception details.
+
+If an operation's final status is uncertain because of a timeout, provide a traceable status or reconciliation mechanism rather than blindly executing it again.
+
+---
+
+## 15. Tool versioning
+
+Each tool must have its own contract version.
+
+Do not confuse:
+
+- Agent configuration version.
+- Agent contract version.
+- Tool contract version.
+
+These are separate versioning dimensions.
+
+Tool version changes must follow the project's established versioning policy where one exists.
+
+Requirements:
+
+- Preserve stable tool IDs.
+- Track tool contract versions.
+- Validate agent compatibility.
+- Avoid silently breaking existing registered agents.
+- Maintain historical definitions where required.
+- Reject incompatible invocations.
+
+Do not implement a full tool marketplace or independent tool deployment platform.
+
+---
+
+## 16. Audit logging and observability
+
+Every tool invocation must produce an appropriate audit record.
+
+Track:
+
+- Request ID.
+- Tool ID.
+- Tool version.
+- Agent ID.
+- Agent configuration version.
+- Contract version.
+- Authenticated actor.
+- Organization and business references.
+- Category reference.
+- Execution status.
+- Approval status.
+- Execution duration.
+- Error classification, if applicable.
+- Timestamp.
+
+Track authorization denials as well as successful executions.
+
+Do not log:
+
+- Passwords.
+- API keys.
+- Access tokens.
+- Database credentials.
+- Unnecessary sensitive customer information.
+- Full confidential business payloads unless explicitly justified and protected.
+
+Integrate with existing GeFlow audit and observability systems.
+
+If no suitable infrastructure exists, implement only the minimum gateway-specific logging required for safe operation and document the extension.
+
+---
+
+## 17. Security requirements
+
+Treat the gateway as a security boundary.
+
+Mandatory requirements:
+
+1. Server-side authentication.
+2. Trusted agent identity.
+3. Organization isolation.
+4. Business-level authorization.
+5. Category-level authorization.
+6. Tool-specific permission enforcement.
+7. Resource ownership validation.
+8. Input schema validation.
+9. Output filtering.
+10. Secure error handling.
+11. Rate limiting.
+12. Execution timeout.
+13. Audit logging.
+14. Protection against replay and duplicate writes where applicable.
+15. No privileged database credentials exposed to agents.
+16. No client-side-only authorization.
+17. No unrestricted tool registration.
+18. No unrestricted code or SQL execution.
+
+### Threat scenarios to test
+
+- An agent attempts to invoke another agent's tool.
+- An agent attempts to change its own identity.
+- A user supplies another organization's ID.
+- A user changes a business or category ID.
+- A caller invokes an inactive tool.
+- A caller bypasses discovery and directly invokes a restricted tool.
+- A caller submits additional unauthorized input fields.
+- A caller repeats a financial write request.
+- An unauthorized user attempts to approve a sensitive operation.
+- An agent attempts to access a resource outside its permitted scope.
+
+All such attempts must be denied safely.
+
+---
+
+## 18. Testing requirements
+
+### 18.1 Tool registry tests
+
+- Register an approved tool.
+- Retrieve a registered tool.
+- Validate tool schema.
+- Reject duplicate tool IDs.
+- Reject invalid versions.
+- Reject invalid lifecycle transitions.
+- Reject unauthorized tool modifications.
+
+### 18.2 Tool discovery tests
+
+- Authorized agent sees permitted tools.
+- Unauthorized agent cannot discover restricted tools.
+- Inactive tools cannot be presented as executable.
+- Discovery does not grant execution access.
+
+### 18.3 Invocation tests
+
+- Valid read operation succeeds.
+- Valid authorized write operation succeeds.
+- Invalid input is rejected.
+- Unknown tool is rejected.
+- Inactive tool is rejected.
+- Incompatible agent version is rejected.
+- Unauthorized agent is rejected.
+- Unauthorized organization is rejected.
+- Unauthorized category is rejected.
+- Resource ownership violation is rejected.
+
+### 18.4 Approval tests
+
+- Approval-required operation enters pending state.
+- Rejected operation does not execute.
+- Approved operation executes only after revalidation.
+- Unauthorized approver is rejected.
+- Modified request cannot reuse an earlier approval.
+- Expired approval cannot authorize execution.
+
+### 18.5 Reliability tests
+
+- Timeout handling.
+- Duplicate request handling.
+- Idempotent write handling.
+- Concurrent execution controls.
+- Safe failure behavior.
+- Partial transaction rollback where supported.
+
+### 18.6 Regression tests
+
+Verify existing GeFlow modules continue to function:
+
+- Authentication.
+- Organization access.
+- Category authorization.
+- Agent Registry.
+- Agent versioning.
+- Products.
+- Inventory.
+- POS and billing.
+- Purchases.
+- Suppliers.
+- Customers.
+- Reports.
+- Existing APIs.
+
+---
+
+## 19. Implementation sequence
+
+Execute the work in this order:
+
+1. Inspect actual Agent Registry and versioning implementations.
+2. Inspect existing business services.
+3. Inspect organization and category authorization.
+4. Inspect existing audit, rate-limit and validation infrastructure.
+5. Finalize gateway architecture against the actual codebase.
+6. Implement the centralized Tool Registry.
+7. Implement tool contracts and schemas.
+8. Implement secure agent invocation context.
+9. Implement tool discovery.
+10. Implement centralized authorization enforcement.
+11. Implement tool input validation.
+12. Implement execution dispatch.
+13. Integrate verified existing business services.
+14. Implement approval controls for approved sensitive operations.
+15. Implement rate limiting and idempotency where applicable.
+16. Implement standardized responses and errors.
+17. Implement audit logging and execution tracing.
+18. Implement tool version compatibility checks.
+19. Add automated security tests.
+20. Run regression tests.
+21. Produce the implementation completion report.
+
+Do not implement hypothetical business tools just to demonstrate that the gateway works.
+
+Use only verified existing backend operations or isolated test fixtures.
+
+---
+
+## 20. Acceptance criteria
+
+- [ ] Existing backend architecture inspected.
+- [ ] Existing Agent Registry verified.
+- [ ] Existing Agent Versioning verified.
+- [ ] Existing authorization integrated.
+- [ ] Centralized Tool Registry implemented.
+- [ ] Tool contracts and input schemas implemented.
+- [ ] Tool version compatibility validated.
+- [ ] Trusted agent identity enforced.
+- [ ] Organization isolation enforced.
+- [ ] Business-level authorization enforced.
+- [ ] Category-level authorization enforced.
+- [ ] Tool-specific permission checks enforced.
+- [ ] Resource ownership verified.
+- [ ] Tool discovery implemented.
+- [ ] Tool invocation implemented.
+- [ ] Existing business services reused.
+- [ ] Sensitive operations protected by approval policies.
+- [ ] Rate limiting and execution safeguards implemented.
+- [ ] Standardized responses and errors implemented.
+- [ ] Audit logging implemented.
+- [ ] Security tests pass.
+- [ ] Relevant regression tests pass.
+- [ ] No unrestricted database access exposed.
+- [ ] No AI orchestrator or runtime accidentally implemented.
+
+A gateway that only exposes routes but does not enforce authorization and execution policies does not satisfy this step.
+
+---
+
+## 21. Required completion report
+
+After implementation, provide the following:
+
+### A. Existing architecture assessment
+
+- Backend framework.
+- Database provider.
+- Agent Registry implementation status.
+- Agent Versioning implementation status.
+- Existing authorization implementation.
+- Existing business services reused.
+
+### B. Tool Registry
+
+- Storage architecture.
+- Number of registered tools.
+- Tool IDs and descriptions.
+- Tool contract versions.
+- Lifecycle implementation.
+
+Clearly distinguish real business tools from test fixtures.
+
+### C. Gateway implementation
+
+- Gateway services.
+- Invocation flow.
+- Tool discovery.
+- Validation.
+- Execution dispatch.
+- Response handling.
+
+### D. Authorization and security
+
+- Agent identity verification.
+- Organization isolation.
+- Business and category authorization.
+- Tool permission enforcement.
+- Resource ownership checks.
+- Approval enforcement.
+- Security test results.
+
+### E. Reliability and observability
+
+- Rate limiting.
+- Timeout handling.
+- Idempotency.
+- Audit logging.
+- Execution tracing.
+
+### F. Changed files
+
+List actual file paths and explain each change.
+
+### G. Database changes
+
+List:
+
+- New tables or collections.
+- Modified schema objects.
+- Indexes and constraints.
+- Migrations.
+- Rollback strategy.
+
+### H. Testing evidence
+
+Provide:
+
+- Total tests.
+- Passed tests.
+- Failed tests.
+- Security results.
+- Regression results.
+- Known limitations.
+
+### I. Outstanding dependencies
+
+Clearly identify incomplete prerequisites or requirements needing separate approval.
+
+### J. Scope confirmation
+
+Confirm that no unrelated GeFlow modules, business workflows, AI runtime or deployment systems were modified.
+
+Distinguish implemented, tested, partially implemented and not implemented requirements.
+
+---
+
+## 22. Strict execution instructions
+
+1. Existing GeFlow backend is the source of truth.
+2. Reuse existing services and security infrastructure.
+3. Implement one shared gateway, not 29 separate gateways.
+4. Never give agents unrestricted database access.
+5. Never trust client-supplied agent or organization identity.
+6. Never bypass organization or category authorization.
+7. Never assign every tool to every agent.
+8. Never expose tools merely because their IDs are known.
+9. Never execute a sensitive operation without its required approval.
+10. Never introduce unrestricted SQL, shell or arbitrary code execution.
+11. Never implement the AI orchestrator or agent runtime in this step.
+12. Do not redesign the GeFlow UI.
+13. Do not modify unrelated business workflows.
+14. Do not start the next roadmap step.
+15. If a critical dependency is missing, stop the affected implementation and report the blocker for approval.
+
+**Final instruction:** Implement only the Shared Tool Gateway described in this document. After completing implementation, testing and the factual completion report, stop all work and wait for my explicit authorization before starting the next roadmap step.

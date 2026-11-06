@@ -2,9 +2,9 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 
-export const CANONICAL_SUPABASE_URL = "https://gvkvljxhufsrgyfsqrkc.supabase.co";
+export const CANONICAL_SUPABASE_URL = "https://jwdztevnodxoeyhcmrnf.supabase.co";
 export const CANONICAL_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2a3ZsanhodWZzcmd5ZnNxcmtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1OTAzNDMsImV4cCI6MjA5NjE2NjM0M30.sef1DVX7ysCEXrNlptxJbht-RvsHxxVze6Op5o95NbE";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3ZHp0ZXZub2R4b2V5aGNtcm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4MDcxMTIsImV4cCI6MjEwOTM4MzExMn0.MIxwxKFlYiCIwWsbfRhJ0N51LeX_YdIm3EkT-FL5S8U";
 
 export const SUPABASE_URL = CANONICAL_SUPABASE_URL;
 export const SUPABASE_PUBLISHABLE_KEY = CANONICAL_ANON_KEY;

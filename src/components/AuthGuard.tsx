@@ -14,7 +14,7 @@ interface Props {
 function getStoredSessionUser(): { id: string; email?: string } | null {
   if (typeof window === "undefined") return null;
   try {
-    const keys = ["sb-gvkvljxhufsrgyfsqrkc-auth-token", "supabase.auth.token"];
+    const keys = ["sb-jwdztevnodxoeyhcmrnf-auth-token", "sb-gvkvljxhufsrgyfsqrkc-auth-token", "supabase.auth.token"];
     for (const key of keys) {
       const raw = localStorage.getItem(key);
       if (!raw) continue;

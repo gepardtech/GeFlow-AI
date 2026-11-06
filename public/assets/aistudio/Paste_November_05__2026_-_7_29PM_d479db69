@@ -1,0 +1,879 @@
+# GeFlow AI — Implementation Step 07: Organization-Level & Category-Level Authorization Implementation
+
+**Company:** Gepard Tech  
+**Product:** GeFlow AI  
+**Step:** 07  
+**Step Name:** Organization-Level & Category-Level Authorization Implementation  
+**Previous Step:** Step 06 — Agent Contract & Runtime Specification Finalization  
+**Related Architecture:** 29-Agent Master Registry, Category-to-Agent Mapping, Agent Contract and Runtime Specification  
+**Database:** Use the existing verified database architecture  
+**Implementation Scope:** Organization-level and category-level authorization only
+
+---
+
+# PART 1 — PRIMARY OBJECTIVE
+
+Implement a secure, server-enforced authorization system that controls access at two levels:
+
+**Level 1: Organization-Level Authorization**
+
+Controls which organizations, businesses, branches and organizational resources a user can access.
+
+**Level 2: Category-Level Authorization**
+
+Controls which business categories, category-specific resources, agent configurations and category-specific capabilities are accessible within an authorized organization.
+
+The implementation must integrate with the existing GeFlow application without replacing its authentication, user management, business management, inventory, POS, purchasing or reporting systems.
+
+## 1.1 Expected Outcome
+
+After successful implementation:
+
+- Users can access only organizations where they have valid membership or explicitly authorized access.
+- Organization owners and administrators can manage access according to their permissions.
+- Category access is controlled independently from organization membership.
+- AI agents can only operate within their assigned category and authorized organization.
+- Users cannot access another organization's records by changing URLs, IDs or request parameters.
+- Backend services enforce permissions independently of frontend visibility.
+- Existing GeFlow business workflows continue working.
+- Authorization decisions can be audited.
+
+---
+
+# PART 2 — EXECUTION BOUNDARIES
+
+## 2.1 Authorization to Implement
+
+This step explicitly authorizes implementation of:
+
+1. Organization-level authorization.
+2. Category-level authorization.
+3. Organization membership validation.
+4. Organization role and permission checks where required.
+5. Category access rules.
+6. Agent-to-organization access validation.
+7. Agent-to-category access validation.
+8. Backend authorization enforcement.
+9. Database security policies required for these two authorization layers.
+10. Integration with existing authentication and user management.
+11. Security tests for the implemented scope.
+12. Documentation and implementation reports.
+
+## 2.2 Do Not Implement
+
+Do not expand this step into:
+
+- A complete new authentication system.
+- A complete new RBAC framework unrelated to the defined requirements.
+- New billing or subscription management.
+- New plan-based feature limits.
+- New agent creation or deployment.
+- AI runtime implementation.
+- AI orchestration.
+- New inventory, POS or purchasing features.
+- New business-category creation.
+- A redesigned admin panel.
+- A redesigned organization dashboard.
+- New marketplace functionality.
+- Unrelated UI redesign.
+- Changes to existing business workflows.
+
+If a prerequisite requires changes outside the authorized scope, document the dependency and request approval instead of implementing it.
+
+## 2.3 Existing System Preservation
+
+Before implementation:
+
+- Inspect current authentication.
+- Inspect organization/business ownership.
+- Inspect existing roles.
+- Inspect existing permissions.
+- Inspect database relationships.
+- Inspect RLS or equivalent security policies.
+- Inspect API authorization logic.
+- Identify all affected resources.
+
+Do not overwrite or replace existing security policies without understanding their current behavior.
+
+Preserve existing valid permissions and business access.
+
+If the existing architecture already implements part of the requirements, reuse it instead of creating duplicate mechanisms.
+
+---
+
+# PART 3 — AUTHORIZATION ARCHITECTURE
+
+## 3.1 Authorization Hierarchy
+
+Implement the following logical hierarchy:
+
+```text
+GeFlow Platform
+    |
+    |-- Organization
+           |
+           |-- Organization Membership
+           |       |
+           |       |-- Organization Role
+           |       |-- Organization Permissions
+           |
+           |-- Business
+           |       |
+           |       |-- Business Category
+           |       |       |
+           |       |       |-- Primary AI Agent
+           |       |       |-- Category Permissions
+           |       |       |-- Category Resources
+           |       |
+           |       |-- Branches (if supported)
+           |       |
+           |       |-- Business Resources
+           |
+           |-- Authorized Users
+           |
+           |-- Authorized AI Agents
+```
+
+This hierarchy is a logical authorization model. Map it to the actual GeFlow database structure.
+
+Do not assume that an organization and a business are separate database entities. If the current application treats them as the same entity, preserve that model and document the implementation decision.
+
+## 3.2 Mandatory Authorization Decision
+
+A request must be allowed only when all applicable checks pass:
+
+1. User is authenticated.
+2. User has access to the requested organization.
+3. User has access to the requested business.
+4. User has permission for the requested operation.
+5. Requested category is valid for the business.
+6. User or agent has the required category access.
+7. Resource belongs to the authorized organization/business.
+8. Any additional existing security policy is satisfied.
+
+A successful organization membership check must not automatically grant unrestricted access to every category.
+
+Similarly, category permission must not grant access to another organization.
+
+---
+
+# PART 4 — ORGANIZATION-LEVEL AUTHORIZATION
+
+## 4.1 Organization Access
+
+Every organization must have a verifiable ownership or membership relationship.
+
+The authorization system must support the actual organization membership model found in GeFlow.
+
+Potential membership attributes:
+
+- User ID.
+- Organization ID.
+- Membership status.
+- Organization role.
+- Assigned permissions.
+- Invitation status.
+- Membership creation date.
+- Membership expiry, if applicable.
+
+Do not introduce unnecessary membership structures if the existing application already provides equivalent functionality.
+
+## 4.2 Organization Membership Status
+
+Define and enforce:
+
+| Status | Access |
+|---|---|
+| Active | Access according to role and permissions |
+| Pending | No normal organizational access until accepted |
+| Suspended | No normal organizational access |
+| Revoked | No organizational access |
+| Expired | No access after expiry |
+
+Only statuses supported by the actual implementation should be created.
+
+## 4.3 Organization Roles
+
+Inspect existing roles first.
+
+If an equivalent role system already exists, reuse it.
+
+Otherwise, implement only the minimum required organization roles:
+
+**Owner**
+- Full authority over the organization.
+- Manage organization membership.
+- Assign authorized organization roles.
+- Configure organization-level settings.
+- Manage category access.
+- Manage approved organizational resources.
+
+**Organization Admin**
+- Manage permitted organization resources.
+- Manage users within delegated authority.
+- Manage permitted category access.
+- Cannot override owner-only restrictions.
+
+**Manager**
+- Access assigned operational resources.
+- Manage permitted business operations.
+- Cannot manage organization ownership.
+- Cannot grant permissions beyond their own authority.
+
+**Member**
+- Access explicitly assigned resources.
+- Perform permitted operational tasks.
+- Cannot manage organization-wide security settings.
+
+These are proposed role definitions. Match or adapt them to existing GeFlow roles instead of creating duplicate roles.
+
+## 4.4 Organization-Level Permission Examples
+
+Define permissions by operation, not only by page visibility.
+
+Examples:
+
+- organization.read
+- organization.update
+- organization.members.read
+- organization.members.invite
+- organization.members.manage
+- organization.roles.read
+- organization.roles.assign
+- organization.categories.read
+- organization.categories.manage
+- organization.settings.manage
+
+Only implement permissions needed by the existing application and authorized scope.
+
+## 4.5 Organization Isolation
+
+Mandatory requirements:
+
+- Organization A cannot read Organization B's data.
+- Organization A cannot update Organization B's data.
+- Organization A cannot delete Organization B's data.
+- Organization A cannot access Organization B's reports.
+- Organization A cannot access Organization B's agent conversations.
+- Organization A cannot invoke tools against Organization B's resources.
+- Organization A cannot access another organization's private documents.
+
+Changing an organization ID in a URL, API payload or frontend state must never bypass backend authorization.
+
+---
+
+# PART 5 — CATEGORY-LEVEL AUTHORIZATION
+
+## 5.1 Category Access Definition
+
+Category-level authorization controls access to the category-specific capabilities and resources associated with a business.
+
+Use the finalized 29-category registry from Step 05.
+
+The system must resolve category access using verified business-category associations.
+
+Do not trust a category ID supplied directly by a browser without validating it against the actual business record.
+
+## 5.2 Category Permission Structure
+
+Define permissions using a structured naming system.
+
+Examples:
+
+**General category permissions**
+- category.read
+- category.access
+- category.settings.read
+- category.settings.manage
+- category.reports.read
+
+**Category-specific permissions**
+- category.inventory.read
+- category.inventory.manage
+- category.sales.read
+- category.sales.manage
+- category.purchases.read
+- category.purchases.manage
+- category.suppliers.read
+- category.suppliers.manage
+- category.customers.read
+- category.customers.manage
+
+These are permission examples, not permission grants.
+
+The actual permissions must match existing GeFlow modules and authorized workflows.
+
+## 5.3 Category Ownership
+
+Every business must resolve to its verified primary category.
+
+The category mapping must match the approved Step 05 registry.
+
+For example:
+
+| Business Category | Primary Agent |
+|---|---|
+| General Retail & Department Store | AGT-001 |
+| Agriculture & Farming Supplies | AGT-002 |
+| Wholesale & Distribution Hub | AGT-003 |
+| Optometry & Eyewear Store | AGT-004 |
+| Pet Shop & Veterinary Supplies | AGT-005 |
+| Sports, Gym & Fitness Equipment | AGT-006 |
+| Home Appliances & Kitchenware | AGT-007 |
+| Home Furniture & Living | AGT-008 |
+| Jewelry, Watches & Luxury Goods | AGT-009 |
+| Bookstore & Stationery | AGT-010 |
+| Hair Salon & Barbershop | AGT-011 |
+| Cosmetics, Beauty & Skincare | AGT-012 |
+| Vehicle Repair & Service Garage | AGT-013 |
+| Auto Parts & Accessories | AGT-014 |
+| Plumbing & Sanitary Ware | AGT-015 |
+| Electrical & Lighting Supplies | AGT-016 |
+| Hardware, Tools & Construction | AGT-017 |
+| Bakery & Pastry Shop | AGT-018 |
+| Cafe & Coffee Shop | AGT-019 |
+| Fast Food & Quick Service | AGT-020 |
+| Restaurant & Dine-In | AGT-021 |
+| Footwear & Shoes | AGT-022 |
+| Fashion & Apparel Boutique | AGT-023 |
+| Computer & IT Hardware | AGT-024 |
+| Mobile Phones & Telecommunication | AGT-025 |
+| Electronics & Gadgets | AGT-026 |
+| Grocery Store & Minimart | AGT-027 |
+| Supermarket & Hypermarket | AGT-028 |
+| Pharmacy & Health Store | AGT-029 |
+
+The mapping must be checked against the actual Step 05 mapping and live project records before implementation.
+
+## 5.4 Category Access Rules
+
+Implement the following behavior:
+
+1. A business must have a valid category association.
+2. Category access must be validated against the business record.
+3. An organization member must not automatically receive every category-specific permission.
+4. A user must have the required category permission to access restricted category resources.
+5. An agent must have an approved mapping to the business category.
+6. An agent must not access resources outside its authorized category scope.
+7. Category-specific restrictions must be enforced server-side.
+8. Invalid or inactive mappings must fail closed.
+
+## 5.5 Multiple Businesses and Categories
+
+If an organization owns multiple businesses with different categories, authorization must be evaluated at the correct business scope.
+
+Example:
+
+```text
+Organization A
+    |
+    |-- Business A1
+    |      Category: Pharmacy
+    |      Primary Agent: AGT-029
+    |
+    |-- Business A2
+    |      Category: Grocery
+    |      Primary Agent: AGT-027
+    |
+    |-- Business A3
+           Category: Fashion
+           Primary Agent: AGT-023
+```
+
+A user may have access to all three businesses, or only selected businesses, depending on assigned permissions.
+
+Access to the pharmacy business must not automatically grant access to the grocery or fashion business if the user lacks permission for those businesses.
+
+Do not assume that multiple businesses per organization are already supported. Verify the existing data model first.
+
+---
+
+# PART 6 — ORGANIZATION + CATEGORY AUTHORIZATION DECISION
+
+## 6.1 Combined Authorization
+
+The final authorization decision must combine:
+
+- Authentication.
+- Organization membership.
+- Business access.
+- Organization permissions.
+- Category access.
+- Category permissions.
+- Resource ownership.
+- Existing application policies.
+
+Conceptual logic:
+
+```text
+ALLOW REQUEST IF:
+
+Authenticated User
+    AND Active Organization Membership
+    AND Authorized Business Access
+    AND Required Organization Permission
+    AND Valid Business Category
+    AND Required Category Permission
+    AND Valid Resource Ownership
+    AND Existing Security Policies Pass
+
+OTHERWISE:
+
+DENY REQUEST
+```
+
+This logic must be implemented using the actual backend authorization architecture.
+
+## 6.2 Fail-Closed Behavior
+
+If the system cannot verify:
+
+- Organization membership.
+- Business ownership.
+- Category mapping.
+- User permission.
+- Agent authorization.
+- Resource ownership.
+
+Then the request must be denied.
+
+Never grant access because of a missing authorization record or failed permission lookup.
+
+---
+
+# PART 7 — AI AGENT AUTHORIZATION
+
+## 7.1 Agent Authorization
+
+The 29 agents must not inherit unrestricted organization-owner permissions.
+
+Every agent must have its own approved capability and tool permissions.
+
+Before invoking an agent, verify:
+
+1. Agent ID is valid.
+2. Agent status permits execution.
+3. Agent maps to the business category.
+4. Organization owns or is authorized for the business.
+5. Requesting user has access to the business.
+6. Agent capability is permitted.
+7. Requested tool is permitted.
+8. Resource belongs to the authorized business.
+9. Any required approval exists.
+
+## 7.2 Agent Scope
+
+Example:
+
+```text
+Organization: Org-A
+    |
+    Business: Pharmacy-A
+        |
+        Category: CAT-029
+        |
+        Primary Agent: AGT-029
+        |
+        Agent Scope:
+            - Authorized pharmacy context
+            - Authorized inventory tools
+            - Authorized reporting tools
+            - Approved business capabilities
+```
+
+AGT-029 must not access another organization's pharmacy records or unrelated category data.
+
+## 7.3 Agent Permission Levels
+
+Define these logical levels:
+
+**Read**
+- Read permitted business information.
+
+**Analyze**
+- Analyze authorized information.
+
+**Draft**
+- Prepare a proposed action without committing it.
+
+**Write**
+- Execute an authorized modification.
+
+**Restricted**
+- Cannot perform the operation.
+
+These levels must be associated with individual capabilities and tools.
+
+An agent's ability to recommend an operation does not mean it can execute that operation.
+
+## 7.4 Cross-Agent Access
+
+Default behavior:
+
+- No unrestricted agent-to-agent access.
+- No unrestricted sharing of agent memory.
+- No automatic cross-category resource access.
+- No permission inheritance from another agent.
+
+Any future central orchestrator must use explicitly authorized delegation policies.
+
+---
+
+# PART 8 — DATABASE AND BACKEND ENFORCEMENT
+
+## 8.1 Database Inspection
+
+Before changes, identify:
+
+- Authentication tables or provider.
+- Organization records.
+- Business records.
+- Membership records.
+- Role and permission records.
+- Category records.
+- Agent registry references, if implemented.
+- Resource ownership fields.
+- Existing database policies.
+- Existing tenant isolation mechanisms.
+
+## 8.2 Database Security
+
+If GeFlow uses Supabase:
+
+- Inspect existing Row Level Security policies.
+- Ensure policies enforce organization and business boundaries.
+- Avoid permissive policies that grant access to all authenticated users.
+- Avoid conflicting or redundant policies.
+- Protect server-only operations.
+- Do not expose service-role credentials to frontend code.
+- Validate authorization in privileged server-side functions.
+
+If GeFlow uses Firebase or another backend, implement equivalent server-enforced access controls appropriate to the actual platform.
+
+Do not introduce Supabase-specific implementation into a project that does not use Supabase.
+
+## 8.3 API Authorization
+
+Every affected API endpoint must validate:
+
+- Authenticated identity.
+- Organization membership.
+- Business access.
+- Category access.
+- Required permission.
+- Resource ownership.
+
+Frontend checks are supplementary only.
+
+Never rely exclusively on hidden buttons, disabled links or route guards.
+
+## 8.4 Direct Database Access
+
+Users and agents must not gain broader access by bypassing the application frontend.
+
+Where direct client database access exists, enforce equivalent security policies at the database layer.
+
+---
+
+# PART 9 — FRONTEND ACCESS CONTROL
+
+## 9.1 UI Permission Behavior
+
+The frontend must display only authorized organization and category options.
+
+Examples:
+
+- Unauthorized businesses should not appear in the user's business selector.
+- Unauthorized category tools should not appear as usable options.
+- Restricted navigation items should follow existing UI conventions.
+- Access-denied states should be clear.
+- Suspended membership should not retain normal access.
+
+## 9.2 Backend Remains Authoritative
+
+Frontend visibility is not authorization.
+
+A user must not gain access by:
+
+- Editing browser state.
+- Changing URL parameters.
+- Calling APIs manually.
+- Replaying requests.
+- Modifying category IDs.
+- Modifying organization IDs.
+- Modifying agent IDs.
+
+## 9.3 Existing UI Preservation
+
+Do not redesign the dashboard, navigation or organization interface.
+
+Implement only the minimum UI changes required to reflect actual authorization outcomes.
+
+If no UI change is required, do not change the UI.
+
+---
+
+# PART 10 — AUTHORIZATION AUDIT AND LOGGING
+
+Record security-relevant events:
+
+- Organization access granted or denied.
+- Organization membership changed.
+- Organization role changed.
+- Category access granted or denied.
+- Category permission changed.
+- Business access denied.
+- Agent invocation authorized or rejected.
+- Agent tool access authorized or rejected.
+- Authorization configuration changed.
+
+Each audit record should contain appropriate references:
+
+- Event ID.
+- Actor reference.
+- Organization reference.
+- Business reference.
+- Category reference, when applicable.
+- Agent reference, when applicable.
+- Action.
+- Authorization outcome.
+- Timestamp.
+- Correlation/request reference.
+
+Do not log passwords, access tokens, provider secrets or unnecessary sensitive business content.
+
+Audit records must be protected against unauthorized modification.
+
+---
+
+# PART 11 — TESTING REQUIREMENTS
+
+All tests must run in an isolated development or test environment. Do not use production business records for destructive testing.
+
+## 11.1 Organization-Level Tests
+
+- Owner accesses own organization.
+- Admin accesses permitted resources.
+- Manager accesses assigned resources.
+- Member accesses assigned resources.
+- Pending member is denied normal access.
+- Suspended member is denied access.
+- Revoked member is denied access.
+- User from Organization A cannot access Organization B.
+- User cannot modify another organization's records.
+- URL ID manipulation does not bypass access controls.
+
+## 11.2 Category-Level Tests
+
+- User with authorized category permission can access the permitted resource.
+- User without category permission is denied.
+- Invalid category mapping is denied.
+- Inactive category mapping is denied.
+- Category ID manipulation is denied.
+- Category-specific tools enforce their own permissions.
+- Category access does not grant unrelated business access.
+
+## 11.3 Combined Tests
+
+- Organization authorized + category authorized = allowed, subject to all other policies.
+- Organization authorized + category unauthorized = denied.
+- Organization unauthorized + category authorized = denied.
+- Business unauthorized + category authorized = denied.
+- Invalid agent mapping = denied.
+- Agent unauthorized for category = denied.
+
+## 11.4 AI Agent Tests
+
+- Correct primary agent resolves.
+- Wrong agent is rejected.
+- Suspended agent is rejected.
+- Unauthorized tool call is rejected.
+- Agent cannot access another tenant.
+- Agent cannot access another business without authorization.
+- Agent cannot modify data without required write permission.
+- Required approval is enforced.
+- Tool execution result is correctly audited.
+
+## 11.5 Regression Tests
+
+Verify that existing GeFlow functions remain operational for authorized users:
+
+- Authentication.
+- Dashboard access.
+- Business management.
+- Products.
+- Inventory.
+- Purchasing.
+- Suppliers.
+- Customers.
+- POS.
+- Reports.
+- Existing AI features.
+- Existing notifications and other modules identified during inspection.
+
+Do not treat a blocked unauthorized request as a regression.
+
+---
+
+# PART 12 — IMPLEMENTATION SEQUENCE
+
+Execute the implementation in this order.
+
+### Phase 1 — Existing Authorization Audit
+
+- Inspect authentication.
+- Inspect organization and business ownership.
+- Inspect roles and permissions.
+- Inspect category associations.
+- Inspect existing policies.
+- Document current access behavior.
+
+**Gate:** Do not proceed if the actual data ownership model is unclear.
+
+### Phase 2 — Authorization Design Validation
+
+- Map organization membership.
+- Map business access.
+- Map category permissions.
+- Map existing roles.
+- Identify policy conflicts.
+- Identify required changes.
+
+**Gate:** Preserve existing valid authorization behavior.
+
+### Phase 3 — Organization-Level Authorization
+
+Implement only the required organization membership and access enforcement using existing architecture.
+
+### Phase 4 — Category-Level Authorization
+
+Implement category-specific access checks and enforce the approved category mapping.
+
+### Phase 5 — Agent Authorization Integration
+
+Implement the authorization checks needed to ensure the 29-agent architecture cannot bypass organization or category boundaries.
+
+Do not deploy or create the agents.
+
+### Phase 6 — Backend and Database Enforcement
+
+Apply required security controls to affected APIs and data-access paths.
+
+### Phase 7 — Minimal Frontend Integration
+
+Reflect authorized and denied access in existing UI without redesigning unrelated screens.
+
+### Phase 8 — Security and Regression Testing
+
+Run the full required test matrix.
+
+### Phase 9 — Documentation and Completion
+
+Document actual changes, test evidence, unresolved risks and remaining dependencies.
+
+Stop after this phase.
+
+---
+
+# PART 13 — ACCEPTANCE CRITERIA
+
+Step 07 is complete only when:
+
+- [ ] Organization access is validated server-side.
+- [ ] Business access is validated server-side.
+- [ ] Category access is validated server-side.
+- [ ] Organization roles and permissions are correctly enforced.
+- [ ] Category permissions are correctly enforced.
+- [ ] Agent authorization respects organization boundaries.
+- [ ] Agent authorization respects category boundaries.
+- [ ] Resource ownership is validated.
+- [ ] Unauthorized cross-tenant access is denied.
+- [ ] Unauthorized cross-category access is denied.
+- [ ] Database security is correctly enforced where applicable.
+- [ ] APIs enforce authorization independently of the frontend.
+- [ ] Frontend access behavior reflects backend authorization.
+- [ ] Security tests pass.
+- [ ] Existing authorized workflows pass regression tests.
+- [ ] No unrelated functionality has been modified.
+- [ ] Implementation evidence is documented.
+- [ ] Remaining risks and limitations are disclosed.
+
+A feature must not be marked complete merely because the UI hides it. Backend enforcement and relevant security tests are mandatory.
+
+---
+
+# PART 14 — FINAL IMPLEMENTATION REPORT
+
+At completion, provide:
+
+## A. Implementation Summary
+
+- Organization-level authorization status.
+- Category-level authorization status.
+- Agent authorization integration status.
+- Database enforcement status.
+- API enforcement status.
+- Frontend integration status.
+
+## B. Actual Files Changed
+
+List every file created, modified or deleted with its actual path and purpose.
+
+## C. Database Changes
+
+List:
+- Actual schema changes.
+- Actual policy changes.
+- Migrations.
+- Existing policies preserved.
+- Rollback references.
+
+If no database changes were needed, explicitly state that.
+
+## D. Security Test Results
+
+For each test:
+- Test name.
+- Expected result.
+- Actual result.
+- Pass/fail.
+- Evidence.
+
+## E. Regression Test Results
+
+List tested existing GeFlow modules and their outcomes.
+
+## F. Outstanding Issues
+
+Identify:
+- Failed tests.
+- Unverified security paths.
+- Missing prerequisites.
+- Deferred requirements.
+- Risks requiring separate approval.
+
+## G. Change Boundary Confirmation
+
+Confirm that no unauthorized agent deployment, AI runtime creation, billing changes, unrelated database modifications or unrelated UI changes occurred.
+
+## H. Next Step
+
+Do not start the next roadmap step automatically.
+
+Wait for explicit user authorization.
+
+---
+
+# FINAL EXECUTION INSTRUCTION
+
+Implement organization-level and category-level authorization within the exact scope defined in this document.
+
+Preserve the existing GeFlow application and reuse its current authentication, database and permission architecture wherever possible.
+
+Do not replace existing systems merely to create a cleaner theoretical architecture.
+
+Do not mark security controls as complete without server-side enforcement and test evidence.
+
+Complete Step 07, provide the implementation report, and STOP.
+
+Wait for explicit user authorization before beginning the next step.

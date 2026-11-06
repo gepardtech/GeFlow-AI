@@ -447,7 +447,10 @@ export class BusinessDataSyncService {
    * Save (insert or update) a product
    */
   public saveProduct(businessId: string, product: Partial<SyncedProduct>, userId?: string): SyncedProduct {
-    const unit = this.getOrCreateBusinessUnit(businessId);
+    const unit = this.getOrCreateBusinessUnit(businessId, userId);
+    if (!unit.ownerUserId && userId) {
+      unit.ownerUserId = userId;
+    }
     const now = new Date().toISOString();
 
     const productId = product.id || `prod_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;

@@ -1,0 +1,915 @@
+# STEP 11 — AGENT EXECUTION & AUDIT LOGGING IMPLEMENTATION
+## GeFlow AI — 29-Agent Architecture
+
+**Objective:** Implement a secure, controlled, traceable execution system for all 29 registered GeFlow AI agents, together with centralized audit logging.
+
+**Implementation Type:** Backend-first implementation  
+**Scope:** Agent execution lifecycle, execution orchestration at the basic runtime level, execution tracking, audit events, failure handling, and security enforcement.
+
+---
+
+# 1. CRITICAL PROJECT INSTRUCTIONS
+
+You are working on the existing GeFlow AI application.
+
+The existing GeFlow application is the source of truth. You must inspect its actual architecture before making any changes.
+
+Do not assume that previous roadmap steps have been implemented merely because their specifications exist.
+
+Before implementation, inspect the actual state of:
+
+- Existing authentication and user management.
+- Organization/business membership and authorization.
+- The 29-agent registry.
+- Agent configuration and versioning.
+- Category-to-agent mapping.
+- Shared Tool Gateway.
+- Existing backend business services.
+- Existing database schema and security policies.
+- Existing logging, monitoring, and error-handling infrastructure.
+
+**Dependency rule:**
+
+This step depends on the actual availability of:
+
+1. Organization-level and category-level authorization.
+2. Persistent 29-agent registry.
+3. Agent configuration/versioning.
+4. Shared Tool Gateway.
+
+If a critical dependency is missing or incomplete, do not bypass it, recreate it independently, or implement an insecure alternative.
+
+Report the missing dependency and request authorization before expanding the scope.
+
+Do not replace existing systems unnecessarily.
+
+---
+
+# 2. IMPLEMENTATION OBJECTIVES
+
+Implement the following capabilities:
+
+1. Controlled execution of registered agents.
+2. Agent execution lifecycle management.
+3. Secure execution request validation.
+4. Organization and category isolation.
+5. Agent-specific capability enforcement.
+6. Tool Gateway integration.
+7. Execution history and status tracking.
+8. Centralized audit event recording.
+9. Failure handling and safe retries.
+10. Execution cancellation and timeout handling.
+11. Execution evidence and traceability.
+12. Security and regression testing.
+
+The architecture must support all 29 agents without creating 29 independent execution engines.
+
+A shared execution infrastructure is acceptable, provided every agent retains its own identity, configuration, version, category association, capabilities, and authorization boundaries.
+
+---
+
+# 3. AGENT EXECUTION ENGINE
+
+Implement a centralized Agent Execution Engine.
+
+The engine must be responsible for managing the lifecycle of an agent execution request.
+
+It must not directly bypass the Shared Tool Gateway or existing business services.
+
+### Execution lifecycle
+
+Implement the following execution flow:
+
+1. Receive an execution request.
+2. Authenticate the requesting user or trusted system.
+3. Resolve the organization/business context.
+4. Validate the user's membership and permissions.
+5. Resolve the requested agent from the persistent registry.
+6. Validate the agent's registered status.
+7. Resolve the agent's active configuration version.
+8. Validate category-to-agent association.
+9. Validate the agent's capabilities and permissions.
+10. Validate the requested operation and its input.
+11. Determine whether approval is required.
+12. Create an execution record.
+13. Start the authorized execution.
+14. Route all business operations through the Shared Tool Gateway.
+15. Validate tool responses.
+16. Record execution events and audit evidence.
+17. Validate the final execution result.
+18. Save the final execution status.
+19. Return a structured response to the authorized caller.
+
+Every step must respect the existing authorization system.
+
+Never trust an agent ID, organization ID, category ID, role, permission, or approval status supplied by the frontend without backend verification.
+
+### Execution architecture
+
+Use the following logical architecture:
+
+User / Authorized System  
+→ Existing Authentication  
+→ Execution Request Validator  
+→ Organization & Category Authorization  
+→ Agent Registry & Version Resolver  
+→ Agent Capability Validator  
+→ Approval Check  
+→ Agent Execution Engine  
+→ Shared Tool Gateway  
+→ Existing GeFlow Business Services  
+→ Execution Result Validator  
+→ Execution History & Audit Logging
+
+This is a conceptual architecture. Adapt it to the actual application stack.
+
+---
+
+# 4. EXECUTION REQUEST CONTRACT
+
+Create a standardized execution request contract.
+
+The contract should support fields such as:
+
+- execution_id
+- agent_id
+- organization_id
+- business_id, if supported by the existing model
+- category_id
+- requesting_user_id
+- agent_configuration_version
+- contract_version
+- task_type
+- task_input
+- requested_tool_ids
+- approval_reference, when required
+- idempotency_key
+- request_timestamp
+- correlation_id
+
+Requirements:
+
+- Generate execution IDs securely on the backend.
+- Validate all referenced IDs against actual database records.
+- Derive trusted user and organization context from authenticated backend context.
+- Never accept client-supplied permissions as authoritative.
+- Validate task input against the agent's approved contract.
+- Reject unsupported task types.
+- Reject unavailable or unauthorized agents.
+- Do not expose internal credentials, tokens, or sensitive context in execution responses.
+
+Do not create a separate authentication mechanism.
+
+---
+
+# 5. EXECUTION STATUS & LIFECYCLE
+
+Implement a consistent execution state machine.
+
+Recommended statuses:
+
+| Status | Meaning |
+|---|---|
+| pending | Request received and awaiting validation or scheduling |
+| validating | Identity, organization, category and permissions are being checked |
+| awaiting_approval | Required approval has not yet been granted |
+| approved | Required approval has been verified |
+| queued | Execution is waiting to start |
+| running | Execution is currently in progress |
+| completed | Execution completed successfully |
+| failed | Execution failed |
+| rejected | Request was denied by validation or authorization |
+| cancelled | Execution was successfully cancelled |
+| timed_out | Execution exceeded its allowed execution time |
+
+Requirements:
+
+- Define valid status transitions.
+- Prevent unauthorized or invalid state transitions.
+- Record timestamps for status changes.
+- Record the reason for rejection, failure, cancellation, or timeout.
+- Preserve the complete execution history.
+- Do not mark an execution completed before verifying its final result.
+- Do not report success when a tool operation failed.
+- Do not silently convert failed executions into successful ones.
+
+Use the existing job or queue infrastructure if one already exists.
+
+Do not introduce an unnecessary second queue system.
+
+If background execution infrastructure is required but does not exist, inspect the current stack and propose the smallest compatible implementation.
+
+---
+
+# 6. EXECUTION CONTEXT & ISOLATION
+
+Every execution must have a strictly isolated context.
+
+Execution context may include:
+
+- Agent identity.
+- Agent configuration version.
+- Contract version.
+- Organization/business context.
+- Category context.
+- Authenticated requesting user.
+- Authorized capabilities.
+- Authorized tool permissions.
+- Approved task input.
+- Approval references.
+- Correlation and trace identifiers.
+
+Security requirements:
+
+1. An agent must never access another organization's data.
+2. An agent must never access a category it is not authorized to access.
+3. An agent must not inherit unrestricted owner permissions.
+4. An agent must not access another agent's private execution context.
+5. An agent must not modify its own permissions.
+6. An agent must not change its registered identity.
+7. An agent must not modify its active configuration or version through execution.
+8. Agent-to-agent delegation must remain disabled by default.
+9. No unrestricted database, ORM, raw SQL, shell, or arbitrary code access.
+10. All business operations must pass through the Shared Tool Gateway.
+
+Do not store sensitive credentials or unnecessary personal information in execution records.
+
+---
+
+# 7. SHARED TOOL GATEWAY INTEGRATION
+
+Integrate the execution engine with the existing Shared Tool Gateway.
+
+Every tool invocation must validate:
+
+- Trusted agent identity.
+- Agent configuration version.
+- Organization/business ownership.
+- Category access.
+- Agent capability.
+- Tool permission.
+- Resource ownership.
+- Approval requirements.
+- Input schema.
+- Idempotency requirements.
+- Execution limits and timeout.
+
+The execution engine must not implement duplicate versions of existing POS, inventory, purchasing, billing, supplier, customer, or reporting business logic.
+
+Use existing GeFlow business services through the gateway.
+
+### Tool invocation records
+
+For every tool invocation, record:
+
+- Execution ID.
+- Agent ID.
+- Organization/business ID.
+- Tool ID.
+- Tool contract version.
+- Requesting user.
+- Invocation timestamp.
+- Approval reference, when applicable.
+- Invocation status.
+- Result reference.
+- Error information, if applicable.
+- Duration.
+- Correlation ID.
+
+Do not expose confidential tool inputs or outputs in ordinary logs.
+
+Sensitive payloads should be redacted or represented through secure references.
+
+---
+
+# 8. APPROVAL & CONSEQUENTIAL ACTION CONTROL
+
+Execution must respect the existing approval and permission policies.
+
+Separate these concepts:
+
+- User authorization.
+- Agent capability authorization.
+- Tool permission.
+- Human approval.
+
+They are not interchangeable.
+
+If an operation requires approval:
+
+1. Create or reference an approval request.
+2. Pause the relevant execution.
+3. Set its status to awaiting_approval.
+4. Verify the approval through the backend.
+5. Confirm that approval applies to the exact organization, agent, tool, action and relevant input.
+6. Resume only after valid approval.
+7. Record who approved it and when.
+
+Approval must never be inferred from a frontend button click or a client-provided boolean.
+
+Do not invent new financial approval thresholds or business policies.
+
+Use existing GeFlow policies. If no policy exists for a consequential operation, do not silently grant permission; report the policy gap and fail safely.
+
+---
+
+# 9. RETRIES, IDEMPOTENCY & FAILURE HANDLING
+
+Implement safe execution recovery.
+
+### Idempotency
+
+- Support an idempotency key for requests and eligible tool operations.
+- Prevent duplicate business transactions when a request is retried.
+- Store and validate idempotency records on the backend.
+- Reuse the original result when the same completed idempotent request is received again, where appropriate.
+- Do not assume every operation is safe to retry.
+
+### Retry handling
+
+- Retry only eligible transient failures.
+- Respect the configured retry policy.
+- Apply bounded retries and appropriate backoff.
+- Do not retry authorization failures, validation failures, rejected approvals, or permanent business-rule errors.
+- Record every retry attempt.
+- Do not execute a consequential operation twice because of an uncertain network response.
+
+### Failure handling
+
+Support clear failure categories:
+
+- authentication_error
+- authorization_error
+- validation_error
+- approval_required
+- approval_rejected
+- agent_unavailable
+- configuration_error
+- tool_execution_error
+- business_rule_error
+- timeout_error
+- dependency_error
+- internal_error
+
+Return safe, structured errors to the caller.
+
+Never expose database credentials, stack traces, private prompts, API keys, or internal security information in user-facing error messages.
+
+### Partial execution
+
+If an execution contains multiple operations and some succeed while others fail:
+
+- Record each operation independently.
+- Identify completed and failed operations.
+- Do not claim that the entire task completed successfully.
+- Use existing transaction or compensation mechanisms where supported.
+- Never assume that a completed external or irreversible operation can be rolled back.
+- Preserve enough evidence to investigate partial completion.
+
+---
+
+# 10. EXECUTION CANCELLATION & TIMEOUTS
+
+Implement controlled cancellation.
+
+Requirements:
+
+- Allow cancellation only to authorized users or systems.
+- Verify that the execution belongs to the authorized organization.
+- Check whether cancellation is possible in the current state.
+- Stop pending or queued executions safely.
+- Request cooperative cancellation for running executions.
+- Record the cancellation requester, reason and timestamp.
+- Do not mark an execution cancelled if the underlying operation has already completed.
+- Record operations that completed before cancellation.
+- Handle timeouts without silently losing execution state.
+
+Cancellation of an execution must not bypass existing business transaction safety.
+
+---
+
+# 11. CENTRALIZED AUDIT LOGGING
+
+Implement a centralized audit event system.
+
+Audit logs must provide an independently traceable history of important agent and security activities.
+
+Audit events must include:
+
+### A. Execution events
+
+- Execution requested.
+- Execution validated.
+- Execution rejected.
+- Execution queued.
+- Execution started.
+- Execution paused.
+- Approval requested.
+- Approval granted.
+- Approval rejected.
+- Tool invoked.
+- Tool succeeded.
+- Tool failed.
+- Retry attempted.
+- Execution completed.
+- Execution failed.
+- Execution cancelled.
+- Execution timed out.
+
+### B. Security events
+
+- Authentication validation result.
+- Organization authorization decision.
+- Category authorization decision.
+- Agent permission decision.
+- Tool permission decision.
+- Unauthorized execution attempt.
+- Cross-organization access attempt.
+- Cross-category access attempt.
+- Invalid agent identity.
+- Invalid configuration version.
+- Invalid approval attempt.
+
+### C. Configuration and governance events
+
+Record these when the corresponding changes occur through authorized systems:
+
+- Agent configuration created.
+- Agent configuration updated.
+- Agent configuration activated.
+- Agent configuration deactivated.
+- Agent configuration rolled back.
+- Agent permissions changed.
+- Agent capabilities changed.
+- Agent registry status changed.
+- Category-to-agent mapping changed.
+- Relevant approval policy changed.
+
+Do not allow an agent to silently change its own configuration, permissions, registry status or authorization policies.
+
+---
+
+# 12. AUDIT EVENT DATA CONTRACT
+
+Create a standardized audit event structure.
+
+Recommended fields:
+
+- audit_event_id
+- event_type
+- event_category
+- event_timestamp
+- execution_id, when applicable
+- correlation_id
+- agent_id, when applicable
+- agent_configuration_version, when applicable
+- organization_id
+- business_id, when applicable
+- category_id, when applicable
+- actor_type
+- actor_id
+- requesting_user_id, when applicable
+- target_type
+- target_id
+- action
+- authorization_decision
+- approval_reference, when applicable
+- tool_id, when applicable
+- result_status
+- failure_code, when applicable
+- sanitized_metadata
+- previous_event_reference, where applicable
+
+Use actual database types, identifiers and relationships consistent with the existing GeFlow schema.
+
+The fields above define the logical contract; they are not permission to duplicate existing tables or introduce a parallel organization model.
+
+---
+
+# 13. AUDIT LOG SECURITY & INTEGRITY
+
+Audit logs must be protected from unauthorized modification.
+
+Requirements:
+
+1. Normal users cannot modify or delete audit events.
+2. Agents cannot modify or delete audit events.
+3. Audit writing must happen through trusted backend services.
+4. Enforce organization-level access when retrieving audit records.
+5. Enforce role-based access for audit viewing.
+6. Keep security-sensitive audit events protected.
+7. Record the actor responsible for privileged changes.
+8. Protect audit records from unauthorized application-level updates.
+9. Record failures to write required audit events.
+10. Never silently continue a sensitive operation when its mandatory audit event cannot be durably recorded.
+
+Where supported by the existing database architecture, use append-only records and appropriate database policies.
+
+A hash chain or cryptographic integrity mechanism may be used if it can be integrated safely with the existing stack. Do not present a hash chain as tamper-proof if privileged database administrators can still rewrite its underlying records.
+
+Define retention and archival behavior using existing organizational and legal requirements. Do not invent arbitrary retention periods.
+
+---
+
+# 14. AUDIT LOGGING RELIABILITY
+
+Audit records must remain useful even when executions fail.
+
+Implement reliable event persistence.
+
+Requirements:
+
+- Persist mandatory audit events before or transactionally with sensitive operations where feasible.
+- Use database transactions or a transactional outbox pattern where supported.
+- Avoid losing audit events during process crashes.
+- Prevent duplicate event creation where idempotency is required.
+- Preserve event ordering or causal references where possible.
+- Record event timestamps consistently.
+- Separate execution results from audit event records.
+- Keep audit logging failures visible to system operators.
+
+Do not build an unnecessary external logging platform.
+
+Use the existing database and infrastructure unless a genuine architectural limitation requires otherwise.
+
+---
+
+# 15. EXECUTION HISTORY & RETRIEVAL SERVICES
+
+Implement secure backend interfaces for retrieving execution information.
+
+Required logical capabilities:
+
+- Retrieve an execution by execution ID.
+- Retrieve executions belonging to an authorized organization.
+- Filter executions by agent.
+- Filter by category.
+- Filter by status.
+- Filter by requesting user where authorized.
+- Filter by date range.
+- Retrieve an execution's tool invocation history.
+- Retrieve related audit events.
+- Retrieve failure information.
+- Retrieve retry history.
+- Retrieve approval history.
+- Retrieve a structured execution summary.
+
+Requirements:
+
+- Enforce authorization on every retrieval.
+- Never expose another organization's execution records.
+- Apply pagination and reasonable query limits.
+- Prevent users from guessing execution IDs to retrieve unauthorized data.
+- Avoid returning sensitive raw inputs, outputs or credentials.
+- Use the existing API conventions and authorization middleware.
+
+This step requires backend retrieval capabilities only. Do not build a new dashboard or redesign existing pages.
+
+---
+
+# 16. BASIC EXECUTION OBSERVABILITY
+
+Implement the backend observability needed to understand execution health.
+
+Capture:
+
+- Total execution count.
+- Successful execution count.
+- Failed execution count.
+- Rejected execution count.
+- Cancelled execution count.
+- Timed-out execution count.
+- Average execution duration.
+- Tool invocation count.
+- Tool failure count.
+- Retry count.
+- Approval waiting count.
+- Agent-wise execution activity.
+
+These metrics must be derived from actual execution records and events.
+
+Do not generate demo values or fake execution statistics.
+
+Do not introduce a separate analytics product in this step.
+
+---
+
+# 17. DATABASE & BACKEND IMPLEMENTATION
+
+Inspect the existing database before creating migrations.
+
+Create or extend only the necessary structures.
+
+Possible logical entities include:
+
+- agent_executions
+- agent_execution_events
+- agent_tool_invocations
+- agent_audit_events
+- agent_execution_idempotency
+
+These are proposed logical names, not mandatory physical table names.
+
+Reuse existing tables and event infrastructure wherever appropriate.
+
+Requirements:
+
+- Use the existing database technology.
+- Follow existing naming conventions.
+- Preserve existing data.
+- Use safe, reversible migrations where possible.
+- Add required indexes for execution retrieval and audit queries.
+- Enforce organization-level isolation at the database/backend level.
+- Apply appropriate database access policies.
+- Avoid duplicate organization, business, user, agent or category records.
+- Do not reset the database.
+- Do not remove existing application functionality.
+
+If the existing architecture supports a single execution table with related event records more efficiently, use that architecture.
+
+Do not create unnecessary tables merely to match the suggested names.
+
+---
+
+# 18. THE 29 AGENTS — EXECUTION COMPATIBILITY
+
+The execution engine must support all 29 registered agents.
+
+Preserve every existing agent identity, stable ID, primary category association and configuration.
+
+The finalized agent registry is:
+
+| Agent ID | Agent Name |
+|---|---|
+| AGT-001 | General Retail Agent |
+| AGT-002 | Agriculture & Farming Supplies Agent |
+| AGT-003 | Wholesale & Distribution Agent |
+| AGT-004 | Optometry & Eyewear Agent |
+| AGT-005 | Pet Shop & Veterinary Supplies Agent |
+| AGT-006 | Sports & Fitness Equipment Agent |
+| AGT-007 | Home Appliances & Kitchenware Agent |
+| AGT-008 | Home Furniture & Living Agent |
+| AGT-009 | Jewelry & Luxury Goods Agent |
+| AGT-010 | Bookstore & Stationery Agent |
+| AGT-011 | Hair Salon & Barbershop Agent |
+| AGT-012 | Cosmetics & Beauty Agent |
+| AGT-013 | Vehicle Repair & Service Garage Agent |
+| AGT-014 | Auto Parts & Accessories Agent |
+| AGT-015 | Plumbing & Sanitary Ware Agent |
+| AGT-016 | Electrical & Lighting Agent |
+| AGT-017 | Hardware & Construction Agent |
+| AGT-018 | Bakery & Pastry Agent |
+| AGT-019 | Cafe & Coffee Shop Agent |
+| AGT-020 | Fast Food & Quick Service Agent |
+| AGT-021 | Restaurant Agent |
+| AGT-022 | Footwear & Shoes Agent |
+| AGT-023 | Fashion & Apparel Agent |
+| AGT-024 | Computer & IT Hardware Agent |
+| AGT-025 | Mobile & Telecom Agent |
+| AGT-026 | Electronics & Gadgets Agent |
+| AGT-027 | Grocery Agent |
+| AGT-028 | Supermarket & Hypermarket Agent |
+| AGT-029 | Pharmacy & Health Store Agent |
+
+Important:
+
+- Do not create 29 independent execution engines.
+- Do not merge the 29 identities into one generic agent.
+- Do not invent agent capabilities or business workflows.
+- Load each agent's actual registered capabilities and permissions.
+- An agent must not execute a task outside its authorized capabilities.
+- Preserve all existing category mappings.
+
+At this stage, the objective is to make all registered agents compatible with the shared execution infrastructure, not to activate every agent for autonomous business operations.
+
+---
+
+# 19. TESTING REQUIREMENTS
+
+Implement automated tests using the existing testing framework.
+
+### A. Execution lifecycle tests
+
+- Valid execution request.
+- Invalid execution request.
+- Agent not found.
+- Agent inactive.
+- Invalid agent version.
+- Invalid category mapping.
+- Successful execution.
+- Failed execution.
+- Cancelled execution.
+- Timed-out execution.
+- Invalid state transition.
+
+### B. Authorization tests
+
+- Authorized organization access.
+- Unauthorized organization access.
+- Authorized category access.
+- Unauthorized category access.
+- Unauthorized user access.
+- Unauthorized agent capability.
+- Unauthorized tool invocation.
+- Missing approval.
+- Rejected approval.
+- Invalid approval reference.
+
+### C. Gateway tests
+
+- Valid tool invocation.
+- Invalid tool input.
+- Unauthorized tool invocation.
+- Tool timeout.
+- Tool failure.
+- Tool retry.
+- Duplicate idempotency key.
+- Partial execution failure.
+
+### D. Audit tests
+
+- Execution event creation.
+- Authorization event creation.
+- Tool invocation audit.
+- Approval audit.
+- Failure audit.
+- Configuration change audit.
+- Unauthorized audit modification.
+- Unauthorized audit retrieval.
+- Audit persistence during failure.
+- Duplicate event protection where applicable.
+
+### E. Isolation tests
+
+Verify that:
+
+- One organization cannot retrieve another organization's execution history.
+- One agent cannot retrieve another agent's private execution context.
+- One category cannot access unauthorized category resources.
+- Frontend manipulation cannot bypass backend authorization.
+- Agents cannot escalate their own permissions.
+
+### F. Regression tests
+
+Verify that existing GeFlow functionality remains operational:
+
+- Authentication.
+- Organization/business access.
+- Product management.
+- Inventory.
+- POS and billing.
+- Purchasing.
+- Suppliers.
+- Customers.
+- Existing reports.
+- Existing integrations.
+
+Only test existing modules and workflows; do not create new business workflows in this step.
+
+---
+
+# 20. STRICTLY OUT OF SCOPE
+
+Do not implement any of the following in this step:
+
+1. Central AI orchestrator.
+2. Autonomous agent-to-agent communication.
+3. Agent-to-agent delegation.
+4. Multi-agent collaboration.
+5. Autonomous long-running business decisions.
+6. Advanced planning and reasoning systems.
+7. New AI model integrations.
+8. Custom model training.
+9. Agent memory or long-term conversational memory.
+10. New business workflows.
+11. New POS or inventory functionality.
+12. Agent marketplace.
+13. New billing or subscription logic.
+14. New user authentication system.
+15. New organization management system.
+16. New agent management dashboard.
+17. Unrelated UI redesign.
+18. Unrestricted database access.
+19. Arbitrary code or shell execution.
+20. New external monitoring platform without a demonstrated requirement.
+
+This is a controlled execution and audit infrastructure step, not the implementation of the entire AI agent ecosystem.
+
+---
+
+# 21. IMPLEMENTATION ORDER
+
+Follow this exact sequence:
+
+**Phase 1 — Dependency Verification**
+- Inspect Steps 07–10 implementation.
+- Verify authorization, registry, versioning and gateway.
+- Identify gaps and blockers.
+
+**Phase 2 — Execution Data Architecture**
+- Design execution records.
+- Design execution events.
+- Design tool invocation records.
+- Design idempotency and correlation handling.
+- Design audit event storage.
+
+**Phase 3 — Execution Engine**
+- Implement request validation.
+- Implement agent/version resolution.
+- Implement execution state machine.
+- Implement secure execution context.
+- Integrate the Shared Tool Gateway.
+
+**Phase 4 — Execution Reliability**
+- Implement approval handling.
+- Implement safe retries.
+- Implement timeout handling.
+- Implement cancellation.
+- Implement partial-failure handling.
+
+**Phase 5 — Audit Infrastructure**
+- Implement centralized audit event writing.
+- Implement protected audit storage.
+- Implement event retrieval.
+- Implement audit integrity controls.
+
+**Phase 6 — Execution Retrieval & Observability**
+- Implement authorized execution history retrieval.
+- Implement filters and pagination.
+- Implement basic execution metrics.
+
+**Phase 7 — Testing & Verification**
+- Run lifecycle tests.
+- Run authorization tests.
+- Run isolation tests.
+- Run audit tests.
+- Run regression tests.
+
+Do not skip dependency verification or security testing.
+
+---
+
+# 22. COMPLETION REPORT — MANDATORY
+
+After implementation, provide a detailed completion report containing:
+
+1. Actual architecture inspected.
+2. Verified status of Steps 07–10.
+3. Files created.
+4. Files modified.
+5. Database migrations created.
+6. Tables or structures added or extended.
+7. APIs or backend services implemented.
+8. Execution lifecycle implemented.
+9. Tool Gateway integration details.
+10. Approval enforcement details.
+11. Audit event types implemented.
+12. Audit security and integrity controls.
+13. Retry and idempotency behavior.
+14. Cancellation and timeout behavior.
+15. Automated tests executed.
+16. Tests passed.
+17. Tests failed.
+18. Existing functionality regression results.
+19. Security issues discovered.
+20. Remaining limitations or blockers.
+
+Clearly distinguish between:
+
+- Implemented and verified.
+- Implemented but not fully verified.
+- Not implemented.
+- Blocked by missing dependencies.
+
+Do not claim a feature is complete unless it has actually been implemented and tested.
+
+Do not report successful tests that were not executed.
+
+---
+
+# 23. FINAL EXECUTION RULES
+
+These instructions are mandatory:
+
+- Work only on Step 11.
+- Preserve the existing GeFlow application.
+- Do not assume previous roadmap steps are complete.
+- Do not bypass missing dependencies.
+- Do not create duplicate infrastructure.
+- Do not introduce unrelated features.
+- Do not modify the 29-agent identities.
+- Do not activate unauthorized agent capabilities.
+- Do not enable default agent-to-agent delegation.
+- Do not expose sensitive execution or audit information.
+- Do not use fake records or demo execution statistics.
+- Do not claim unverified implementation success.
+
+**STOP CONDITION:**
+
+After completing Step 11 and providing the completion report, STOP.
+
+Do not automatically begin the next roadmap step.
+
+Wait for explicit authorization from the user before implementing anything further.
+
+**Final objective:** Establish a secure, reliable and auditable execution foundation for GeFlow AI's 29-agent architecture while preserving the existing GeFlow application and its business operations.

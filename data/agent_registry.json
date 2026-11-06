@@ -1,0 +1,3728 @@
+{
+  "agents": [
+    {
+      "id": "agent_agt-001_1793890789263",
+      "name": "General Retail Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-001",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T15:02:03.956Z",
+      "updated_by": "gepardwebs@gmail.com",
+      "description": "Multi-department retail operations, seasonal assortment velocity, SKU cataloging, and omni-channel stock balancing.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.audit",
+        "pos.basket_analysis",
+        "purchasing.reorder_forecast",
+        "reports.department_velocity"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Departmental turnover velocity monitoring",
+          "Multi-variant SKU and barcode catalog management",
+          "Seasonal reorder point optimization",
+          "Cashier basket size and line-item promotion audits"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports",
+          "analytics"
+        ],
+        "specialized_domain": "Retail",
+        "operational_boundaries": [
+          "Restricted strictly to General Retail catalog and store parameters",
+          "No access to prescription pharmaceutical databases or clinical drug contraindications",
+          "Cannot modify store billing plans or external tenant configurations"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-001_1_0_0",
+      "primary_category_id": "CAT-001",
+      "database_category_id": "0f9dad09-934d-4918-839d-242e4c20c110"
+    },
+    {
+      "id": "agent_agt-002_1793890789263",
+      "name": "Agriculture & Farming Supplies Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-002",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Crop season planting schedules, seed germination batches, bulk fertilizer units, livestock feed lots, and rural credit tracking.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.batch_tracking",
+        "pos.bulk_weighing",
+        "purchasing.seasonal_buffer",
+        "reports.crop_cycle"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Agricultural planting season inventory planning",
+          "Chemical and fertilizer batch tracking with regulatory expiry",
+          "Bulk UoM conversions (bags, quintals, metric tons)",
+          "Farmer seasonal credit khata balancing"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Agriculture",
+        "operational_boundaries": [
+          "Restricted to agricultural supplies, fertilizers, feeds, and farm equipment",
+          "Cannot approve chemical dispensing without documented safety data sheets",
+          "No access to non-farming retail contexts"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-002_1_0_0",
+      "primary_category_id": "CAT-002",
+      "database_category_id": "360b1722-8efe-4e08-9ab9-07d2c932a21b"
+    },
+    {
+      "id": "agent_agt-003_1793890789263",
+      "name": "Wholesale & Distribution Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-003",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "B2B bulk carton/pallet logistics, multi-tier volume discounts, freight manifest audits, and distributor ledger reconciliations.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "purchases.manage",
+        "reports.read",
+        "analytics.read"
+      ],
+      "capabilities": [
+        "inventory.pallet_tracking",
+        "pos.tiered_pricing",
+        "purchasing.supplier_contract",
+        "analytics.debtor_aging"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Case, carton, and pallet tier pricing calculations",
+          "Warehouse bin locations and replenishment velocity",
+          "High-volume trade debtor credit terms & aging reports",
+          "Supplier PO delivery reconciliation"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports",
+          "analytics"
+        ],
+        "specialized_domain": "Wholesale",
+        "operational_boundaries": [
+          "Restricted to wholesale and B2B distribution channels",
+          "Cannot dispatch orders exceeding maximum verified distributor credit lines without explicit manager authorization"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-003_1_0_0",
+      "primary_category_id": "CAT-003",
+      "database_category_id": "f362c533-f909-4689-8642-59da10934d10"
+    },
+    {
+      "id": "agent_agt-004_1793890789263",
+      "name": "Optometry & Eyewear Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-004",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Lens prescription parameters (Sphere, Cylinder, Axis, Addition), frame fitting ergonomics, contact lens lot expiries, and optical warranty tracking.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.rx_matrix",
+        "pos.optical_order",
+        "purchasing.lab_work_order"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Patient optical prescription indexing and job order routing",
+          "Designer frame inventory serialization",
+          "Contact lens power and expiry matrix checks",
+          "Optical lab grinding and lens assembly status updates"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Optical",
+        "operational_boundaries": [
+          "Restricted to eyewear, optical lenses, and clinic dispensary supplies",
+          "Cannot dispense lenses without valid validated optical prescription parameters"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-004_1_0_0",
+      "primary_category_id": "CAT-004",
+      "database_category_id": "a1148c56-2092-4c06-8f8e-b30ba889ea94"
+    },
+    {
+      "id": "agent_agt-005_1793890789263",
+      "name": "Pet Shop & Veterinary Supplies Agent",
+      "status": "active",
+      "version": "1.2.0",
+      "agent_id": "AGT-005",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-06T14:45:25.246Z",
+      "description": "Veterinary prescription feeds, pet vaccinations, grooming service booking schedules, and species-specific dietary inventory.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.vaccine_expiry",
+        "pos.service_booking",
+        "purchasing.feed_bulk"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Pet species and age-specific food rotation audits",
+          "Vaccine cold-chain and expiration alert management",
+          "Pet grooming appointment and consumable tracking",
+          "Pet owner loyalty and recurring preventative replenishment"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Pet Care",
+        "operational_boundaries": [
+          "Restricted to veterinary, pet care, animal feed, and grooming inventory",
+          "Cannot prescribe controlled veterinary pharmaceuticals without licensed doctor credentialing"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-005_1_2_0",
+      "primary_category_id": "CAT-005",
+      "database_category_id": "30382437-3ceb-4dfe-9600-e2dc7a4a8541",
+      "updated_by": "compliance@geflow.app"
+    },
+    {
+      "id": "agent_agt-006_1793890789263",
+      "name": "Sports & Fitness Equipment Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-006",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Athletic gear specifications, nutritional supplement batch expiries, gym apparatus delivery & assembly, and team club bulk jerseys.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.supplement_tracking",
+        "pos.team_order",
+        "purchasing.equipment_po"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Sports gear size/weight matrix (dumbbells, weights, resistance)",
+          "Dietary protein and supplement expiry date monitoring",
+          "Gym machine warranty and maintenance scheduling",
+          "Athletic team kit custom printing orders"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Sports",
+        "operational_boundaries": [
+          "Restricted to athletic equipment, fitness gear, and verified nutritional supplements"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-006_1_0_0",
+      "primary_category_id": "CAT-006",
+      "database_category_id": "6dd771a6-3939-46fb-8914-bff21f00b83b"
+    },
+    {
+      "id": "agent_agt-007_1793890789264",
+      "name": "Home Appliances & Kitchenware Agent",
+      "status": "active",
+      "version": "1.1.0",
+      "agent_id": "AGT-007",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-06T14:46:14.345Z",
+      "description": "Consumer electronics warranties, serial number tracking, appliance installation dispatching, and spare part cross-referencing.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.serial_lookup",
+        "pos.warranty_issuance",
+        "purchasing.spare_parts"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Appliance IMEI and motor serial number capture at POS checkout",
+          "Manufacturer warranty card registration and claim tracking",
+          "Home installation and technician delivery scheduling",
+          "Spare parts inventory compatibility lookup"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Home Goods",
+        "operational_boundaries": [
+          "Restricted to kitchenware, domestic appliances, and electrical home goods"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-007_1_1_0",
+      "primary_category_id": "CAT-007",
+      "database_category_id": "c62dd5a7-83ff-41fc-bb09-2ce5f7a4c87a",
+      "updated_by": "compliance@geflow.app"
+    },
+    {
+      "id": "agent_agt-008_1793890789264",
+      "name": "Home Furniture & Living Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-008",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Flat-pack component assembly, custom upholstery fabrics, room dimensional planning, and heavy white-glove delivery logistics.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.dimension_calc",
+        "pos.custom_order",
+        "purchasing.timber_fabric"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Furniture set grouping (dining tables with chairs, sofa combinations)",
+          "Custom upholstery fabric swatch selection and custom order lead times",
+          "Warehouse bulk storage footprint and dimension management",
+          "Delivery and assembly team work-order assignment"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Furniture",
+        "operational_boundaries": [
+          "Restricted to home furniture, interior decor, and living accessories"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-008_1_0_0",
+      "primary_category_id": "CAT-008",
+      "database_category_id": "de9589a0-d4bf-45b8-bc78-d4493c0efe35"
+    },
+    {
+      "id": "agent_agt-009_1793890789264",
+      "name": "Jewelry & Luxury Goods Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-009",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Precious metal spot rate calculations (Gold karatage, Silver grams), gemstone certification (GIA/IGI), hallmark tracking, and bespoke jewelry crafting.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.gold_rate_calc",
+        "pos.gemstone_cert",
+        "purchasing.bullion_lot"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Live gold karat pricing (24K, 22K, 18K) plus artisan making charge audits",
+          "Certified gemstone carat, color, clarity, and cut indexing",
+          "Serial numbered Swiss luxury watch provenance tracking",
+          "High-security vault inventory audit reconciliation"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Jewelry",
+        "operational_boundaries": [
+          "Restricted to fine jewelry, precious metals, gems, and horology",
+          "Cannot alter metal scrap valuations without supervisor verification"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-009_1_0_0",
+      "primary_category_id": "CAT-009",
+      "database_category_id": "4c8bb703-4bae-4d8d-a3d3-50ef94fd2e3d"
+    },
+    {
+      "id": "agent_agt-010_1793890789264",
+      "name": "Bookstore & Stationery Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-010",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "ISBN bibliographical lookups, academic curriculum booklists, publisher consignment returns, and stationery pack bundling.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.isbn_lookup",
+        "pos.curriculum_bundle",
+        "purchasing.consignment_return"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "ISBN-13 barcode lookups and author/edition indexing",
+          "School textbook season bundling and student kit assembly",
+          "Publisher sale-or-return consignment reconciliations",
+          "Office stationery pack sales tracking"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Books & Stationery",
+        "operational_boundaries": [
+          "Restricted to books, print media, school supplies, and office stationery"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-010_1_0_0",
+      "primary_category_id": "CAT-010",
+      "database_category_id": "5d884f9c-7ebe-467a-a073-7942da625f78"
+    },
+    {
+      "id": "agent_agt-011_1793890789264",
+      "name": "Hair Salon & Barbershop Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-011",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Stylist appointment calendar sync, chair occupancy metrics, professional hair treatment consumables, and stylist commission splits.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.consumable_mix",
+        "pos.appointment_split",
+        "reports.stylist_commission"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Stylist chair booking and schedule management",
+          "Hair dye color tube and developer dispensing volume control",
+          "Stylist commission calculation based on ticket totals",
+          "Salon retail shampoo/conditioner homecare cross-sells"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "reports"
+        ],
+        "specialized_domain": "Salon",
+        "operational_boundaries": [
+          "Restricted to hair styling services, barber treatments, and professional haircare products"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-011_1_0_0",
+      "primary_category_id": "CAT-011",
+      "database_category_id": "60e21025-cb74-4632-8cfb-79b3acff7097"
+    },
+    {
+      "id": "agent_agt-012_1793890789264",
+      "name": "Cosmetics & Beauty Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-012",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Cosmetics shade matrices, skincare formula batch expiries, hypoallergenic allergen labeling, and counter tester unit controls.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.shade_matrix",
+        "pos.tester_audit",
+        "purchasing.beauty_distributor"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Lipstick/foundation color shade and undertone matrix indexing",
+          "Skincare PAO (Period After Opening) and batch shelf-life alerts",
+          "Counter tester and sample sachet shrinkage control",
+          "Beauty influencer and brand bundle promotions"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Beauty",
+        "operational_boundaries": [
+          "Restricted to skincare, makeup, fragrances, and personal beauty supplies"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-012_1_0_0",
+      "primary_category_id": "CAT-012",
+      "database_category_id": "3fbaff3a-b01a-4c96-885d-6cfb596d4663"
+    },
+    {
+      "id": "agent_agt-013_1793890789264",
+      "name": "Vehicle Repair & Service Garage Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-013",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Automotive Job Cards, technician labor hours billing, vehicle VIN vehicle histories, and mechanic bay occupancy.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "pos.job_card",
+        "inventory.parts_usage",
+        "reports.mechanic_hours"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Repair Job Card generation and vehicle mileage/VIN documentation",
+          "Technician labor hour rates and workshop bay utilization",
+          "Parts installed vs. outsourced lathe/machining charges",
+          "Vehicle periodic service reminder SMS/WhatsApp triggers"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "reports"
+        ],
+        "specialized_domain": "Repair Shop",
+        "operational_boundaries": [
+          "Restricted to vehicle maintenance, garage repair work, and mechanical operations"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-013_1_0_0",
+      "primary_category_id": "CAT-013",
+      "database_category_id": "bc0d95be-9ea5-4f41-8d91-80c1faed1361"
+    },
+    {
+      "id": "agent_agt-014_1793890789264",
+      "name": "Auto Parts & Accessories Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-014",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "OEM vs. aftermarket automotive parts cross-referencing, engine chassis compatibility, core deposit returns, and fastener bins.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.vin_fitment",
+        "pos.core_deposit",
+        "purchasing.oem_aftermarket"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Vehicle Make, Model, Year, Engine code parts fitment verification",
+          "OEM genuine vs. aftermarket alternative catalog matching",
+          "Old core component (alternator, battery) exchange deposit handling",
+          "Critical fast-moving wear parts (brake pads, filters, spark plugs) reorder curves"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Automotive",
+        "operational_boundaries": [
+          "Restricted to automotive spare parts, fluids, tires, and vehicle accessories"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-014_1_0_0",
+      "primary_category_id": "CAT-014",
+      "database_category_id": "f5a573ff-d99a-4a2a-a4b7-8573805a0b17"
+    },
+    {
+      "id": "agent_agt-015_1793890789264",
+      "name": "Plumbing & Sanitary Ware Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-015",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Pipe diameter thread specifications (PPRC, CPVC, PVC, Brass), sanitary fixtures, pump flow ratings, and contractor project takeoffs.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.pipe_schedule",
+        "pos.contractor_quote",
+        "purchasing.bulk_fittings"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Pipe sizing, standard schedule (Sch 40/80), and fitting thread compatibility",
+          "Contractor plumbing bill-of-materials (BOM) quote builder",
+          "Water pump head/flow specifications and warranty registration",
+          "Bathroom ceramic finish matching (matte, chrome, brushed gold)"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Plumbing",
+        "operational_boundaries": [
+          "Restricted to plumbing supplies, pipes, sanitary fixtures, and pumps"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-015_1_0_0",
+      "primary_category_id": "CAT-015",
+      "database_category_id": "ccc4ee65-ba95-46a7-b95e-cbee6b909cd8"
+    },
+    {
+      "id": "agent_agt-016_1793890789264",
+      "name": "Electrical & Lighting Supplies Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-016",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Cable gauges and coil cutting lengths, circuit breaker amperages, LED color temperatures (Kelvin), and electrician rebate incentives.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.reel_cutting",
+        "pos.electrician_rebate",
+        "purchasing.lighting_specs"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Electric cable reel meters-to-coils automated deduction on sale",
+          "Circuit breaker amp curves, distribution board modular capacity",
+          "Commercial LED lumens, wattage, and color Kelvin (3000K-6500K) matching",
+          "Electrician trade discount and annual rebate tracking"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Electrical",
+        "operational_boundaries": [
+          "Restricted to electrical cabling, switches, lighting, and power components"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-016_1_0_0",
+      "primary_category_id": "CAT-016",
+      "database_category_id": "9fdb8308-4a82-4aa9-b1c4-b99041963208"
+    },
+    {
+      "id": "agent_agt-017_1793890789264",
+      "name": "Hardware & Construction Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-017",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Power tool serial warranties, fastener weight-to-count conversions, cement/steel batch tracking, and site delivery dispatches.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.weight_piece_convert",
+        "pos.jobsite_dispatch",
+        "purchasing.steel_cement"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Power tool tool-body vs. battery kit inventory tracking",
+          "Screws, nails, and bolts sold by kilogram or counted piece packs",
+          "Construction cement bags and steel rebar ton calculations",
+          "Construction jobsite dump truck delivery scheduling"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Hardware",
+        "operational_boundaries": [
+          "Restricted to hardware, construction tools, masonry, and civil supplies"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-017_1_0_0",
+      "primary_category_id": "CAT-017",
+      "database_category_id": "58024f0f-52d0-4626-a252-e08356fe8b9e"
+    },
+    {
+      "id": "agent_agt-018_1793890789264",
+      "name": "Bakery & Pastry Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-018",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Daily bake production recipes, raw ingredient scaling (Flour, Sugar, Butter), custom celebration cake orders, and same-day end-of-shift markdowns.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.recipe_depletion",
+        "pos.custom_cake",
+        "reports.daily_waste"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Morning and evening bake batch yield calculations",
+          "Recipe raw flour, yeast, and butter inventory auto-depletion",
+          "Custom birthday and wedding cake deposit and design notes",
+          "End-of-day fresh pastry markdown and food waste ledger audits"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Bakery",
+        "operational_boundaries": [
+          "Restricted to bakery goods, patisserie, and confectionary operations"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-018_1_0_0",
+      "primary_category_id": "CAT-018",
+      "database_category_id": "6cb7b5d8-b372-477c-acc4-9ad9b7403ea2"
+    },
+    {
+      "id": "agent_agt-019_1793890789264",
+      "name": "Cafe & Coffee Shop Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-019",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Coffee bean roast batch tracking, dairy and plant milk usage, barista drink modifications (Syrup, Extra Shot), and loyalty punchcards.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.bean_batch",
+        "pos.beverage_modifier",
+        "reports.peak_hours"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Espresso shot recipe bean weight to grinder calibration checks",
+          "Milk and alternative oat/almond milk refrigerated inventory",
+          "Barista beverage modifier pricing (+Syrup, +Extra Shot, Decaf)",
+          "Peak morning rush speed-of-service checkout optimization"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "reports"
+        ],
+        "specialized_domain": "Cafe",
+        "operational_boundaries": [
+          "Restricted to cafe beverages, specialty coffee, tea, and grab-and-go snacks"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-019_1_0_0",
+      "primary_category_id": "CAT-019",
+      "database_category_id": "236e4d24-12b0-47a1-b658-be02ed42547f"
+    },
+    {
+      "id": "agent_agt-020_1793890789264",
+      "name": "Fast Food & Quick Service Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-020",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Combo meal upsells, kitchen display system (KDS) firing, made-on-order bypass (live cook items never out of stock), and drive-thru speeds.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "pos.combo_builder",
+        "inventory.made_on_order",
+        "reports.speed_of_service"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Combo deal grouping (Burger + Fries + Drink) with automatic savings calculation",
+          "Live cooking made-on-order items (Burgers, Fries) bypassing zero inventory limits",
+          "Kitchen printer / screen routing by station (Fryer vs. Grill)",
+          "High-throughput cashier drawer shift change audits"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "reports"
+        ],
+        "specialized_domain": "Fast Food",
+        "operational_boundaries": [
+          "Restricted to quick service, burger joints, fried chicken, and takeaway counters"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-020_1_0_0",
+      "primary_category_id": "CAT-020",
+      "database_category_id": "bc657191-8372-43af-b10f-bfd4cbbe7175"
+    },
+    {
+      "id": "agent_agt-021_1793890789264",
+      "name": "Restaurant Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-021",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Dining table floor plan layouts, kitchen order ticket (KOT) firing, split bills, live kitchen recipes, and waiter service tips.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "pos.table_management",
+        "pos.kot_routing",
+        "inventory.perishable_meat",
+        "reports.cover_analytics"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Dine-in floor map table occupancy and guest cover counts",
+          "Kitchen Order Ticket (KOT) multi-course printing (Appetizers then Mains)",
+          "Table bill splitting across guests or payment methods (Cash/Card)",
+          "Perishable meat and produce cold-storage shrinkage audits"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "reports"
+        ],
+        "specialized_domain": "Restaurant",
+        "operational_boundaries": [
+          "Restricted to dine-in restaurants, food courses, bar menus, and hospitality catering",
+          "No access to pharmacy, automotive or external commercial retail domains"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-021_1_0_0",
+      "primary_category_id": "CAT-021",
+      "database_category_id": "c611abf8-8757-484d-8f29-434a77c29d73"
+    },
+    {
+      "id": "agent_agt-022_1793890789264",
+      "name": "Footwear & Shoes Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-022",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Shoe size conversion charts (US, UK, EU, CM), width fittings, left/right pair integrity, shoe care product attachments, and seasonal footwear clearances.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.size_matrix",
+        "pos.broken_size_sale",
+        "purchasing.case_size_run"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Footwear Size matrix (US 7 to 13, UK 6 to 12, EU 40 to 46) synchronization",
+          "Shoe box barcode tracking to ensure single-pair matching",
+          "Shoe polish, waterproof sprays, and insole counter cross-selling",
+          "End-of-season broken-size clearance markdown audits"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Footwear",
+        "operational_boundaries": [
+          "Restricted to footwear, athletic sneakers, formal shoes, and leather footwear care"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-022_1_0_0",
+      "primary_category_id": "CAT-022",
+      "database_category_id": "dbad316f-8cc9-4268-ac15-17ec1e3529cc"
+    },
+    {
+      "id": "agent_agt-023_1793890789264",
+      "name": "Fashion & Apparel Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-023",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Apparel Color & Size variant matrices (XS to 3XL), seasonal collections, fitting room reserves, alteration tracking, and garment tagging.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.color_size_matrix",
+        "pos.alteration_slip",
+        "reports.sell_through_rate"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Apparel SKU Matrix: Master Style -> Color -> Size SKU generation",
+          "Seasonal fashion collections (Spring/Summer, Autumn/Winter) lifecycle tracking",
+          "Garment alteration and tailoring pickup receipts",
+          "Fashion accessory attachment rates (belts, scarves, jewelry)"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Boutique",
+        "operational_boundaries": [
+          "Restricted to fashion garments, apparel, designer clothing, and fashion accessories"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-023_1_0_0",
+      "primary_category_id": "CAT-023",
+      "database_category_id": "ad4ce636-f533-457b-99c4-67c9b0eb9ad1"
+    },
+    {
+      "id": "agent_agt-024_1793890789264",
+      "name": "Computer & IT Hardware Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-024",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Custom PC builder component compatibility (Socket, Motherboard, RAM, PSU Wattage), serial number warranties, and enterprise IT licenses.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.pc_compatibility",
+        "pos.serial_warranty",
+        "purchasing.it_distributor"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "PC Builder Compatibility: CPU socket, chipset, RAM DDR generation, and GPU clearance checks",
+          "Storage, RAM, and graphics card serial number tracking on purchase and sale",
+          "Software licensing keys and OEM activation tracking",
+          "IT repair bench diagnostics and hardware upgrade billing"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "IT Store",
+        "operational_boundaries": [
+          "Restricted to computer hardware, IT peripherals, networking, and server components"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-024_1_0_0",
+      "primary_category_id": "CAT-024",
+      "database_category_id": "c2dedcd2-42e2-47cc-97b5-37e818af2506"
+    },
+    {
+      "id": "agent_agt-025_1793890789264",
+      "name": "Mobile & Telecom Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-025",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Dual-IMEI device verification, carrier network unlocks, mobile screen repair tracking, accessories bundling, and used phone trade-in evaluations.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.imei_validation",
+        "pos.trade_in_audit",
+        "purchasing.mobile_wholesaler"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "IMEI-1 and IMEI-2 registration at intake and POS invoice printing",
+          "Used phone trade-in functional checklist (Battery health, FaceID, Cameras)",
+          "Mobile screen and battery replacement repair tickets",
+          "Tempered glass and phone case margin optimization"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Mobile Shop",
+        "operational_boundaries": [
+          "Restricted to smartphones, tablets, mobile accessories, and mobile repair services"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-025_1_0_0",
+      "primary_category_id": "CAT-025",
+      "database_category_id": "23618b13-fafd-4ecf-be01-8dc3dccb1238"
+    },
+    {
+      "id": "agent_agt-026_1793890789264",
+      "name": "Electronics & Gadgets Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-026",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Smart consumer electronics, audio gear, smart home IoT ecosystem compatibility, warranty claims, and fast-depreciating tech cycles.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read",
+        "analytics.read"
+      ],
+      "capabilities": [
+        "inventory.tech_specs",
+        "pos.extended_warranty",
+        "analytics.gadget_velocity"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Audio and wearable technology specification matrix (Bluetooth codec, battery life)",
+          "Smart home ecosystem compatibility (Matter, Zigbee, WiFi)",
+          "Tech gadget rapid price depreciation and clearance reorder rules",
+          "Customer replacement and manufacturer warranty return processing"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports",
+          "analytics"
+        ],
+        "specialized_domain": "Electronics",
+        "operational_boundaries": [
+          "Restricted to consumer gadgets, smart electronics, headphones, and gaming gear"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-026_1_0_0",
+      "primary_category_id": "CAT-026",
+      "database_category_id": "c4017b89-58b8-4942-801e-1751d56af56d"
+    },
+    {
+      "id": "agent_agt-027_1793890789264",
+      "name": "Grocery Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-027",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "FMCG high-turnover staples, loose grain weigh-scales, milk/bread daily deliveries, neighbor khata store credit, and perishable shelf-life rotations.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.fmcg_expiry",
+        "pos.weigh_scale_barcode",
+        "pos.khata_balance",
+        "purchasing.staple_buffer"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "FMCG staple commodity velocity (Rice, Flour, Cooking Oil, Lentils)",
+          "Daily fresh bread and dairy delivery reconciliation",
+          "Neighborhood customer credit khata balancing and statement generation",
+          "Loose weighed products pricing from scale barcodes (EAN-13 variable weight)"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Grocery",
+        "operational_boundaries": [
+          "Restricted to neighborhood grocery, minimart, and FMCG convenience store operations",
+          "No pharmaceutical dispensing access"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-027_1_0_0",
+      "primary_category_id": "CAT-027",
+      "database_category_id": "6cf4123d-8cf7-4508-9968-a53231db21ed"
+    },
+    {
+      "id": "agent_agt-028_1793890789264",
+      "name": "Supermarket & Hypermarket Agent",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-028",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "description": "Multi-aisle layout velocity, gondola end-cap promotions, central warehouse restocking trucks, thermal receipt line items, and high-speed multi-lane cashiering.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.planogram_velocity",
+        "pos.multi_lane_throughput",
+        "purchasing.central_dc_order"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Aisle and shelf planogram restock velocity",
+          "Multi-lane POS cashier scanning speed and lane balancing",
+          "Weekly promotional catalog and gondola end-cap margin analysis",
+          "Cross-department shrinkage (Fresh Produce vs. Packaged Foods) monitoring"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Supermarket",
+        "operational_boundaries": [
+          "Restricted to large-format supermarket and hypermarket retail operations"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-028_1_0_0",
+      "primary_category_id": "CAT-028",
+      "database_category_id": "b10a30d6-c410-4092-b2fd-630fa7d970e5"
+    },
+    {
+      "id": "agent_agt-029_1793890789264",
+      "name": "Pharmacy & Health Store Agent",
+      "status": "active",
+      "version": "1.1.0",
+      "agent_id": "AGT-029",
+      "agent_type": "category_specialized",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "created_by": "system_master_seed",
+      "updated_at": "2026-11-05T15:17:13.595Z",
+      "updated_by": "gepardwebs@gmail.com",
+      "description": "Drug schedule regulations, batch and expiry date compliance, active pharmaceutical ingredient (API/Formula) generic equivalents, and temperature storage controls.",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.drug_batch_expiry",
+        "pos.formula_generic_sub",
+        "purchasing.pharma_distributor",
+        "reports.controlled_substance_log"
+      ],
+      "configuration": {
+        "responsibilities": [
+          "Active ingredient / formula generic brand substitution lookup",
+          "Prescription medicine batch number and expiry date enforcement at checkout",
+          "Short-expiry medicine return to pharmaceutical distributor alerting",
+          "Narcotic and scheduled medicine dispensing register audits"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Pharmacy",
+        "operational_boundaries": [
+          "Restricted strictly to pharmaceutical, clinical wellness, and licensed OTC medicines",
+          "Cannot override required prescription check for scheduled drugs without licensed pharmacist credentialing",
+          "No access to unrelated retail or dining domains"
+        ]
+      },
+      "contract_version": "1.0",
+      "active_version_id": "ver_agt-029_1_1_0",
+      "primary_category_id": "CAT-029",
+      "database_category_id": "e8be593c-3b31-4a0b-9511-b264f540eeb9"
+    }
+  ],
+  "version": "1.0.0",
+  "audit_logs": [
+    {
+      "id": "audit_1793890923956_eg03m",
+      "action": "update_status",
+      "reason": "Operational verification",
+      "actor_id": "a375b057-debe-4239-9549-9f83b5557df2",
+      "agent_id": "AGT-001",
+      "new_state": {
+        "status": "active"
+      },
+      "timestamp": "2026-11-05T15:02:03.956Z",
+      "actor_email": "gepardwebs@gmail.com",
+      "previous_state": {
+        "status": "active"
+      }
+    }
+  ],
+  "associations": [
+    {
+      "id": "assoc_cat-001_agt-001",
+      "status": "active",
+      "agent_id": "AGT-001",
+      "agent_name": "General Retail Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T15:02:03.956Z",
+      "category_id": "0f9dad09-934d-4918-839d-242e4c20c110",
+      "category_name": "General Retail & Department Store",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-001"
+    },
+    {
+      "id": "assoc_cat-002_agt-002",
+      "status": "active",
+      "agent_id": "AGT-002",
+      "agent_name": "Agriculture & Farming Supplies Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "360b1722-8efe-4e08-9ab9-07d2c932a21b",
+      "category_name": "Agriculture & Farming Supplies",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-002"
+    },
+    {
+      "id": "assoc_cat-003_agt-003",
+      "status": "active",
+      "agent_id": "AGT-003",
+      "agent_name": "Wholesale & Distribution Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "f362c533-f909-4689-8642-59da10934d10",
+      "category_name": "Wholesale & Distribution Hub",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-003"
+    },
+    {
+      "id": "assoc_cat-004_agt-004",
+      "status": "active",
+      "agent_id": "AGT-004",
+      "agent_name": "Optometry & Eyewear Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "a1148c56-2092-4c06-8f8e-b30ba889ea94",
+      "category_name": "Optometry & Eyewear Store",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-004"
+    },
+    {
+      "id": "assoc_cat-005_agt-005",
+      "status": "active",
+      "agent_id": "AGT-005",
+      "agent_name": "Pet Shop & Veterinary Supplies Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "30382437-3ceb-4dfe-9600-e2dc7a4a8541",
+      "category_name": "Pet Shop & Veterinary Supplies",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-005"
+    },
+    {
+      "id": "assoc_cat-006_agt-006",
+      "status": "active",
+      "agent_id": "AGT-006",
+      "agent_name": "Sports & Fitness Equipment Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "6dd771a6-3939-46fb-8914-bff21f00b83b",
+      "category_name": "Sports, Gym & Fitness Equipment",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-006"
+    },
+    {
+      "id": "assoc_cat-007_agt-007",
+      "status": "active",
+      "agent_id": "AGT-007",
+      "agent_name": "Home Appliances & Kitchenware Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "c62dd5a7-83ff-41fc-bb09-2ce5f7a4c87a",
+      "category_name": "Home Appliances & Kitchenware",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-007"
+    },
+    {
+      "id": "assoc_cat-008_agt-008",
+      "status": "active",
+      "agent_id": "AGT-008",
+      "agent_name": "Home Furniture & Living Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "de9589a0-d4bf-45b8-bc78-d4493c0efe35",
+      "category_name": "Home Furniture & Living",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-008"
+    },
+    {
+      "id": "assoc_cat-009_agt-009",
+      "status": "active",
+      "agent_id": "AGT-009",
+      "agent_name": "Jewelry & Luxury Goods Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "4c8bb703-4bae-4d8d-a3d3-50ef94fd2e3d",
+      "category_name": "Jewelry, Watches & Luxury Goods",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-009"
+    },
+    {
+      "id": "assoc_cat-010_agt-010",
+      "status": "active",
+      "agent_id": "AGT-010",
+      "agent_name": "Bookstore & Stationery Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "5d884f9c-7ebe-467a-a073-7942da625f78",
+      "category_name": "Bookstore & Stationery",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-010"
+    },
+    {
+      "id": "assoc_cat-011_agt-011",
+      "status": "active",
+      "agent_id": "AGT-011",
+      "agent_name": "Hair Salon & Barbershop Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "60e21025-cb74-4632-8cfb-79b3acff7097",
+      "category_name": "Hair Salon & Barbershop",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-011"
+    },
+    {
+      "id": "assoc_cat-012_agt-012",
+      "status": "active",
+      "agent_id": "AGT-012",
+      "agent_name": "Cosmetics & Beauty Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "3fbaff3a-b01a-4c96-885d-6cfb596d4663",
+      "category_name": "Cosmetics, Beauty & Skincare",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-012"
+    },
+    {
+      "id": "assoc_cat-013_agt-013",
+      "status": "active",
+      "agent_id": "AGT-013",
+      "agent_name": "Vehicle Repair & Service Garage Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "bc0d95be-9ea5-4f41-8d91-80c1faed1361",
+      "category_name": "Vehicle Repair & Service Garage",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-013"
+    },
+    {
+      "id": "assoc_cat-014_agt-014",
+      "status": "active",
+      "agent_id": "AGT-014",
+      "agent_name": "Auto Parts & Accessories Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "f5a573ff-d99a-4a2a-a4b7-8573805a0b17",
+      "category_name": "Auto Parts & Accessories",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-014"
+    },
+    {
+      "id": "assoc_cat-015_agt-015",
+      "status": "active",
+      "agent_id": "AGT-015",
+      "agent_name": "Plumbing & Sanitary Ware Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "ccc4ee65-ba95-46a7-b95e-cbee6b909cd8",
+      "category_name": "Plumbing & Sanitary Ware",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-015"
+    },
+    {
+      "id": "assoc_cat-016_agt-016",
+      "status": "active",
+      "agent_id": "AGT-016",
+      "agent_name": "Electrical & Lighting Supplies Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "9fdb8308-4a82-4aa9-b1c4-b99041963208",
+      "category_name": "Electrical & Lighting Supplies",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-016"
+    },
+    {
+      "id": "assoc_cat-017_agt-017",
+      "status": "active",
+      "agent_id": "AGT-017",
+      "agent_name": "Hardware & Construction Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "58024f0f-52d0-4626-a252-e08356fe8b9e",
+      "category_name": "Hardware, Tools & Construction",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-017"
+    },
+    {
+      "id": "assoc_cat-018_agt-018",
+      "status": "active",
+      "agent_id": "AGT-018",
+      "agent_name": "Bakery & Pastry Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "6cb7b5d8-b372-477c-acc4-9ad9b7403ea2",
+      "category_name": "Bakery & Pastry Shop",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-018"
+    },
+    {
+      "id": "assoc_cat-019_agt-019",
+      "status": "active",
+      "agent_id": "AGT-019",
+      "agent_name": "Cafe & Coffee Shop Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "236e4d24-12b0-47a1-b658-be02ed42547f",
+      "category_name": "Cafe & Coffee Shop",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-019"
+    },
+    {
+      "id": "assoc_cat-020_agt-020",
+      "status": "active",
+      "agent_id": "AGT-020",
+      "agent_name": "Fast Food & Quick Service Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "bc657191-8372-43af-b10f-bfd4cbbe7175",
+      "category_name": "Fast Food & Quick Service",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-020"
+    },
+    {
+      "id": "assoc_cat-021_agt-021",
+      "status": "active",
+      "agent_id": "AGT-021",
+      "agent_name": "Restaurant Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "c611abf8-8757-484d-8f29-434a77c29d73",
+      "category_name": "Restaurant & Dine-In",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-021"
+    },
+    {
+      "id": "assoc_cat-022_agt-022",
+      "status": "active",
+      "agent_id": "AGT-022",
+      "agent_name": "Footwear & Shoes Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "dbad316f-8cc9-4268-ac15-17ec1e3529cc",
+      "category_name": "Footwear & Shoes",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-022"
+    },
+    {
+      "id": "assoc_cat-023_agt-023",
+      "status": "active",
+      "agent_id": "AGT-023",
+      "agent_name": "Fashion & Apparel Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "ad4ce636-f533-457b-99c4-67c9b0eb9ad1",
+      "category_name": "Fashion & Apparel Boutique",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-023"
+    },
+    {
+      "id": "assoc_cat-024_agt-024",
+      "status": "active",
+      "agent_id": "AGT-024",
+      "agent_name": "Computer & IT Hardware Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "c2dedcd2-42e2-47cc-97b5-37e818af2506",
+      "category_name": "Computer & IT Hardware",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-024"
+    },
+    {
+      "id": "assoc_cat-025_agt-025",
+      "status": "active",
+      "agent_id": "AGT-025",
+      "agent_name": "Mobile & Telecom Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "23618b13-fafd-4ecf-be01-8dc3dccb1238",
+      "category_name": "Mobile Phones & Telecommunication",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-025"
+    },
+    {
+      "id": "assoc_cat-026_agt-026",
+      "status": "active",
+      "agent_id": "AGT-026",
+      "agent_name": "Electronics & Gadgets Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "c4017b89-58b8-4942-801e-1751d56af56d",
+      "category_name": "Electronics & Gadgets",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-026"
+    },
+    {
+      "id": "assoc_cat-027_agt-027",
+      "status": "active",
+      "agent_id": "AGT-027",
+      "agent_name": "Grocery Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "6cf4123d-8cf7-4508-9968-a53231db21ed",
+      "category_name": "Grocery Store & Minimart",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-027"
+    },
+    {
+      "id": "assoc_cat-028_agt-028",
+      "status": "active",
+      "agent_id": "AGT-028",
+      "agent_name": "Supermarket & Hypermarket Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "b10a30d6-c410-4092-b2fd-630fa7d970e5",
+      "category_name": "Supermarket & Hypermarket",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-028"
+    },
+    {
+      "id": "assoc_cat-029_agt-029",
+      "status": "active",
+      "agent_id": "AGT-029",
+      "agent_name": "Pharmacy & Health Store Agent",
+      "created_at": "2026-11-05T14:59:49.263Z",
+      "is_primary": true,
+      "updated_at": "2026-11-05T14:59:49.263Z",
+      "category_id": "e8be593c-3b31-4a0b-9511-b264f540eeb9",
+      "category_name": "Pharmacy & Health Store",
+      "mapping_version": "1.0",
+      "standard_category_id": "CAT-029"
+    }
+  ],
+  "last_updated": "2026-11-06T14:46:14.352Z",
+  "version_records": [
+    {
+      "id": "ver_agt-007_1_1_0",
+      "agent_id": "AGT-007",
+      "version": "1.1.0",
+      "contract_version": "1.0",
+      "configuration": {
+        "responsibilities": [
+          "Appliance IMEI and motor serial number capture at POS checkout",
+          "Manufacturer warranty card registration and claim tracking",
+          "Home installation and technician delivery scheduling",
+          "Spare parts inventory compatibility lookup"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Home Goods",
+        "operational_boundaries": [
+          "Restricted to kitchenware, domestic appliances, and electrical home goods"
+        ]
+      },
+      "capabilities": [
+        "inventory.serial_lookup",
+        "pos.warranty_issuance",
+        "purchasing.spare_parts"
+      ],
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "configuration_hash": "bc595e78d04c155ff1df4f8a0c3c4850db630ca310ac4ac956c36f742503a34b",
+      "status": "active",
+      "change_type": "rollback",
+      "change_summary": "Rollback restoration based on historical version 1.0.0. Reason: Reverting motor warranty checklist for certification audit",
+      "created_at": "2026-11-06T14:46:14.342Z",
+      "created_by": "admin",
+      "created_by_email": "compliance@geflow.app",
+      "approved_at": "2026-11-06T14:46:14.342Z",
+      "approved_by": "compliance@geflow.app",
+      "previous_version_id": "ver_agt-007_1_0_1",
+      "rollback_source_version_id": "ver_agt-007_1_0_0",
+      "published_at": "2026-11-06T14:46:14.345Z",
+      "published_by": "compliance@geflow.app"
+    },
+    {
+      "id": "ver_agt-007_1_0_1",
+      "agent_id": "AGT-007",
+      "version": "1.0.1",
+      "contract_version": "1.0",
+      "configuration": {
+        "responsibilities": [
+          "Appliance warranty audit",
+          "Motor serial lookup"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Home Goods",
+        "operational_boundaries": [
+          "Restricted to kitchenware, domestic appliances, and electrical home goods"
+        ]
+      },
+      "capabilities": [
+        "inventory.serial_lookup",
+        "pos.warranty_issuance",
+        "purchasing.spare_parts"
+      ],
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "configuration_hash": "682fdf2757b138050e2d3ba77c13f05cbba47a032f2da0bcbe25db951361b1b1",
+      "status": "superseded",
+      "change_type": "patch",
+      "change_summary": "Added appliance motor warranty checklist",
+      "created_at": "2026-11-06T14:46:14.313Z",
+      "created_by": "admin",
+      "created_by_email": "appliance-lead@geflow.app",
+      "previous_version_id": "ver_agt-007_1_0_0",
+      "approved_at": "2026-11-06T14:46:14.320Z",
+      "approved_by": "qa-admin@geflow.app",
+      "published_at": "2026-11-06T14:46:14.336Z",
+      "published_by": "admin@geflow.app"
+    },
+    {
+      "id": "ver_agt-005_1_2_0",
+      "agent_id": "AGT-005",
+      "version": "1.2.0",
+      "contract_version": "1.0",
+      "configuration": {
+        "responsibilities": [
+          "Pet species and age-specific food rotation audits",
+          "Vaccine cold-chain and expiration alert management",
+          "Pet grooming appointment and consumable tracking",
+          "Pet owner loyalty and recurring preventative replenishment"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Pet Care",
+        "operational_boundaries": [
+          "Restricted to veterinary, pet care, animal feed, and grooming inventory",
+          "Cannot prescribe controlled veterinary pharmaceuticals without licensed doctor credentialing"
+        ]
+      },
+      "capabilities": [
+        "inventory.vaccine_expiry",
+        "pos.service_booking",
+        "purchasing.feed_bulk"
+      ],
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "configuration_hash": "71e4b4c0e99a69f5d6f3177cf401551c12ff156303dc1bbe2405ffaa5375650e",
+      "status": "active",
+      "change_type": "rollback",
+      "change_summary": "Rollback restoration based on historical version 1.0.0. Reason: Rollback exotic guidelines for compliance review",
+      "created_at": "2026-11-06T14:45:25.243Z",
+      "created_by": "admin",
+      "created_by_email": "compliance@geflow.app",
+      "approved_at": "2026-11-06T14:45:25.243Z",
+      "approved_by": "compliance@geflow.app",
+      "previous_version_id": "ver_agt-005_1_1_0",
+      "rollback_source_version_id": "ver_agt-005_1_0_0",
+      "published_at": "2026-11-06T14:45:25.246Z",
+      "published_by": "compliance@geflow.app"
+    },
+    {
+      "id": "ver_agt-005_1_1_0",
+      "agent_id": "AGT-005",
+      "version": "1.1.0",
+      "contract_version": "1.0",
+      "configuration": {
+        "responsibilities": [
+          "Pet species and age-specific food rotation audits",
+          "Vaccine cold-chain and expiration alert management",
+          "Pet grooming appointment and consumable tracking",
+          "Pet owner loyalty and recurring preventative replenishment"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Pet Care",
+        "operational_boundaries": [
+          "Restricted to veterinary, pet care, animal feed, and grooming inventory",
+          "Cannot prescribe controlled veterinary pharmaceuticals without licensed doctor credentialing"
+        ]
+      },
+      "capabilities": [
+        "inventory.vaccine_expiry",
+        "pos.service_booking",
+        "purchasing.feed_bulk"
+      ],
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "configuration_hash": "45e7abedeacf76f053ad1296656271a44f42e32c122d0a5eb49bbf4c710818f9",
+      "status": "superseded",
+      "change_type": "rollback",
+      "change_summary": "Rollback restoration based on historical version 1.0.0. Reason: Rollback exotic guidelines for compliance review",
+      "created_at": "2026-11-05T15:18:58.040Z",
+      "created_by": "admin",
+      "created_by_email": "compliance@geflow.app",
+      "approved_at": "2026-11-05T15:18:58.040Z",
+      "approved_by": "compliance@geflow.app",
+      "previous_version_id": "ver_agt-005_1_0_1",
+      "rollback_source_version_id": "ver_agt-005_1_0_0",
+      "published_at": "2026-11-05T15:18:58.044Z",
+      "published_by": "compliance@geflow.app"
+    },
+    {
+      "id": "ver_agt-005_1_0_1",
+      "agent_id": "AGT-005",
+      "version": "1.0.1",
+      "contract_version": "1.0",
+      "configuration": {
+        "responsibilities": [
+          "Exotic pet care",
+          "Standard veterinary supplies"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Pet Care",
+        "operational_boundaries": [
+          "Restricted to veterinary, pet care, animal feed, and grooming inventory",
+          "Cannot prescribe controlled veterinary pharmaceuticals without licensed doctor credentialing"
+        ]
+      },
+      "capabilities": [
+        "inventory.vaccine_expiry",
+        "pos.service_booking",
+        "purchasing.feed_bulk"
+      ],
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "configuration_hash": "b96cb2530f7ed9fe872f7c95288807240bcdd530e1ff48d7d99f760292315b04",
+      "status": "superseded",
+      "change_type": "patch",
+      "change_summary": "Added exotic reptile dietary guidelines",
+      "created_at": "2026-11-05T15:18:57.992Z",
+      "created_by": "admin",
+      "created_by_email": "vet-lead@geflow.app",
+      "previous_version_id": "ver_agt-005_1_0_0",
+      "approved_at": "2026-11-05T15:18:58.024Z",
+      "approved_by": "qa-admin@geflow.app",
+      "published_at": "2026-11-05T15:18:58.030Z",
+      "published_by": "admin@geflow.app"
+    },
+    {
+      "id": "ver_agt-029_1_1_0",
+      "status": "active",
+      "version": "1.1.0",
+      "agent_id": "AGT-029",
+      "created_at": "2026-11-05T15:17:13.594Z",
+      "created_by": "a375b057-debe-4239-9549-9f83b5557df2",
+      "approved_at": "2026-11-05T15:17:13.594Z",
+      "approved_by": "gepardwebs@gmail.com",
+      "change_type": "rollback",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.drug_batch_expiry",
+        "pos.formula_generic_sub",
+        "purchasing.pharma_distributor",
+        "reports.controlled_substance_log"
+      ],
+      "published_at": "2026-11-05T15:17:13.595Z",
+      "published_by": "gepardwebs@gmail.com",
+      "configuration": {
+        "responsibilities": [
+          "Active ingredient / formula generic brand substitution lookup",
+          "Prescription medicine batch number and expiry date enforcement at checkout",
+          "Short-expiry medicine return to pharmaceutical distributor alerting",
+          "Narcotic and scheduled medicine dispensing register audits"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Pharmacy",
+        "operational_boundaries": [
+          "Restricted strictly to pharmaceutical, clinical wellness, and licensed OTC medicines",
+          "Cannot override required prescription check for scheduled drugs without licensed pharmacist credentialing",
+          "No access to unrelated retail or dining domains"
+        ]
+      },
+      "change_summary": "Rollback restoration based on historical version 1.0.0. Reason: Reverting cold-chain threshold update for revision",
+      "contract_version": "1.0",
+      "created_by_email": "gepardwebs@gmail.com",
+      "configuration_hash": "9e1fefa8b68d389591475e0aa68b0831f4352fef96f9934c6b3ef6f1b873559e",
+      "previous_version_id": "ver_agt-029_1_0_1",
+      "rollback_source_version_id": "ver_agt-029_1_0_0"
+    },
+    {
+      "id": "ver_agt-029_1_0_1",
+      "status": "superseded",
+      "version": "1.0.1",
+      "agent_id": "AGT-029",
+      "created_at": "2026-11-05T15:17:13.573Z",
+      "created_by": "a375b057-debe-4239-9549-9f83b5557df2",
+      "approved_at": "2026-11-05T15:17:13.580Z",
+      "approved_by": "gepardwebs@gmail.com",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.drug_batch_expiry",
+        "pos.formula_generic_sub",
+        "purchasing.pharma_distributor",
+        "reports.controlled_substance_log"
+      ],
+      "published_at": "2026-11-05T15:17:13.585Z",
+      "published_by": "gepardwebs@gmail.com",
+      "configuration": {
+        "responsibilities": [
+          "Drug schedule verification",
+          "Prescription expiry compliance",
+          "Cold chain alert 2-8C"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Pharmacy",
+        "operational_boundaries": [
+          "Restricted strictly to pharmaceutical, clinical wellness, and licensed OTC medicines",
+          "Cannot override required prescription check for scheduled drugs without licensed pharmacist credentialing",
+          "No access to unrelated retail or dining domains"
+        ]
+      },
+      "change_summary": "Updated antibiotic temperature storage notice",
+      "contract_version": "1.0",
+      "created_by_email": "gepardwebs@gmail.com",
+      "configuration_hash": "5e156776356f6b5367dc9a8703546a400e28e09051ca09ba51d9a6a64122cc19",
+      "previous_version_id": "ver_agt-029_1_0_0"
+    },
+    {
+      "id": "ver_agt-001_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-001",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.audit",
+        "pos.basket_analysis",
+        "purchasing.reorder_forecast",
+        "reports.department_velocity"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Departmental turnover velocity monitoring",
+          "Multi-variant SKU and barcode catalog management",
+          "Seasonal reorder point optimization",
+          "Cashier basket size and line-item promotion audits"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports",
+          "analytics"
+        ],
+        "specialized_domain": "Retail",
+        "operational_boundaries": [
+          "Restricted strictly to General Retail catalog and store parameters",
+          "No access to prescription pharmaceutical databases or clinical drug contraindications",
+          "Cannot modify store billing plans or external tenant configurations"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "efb54fd6a72429662b818818df110a95837fd2263d30fd33d38cf5d8d75888ef"
+    },
+    {
+      "id": "ver_agt-002_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-002",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.batch_tracking",
+        "pos.bulk_weighing",
+        "purchasing.seasonal_buffer",
+        "reports.crop_cycle"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Agricultural planting season inventory planning",
+          "Chemical and fertilizer batch tracking with regulatory expiry",
+          "Bulk UoM conversions (bags, quintals, metric tons)",
+          "Farmer seasonal credit khata balancing"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Agriculture",
+        "operational_boundaries": [
+          "Restricted to agricultural supplies, fertilizers, feeds, and farm equipment",
+          "Cannot approve chemical dispensing without documented safety data sheets",
+          "No access to non-farming retail contexts"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "9d7b20c8ba7608d43dd2926f27b0752e57e6353693b602034d5424af64d337f0"
+    },
+    {
+      "id": "ver_agt-003_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-003",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "purchases.manage",
+        "reports.read",
+        "analytics.read"
+      ],
+      "capabilities": [
+        "inventory.pallet_tracking",
+        "pos.tiered_pricing",
+        "purchasing.supplier_contract",
+        "analytics.debtor_aging"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Case, carton, and pallet tier pricing calculations",
+          "Warehouse bin locations and replenishment velocity",
+          "High-volume trade debtor credit terms & aging reports",
+          "Supplier PO delivery reconciliation"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports",
+          "analytics"
+        ],
+        "specialized_domain": "Wholesale",
+        "operational_boundaries": [
+          "Restricted to wholesale and B2B distribution channels",
+          "Cannot dispatch orders exceeding maximum verified distributor credit lines without explicit manager authorization"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "758fd34f5962c26bff7664f67d0bb0bd2c93e533a4af84363f29d7a976406b47"
+    },
+    {
+      "id": "ver_agt-004_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-004",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.rx_matrix",
+        "pos.optical_order",
+        "purchasing.lab_work_order"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Patient optical prescription indexing and job order routing",
+          "Designer frame inventory serialization",
+          "Contact lens power and expiry matrix checks",
+          "Optical lab grinding and lens assembly status updates"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Optical",
+        "operational_boundaries": [
+          "Restricted to eyewear, optical lenses, and clinic dispensary supplies",
+          "Cannot dispense lenses without valid validated optical prescription parameters"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "59cf91a1e6f47b17e45877b1e45a0ab398f0a62564d628db66d749bd8d48b7c7"
+    },
+    {
+      "id": "ver_agt-005_1_0_0",
+      "status": "superseded",
+      "version": "1.0.0",
+      "agent_id": "AGT-005",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.vaccine_expiry",
+        "pos.service_booking",
+        "purchasing.feed_bulk"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Pet species and age-specific food rotation audits",
+          "Vaccine cold-chain and expiration alert management",
+          "Pet grooming appointment and consumable tracking",
+          "Pet owner loyalty and recurring preventative replenishment"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Pet Care",
+        "operational_boundaries": [
+          "Restricted to veterinary, pet care, animal feed, and grooming inventory",
+          "Cannot prescribe controlled veterinary pharmaceuticals without licensed doctor credentialing"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "71e4b4c0e99a69f5d6f3177cf401551c12ff156303dc1bbe2405ffaa5375650e"
+    },
+    {
+      "id": "ver_agt-006_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-006",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.supplement_tracking",
+        "pos.team_order",
+        "purchasing.equipment_po"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Sports gear size/weight matrix (dumbbells, weights, resistance)",
+          "Dietary protein and supplement expiry date monitoring",
+          "Gym machine warranty and maintenance scheduling",
+          "Athletic team kit custom printing orders"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Sports",
+        "operational_boundaries": [
+          "Restricted to athletic equipment, fitness gear, and verified nutritional supplements"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "69c2d840e81a0c34d9eda205a5190780f91589d0f5acf1cc95a6a9a49098694d"
+    },
+    {
+      "id": "ver_agt-007_1_0_0",
+      "status": "superseded",
+      "version": "1.0.0",
+      "agent_id": "AGT-007",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.serial_lookup",
+        "pos.warranty_issuance",
+        "purchasing.spare_parts"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Appliance IMEI and motor serial number capture at POS checkout",
+          "Manufacturer warranty card registration and claim tracking",
+          "Home installation and technician delivery scheduling",
+          "Spare parts inventory compatibility lookup"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Home Goods",
+        "operational_boundaries": [
+          "Restricted to kitchenware, domestic appliances, and electrical home goods"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "bc595e78d04c155ff1df4f8a0c3c4850db630ca310ac4ac956c36f742503a34b"
+    },
+    {
+      "id": "ver_agt-008_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-008",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.dimension_calc",
+        "pos.custom_order",
+        "purchasing.timber_fabric"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Furniture set grouping (dining tables with chairs, sofa combinations)",
+          "Custom upholstery fabric swatch selection and custom order lead times",
+          "Warehouse bulk storage footprint and dimension management",
+          "Delivery and assembly team work-order assignment"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Furniture",
+        "operational_boundaries": [
+          "Restricted to home furniture, interior decor, and living accessories"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "8a0ba8d0b4a13984befbfbf6d94d01e08f41b2fb892ab07ea255b1508145a517"
+    },
+    {
+      "id": "ver_agt-009_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-009",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.gold_rate_calc",
+        "pos.gemstone_cert",
+        "purchasing.bullion_lot"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Live gold karat pricing (24K, 22K, 18K) plus artisan making charge audits",
+          "Certified gemstone carat, color, clarity, and cut indexing",
+          "Serial numbered Swiss luxury watch provenance tracking",
+          "High-security vault inventory audit reconciliation"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Jewelry",
+        "operational_boundaries": [
+          "Restricted to fine jewelry, precious metals, gems, and horology",
+          "Cannot alter metal scrap valuations without supervisor verification"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "2daec772b50bd489eeb137563c7203ec0833132a943cfeb3accac6fbab7e3261"
+    },
+    {
+      "id": "ver_agt-010_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-010",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.isbn_lookup",
+        "pos.curriculum_bundle",
+        "purchasing.consignment_return"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "ISBN-13 barcode lookups and author/edition indexing",
+          "School textbook season bundling and student kit assembly",
+          "Publisher sale-or-return consignment reconciliations",
+          "Office stationery pack sales tracking"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Books & Stationery",
+        "operational_boundaries": [
+          "Restricted to books, print media, school supplies, and office stationery"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "cea7d8e736518a1b2e05f50497a5fc173a7498f07ae4ff5595b2b6a95c18d501"
+    },
+    {
+      "id": "ver_agt-011_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-011",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.consumable_mix",
+        "pos.appointment_split",
+        "reports.stylist_commission"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Stylist chair booking and schedule management",
+          "Hair dye color tube and developer dispensing volume control",
+          "Stylist commission calculation based on ticket totals",
+          "Salon retail shampoo/conditioner homecare cross-sells"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "reports"
+        ],
+        "specialized_domain": "Salon",
+        "operational_boundaries": [
+          "Restricted to hair styling services, barber treatments, and professional haircare products"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "0bba4fb23209635ccff01d2a49cf33cc4f23ad9274eb4a899a6105e90b6d14d4"
+    },
+    {
+      "id": "ver_agt-012_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-012",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.shade_matrix",
+        "pos.tester_audit",
+        "purchasing.beauty_distributor"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Lipstick/foundation color shade and undertone matrix indexing",
+          "Skincare PAO (Period After Opening) and batch shelf-life alerts",
+          "Counter tester and sample sachet shrinkage control",
+          "Beauty influencer and brand bundle promotions"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Beauty",
+        "operational_boundaries": [
+          "Restricted to skincare, makeup, fragrances, and personal beauty supplies"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "d5ba3c7568dfcda0eadfcbcc98e988c02789b7ca6efafd4280a95e8a1ca59664"
+    },
+    {
+      "id": "ver_agt-013_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-013",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "pos.job_card",
+        "inventory.parts_usage",
+        "reports.mechanic_hours"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Repair Job Card generation and vehicle mileage/VIN documentation",
+          "Technician labor hour rates and workshop bay utilization",
+          "Parts installed vs. outsourced lathe/machining charges",
+          "Vehicle periodic service reminder SMS/WhatsApp triggers"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "reports"
+        ],
+        "specialized_domain": "Repair Shop",
+        "operational_boundaries": [
+          "Restricted to vehicle maintenance, garage repair work, and mechanical operations"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "d0e2a1002acfbdf9d9592f4f716d10d85d70a8e9cc89b66f2c71a913b58a5faa"
+    },
+    {
+      "id": "ver_agt-014_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-014",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.vin_fitment",
+        "pos.core_deposit",
+        "purchasing.oem_aftermarket"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Vehicle Make, Model, Year, Engine code parts fitment verification",
+          "OEM genuine vs. aftermarket alternative catalog matching",
+          "Old core component (alternator, battery) exchange deposit handling",
+          "Critical fast-moving wear parts (brake pads, filters, spark plugs) reorder curves"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Automotive",
+        "operational_boundaries": [
+          "Restricted to automotive spare parts, fluids, tires, and vehicle accessories"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "027055033c40e0d7c758f35672f71b47dfbb4dcda39dbc2eba7b4dc9c2796f77"
+    },
+    {
+      "id": "ver_agt-015_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-015",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.pipe_schedule",
+        "pos.contractor_quote",
+        "purchasing.bulk_fittings"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Pipe sizing, standard schedule (Sch 40/80), and fitting thread compatibility",
+          "Contractor plumbing bill-of-materials (BOM) quote builder",
+          "Water pump head/flow specifications and warranty registration",
+          "Bathroom ceramic finish matching (matte, chrome, brushed gold)"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Plumbing",
+        "operational_boundaries": [
+          "Restricted to plumbing supplies, pipes, sanitary fixtures, and pumps"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "6749880cbd5adc9cd4fe1f52dd34b7685b31c01610753efdb9a1264083163f05"
+    },
+    {
+      "id": "ver_agt-016_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-016",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.reel_cutting",
+        "pos.electrician_rebate",
+        "purchasing.lighting_specs"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Electric cable reel meters-to-coils automated deduction on sale",
+          "Circuit breaker amp curves, distribution board modular capacity",
+          "Commercial LED lumens, wattage, and color Kelvin (3000K-6500K) matching",
+          "Electrician trade discount and annual rebate tracking"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Electrical",
+        "operational_boundaries": [
+          "Restricted to electrical cabling, switches, lighting, and power components"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "840e3294dcd4bb0e0897a868cdfea7d8b3e2999e02ff27cf62a30ed674f31d63"
+    },
+    {
+      "id": "ver_agt-017_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-017",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.weight_piece_convert",
+        "pos.jobsite_dispatch",
+        "purchasing.steel_cement"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Power tool tool-body vs. battery kit inventory tracking",
+          "Screws, nails, and bolts sold by kilogram or counted piece packs",
+          "Construction cement bags and steel rebar ton calculations",
+          "Construction jobsite dump truck delivery scheduling"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Hardware",
+        "operational_boundaries": [
+          "Restricted to hardware, construction tools, masonry, and civil supplies"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "6e2b36a55bb0655defb9c7782820e1b4f71f73a90ebb75381c0f580c5c3374d6"
+    },
+    {
+      "id": "ver_agt-018_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-018",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.recipe_depletion",
+        "pos.custom_cake",
+        "reports.daily_waste"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Morning and evening bake batch yield calculations",
+          "Recipe raw flour, yeast, and butter inventory auto-depletion",
+          "Custom birthday and wedding cake deposit and design notes",
+          "End-of-day fresh pastry markdown and food waste ledger audits"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Bakery",
+        "operational_boundaries": [
+          "Restricted to bakery goods, patisserie, and confectionary operations"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "7eecccaf8026c49f569623756647fdc55d89107c3d5d2ee18d9a78e36012b931"
+    },
+    {
+      "id": "ver_agt-019_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-019",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.bean_batch",
+        "pos.beverage_modifier",
+        "reports.peak_hours"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Espresso shot recipe bean weight to grinder calibration checks",
+          "Milk and alternative oat/almond milk refrigerated inventory",
+          "Barista beverage modifier pricing (+Syrup, +Extra Shot, Decaf)",
+          "Peak morning rush speed-of-service checkout optimization"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "reports"
+        ],
+        "specialized_domain": "Cafe",
+        "operational_boundaries": [
+          "Restricted to cafe beverages, specialty coffee, tea, and grab-and-go snacks"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "bd5aae21ad54d54639a36c8c1467e9aba28f280699c7785c2c589a22a6d7b732"
+    },
+    {
+      "id": "ver_agt-020_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-020",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "pos.combo_builder",
+        "inventory.made_on_order",
+        "reports.speed_of_service"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Combo deal grouping (Burger + Fries + Drink) with automatic savings calculation",
+          "Live cooking made-on-order items (Burgers, Fries) bypassing zero inventory limits",
+          "Kitchen printer / screen routing by station (Fryer vs. Grill)",
+          "High-throughput cashier drawer shift change audits"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "reports"
+        ],
+        "specialized_domain": "Fast Food",
+        "operational_boundaries": [
+          "Restricted to quick service, burger joints, fried chicken, and takeaway counters"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "da8fef7bcc940a78f00099cc4fe6157c978913f644561c396b42aaf05e658cf5"
+    },
+    {
+      "id": "ver_agt-021_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-021",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "pos.table_management",
+        "pos.kot_routing",
+        "inventory.perishable_meat",
+        "reports.cover_analytics"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Dine-in floor map table occupancy and guest cover counts",
+          "Kitchen Order Ticket (KOT) multi-course printing (Appetizers then Mains)",
+          "Table bill splitting across guests or payment methods (Cash/Card)",
+          "Perishable meat and produce cold-storage shrinkage audits"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "reports"
+        ],
+        "specialized_domain": "Restaurant",
+        "operational_boundaries": [
+          "Restricted to dine-in restaurants, food courses, bar menus, and hospitality catering",
+          "No access to pharmacy, automotive or external commercial retail domains"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "80314c93e7d6708e97ff69c7e4a188f9d1638d7f73a2ba2378ba7e2347ecf829"
+    },
+    {
+      "id": "ver_agt-022_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-022",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.size_matrix",
+        "pos.broken_size_sale",
+        "purchasing.case_size_run"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Footwear Size matrix (US 7 to 13, UK 6 to 12, EU 40 to 46) synchronization",
+          "Shoe box barcode tracking to ensure single-pair matching",
+          "Shoe polish, waterproof sprays, and insole counter cross-selling",
+          "End-of-season broken-size clearance markdown audits"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Footwear",
+        "operational_boundaries": [
+          "Restricted to footwear, athletic sneakers, formal shoes, and leather footwear care"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "9b56dd60e23c2dfb2ad815bde530e1a1ea757a9d2fa898001482ed0d55242ea9"
+    },
+    {
+      "id": "ver_agt-023_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-023",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.color_size_matrix",
+        "pos.alteration_slip",
+        "reports.sell_through_rate"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Apparel SKU Matrix: Master Style -> Color -> Size SKU generation",
+          "Seasonal fashion collections (Spring/Summer, Autumn/Winter) lifecycle tracking",
+          "Garment alteration and tailoring pickup receipts",
+          "Fashion accessory attachment rates (belts, scarves, jewelry)"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Boutique",
+        "operational_boundaries": [
+          "Restricted to fashion garments, apparel, designer clothing, and fashion accessories"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "8ea45da04cd172a264886a90e51a52b034fee17cb296b5bbebfcaab94fbe9ac0"
+    },
+    {
+      "id": "ver_agt-024_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-024",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.pc_compatibility",
+        "pos.serial_warranty",
+        "purchasing.it_distributor"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "PC Builder Compatibility: CPU socket, chipset, RAM DDR generation, and GPU clearance checks",
+          "Storage, RAM, and graphics card serial number tracking on purchase and sale",
+          "Software licensing keys and OEM activation tracking",
+          "IT repair bench diagnostics and hardware upgrade billing"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "IT Store",
+        "operational_boundaries": [
+          "Restricted to computer hardware, IT peripherals, networking, and server components"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "27e6fabef86d856088d681323b153026930f2bd62305817215b6d892dfc4423c"
+    },
+    {
+      "id": "ver_agt-025_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-025",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.imei_validation",
+        "pos.trade_in_audit",
+        "purchasing.mobile_wholesaler"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "IMEI-1 and IMEI-2 registration at intake and POS invoice printing",
+          "Used phone trade-in functional checklist (Battery health, FaceID, Cameras)",
+          "Mobile screen and battery replacement repair tickets",
+          "Tempered glass and phone case margin optimization"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Mobile Shop",
+        "operational_boundaries": [
+          "Restricted to smartphones, tablets, mobile accessories, and mobile repair services"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "0c4e80ebcf6066e7dcd2fc40056e80f02b07b52518a35201ba48ea9eea8ca249"
+    },
+    {
+      "id": "ver_agt-026_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-026",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read",
+        "analytics.read"
+      ],
+      "capabilities": [
+        "inventory.tech_specs",
+        "pos.extended_warranty",
+        "analytics.gadget_velocity"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Audio and wearable technology specification matrix (Bluetooth codec, battery life)",
+          "Smart home ecosystem compatibility (Matter, Zigbee, WiFi)",
+          "Tech gadget rapid price depreciation and clearance reorder rules",
+          "Customer replacement and manufacturer warranty return processing"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports",
+          "analytics"
+        ],
+        "specialized_domain": "Electronics",
+        "operational_boundaries": [
+          "Restricted to consumer gadgets, smart electronics, headphones, and gaming gear"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "329e12e22620fed05e3ff219a339ea122ff609408c93e4504cac8dd95e0134cc"
+    },
+    {
+      "id": "ver_agt-027_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-027",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.fmcg_expiry",
+        "pos.weigh_scale_barcode",
+        "pos.khata_balance",
+        "purchasing.staple_buffer"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "FMCG staple commodity velocity (Rice, Flour, Cooking Oil, Lentils)",
+          "Daily fresh bread and dairy delivery reconciliation",
+          "Neighborhood customer credit khata balancing and statement generation",
+          "Loose weighed products pricing from scale barcodes (EAN-13 variable weight)"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Grocery",
+        "operational_boundaries": [
+          "Restricted to neighborhood grocery, minimart, and FMCG convenience store operations",
+          "No pharmaceutical dispensing access"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "b5de2826cc30b3fc64577d8c6daf35f36c65c0697e30b8967f03d319de0308c6"
+    },
+    {
+      "id": "ver_agt-028_1_0_0",
+      "status": "active",
+      "version": "1.0.0",
+      "agent_id": "AGT-028",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.planogram_velocity",
+        "pos.multi_lane_throughput",
+        "purchasing.central_dc_order"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Aisle and shelf planogram restock velocity",
+          "Multi-lane POS cashier scanning speed and lane balancing",
+          "Weekly promotional catalog and gondola end-cap margin analysis",
+          "Cross-department shrinkage (Fresh Produce vs. Packaged Foods) monitoring"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Supermarket",
+        "operational_boundaries": [
+          "Restricted to large-format supermarket and hypermarket retail operations"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "490dc9877e119598f6e1a10f9bcea0267c4afa914b9b4067ecb082eb13fac228"
+    },
+    {
+      "id": "ver_agt-029_1_0_0",
+      "status": "superseded",
+      "version": "1.0.0",
+      "agent_id": "AGT-029",
+      "created_at": "2026-11-05T15:15:20.347Z",
+      "created_by": "system_master_seed",
+      "approved_at": "2026-11-05T15:15:20.347Z",
+      "approved_by": "system_master_seed",
+      "change_type": "patch",
+      "permissions": [
+        "inventory.read",
+        "inventory.manage",
+        "pos.read",
+        "purchases.read",
+        "returns.read",
+        "reports.read"
+      ],
+      "capabilities": [
+        "inventory.drug_batch_expiry",
+        "pos.formula_generic_sub",
+        "purchasing.pharma_distributor",
+        "reports.controlled_substance_log"
+      ],
+      "published_at": "2026-11-05T15:15:20.347Z",
+      "published_by": "system_master_seed",
+      "configuration": {
+        "responsibilities": [
+          "Active ingredient / formula generic brand substitution lookup",
+          "Prescription medicine batch number and expiry date enforcement at checkout",
+          "Short-expiry medicine return to pharmaceutical distributor alerting",
+          "Narcotic and scheduled medicine dispensing register audits"
+        ],
+        "default_risk_tier": "low",
+        "supported_modules": [
+          "dashboard",
+          "inventory",
+          "pos",
+          "purchases",
+          "returns",
+          "reports"
+        ],
+        "specialized_domain": "Pharmacy",
+        "operational_boundaries": [
+          "Restricted strictly to pharmaceutical, clinical wellness, and licensed OTC medicines",
+          "Cannot override required prescription check for scheduled drugs without licensed pharmacist credentialing",
+          "No access to unrelated retail or dining domains"
+        ]
+      },
+      "change_summary": "Initial baseline configuration v1.0.0",
+      "contract_version": "1.0",
+      "created_by_email": "system@geflow.app",
+      "configuration_hash": "349e531f8de384506d03a9d043ec288ec8c94d8a6b68ca817abda016734a1314"
+    }
+  ],
+  "contract_versions": [
+    {
+      "contract_version_id": "contract_v1_0",
+      "version": "1.0",
+      "schema_definition": {
+        "request_envelope_version": "1.0",
+        "response_envelope_version": "1.0",
+        "required_context_fields": [
+          "tenant",
+          "agent",
+          "actor",
+          "request"
+        ],
+        "allowed_risk_tiers": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "compatibility_policy": "backward_compatible",
+      "status": "active",
+      "created_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_architecture",
+      "change_summary": "Initial standardized contract specification v1.0"
+    }
+  ]
+}

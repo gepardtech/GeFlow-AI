@@ -1,0 +1,728 @@
+# Step 08 — Agent Registry Backend Implementation
+
+## 1. Objective
+
+Implement the finalized 29-agent master registry in the existing GeFlow backend.
+
+The registry will become the authoritative backend source for identifying, configuring, mapping, validating, retrieving and managing GeFlow's specialized business-category agents.
+
+This implementation must follow the previously finalized documents:
+
+1. Step 04 — 29-Agent Master Registry Finalization.
+2. Step 05 — Category-to-Agent Mapping Definition.
+3. Step 06 — Agent Contract & Runtime Specification Finalization.
+4. Step 07 — Organization-Level & Category-Level Authorization Implementation.
+
+**Primary objective:** Convert the approved registry specification into a working, persistent, validated backend system without prematurely implementing agent execution, AI orchestration or agent-to-agent communication.
+
+---
+
+## 2. Scope and implementation boundaries
+
+### Included in this step
+
+- Inspect the existing backend and database architecture.
+- Implement persistent agent registry storage.
+- Register all 29 finalized agents.
+- Implement category-to-agent registry associations.
+- Implement registry validation and integrity constraints.
+- Implement backend services for registry operations.
+- Implement authorized registry retrieval and management endpoints, where the existing API architecture supports them.
+- Integrate organization/category authorization from Step 07, after verifying its actual implementation.
+- Implement agent status and configuration management.
+- Implement registry versioning and audit logging where supported by the existing architecture.
+- Add automated tests and regression tests.
+- Document actual implementation and outstanding limitations.
+
+### Explicitly excluded
+
+Do not implement any of the following in this step:
+
+- AI agent runtime or execution engine.
+- Agent reasoning, task execution or autonomous operations.
+- AI model integrations or provider selection.
+- Agent-to-agent communication or delegation.
+- Central AI orchestrator.
+- Agent memory or conversation storage.
+- Category-specific business workflows.
+- New POS, inventory, purchasing or reporting features.
+- Agent dashboard or registry management UI.
+- Billing, subscription or pricing restrictions.
+- New authentication or authorization framework.
+- Deployment of 29 separate AI models or servers.
+
+These are separate concerns and must not be bundled into this implementation.
+
+---
+
+## 3. Mandatory pre-implementation inspection
+
+Before modifying anything, inspect the actual GeFlow project.
+
+Do not assume the technology stack or database provider based on earlier discussions.
+
+### 3.1 Backend architecture
+
+Identify:
+
+- Actual application framework and version.
+- Backend architecture and service organization.
+- Existing API conventions.
+- Existing database client and connection configuration.
+- Existing migration mechanism.
+- Existing validation and error-handling patterns.
+- Existing logging and audit infrastructure.
+- Existing environment configuration.
+- Existing automated testing framework.
+
+### 3.2 Existing database
+
+Inspect:
+
+- Existing organization/business tables or collections.
+- Existing category tables or collections.
+- Existing agent-related tables, collections or configuration objects.
+- Existing user and membership relationships.
+- Existing database constraints and indexes.
+- Existing migration history.
+- Existing authorization policies.
+
+Determine whether a registry structure already exists.
+
+If an equivalent implementation exists, extend or correct it instead of creating duplicate tables, collections, services or endpoints.
+
+### 3.3 Previous-step verification
+
+Verify the actual availability of:
+
+- The finalized 29-agent registry specification.
+- Category-to-agent mapping.
+- Agent contract and configuration structure.
+- Organization-level authorization.
+- Category-level authorization.
+
+Do not assume Step 07 was successfully implemented merely because its implementation instructions were prepared.
+
+If the authorization layer is incomplete, preserve the dependency and report it. Do not create a second authorization framework as a workaround.
+
+---
+
+## 4. Registry architecture
+
+Implement a centralized, persistent registry with logical separation between:
+
+1. Agent identity.
+2. Agent configuration.
+3. Category association.
+4. Agent lifecycle status.
+5. Registry version information.
+6. Organization-specific agent access, if required by the existing authorization model.
+
+The architecture must support all 29 specialized agents through a common registry contract.
+
+### 4.1 Core architecture
+
+Conceptual architecture:
+
+```mermaid
+flowchart TD
+    A[GeFlow Backend] --> B[Agent Registry Service]
+    B --> C[Registry Validation]
+    C --> D[Agent Registry Storage]
+    B --> E[Category Mapping Service]
+    E --> F[Existing Category Data]
+    B --> G[Authorization Layer]
+    G --> H[Organization and Category Permissions]
+    B --> I[Registry API]
+    I --> J[Authorized Backend Consumers]
+```
+
+This is an architectural representation, not a request to create an entirely new backend framework.
+
+Reuse existing application architecture wherever possible.
+
+---
+
+## 5. Agent registry data model
+
+Implement the registry using the database conventions and naming standards already present in GeFlow.
+
+The following is the logical data model. Actual table names, field types and relationships must follow the inspected database architecture.
+
+### 5.1 Core agent registry
+
+Each agent must have a persistent registry record.
+
+| Field | Purpose |
+|---|---|
+| id | Internal primary identifier |
+| agent_id | Permanent identifier, e.g. AGT-001 |
+| name | Official agent name |
+| description | Agent's functional purpose |
+| agent_type | Specialized business-category agent |
+| primary_category_id | Associated primary category |
+| status | Current lifecycle status |
+| version | Agent configuration version |
+| contract_version | Compatible agent contract version |
+| configuration | Validated agent configuration |
+| capabilities | Declared capability identifiers |
+| permissions | Declared permission references |
+| created_at | Creation timestamp |
+| updated_at | Last update timestamp |
+| created_by | Creating user/system reference |
+| updated_by | Last updating user/system reference |
+
+Requirements:
+
+- `agent_id` must be unique.
+- IDs must remain stable across configuration updates.
+- All 29 finalized agents must be represented.
+- Category references must resolve against actual category records or the established category identifier system.
+- Configuration must be validated before persistence.
+- Sensitive credentials, API keys and secrets must never be stored in ordinary agent configuration fields.
+- Do not store organization-specific private context in global registry records.
+
+If the actual application uses JSONB, document storage or another configuration mechanism, follow the existing database design.
+
+### 5.2 Category-to-agent association
+
+Implement the association between GeFlow categories and their primary agents.
+
+Required logical fields:
+
+| Field | Purpose |
+|---|---|
+| id | Association identifier |
+| category_id | Existing GeFlow category identifier |
+| agent_id | Associated agent identifier |
+| is_primary | Whether this is the primary agent |
+| mapping_version | Mapping version |
+| status | Active or inactive association |
+| created_at | Creation timestamp |
+| updated_at | Last update timestamp |
+
+Integrity requirements:
+
+- Every finalized category must have its correct primary agent.
+- Every agent must have its correct primary category.
+- The initial registry must preserve the approved one-to-one mapping.
+- Prevent duplicate primary mappings for the same category.
+- Prevent associations with nonexistent categories or agents.
+- Do not invent new category IDs if actual category IDs already exist.
+
+The initial implementation must contain exactly 29 finalized primary associations.
+
+Do not add secondary agents or multi-agent category routing in this step.
+
+### 5.3 Agent configuration structure
+
+Each agent must have its own configuration record or equivalent configuration object.
+
+The configuration should support:
+
+- Agent identity.
+- Agent description.
+- Specialized category.
+- Responsibilities.
+- Operational boundaries.
+- Declared capabilities.
+- Allowed permission references.
+- Supported business module references.
+- Compatible contract version.
+- Configuration version.
+- Lifecycle status.
+
+Example conceptual configuration:
+
+```json
+{
+  "agent_id": "AGT-001",
+  "name": "General Retail Agent",
+  "agent_type": "category_specialized",
+  "primary_category_id": "CAT-001",
+  "status": "registered",
+  "version": "1.0.0",
+  "contract_version": "1.0",
+  "capabilities": [],
+  "permissions": [],
+  "configuration": {
+    "responsibilities": [],
+    "boundaries": [],
+    "supported_modules": []
+  }
+}
+```
+
+This JSON is an illustrative structure, not an instruction to insert empty capabilities or invent unapproved business functionality.
+
+Populate the actual agent configurations using the finalized Step 04–06 specifications.
+
+---
+
+## 6. Register all 29 finalized agents
+
+Seed or migrate the following 29 agent records into the persistent registry.
+
+| Agent ID | Agent Name | Primary Category |
+|---|---|---|
+| AGT-001 | General Retail Agent | CAT-001 — General Retail & Department Store |
+| AGT-002 | Agriculture & Farming Supplies Agent | CAT-002 — Agriculture & Farming Supplies |
+| AGT-003 | Wholesale & Distribution Agent | CAT-003 — Wholesale & Distribution Hub |
+| AGT-004 | Optometry & Eyewear Agent | CAT-004 — Optometry & Eyewear Store |
+| AGT-005 | Pet Shop & Veterinary Supplies Agent | CAT-005 — Pet Shop & Veterinary Supplies |
+| AGT-006 | Sports & Fitness Equipment Agent | CAT-006 — Sports, Gym & Fitness Equipment |
+| AGT-007 | Home Appliances & Kitchenware Agent | CAT-007 — Home Appliances & Kitchenware |
+| AGT-008 | Home Furniture & Living Agent | CAT-008 — Home Furniture & Living |
+| AGT-009 | Jewelry & Luxury Goods Agent | CAT-009 — Jewelry, Watches & Luxury Goods |
+| AGT-010 | Bookstore & Stationery Agent | CAT-010 — Bookstore & Stationery |
+| AGT-011 | Hair Salon & Barbershop Agent | CAT-011 — Hair Salon & Barbershop |
+| AGT-012 | Cosmetics & Beauty Agent | CAT-012 — Cosmetics, Beauty & Skincare |
+| AGT-013 | Vehicle Repair & Service Garage Agent | CAT-013 — Vehicle Repair & Service Garage |
+| AGT-014 | Auto Parts & Accessories Agent | CAT-014 — Auto Parts & Accessories |
+| AGT-015 | Plumbing & Sanitary Ware Agent | CAT-015 — Plumbing & Sanitary Ware |
+| AGT-016 | Electrical & Lighting Agent | CAT-016 — Electrical & Lighting Supplies |
+| AGT-017 | Hardware & Construction Agent | CAT-017 — Hardware, Tools & Construction |
+| AGT-018 | Bakery & Pastry Agent | CAT-018 — Bakery & Pastry Shop |
+| AGT-019 | Cafe & Coffee Shop Agent | CAT-019 — Cafe & Coffee Shop |
+| AGT-020 | Fast Food & Quick Service Agent | CAT-020 — Fast Food & Quick Service |
+| AGT-021 | Restaurant Agent | CAT-021 — Restaurant & Dine-In |
+| AGT-022 | Footwear & Shoes Agent | CAT-022 — Footwear & Shoes |
+| AGT-023 | Fashion & Apparel Agent | CAT-023 — Fashion & Apparel Boutique |
+| AGT-024 | Computer & IT Hardware Agent | CAT-024 — Computer & IT Hardware |
+| AGT-025 | Mobile & Telecom Agent | CAT-025 — Mobile Phones & Telecommunication |
+| AGT-026 | Electronics & Gadgets Agent | CAT-026 — Electronics & Gadgets |
+| AGT-027 | Grocery Agent | CAT-027 — Grocery Store & Minimart |
+| AGT-028 | Supermarket & Hypermarket Agent | CAT-028 — Supermarket & Hypermarket |
+| AGT-029 | Pharmacy & Health Store Agent | CAT-029 — Pharmacy & Health Store |
+
+Important:
+
+- Verify the actual category IDs and names in GeFlow before inserting associations.
+- The table above represents the finalized logical identifiers.
+- If actual category identifiers differ, use the existing identifiers and maintain a documented mapping to the finalized registry IDs.
+- Do not silently rename or recreate existing categories.
+- Seed operations must be idempotent: running them again must not create duplicate agents or mappings.
+
+---
+
+## 7. Registry lifecycle management
+
+Implement the registry lifecycle as a backend-managed state.
+
+Suggested logical states:
+
+| Status | Meaning |
+|---|---|
+| registered | Agent identity exists in the registry |
+| active | Agent configuration is approved and available to authorized consumers |
+| inactive | Agent is intentionally unavailable |
+| deprecated | Agent is being phased out |
+| archived | Agent is retained for historical reference |
+
+Use existing project conventions if equivalent statuses already exist.
+
+### Lifecycle restrictions
+
+- A newly registered agent must not automatically become executable.
+- Registration does not imply AI runtime deployment.
+- An inactive agent must not be returned as an active agent.
+- A deprecated agent must not be assigned to new category mappings without explicit approval.
+- Archived agents must remain traceable where historical records reference them.
+- Status changes must be validated and authorized.
+- Invalid lifecycle transitions must be rejected.
+
+If the current architecture does not support a safe lifecycle transition, document the limitation instead of introducing an unnecessarily complex state machine.
+
+---
+
+## 8. Registry backend services
+
+Implement registry operations using the existing service architecture.
+
+Suggested logical operations:
+
+### 8.1 Read operations
+
+- Retrieve an agent by permanent agent ID.
+- Retrieve an agent by internal database ID.
+- Retrieve all registered agents.
+- Retrieve agents by status.
+- Retrieve agents by category.
+- Retrieve the primary agent for a category.
+- Retrieve an agent's approved configuration.
+- Retrieve registry version information.
+
+### 8.2 Management operations
+
+Where authorized by the existing permission system:
+
+- Register a new agent record.
+- Update permitted agent metadata.
+- Update agent configuration.
+- Change agent lifecycle status.
+- Update an approved category mapping.
+- Retrieve registry change history.
+
+Management operations must enforce uniqueness, referential integrity, configuration validation and authorization.
+
+Do not implement public or unrestricted agent registration.
+
+The initial 29-agent registry must be protected against accidental deletion or unauthorized identity changes.
+
+### 8.3 Service responsibilities
+
+The registry service must:
+
+1. Retrieve records from the persistent registry.
+2. Validate requested agent identifiers.
+3. Validate category associations.
+4. Validate configuration structure.
+5. Check lifecycle status.
+6. Apply authorization checks.
+7. Return a consistent response.
+8. Record relevant management events.
+9. Handle database errors without exposing secrets or internal stack traces.
+
+Keep database operations separate from business validation and API response formatting according to existing project conventions.
+
+---
+
+## 9. Registry API integration
+
+Inspect the current API architecture before choosing routes.
+
+If the project already has an API versioning and routing convention, follow it.
+
+Possible logical endpoints:
+
+| Method | Logical endpoint | Purpose |
+|---|---|---|
+| GET | `/agents` | Retrieve authorized registry entries |
+| GET | `/agents/:agentId` | Retrieve one agent |
+| GET | `/agents/category/:categoryId` | Retrieve category's primary agent |
+| GET | `/agents/:agentId/configuration` | Retrieve authorized configuration |
+| POST | `/agents` | Register an agent through an authorized management operation |
+| PATCH | `/agents/:agentId` | Update permitted metadata |
+| PATCH | `/agents/:agentId/status` | Change lifecycle status |
+| PATCH | `/agents/:agentId/configuration` | Update configuration |
+| GET | `/agents/:agentId/history` | Retrieve authorized registry history |
+
+These are proposed logical routes, not mandatory literal paths.
+
+Do not create duplicate API versions or competing route structures.
+
+### API requirements
+
+- Validate every request server-side.
+- Validate request body and path parameters.
+- Enforce authentication and authorization.
+- Apply consistent error responses.
+- Prevent mass assignment of protected fields.
+- Do not expose internal secrets or sensitive infrastructure data.
+- Apply pagination to registry listing if consistent with existing API conventions.
+- Do not expose unrestricted administrative operations to ordinary users.
+
+If the project uses server actions or direct database access rather than conventional REST APIs, implement equivalent backend operations in the established architecture instead.
+
+---
+
+## 10. Authorization integration
+
+Registry implementation must respect the organization-level and category-level authorization model from Step 07.
+
+Do not assume that every authenticated user can access every agent.
+
+### Required validation
+
+For organization-specific registry access, verify:
+
+1. Authenticated user identity.
+2. Active organization membership.
+3. Authorized business access.
+4. Organization-level permission.
+5. Category-level permission.
+6. Valid category-to-agent association.
+7. Agent lifecycle status.
+8. Resource ownership where applicable.
+
+For global registry management, enforce the existing platform-level administrative permissions.
+
+### Security rules
+
+- Ordinary users must not register, delete or modify global agents.
+- Organization administrators must not automatically receive platform-wide registry management access.
+- Category access must not be inferred solely from an agent ID supplied by the client.
+- Organization-specific settings must remain isolated.
+- Global registry configuration must not contain tenant-specific private data.
+- Backend checks are mandatory; frontend visibility is not an authorization mechanism.
+
+If Step 07 is not yet implemented, do not bypass authorization. Record the dependency and request approval for any prerequisite work outside this step.
+
+---
+
+## 11. Registry integrity and validation
+
+Implement validation at both service and database levels where the actual stack supports it.
+
+### Required integrity checks
+
+- Unique agent IDs.
+- Valid category references.
+- Valid lifecycle status values.
+- Valid configuration structure.
+- Valid contract version.
+- Valid mapping version.
+- No duplicate primary mapping for a category.
+- No orphaned category-agent association.
+- No accidental deletion of required registry records.
+- No invalid configuration updates.
+- No unauthorized changes to protected identifiers.
+
+### Initial registry validation
+
+The initial registry must pass all of these checks:
+
+- Exactly 29 expected agent IDs exist.
+- All 29 agent IDs are unique.
+- All 29 finalized category associations exist.
+- Every expected category has exactly one primary agent.
+- Every agent maps to its correct primary category.
+- No unexpected duplicate primary mapping exists.
+- All records have valid initial configuration versions and statuses.
+
+A failed validation must produce a clear error and must not leave a partially seeded registry.
+
+Use transactions or the database's equivalent atomic mechanism when available.
+
+---
+
+## 12. Versioning and change history
+
+Implement registry versioning consistent with the existing architecture.
+
+At minimum:
+
+- Maintain an agent configuration version.
+- Maintain a contract compatibility version.
+- Maintain a category mapping version.
+- Track update timestamps.
+- Track authorized change actors.
+- Preserve enough history to identify important changes.
+
+Where an audit system exists, integrate with it rather than creating another unrelated logging framework.
+
+Where no audit infrastructure exists, implement only the minimum registry change-history mechanism needed for this scope.
+
+Never record passwords, API keys, access tokens or unnecessary sensitive business data.
+
+---
+
+## 13. Database migration and deployment safety
+
+Before applying schema changes:
+
+1. Inspect the existing database schema.
+2. Identify migration conventions.
+3. Prepare a migration plan.
+4. Check for naming conflicts.
+5. Check for existing records and relationships.
+6. Determine rollback requirements.
+7. Verify whether production and development environments are separate.
+
+### Migration requirements
+
+- Use the project's existing migration mechanism.
+- Avoid destructive migrations.
+- Preserve existing GeFlow data.
+- Use safe defaults.
+- Include appropriate indexes and constraints.
+- Make the initial seed idempotent.
+- Do not reset the database.
+- Do not delete or recreate existing tables.
+- Do not modify unrelated schema objects.
+- Do not expose privileged database credentials.
+
+Do not run production migrations or deploy changes unless that action is explicitly authorized by the project's established deployment permissions and workflow.
+
+If the environment is development-only, clearly report that fact.
+
+---
+
+## 14. Automated testing
+
+Create automated tests using the existing test framework.
+
+### 14.1 Registry tests
+
+- Register a valid agent.
+- Retrieve an agent by ID.
+- Retrieve all agents.
+- Retrieve an agent by category.
+- Retrieve the primary agent for a category.
+- Update permitted metadata.
+- Update valid configuration.
+- Change lifecycle status.
+- Reject duplicate agent IDs.
+- Reject invalid category references.
+- Reject malformed configurations.
+- Reject invalid lifecycle transitions.
+- Verify seed idempotency.
+
+### 14.2 Mapping tests
+
+- Validate all 29 expected associations.
+- Confirm one primary agent per category.
+- Reject duplicate primary mappings.
+- Reject invalid agent-category combinations.
+- Verify mapping integrity after updates.
+
+### 14.3 Authorization tests
+
+- Authorized platform administrator can perform permitted global management operations.
+- Ordinary user cannot modify the global registry.
+- Organization administrator cannot automatically modify global registry records.
+- Users cannot retrieve unauthorized organization-specific information.
+- Category permissions are enforced.
+- Cross-organization access is denied.
+- Direct API requests cannot bypass authorization.
+
+### 14.4 Regression tests
+
+Verify that existing GeFlow functionality remains intact:
+
+- Authentication.
+- Organization and business access.
+- Category management.
+- Products and inventory.
+- POS and billing.
+- Purchases and suppliers.
+- Customers.
+- Reports and existing APIs.
+
+Do not weaken existing security policies to make registry tests pass.
+
+---
+
+## 15. Implementation sequence
+
+Execute this step in the following order:
+
+1. Inspect the current backend and database architecture.
+2. Inspect the existing category and authorization models.
+3. Check for existing registry-related implementation.
+4. Finalize the implementation-level data model.
+5. Implement the registry schema or equivalent persistent storage.
+6. Implement required database constraints and indexes.
+7. Implement the initial 29-agent seed operation.
+8. Implement category-to-agent associations.
+9. Implement registry validation.
+10. Implement registry service operations.
+11. Integrate authorization checks.
+12. Implement API or equivalent backend interfaces.
+13. Implement lifecycle management and version tracking.
+14. Add automated registry and security tests.
+15. Run regression tests.
+16. Review database migrations and deployment safety.
+17. Produce the implementation completion report.
+
+Do not skip inspection or verification to speed up implementation.
+
+---
+
+## 16. Acceptance criteria
+
+This step is complete only when:
+
+- [ ] The actual GeFlow backend architecture has been inspected.
+- [ ] Registry persistence has been implemented using the existing stack.
+- [ ] All 29 finalized agents are registered.
+- [ ] All 29 primary category mappings are correct.
+- [ ] Registry IDs are unique and stable.
+- [ ] Configuration validation works.
+- [ ] Registry retrieval operations work.
+- [ ] Authorized management operations work.
+- [ ] Lifecycle validation works.
+- [ ] Organization/category authorization is integrated or its verified prerequisite gap is explicitly documented.
+- [ ] Backend enforcement is tested.
+- [ ] Database integrity constraints are in place where supported.
+- [ ] Seed operations are idempotent.
+- [ ] Registry and authorization tests pass.
+- [ ] Existing GeFlow functionality passes relevant regression tests.
+- [ ] No unrelated application functionality has been changed.
+- [ ] No AI runtime or agent execution has been implemented accidentally.
+
+Do not mark the step complete simply because database tables or API routes have been created.
+
+---
+
+## 17. Required completion report
+
+After implementation, provide a factual report containing:
+
+### A. Architecture findings
+- Actual backend framework.
+- Actual database provider.
+- Registry storage approach.
+- Existing architecture reused.
+
+### B. Database changes
+- Tables, collections or equivalent objects created or modified.
+- Migrations applied.
+- Indexes and constraints.
+- Seed results.
+- Rollback approach.
+
+### C. Registry implementation
+- Number of registered agents.
+- Number of verified category mappings.
+- Configuration structure.
+- Lifecycle management.
+- Versioning and audit implementation.
+
+### D. Backend implementation
+- Services created or modified.
+- APIs or equivalent interfaces created or modified.
+- Validation and error handling.
+- Authorization integration.
+
+### E. Testing evidence
+- Tests executed.
+- Passed and failed test counts.
+- Registry integrity results.
+- Security test results.
+- Regression test results.
+
+### F. Outstanding issues
+- Missing prerequisites.
+- Known limitations.
+- Unimplemented requirements.
+- Risks requiring separate approval.
+
+### G. Changed files
+List the actual file paths changed, with a short explanation of each.
+
+### H. Scope confirmation
+Explicitly confirm whether any unrelated files, modules, database structures or workflows were changed.
+
+Clearly distinguish implemented, tested, partially implemented and not implemented items.
+
+---
+
+## 18. Strict execution instructions
+
+1. Treat the existing GeFlow application as the source of truth.
+2. Follow the finalized 29-agent registry and mapping documents.
+3. Follow the approved agent contract.
+4. Preserve the existing authorization architecture.
+5. Inspect before modifying.
+6. Do not invent database tables, category IDs, APIs or framework conventions without checking the project.
+7. Do not duplicate existing functionality.
+8. Do not delete or reset existing business data.
+9. Do not deploy 29 separate AI models.
+10. Do not implement an AI runtime, orchestrator or agent execution system.
+11. Do not introduce agent-to-agent delegation.
+12. Do not redesign the UI.
+13. Do not implement the next roadmap step.
+14. If an essential prerequisite is missing or an out-of-scope change becomes necessary, stop that portion and report the blocker for approval.
+
+**Final instruction:** Implement only the Agent Registry Backend described in this document. Once the acceptance criteria have been evaluated and the completion report is delivered, stop all further work and wait for explicit authorization before proceeding to the next step.

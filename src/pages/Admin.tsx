@@ -141,7 +141,10 @@ const Admin = () => {
         user = userData?.user;
       }
       if (!user) {
-        const raw = localStorage.getItem("sb-gvkvljxhufsrgyfsqrkc-auth-token") || localStorage.getItem("supabase.auth.token");
+        const raw =
+          localStorage.getItem("sb-jwdztevnodxoeyhcmrnf-auth-token") ||
+          localStorage.getItem("sb-gvkvljxhufsrgyfsqrkc-auth-token") ||
+          localStorage.getItem("supabase.auth.token");
         if (!raw) {
           navigate("/login");
           return;
