@@ -41,6 +41,10 @@ export type TaskType =
   | "catalog_lookup"
   | "pos_transaction"
   | "diagnostic_echo"
+  | "cafe_menu_query"
+  | "cafe_recipe_costing"
+  | "cafe_stock_audit"
+  | "cafe_sales_velocity"
   | "custom_tool_run";
 
 export interface ToolInvocationRecord {
@@ -115,6 +119,8 @@ export interface AgentExecutionRecord {
   cancellation_reason?: string;
   cancelled_by?: string;
   result_data?: any;
+  resolved_configuration_snapshot?: any;
+  configuration_snapshot_hash?: string;
   tool_invocations: ToolInvocationRecord[];
   events: ExecutionEventRecord[];
   created_at: string;

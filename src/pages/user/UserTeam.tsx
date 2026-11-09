@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1456,9 +1457,30 @@ export const UserTeam = () => {
           {/* Table Body Rows */}
           <div className="divide-y divide-border/40">
             {loading ? (
-              <div className="py-12 flex flex-col items-center justify-center text-muted-foreground text-xs gap-3">
-                <Loader2 className="w-7 h-7 animate-spin text-sky-500" />
-                <p>Synchronizing real-time team members from database...</p>
+              <div className="divide-y divide-border/30">
+                {Array.from({ length: 5 }).map((_, idx) => (
+                  <div key={idx} className="p-4 grid grid-cols-12 items-center gap-4">
+                    <div className="col-span-8 sm:col-span-5 flex items-center gap-3">
+                      <Skeleton className="w-9 h-9 rounded-full shrink-0" />
+                      <div className="space-y-1.5 flex-1 min-w-0">
+                        <Skeleton className="h-4 w-36" />
+                        <Skeleton className="h-3 w-48" />
+                      </div>
+                    </div>
+                    <div className="hidden sm:block sm:col-span-2">
+                      <Skeleton className="h-6 w-24 rounded-full" />
+                    </div>
+                    <div className="hidden sm:block sm:col-span-2">
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                    </div>
+                    <div className="hidden sm:block sm:col-span-2">
+                      <Skeleton className="h-3.5 w-24" />
+                    </div>
+                    <div className="col-span-4 sm:col-span-1 flex justify-end">
+                      <Skeleton className="h-8 w-8 rounded-lg" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : filteredMembers.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground text-xs space-y-2">

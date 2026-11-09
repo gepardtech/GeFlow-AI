@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import PanelLayout from "@/components/PanelLayout";
 import { ADMIN_NAV, ADMIN_IDENTITY } from "@/lib/panelNav";
 import BillingTabs from "@/components/BillingTabs";
+import { TableRowSkeletons } from "@/components/ui/PageSkeletons";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -220,7 +221,24 @@ const AdminBillingCoupons = () => {
 
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         {loading ? (
-          <div className="p-20 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[10px] font-bold tracking-widest text-muted-foreground border-b border-border bg-muted/20">
+                  <th className="px-5 py-3">CODE</th>
+                  <th className="px-5 py-3">DISCOUNT</th>
+                  <th className="px-5 py-3">APPLIES TO PLAN</th>
+                  <th className="px-5 py-3">USAGE</th>
+                  <th className="px-5 py-3">EXPIRES</th>
+                  <th className="px-5 py-3">STATUS</th>
+                  <th className="px-5 py-3 text-right">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <TableRowSkeletons rows={5} columns={7} />
+              </tbody>
+            </table>
+          </div>
         ) : coupons.length === 0 ? (
           <div className="p-16 text-center text-sm text-muted-foreground">No coupons yet. Create your first discount code.</div>
         ) : (

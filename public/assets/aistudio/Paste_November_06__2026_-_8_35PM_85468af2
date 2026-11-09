@@ -1,0 +1,886 @@
+# STEP 12 — AGENT CONFIGURATION FRAMEWORK IMPLEMENTATION
+## GeFlow AI — 29-Agent Architecture
+
+**Objective:** Implement a centralized, extensible and secure configuration framework that allows all 29 GeFlow AI agents to maintain their own validated configurations while sharing common configuration infrastructure.
+
+**Implementation Type:** Backend-first architecture implementation  
+**Scope:** Configuration schema, configuration definitions, validation, defaults, resolution, version integration, runtime access and configuration security.
+
+---
+
+# 1. CRITICAL PROJECT INSTRUCTIONS
+
+You are working on the existing GeFlow AI application.
+
+The existing application, database, API contracts, agent registry and versioning system are the source of truth.
+
+Before implementation, inspect the actual status of:
+
+- Existing 29-agent registry.
+- Agent configuration fields and stored configuration data.
+- Agent versioning implementation.
+- Agent contract definitions.
+- Category-to-agent mappings.
+- Agent execution engine.
+- Execution context and runtime integration.
+- Existing authorization and organization isolation.
+- Shared Tool Gateway.
+- Existing database and API architecture.
+
+Do not assume previous roadmap steps have been implemented merely because their specifications exist.
+
+If a critical dependency is missing:
+
+1. Identify the missing dependency.
+2. Explain why it is required.
+3. Do not bypass it.
+4. Do not create duplicate infrastructure.
+5. Request authorization before implementing work outside this step.
+
+Preserve all existing agent identities, configurations, version history and business functionality.
+
+---
+
+# 2. FRAMEWORK OBJECTIVES
+
+Implement a shared Agent Configuration Framework that provides:
+
+1. Standardized configuration structure.
+2. Common configuration schema.
+3. Agent-specific configuration schemas.
+4. Default configuration management.
+5. Configuration validation.
+6. Configuration normalization.
+7. Configuration inheritance rules.
+8. Configuration resolution.
+9. Configuration version integration.
+10. Configuration compatibility validation.
+11. Organization-specific configuration overrides, if supported by existing architecture.
+12. Secure configuration retrieval.
+13. Configuration change tracking.
+14. Runtime configuration access.
+15. Configuration testing and validation tools.
+
+The framework must support all 29 agents without merging their unique identities or specializations.
+
+---
+
+# 3. CONFIGURATION ARCHITECTURE
+
+Implement a centralized configuration management architecture.
+
+Logical architecture:
+
+Agent Registry  
+→ Agent Configuration Definition  
+→ Configuration Schema Resolver  
+→ Default Configuration Resolver  
+→ Agent-Specific Configuration Resolver  
+→ Authorized Organization Configuration Resolver  
+→ Configuration Validator  
+→ Configuration Normalizer  
+→ Active Configuration Version Resolver  
+→ Resolved Agent Configuration  
+→ Agent Execution Engine
+
+The framework must produce a validated, version-specific configuration object before an agent execution begins.
+
+The execution engine must receive a resolved configuration snapshot rather than independently assembling configuration from multiple database sources.
+
+The actual implementation must follow the existing GeFlow technology stack and architecture.
+
+---
+
+# 4. COMMON AGENT CONFIGURATION CONTRACT
+
+Define a standardized configuration contract shared by all 29 agents.
+
+The common contract should support the following logical sections:
+
+### A. Identity
+
+- agent_id
+- agent_name
+- agent_type
+- primary_category_id
+- configuration_id
+- configuration_version
+- contract_version
+
+Identity fields must match the registered agent.
+
+An agent must not be allowed to change its own identity or primary category through configuration.
+
+### B. General Settings
+
+- display_name
+- description
+- enabled_status
+- supported_languages, if implemented
+- default_locale, if implemented
+- timezone_behavior, if implemented
+
+Do not introduce unsupported features merely because these fields are listed as possibilities.
+
+### C. Behavior Settings
+
+- response_style
+- response_detail_level
+- task_handling_preferences
+- confirmation_behavior
+- error_handling_preferences
+
+Only implement behavior settings that are supported by the existing agent contract and execution system.
+
+### D. Capability Settings
+
+- enabled_capabilities
+- disabled_capabilities
+- capability_limits
+- supported_task_types
+
+Configuration must never grant permissions that the authorization system or agent registry does not grant.
+
+### E. Tool Settings
+
+- allowed_tool_ids
+- restricted_tool_ids
+- tool_configuration
+- tool_execution_preferences
+
+Tool access must remain subordinate to the Shared Tool Gateway's authorization checks.
+
+### F. Execution Settings
+
+- execution_timeout
+- retry_policy_reference
+- concurrency_policy_reference
+- approval_policy_reference
+- execution_mode
+
+Use existing policies and supported execution infrastructure.
+
+Do not invent new financial limits, approval thresholds or unrestricted execution modes.
+
+### G. Context Settings
+
+- organization_context_policy
+- category_context_policy
+- data_access_scope
+- context_visibility_rules
+
+These settings cannot override backend organization isolation or authorization.
+
+### H. Metadata
+
+- created_at
+- updated_at
+- created_by
+- updated_by
+- schema_version
+- configuration_status
+
+Use actual project conventions and database types.
+
+The above is a logical contract. Adapt field names and storage structure to the existing implementation.
+
+---
+
+# 5. COMMON & AGENT-SPECIFIC CONFIGURATION
+
+Every agent must have two conceptual configuration layers.
+
+## Layer 1 — Common Configuration
+
+Defines shared settings and behavior that apply consistently across the architecture.
+
+Examples:
+
+- Identity reference.
+- Configuration status.
+- Supported contract version.
+- Common execution preferences.
+- General validation rules.
+- Shared capability references.
+
+## Layer 2 — Agent-Specific Configuration
+
+Defines settings unique to an individual agent.
+
+Examples:
+
+- Agent-specific task preferences.
+- Category-specific operational behavior.
+- Agent-specific supported task types.
+- Agent-specific capability references.
+- Specialized response requirements.
+
+The common framework must not force every agent to use identical configurations.
+
+Do not create fake category workflows or capabilities.
+
+Use the actual approved agent definitions and existing category mappings.
+
+---
+
+# 6. CONFIGURATION SCHEMA FRAMEWORK
+
+Implement a reusable configuration schema system.
+
+Requirements:
+
+- Define a common base schema.
+- Support individual agent configuration schemas.
+- Support schema versioning.
+- Validate required fields.
+- Validate field types.
+- Validate allowed values.
+- Validate nested objects.
+- Validate arrays and collection limits.
+- Validate references to registered capabilities and tools.
+- Reject unsupported properties where appropriate.
+- Support optional fields with documented defaults.
+- Produce structured validation errors.
+
+Each configuration schema must have:
+
+- schema_id
+- schema_version
+- agent_id or applicable scope
+- required_fields
+- optional_fields
+- field_definitions
+- validation_rules
+- default_values
+- compatibility_rules
+- schema_status
+
+Use the project's existing validation technology if available.
+
+Do not introduce an unnecessary schema-validation library or duplicate existing validation logic.
+
+### Schema validation output
+
+Return a structured result containing:
+
+- is_valid
+- schema_id
+- schema_version
+- validation_errors
+- validation_warnings
+- normalized_configuration
+
+Never silently accept invalid configuration.
+
+---
+
+# 7. DEFAULT CONFIGURATION MANAGEMENT
+
+Implement a controlled default configuration system.
+
+The framework must support:
+
+1. Platform-level defaults.
+2. Common agent defaults.
+3. Agent-specific defaults.
+4. Authorized organization-level overrides, if supported.
+
+Define clear precedence rules.
+
+Recommended resolution order:
+
+Platform Defaults  
+→ Common Agent Defaults  
+→ Agent-Specific Defaults  
+→ Authorized Organization Overrides  
+→ Validated Active Configuration
+
+A higher-level configuration must not override security-critical restrictions.
+
+In particular:
+
+- Organization settings cannot grant unavailable agent capabilities.
+- Organization settings cannot grant unrestricted tool access.
+- Agent defaults cannot override authorization.
+- User preferences cannot change protected agent identity.
+- Configuration values cannot override backend security policies.
+
+Do not allow arbitrary configuration inheritance.
+
+Every inheritance relationship must be explicit, validated and traceable.
+
+---
+
+# 8. CONFIGURATION RESOLUTION ENGINE
+
+Implement a reusable Configuration Resolver.
+
+Its responsibility is to generate the final effective configuration for an agent.
+
+Required resolution process:
+
+1. Receive the trusted agent identity.
+2. Verify the registered agent.
+3. Resolve its primary category.
+4. Resolve its active configuration version.
+5. Resolve the applicable configuration schema.
+6. Load platform defaults.
+7. Load common agent defaults.
+8. Load agent-specific configuration.
+9. Load authorized organization overrides, if applicable.
+10. Validate all configuration layers.
+11. Apply approved inheritance and precedence rules.
+12. Normalize the final configuration.
+13. Verify capability and tool references.
+14. Verify version and schema compatibility.
+15. Generate a resolved configuration snapshot.
+16. Return the snapshot to the authorized execution engine.
+
+Requirements:
+
+- Resolve configuration server-side.
+- Never trust a client-generated effective configuration.
+- Do not permit users to select arbitrary historical configurations for normal execution.
+- Only approved and active versions may be used for standard execution.
+- Historical versions may be retrieved for authorized review and rollback workflows.
+- Preserve the exact configuration version used by each execution.
+- Never modify the original configuration while resolving it.
+
+---
+
+# 9. CONFIGURATION VERSIONING INTEGRATION
+
+Integrate the framework with the existing Agent Versioning system.
+
+Do not implement a duplicate versioning engine.
+
+Maintain a clear distinction between:
+
+- Agent identity.
+- Configuration schema version.
+- Agent configuration version.
+- Common agent contract version.
+- Category mapping version.
+
+Requirements:
+
+1. Each active configuration must reference its schema version.
+2. Each configuration version must retain its historical snapshot.
+3. Configuration changes must create a new version through the existing versioning system.
+4. Active configurations must not be silently overwritten.
+5. Configuration rollback must follow the existing rollback policy.
+6. Old configuration snapshots must remain available.
+7. Incompatible schema changes must be detected.
+8. Configuration activation must validate schema and compatibility.
+9. Execution records must retain the exact configuration version used.
+10. Historical executions must remain interpretable using their recorded version references.
+
+Do not change the established semantic versioning rules.
+
+Do not delete historical configuration versions.
+
+If the existing versioning implementation does not support a required capability, report the gap instead of silently building a parallel system.
+
+---
+
+# 10. CONFIGURATION LIFECYCLE
+
+Implement a controlled configuration lifecycle.
+
+Recommended statuses:
+
+| Status | Meaning |
+|---|---|
+| draft | Configuration is being created or edited |
+| validating | Configuration is undergoing validation |
+| validated | Configuration passed validation |
+| approved | Configuration received required approval |
+| active | Configuration is currently approved for standard execution |
+| superseded | A newer configuration replaced it |
+| deprecated | Configuration should no longer be used |
+| archived | Configuration is retained for historical reference |
+
+Requirements:
+
+- Define valid state transitions.
+- Enforce authorized transitions.
+- Validate before activation.
+- Preserve historical configurations.
+- Prevent unauthorized activation.
+- Prevent normal execution from using draft or deprecated configurations.
+- Maintain one active configuration version per agent and applicable scope, according to the existing versioning model.
+
+Do not invent an approval workflow if the existing platform has not defined one. Report any missing governance policy.
+
+---
+
+# 11. ORGANIZATION-LEVEL CONFIGURATION OVERRIDES
+
+Support organization-specific configuration only where the existing GeFlow architecture supports organization-scoped settings.
+
+The framework must distinguish:
+
+- Platform defaults.
+- Agent defaults.
+- Organization-specific overrides.
+
+Requirements:
+
+1. An organization can only configure agents it is authorized to use.
+2. Organization overrides must be validated against the agent's schema.
+3. Organization overrides must not change the agent's registered identity.
+4. Organization overrides must not grant unauthorized capabilities.
+5. Organization overrides must not bypass tool authorization.
+6. Organization data must remain isolated.
+7. Every override must have an authorized owner or actor.
+8. Changes must be versioned or otherwise historically traceable.
+9. Configuration resolution must use the correct organization context.
+10. One organization's overrides must never affect another organization.
+
+If the existing product architecture does not support organization-level configuration, implement only the platform and agent-level framework in this step and report the limitation.
+
+Do not introduce a new tenant model.
+
+---
+
+# 12. CONFIGURATION SECURITY & AUTHORIZATION
+
+All configuration operations must be protected by backend authorization.
+
+Implement authorization for:
+
+- Configuration retrieval.
+- Configuration creation.
+- Configuration editing.
+- Configuration validation.
+- Configuration approval, where supported.
+- Configuration activation.
+- Configuration deactivation.
+- Configuration rollback.
+- Configuration history retrieval.
+- Schema management.
+
+Security requirements:
+
+- Reuse existing authentication.
+- Reuse existing organization and role permissions.
+- Enforce backend authorization.
+- Prevent unauthorized cross-organization access.
+- Prevent agents from modifying their own configuration.
+- Prevent users from changing protected system fields.
+- Prevent organization overrides from expanding capabilities.
+- Validate all tool and capability references against trusted records.
+- Protect sensitive configuration values.
+- Do not expose secrets through configuration retrieval APIs.
+- Do not store API keys or credentials as ordinary plaintext configuration values.
+
+Use secure secret references or the existing secret-management mechanism where necessary.
+
+Configuration is not authorization. A configuration flag such as `enabled=true` must never independently grant permission to execute an operation.
+
+---
+
+# 13. CONFIGURATION CHANGE AUDIT
+
+Integrate configuration changes with the existing audit logging infrastructure.
+
+Record:
+
+- Configuration created.
+- Configuration edited.
+- Configuration validated.
+- Validation failed.
+- Configuration approved.
+- Configuration activated.
+- Configuration deactivated.
+- Configuration superseded.
+- Configuration rolled back.
+- Schema created or updated.
+- Default configuration changed.
+- Organization override changed.
+- Unauthorized configuration change attempted.
+
+Each event should record:
+
+- Event ID.
+- Agent ID.
+- Organization ID, where applicable.
+- Configuration ID.
+- Previous version reference.
+- New version reference.
+- Actor type.
+- Actor ID.
+- Event timestamp.
+- Action.
+- Result.
+- Relevant sanitized metadata.
+- Correlation ID.
+
+Do not store complete sensitive configuration payloads in ordinary audit logs.
+
+Use the existing audit event infrastructure from the execution and audit logging step.
+
+Do not create a duplicate audit system.
+
+---
+
+# 14. CONFIGURATION API & BACKEND SERVICES
+
+Implement backend services following existing API conventions.
+
+Required logical operations:
+
+### Configuration services
+
+- Get agent configuration.
+- Get active configuration.
+- Get configuration schema.
+- Validate configuration.
+- Resolve effective configuration.
+- Get configuration history.
+- Create configuration draft.
+- Update configuration draft.
+- Activate approved configuration.
+- Deactivate configuration.
+- Request configuration rollback through the existing versioning system.
+
+### Schema services
+
+- Get common schema.
+- Get agent-specific schema.
+- Validate schema compatibility.
+- Retrieve schema version history.
+
+### Authorization services
+
+- Validate configuration access.
+- Validate configuration management permission.
+- Validate organization ownership.
+- Validate protected fields.
+- Validate capability references.
+
+Requirements:
+
+- Use the existing backend framework.
+- Use existing authentication and authorization middleware.
+- Validate every input server-side.
+- Apply pagination where applicable.
+- Return standardized error responses.
+- Do not expose internal configuration secrets.
+- Do not expose unauthorized organization configurations.
+- Do not create a separate API framework.
+
+These are logical service capabilities. Follow existing routing and service naming conventions.
+
+---
+
+# 15. RUNTIME & EXECUTION ENGINE INTEGRATION
+
+Integrate the Configuration Framework with the existing Agent Execution Engine.
+
+Before execution:
+
+1. Resolve the trusted agent.
+2. Resolve the active configuration version.
+3. Resolve the applicable schema.
+4. Resolve authorized organization overrides.
+5. Validate the final configuration.
+6. Verify the agent's registered capabilities.
+7. Verify tool permissions through existing authorization and gateway systems.
+8. Generate an immutable resolved configuration snapshot.
+9. Attach the snapshot reference and version information to the execution context.
+10. Start execution only after successful validation.
+
+During execution:
+
+- Treat the resolved configuration as immutable.
+- Do not allow an agent to modify its own effective configuration.
+- Do not dynamically grant new capabilities.
+- Do not silently switch configuration versions during an execution.
+- Record configuration references in execution and audit history.
+
+If an active configuration changes while an execution is already running, the existing execution must continue using its original resolved snapshot unless a documented safety policy explicitly requires termination.
+
+New executions must use the newly active configuration after successful activation.
+
+---
+
+# 16. THE 29 AGENTS — CONFIGURATION SUPPORT
+
+The framework must support the complete finalized registry:
+
+| Agent ID | Agent Name |
+|---|---|
+| AGT-001 | General Retail Agent |
+| AGT-002 | Agriculture & Farming Supplies Agent |
+| AGT-003 | Wholesale & Distribution Agent |
+| AGT-004 | Optometry & Eyewear Agent |
+| AGT-005 | Pet Shop & Veterinary Supplies Agent |
+| AGT-006 | Sports & Fitness Equipment Agent |
+| AGT-007 | Home Appliances & Kitchenware Agent |
+| AGT-008 | Home Furniture & Living Agent |
+| AGT-009 | Jewelry & Luxury Goods Agent |
+| AGT-010 | Bookstore & Stationery Agent |
+| AGT-011 | Hair Salon & Barbershop Agent |
+| AGT-012 | Cosmetics & Beauty Agent |
+| AGT-013 | Vehicle Repair & Service Garage Agent |
+| AGT-014 | Auto Parts & Accessories Agent |
+| AGT-015 | Plumbing & Sanitary Ware Agent |
+| AGT-016 | Electrical & Lighting Agent |
+| AGT-017 | Hardware & Construction Agent |
+| AGT-018 | Bakery & Pastry Agent |
+| AGT-019 | Cafe & Coffee Shop Agent |
+| AGT-020 | Fast Food & Quick Service Agent |
+| AGT-021 | Restaurant Agent |
+| AGT-022 | Footwear & Shoes Agent |
+| AGT-023 | Fashion & Apparel Agent |
+| AGT-024 | Computer & IT Hardware Agent |
+| AGT-025 | Mobile & Telecom Agent |
+| AGT-026 | Electronics & Gadgets Agent |
+| AGT-027 | Grocery Agent |
+| AGT-028 | Supermarket & Hypermarket Agent |
+| AGT-029 | Pharmacy & Health Store Agent |
+
+Requirements:
+
+- Every agent must have a valid common configuration schema.
+- Every agent must have an explicit agent-specific configuration definition.
+- Every configuration must reference the correct agent ID.
+- Every configuration must reference its correct primary category.
+- Agent-specific fields must be defined only when supported by approved requirements.
+- No agent should receive invented capabilities or permissions.
+- Missing agent-specific settings must be explicitly identified.
+- Use validated defaults only where appropriate.
+
+Do not populate the 29 configurations with fabricated operational capabilities simply to make the framework appear complete.
+
+---
+
+# 17. TESTING REQUIREMENTS
+
+Implement automated tests using the existing testing framework.
+
+### A. Schema tests
+
+- Valid common configuration.
+- Invalid common configuration.
+- Valid agent-specific configuration.
+- Missing required fields.
+- Invalid field types.
+- Invalid nested configuration.
+- Unsupported properties.
+- Invalid schema version.
+- Schema compatibility failure.
+
+### B. Configuration resolution tests
+
+- Platform defaults.
+- Common agent defaults.
+- Agent-specific defaults.
+- Authorized organization overrides.
+- Configuration precedence.
+- Invalid inheritance.
+- Protected-field override rejection.
+- Missing configuration.
+- Invalid active version.
+
+### C. Versioning tests
+
+- Draft creation.
+- Configuration validation.
+- Activation.
+- Historical snapshot preservation.
+- Configuration rollback integration.
+- Schema compatibility.
+- Active version resolution.
+- Existing execution snapshot preservation.
+
+### D. Security tests
+
+- Unauthorized configuration retrieval.
+- Unauthorized configuration update.
+- Cross-organization access.
+- Unauthorized activation.
+- Unauthorized rollback.
+- Protected identity modification.
+- Unauthorized capability addition.
+- Unauthorized tool addition.
+- Secret exposure prevention.
+- Agent self-modification prevention.
+
+### E. Runtime integration tests
+
+- Valid configuration passed to execution.
+- Invalid configuration blocks execution.
+- Correct version attached to execution.
+- Organization-specific configuration isolation.
+- Configuration remains immutable during execution.
+- New execution resolves newly activated version.
+- Existing execution retains its original configuration snapshot.
+
+### F. Regression tests
+
+Verify that existing GeFlow features continue to work:
+
+- Authentication.
+- Organization/business access.
+- Agent registry.
+- Agent versioning.
+- Shared Tool Gateway.
+- Agent execution.
+- Audit logging.
+- POS.
+- Inventory.
+- Purchasing.
+- Suppliers.
+- Customers.
+- Reports.
+
+Do not create new business workflows for testing.
+
+---
+
+# 18. STRICTLY OUT OF SCOPE
+
+Do not implement:
+
+1. Central AI orchestrator.
+2. Autonomous agent-to-agent communication.
+3. Agent delegation.
+4. Multi-agent collaboration.
+5. New AI models or model integrations.
+6. Custom model training.
+7. Long-term agent memory.
+8. New agent capabilities not previously approved.
+9. New business workflows.
+10. Agent marketplace.
+11. Billing and subscription changes.
+12. New authentication framework.
+13. New organization/tenant architecture.
+14. Unrelated dashboard redesign.
+15. A new agent management UI.
+16. A duplicate versioning system.
+17. A duplicate audit logging system.
+18. Unrestricted dynamic code execution.
+19. Automatic configuration changes by agents.
+20. Any future roadmap step without explicit authorization.
+
+---
+
+# 19. IMPLEMENTATION ORDER
+
+Follow this exact sequence:
+
+**Phase 1 — Architecture Inspection**
+- Inspect registry and versioning.
+- Inspect existing agent contracts.
+- Inspect execution engine.
+- Inspect authorization and audit systems.
+- Document dependencies and gaps.
+
+**Phase 2 — Configuration Contract**
+- Define common configuration structure.
+- Define agent-specific configuration structure.
+- Define schema versioning.
+- Define validation rules.
+
+**Phase 3 — Configuration Storage**
+- Inspect existing configuration storage.
+- Reuse existing structures where possible.
+- Add only necessary migrations.
+- Preserve historical configurations.
+
+**Phase 4 — Schema & Validation Engine**
+- Implement schema registration.
+- Implement validation.
+- Implement normalization.
+- Implement compatibility checks.
+
+**Phase 5 — Defaults & Resolution**
+- Implement default configuration resolution.
+- Implement explicit inheritance.
+- Implement authorized organization overrides where supported.
+- Generate validated effective configurations.
+
+**Phase 6 — Versioning Integration**
+- Integrate with existing versioning.
+- Enforce lifecycle transitions.
+- Preserve immutable snapshots.
+- Support controlled activation and rollback.
+
+**Phase 7 — Runtime Integration**
+- Integrate with the execution engine.
+- Pass immutable configuration snapshots.
+- Enforce capability and tool restrictions.
+- Preserve execution version references.
+
+**Phase 8 — Security, Audit & Testing**
+- Integrate audit events.
+- Run authorization tests.
+- Run schema tests.
+- Run versioning tests.
+- Run runtime tests.
+- Run regression tests.
+
+Do not skip architecture inspection or security verification.
+
+---
+
+# 20. COMPLETION REPORT — MANDATORY
+
+After implementation, provide a detailed report covering:
+
+1. Existing architecture inspected.
+2. Actual status of previous dependencies.
+3. Configuration framework architecture.
+4. Common configuration contract.
+5. Agent-specific configuration definitions.
+6. Schema and validation implementation.
+7. Default configuration system.
+8. Configuration resolution engine.
+9. Organization override support and limitations.
+10. Versioning integration.
+11. Runtime integration.
+12. Database migrations and structures.
+13. Backend services and API endpoints.
+14. Audit logging integration.
+15. Security controls.
+16. Automated tests executed.
+17. Tests passed and failed.
+18. Existing functionality regression results.
+19. Remaining limitations and blockers.
+
+Clearly distinguish:
+
+- Implemented and verified.
+- Implemented but not fully verified.
+- Not implemented.
+- Blocked by dependencies.
+
+Do not claim success for untested functionality.
+
+Do not report fabricated test results.
+
+---
+
+# 21. FINAL EXECUTION RULES
+
+- Implement only Step 12.
+- Inspect the actual application before making changes.
+- Reuse existing infrastructure.
+- Preserve all 29 agent identities.
+- Preserve historical configuration versions.
+- Do not bypass authorization.
+- Do not introduce duplicate systems.
+- Do not invent agent capabilities.
+- Do not enable agent self-modification.
+- Do not introduce unrelated UI or business functionality.
+- Do not begin future roadmap work.
+
+**STOP CONDITION:**
+
+After implementing this step and providing the completion report, stop.
+
+Wait for explicit user authorization before proceeding to the next roadmap step.
+
+**Final objective:** Establish a centralized, secure, extensible and version-aware configuration framework that gives all 29 GeFlow AI agents individually defined configurations while preserving shared infrastructure, strict authorization and reliable execution.

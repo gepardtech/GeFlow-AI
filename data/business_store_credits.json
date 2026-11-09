@@ -1,0 +1,72 @@
+{
+  "abd5e80f-b0f0-4b9c-9167-d183bb905ed3": [
+    {
+      "id": "credit_1793717438208_y7nm1",
+      "notes": "Created from POS checkout",
+      "balance": 0,
+      "buyer_id": "BUY-10001",
+      "created_at": "2026-11-03T14:50:38.208Z",
+      "updated_at": "2026-11-05T14:37:40.156Z",
+      "business_id": "abd5e80f-b0f0-4b9c-9167-d183bb905ed3",
+      "credit_limit": 50000,
+      "transactions": [
+        {
+          "id": "txn_1793889460156_q3sh",
+          "date": "2026-11-05T14:37:40.156Z",
+          "note": "Udhar repayment received via Cash",
+          "type": "udhar_repayment",
+          "amount": 1630,
+          "invoice_no": "REP-462224",
+          "processed_by": "Gepard Restaurant",
+          "balance_after": 0,
+          "payment_method": "Cash",
+          "udhar_balance_after": 0,
+          "deposit_balance_after": 0
+        },
+        {
+          "id": "txn_1793717748422_ba6p",
+          "date": "2026-11-03T14:55:48.422Z",
+          "note": "Udhar repayment received via Cash",
+          "type": "udhar_repayment",
+          "amount": 570,
+          "invoice_no": "REP-748911",
+          "processed_by": "Gepard Restaurant",
+          "balance_after": 1630,
+          "payment_method": "Cash",
+          "udhar_balance_after": 1630,
+          "deposit_balance_after": 0
+        },
+        {
+          "id": "txn_1793717684791_jytb",
+          "date": "2026-11-03T14:54:44.791Z",
+          "note": "POS Store Credit Purchase (1 items)",
+          "type": "udhar_charge",
+          "amount": 750,
+          "invoice_no": "GEF-GERE-UMEK5T",
+          "processed_by": "Premium",
+          "balance_after": 2200,
+          "payment_method": "Udhar Credit",
+          "udhar_balance_after": 2200,
+          "deposit_balance_after": 0
+        },
+        {
+          "id": "txn_1793717452143_9yxw",
+          "date": "2026-11-03T14:50:52.143Z",
+          "note": "POS Store Credit Purchase (1 items)",
+          "type": "udhar_charge",
+          "amount": 1450,
+          "invoice_no": "GEF-GERE-SSDGRH",
+          "processed_by": "Premium",
+          "balance_after": 1450,
+          "payment_method": "Udhar Credit",
+          "udhar_balance_after": 1450,
+          "deposit_balance_after": 0
+        }
+      ],
+      "customer_name": "SG Bilal",
+      "customer_phone": "+923038624814",
+      "available_deposit": 0,
+      "outstanding_udhar": 0
+    }
+  ]
+}

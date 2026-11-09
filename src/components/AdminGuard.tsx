@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { FullWorkspaceSkeleton } from "@/components/ui/PageSkeletons";
 
 interface Props {
   children: ReactNode;
@@ -147,15 +148,7 @@ const AdminGuard = ({ children }: Props) => {
   }, [navigate]);
 
   if (allowed !== true) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background text-muted-foreground gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center p-2.5 shadow-md">
-          <img src="/favicon.ico" alt="Favicon" className="w-full h-full object-contain" />
-        </div>
-        <div className="h-6 w-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-        <p className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Verifying administrator access...</p>
-      </div>
-    );
+    return <FullWorkspaceSkeleton title="Verifying administrator access..." />;
   }
 
   return <>{children}</>;

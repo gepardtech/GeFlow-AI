@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import DashboardCardModal, { DashboardModalType } from "@/components/dashboard/DashboardCardModal";
+import { DashboardPageSkeleton } from "@/components/ui/PageSkeletons";
 
 interface DayPoint {
   day: string;
@@ -361,14 +362,11 @@ const Dashboard = () => {
   const initial = firstName.charAt(0).toUpperCase();
   const hasData = chart.some((c) => c.sales > 0);
 
-  // Show full spinner only on initial unresolved bootstrap, never flash on updates
+  // Show realistic skeleton only on initial unresolved bootstrap, never flash on updates
   if ((loading && !hasLoaded) || (bizLoading && !activeId && !hasLoaded)) {
     return (
       <UserPanelGate pageTitle="Dashboard" module="dashboard">
-        <div className="min-h-[60vh] flex flex-col items-center justify-center text-muted-foreground text-sm font-medium gap-3">
-          <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          <p>Loading your store dashboard...</p>
-        </div>
+        <DashboardPageSkeleton />
       </UserPanelGate>
     );
   }

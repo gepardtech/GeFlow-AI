@@ -96,39 +96,75 @@
     <style>
       #geflow-boot-screen {
         min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
         background: #090d16;
         color: #f3f4f6;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        padding: 24px;
         box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
       }
-      .geflow-spinner {
-        width: 44px;
-        height: 44px;
-        border: 3px solid rgba(80, 200, 251, 0.15);
-        border-top-color: #50c8fb;
-        border-radius: 50%;
-        animation: geflow-spin 0.8s linear infinite;
-        margin-bottom: 20px;
+      @keyframes geflow-pulse {
+        0%, 100% { opacity: 0.35; }
+        50% { opacity: 0.85; }
       }
-      @keyframes geflow-spin {
-        to { transform: rotate(360deg); }
+      .sk-box {
+        background: #1e2638;
+        border-radius: 8px;
+        animation: geflow-pulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
       }
-      .geflow-brand {
-        font-size: 22px;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        color: #ffffff;
-        margin-bottom: 6px;
+      .sk-card {
+        background: #111827;
+        border: 1px solid #1f293d;
+        border-radius: 16px;
       }
-      .geflow-sub {
-        font-size: 13px;
-        color: #9ca3af;
-        letter-spacing: 0.02em;
+      .sk-header {
+        height: 64px;
+        border-bottom: 1px solid #1f293d;
+        padding: 0 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #0e1422;
+      }
+      .sk-body {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+      }
+      .sk-sidebar {
+        width: 240px;
+        border-right: 1px solid #1f293d;
+        background: #0d121f;
+        padding: 20px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .sk-main {
+        flex: 1;
+        padding: 28px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .sk-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+      }
+      .sk-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 20px;
+      }
+      @media (max-width: 900px) {
+        .sk-sidebar { display: none; }
+        .sk-kpis { grid-template-columns: repeat(2, 1fr); }
+        .sk-grid { grid-template-columns: 1fr; }
+      }
+      @media (max-width: 600px) {
+        .sk-kpis { grid-template-columns: 1fr; }
+        .sk-main { padding: 16px; }
       }
     </style>
 
@@ -246,10 +282,104 @@
   <body>
     <div id="root">
       <div id="geflow-boot-screen">
-        <img src="/favicon.ico" alt="Favicon" style="width:48px;height:48px;object-fit:contain;margin-bottom:20px;" />
-        <div class="geflow-spinner"></div>
-        <div class="geflow-brand">GeFlow</div>
-        <div class="geflow-sub">Fast. Smart. Reliable.</div>
+        <header class="sk-header">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <img src="/favicon.ico" alt="GeFlow" style="width:32px;height:32px;object-fit:contain;" />
+            <div style="font-weight:700;font-size:17px;color:#fff;letter-spacing:-0.02em;">GeFlow</div>
+            <div class="sk-box" style="width:70px;height:18px;border-radius:12px;margin-left:8px;"></div>
+          </div>
+          <div class="sk-box" style="width:260px;height:36px;border-radius:10px;"></div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div class="sk-box" style="width:90px;height:32px;border-radius:8px;"></div>
+            <div class="sk-box" style="width:36px;height:36px;border-radius:50%;"></div>
+          </div>
+        </header>
+        <div class="sk-body">
+          <aside class="sk-sidebar">
+            <div class="sk-box" style="width:80px;height:12px;margin-bottom:8px;"></div>
+            <div class="sk-box" style="width:100%;height:38px;border-radius:10px;"></div>
+            <div class="sk-box" style="width:100%;height:38px;border-radius:10px;"></div>
+            <div class="sk-box" style="width:100%;height:38px;border-radius:10px;"></div>
+            <div class="sk-box" style="width:100%;height:38px;border-radius:10px;"></div>
+            <div class="sk-box" style="width:100%;height:38px;border-radius:10px;"></div>
+            <div class="sk-box" style="width:100%;height:38px;border-radius:10px;"></div>
+            <div class="sk-box" style="width:100%;height:38px;border-radius:10px;"></div>
+          </aside>
+          <main class="sk-main">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
+              <div>
+                <div class="sk-box" style="width:220px;height:26px;margin-bottom:8px;"></div>
+                <div class="sk-box" style="width:320px;height:14px;"></div>
+              </div>
+              <div style="display:flex;gap:10px;">
+                <div class="sk-box" style="width:100px;height:38px;border-radius:10px;"></div>
+                <div class="sk-box" style="width:130px;height:38px;border-radius:10px;"></div>
+              </div>
+            </div>
+            <div class="sk-kpis">
+              <div class="sk-card" style="padding:18px;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
+                  <div class="sk-box" style="width:80px;height:12px;"></div>
+                  <div class="sk-box" style="width:28px;height:28px;border-radius:8px;"></div>
+                </div>
+                <div class="sk-box" style="width:120px;height:26px;margin-bottom:10px;"></div>
+                <div class="sk-box" style="width:90px;height:12px;"></div>
+              </div>
+              <div class="sk-card" style="padding:18px;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
+                  <div class="sk-box" style="width:80px;height:12px;"></div>
+                  <div class="sk-box" style="width:28px;height:28px;border-radius:8px;"></div>
+                </div>
+                <div class="sk-box" style="width:120px;height:26px;margin-bottom:10px;"></div>
+                <div class="sk-box" style="width:90px;height:12px;"></div>
+              </div>
+              <div class="sk-card" style="padding:18px;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
+                  <div class="sk-box" style="width:80px;height:12px;"></div>
+                  <div class="sk-box" style="width:28px;height:28px;border-radius:8px;"></div>
+                </div>
+                <div class="sk-box" style="width:120px;height:26px;margin-bottom:10px;"></div>
+                <div class="sk-box" style="width:90px;height:12px;"></div>
+              </div>
+              <div class="sk-card" style="padding:18px;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
+                  <div class="sk-box" style="width:80px;height:12px;"></div>
+                  <div class="sk-box" style="width:28px;height:28px;border-radius:8px;"></div>
+                </div>
+                <div class="sk-box" style="width:120px;height:26px;margin-bottom:10px;"></div>
+                <div class="sk-box" style="width:90px;height:12px;"></div>
+              </div>
+            </div>
+            <div class="sk-grid">
+              <div class="sk-card" style="padding:22px;height:280px;display:flex;flex-direction:column;justify-content:space-between;">
+                <div style="display:flex;justify-content:space-between;">
+                  <div class="sk-box" style="width:160px;height:18px;"></div>
+                  <div class="sk-box" style="width:80px;height:28px;border-radius:8px;"></div>
+                </div>
+                <div style="display:flex;align-items:flex-end;gap:12px;height:190px;padding-top:20px;">
+                  <div class="sk-box" style="flex:1;height:45%;"></div>
+                  <div class="sk-box" style="flex:1;height:70%;"></div>
+                  <div class="sk-box" style="flex:1;height:35%;"></div>
+                  <div class="sk-box" style="flex:1;height:85%;"></div>
+                  <div class="sk-box" style="flex:1;height:60%;"></div>
+                  <div class="sk-box" style="flex:1;height:95%;"></div>
+                  <div class="sk-box" style="flex:1;height:55%;"></div>
+                  <div class="sk-box" style="flex:1;height:75%;"></div>
+                  <div class="sk-box" style="flex:1;height:90%;"></div>
+                  <div class="sk-box" style="flex:1;height:65%;"></div>
+                  <div class="sk-box" style="flex:1;height:80%;"></div>
+                  <div class="sk-box" style="flex:1;height:100%;"></div>
+                </div>
+              </div>
+              <div class="sk-card" style="padding:22px;display:flex;flex-direction:column;gap:16px;">
+                <div class="sk-box" style="width:130px;height:18px;"></div>
+                <div class="sk-box" style="width:140px;height:140px;border-radius:50%;margin:10px auto;"></div>
+                <div class="sk-box" style="width:100%;height:14px;"></div>
+                <div class="sk-box" style="width:80%;height:14px;"></div>
+              </div>
+            </div>
+          </main>
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>

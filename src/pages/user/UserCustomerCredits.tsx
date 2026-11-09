@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import UserPanelGate from "@/components/UserPanelGate";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
+import { ReportsPageSkeleton } from "@/components/ui/PageSkeletons";
 import { useMoney } from "@/lib/currency";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -857,6 +858,14 @@ export default function UserCustomerCredits() {
   const handlePrintReceipt = () => {
     window.print();
   };
+
+  if (loading && credits.length === 0) {
+    return (
+      <UserPanelGate pageTitle="Store Credit & Udhar" module="pos">
+        <ReportsPageSkeleton />
+      </UserPanelGate>
+    );
+  }
 
   return (
     <UserPanelGate pageTitle="Store Credit & Udhar" module="pos">

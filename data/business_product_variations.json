@@ -11,8 +11,8 @@
           "Size": "Small 8\"",
           "Crust": "Classic Hand Tossed"
         },
-        "stock_units": 10,
-        "retail_price": 500,
+        "stock_units": 9,
+        "retail_price": 750,
         "purchase_cost": 1000
       },
       {
@@ -26,7 +26,7 @@
           "Crust": "Thin Crust"
         },
         "stock_units": 10,
-        "retail_price": 500,
+        "retail_price": 750,
         "purchase_cost": 1000
       },
       {
@@ -40,7 +40,7 @@
           "Crust": "Cheese Burst"
         },
         "stock_units": 10,
-        "retail_price": 500,
+        "retail_price": 750,
         "purchase_cost": 1000
       },
       {
@@ -54,7 +54,7 @@
           "Crust": "Classic Hand Tossed"
         },
         "stock_units": 10,
-        "retail_price": 750,
+        "retail_price": 1000,
         "purchase_cost": 1150
       },
       {
@@ -68,7 +68,7 @@
           "Crust": "Thin Crust"
         },
         "stock_units": 10,
-        "retail_price": 750,
+        "retail_price": 1000,
         "purchase_cost": 1150
       },
       {
@@ -82,7 +82,7 @@
           "Crust": "Cheese Burst"
         },
         "stock_units": 10,
-        "retail_price": 750,
+        "retail_price": 1000,
         "purchase_cost": 1150
       },
       {
@@ -96,7 +96,7 @@
           "Crust": "Classic Hand Tossed"
         },
         "stock_units": 10,
-        "retail_price": 800,
+        "retail_price": 1150,
         "purchase_cost": 1400
       },
       {
@@ -110,7 +110,7 @@
           "Crust": "Thin Crust"
         },
         "stock_units": 10,
-        "retail_price": 800,
+        "retail_price": 1150,
         "purchase_cost": 1400
       },
       {
@@ -124,7 +124,7 @@
           "Crust": "Cheese Burst"
         },
         "stock_units": 10,
-        "retail_price": 800,
+        "retail_price": 1150,
         "purchase_cost": 1400
       },
       {
@@ -138,7 +138,7 @@
           "Crust": "Classic Hand Tossed"
         },
         "stock_units": 10,
-        "retail_price": 950,
+        "retail_price": 1450,
         "purchase_cost": 2100
       },
       {
@@ -152,7 +152,7 @@
           "Crust": "Thin Crust"
         },
         "stock_units": 10,
-        "retail_price": 950,
+        "retail_price": 1450,
         "purchase_cost": 2100
       },
       {
@@ -165,8 +165,8 @@
           "Size": "Family 14\"",
           "Crust": "Cheese Burst"
         },
-        "stock_units": 10,
-        "retail_price": 950,
+        "stock_units": 8,
+        "retail_price": 1450,
         "purchase_cost": 2100.04
       }
     ],
@@ -220,7 +220,7 @@
       }
     ],
     "product_id": "86fc96a1-fc63-411c-929f-b1bac4a4b92a",
-    "updated_at": "2026-11-01T15:50:25.030Z",
+    "updated_at": "2026-11-05T05:27:20.505Z",
     "business_id": "abd5e80f-b0f0-4b9c-9167-d183bb905ed3",
     "weight_unit": "g",
     "product_type": "variable",
@@ -231,5 +231,227 @@
       1000
     ],
     "price_per_base_unit": 1000
+  },
+  "prod_cappuccino_01": {
+    "variants": [
+      {
+        "id": "var_cap_small",
+        "sku": "CAP-SM",
+        "name": "Small (8oz)",
+        "active": true,
+        "parent_id": "prod_cappuccino_01",
+        "attributes": {
+          "Size": "Small (8oz)"
+        },
+        "stock_units": 50,
+        "retail_price": 3.8,
+        "purchase_cost": 0.95
+      },
+      {
+        "id": "var_cap_med",
+        "sku": "CAP-MD",
+        "name": "Medium (12oz)",
+        "active": true,
+        "parent_id": "prod_cappuccino_01",
+        "attributes": {
+          "Size": "Medium (12oz)"
+        },
+        "stock_units": 40,
+        "retail_price": 4.5,
+        "purchase_cost": 1.2
+      },
+      {
+        "id": "var_cap_large",
+        "sku": "CAP-LG",
+        "name": "Large (16oz)",
+        "active": true,
+        "parent_id": "prod_cappuccino_01",
+        "attributes": {
+          "Size": "Large (16oz)"
+        },
+        "stock_units": 30,
+        "retail_price": 5.2,
+        "purchase_cost": 1.5
+      }
+    ],
+    "modifiers": [],
+    "attributes": [
+      {
+        "id": "attr_size",
+        "name": "Size",
+        "values": [
+          "Small (8oz)",
+          "Medium (12oz)",
+          "Large (16oz)"
+        ],
+        "generatesVariants": true
+      }
+    ],
+    "product_id": "prod_cappuccino_01",
+    "updated_at": "2026-11-07T15:42:31.918Z",
+    "business_id": "biz_cafe_test_01",
+    "product_type": "variable"
+  },
+  "cafe_cappuccino_01": {
+    "variants": [
+      {
+        "id": "var_cap_small",
+        "sku": "CAP-SM",
+        "name": "Small (8oz)",
+        "active": true,
+        "parent_id": "cafe_cappuccino_01",
+        "attributes": {
+          "Size": "Small (8oz)"
+        },
+        "stock_units": 50,
+        "retail_price": 3.8,
+        "purchase_cost": 0.95
+      },
+      {
+        "id": "var_cap_med",
+        "sku": "CAP-MD",
+        "name": "Medium (12oz)",
+        "active": true,
+        "parent_id": "cafe_cappuccino_01",
+        "attributes": {
+          "Size": "Medium (12oz)"
+        },
+        "stock_units": 40,
+        "retail_price": 4.5,
+        "purchase_cost": 1.2
+      },
+      {
+        "id": "var_cap_large",
+        "sku": "CAP-LG",
+        "name": "Large (16oz)",
+        "active": true,
+        "parent_id": "cafe_cappuccino_01",
+        "attributes": {
+          "Size": "Large (16oz)"
+        },
+        "stock_units": 30,
+        "retail_price": 5.2,
+        "purchase_cost": 1.5
+      }
+    ],
+    "modifiers": [],
+    "attributes": [
+      {
+        "id": "attr_size",
+        "name": "Size",
+        "values": [
+          "Small (8oz)",
+          "Medium (12oz)",
+          "Large (16oz)"
+        ],
+        "generatesVariants": true
+      }
+    ],
+    "product_id": "cafe_cappuccino_01",
+    "updated_at": "2026-11-07T15:47:54.828Z",
+    "business_id": "biz_cafe_artisan_01",
+    "product_type": "variable"
+  },
+  "cafe_cappuccino": {
+    "variants": [
+      {
+        "id": "var_cap_sm",
+        "sku": "CAP-SM",
+        "name": "Small",
+        "attributes": {
+          "size": "Small"
+        },
+        "stock_units": 30,
+        "retail_price": 3,
+        "purchase_cost": 0.55
+      },
+      {
+        "id": "var_cap_md",
+        "sku": "CAP-MD",
+        "name": "Medium",
+        "attributes": {
+          "size": "Medium"
+        },
+        "stock_units": 50,
+        "retail_price": 4,
+        "purchase_cost": 0.735
+      },
+      {
+        "id": "var_cap_lg",
+        "sku": "CAP-LG",
+        "name": "Large",
+        "attributes": {
+          "size": "Large"
+        },
+        "stock_units": 20,
+        "retail_price": 5,
+        "purchase_cost": 0.95
+      }
+    ],
+    "attributes": [
+      {
+        "id": "attr_size",
+        "name": "Size",
+        "values": [
+          "Small",
+          "Medium",
+          "Large"
+        ]
+      }
+    ],
+    "product_id": "cafe_cappuccino",
+    "updated_at": "2026-11-08T16:07:10.438Z",
+    "product_type": "variable"
+  },
+  "cafe_latte": {
+    "variants": [
+      {
+        "id": "var_lat_sm",
+        "sku": "LAT-SM",
+        "name": "Small",
+        "attributes": {
+          "size": "Small"
+        },
+        "stock_units": 25,
+        "retail_price": 3.5,
+        "purchase_cost": 0.65
+      },
+      {
+        "id": "var_lat_md",
+        "sku": "LAT-MD",
+        "name": "Medium",
+        "attributes": {
+          "size": "Medium"
+        },
+        "stock_units": 40,
+        "retail_price": 4.5,
+        "purchase_cost": 0.85
+      },
+      {
+        "id": "var_lat_lg",
+        "sku": "LAT-LG",
+        "name": "Large",
+        "attributes": {
+          "size": "Large"
+        },
+        "stock_units": 15,
+        "retail_price": 5.5,
+        "purchase_cost": 1.05
+      }
+    ],
+    "attributes": [
+      {
+        "id": "attr_size",
+        "name": "Size",
+        "values": [
+          "Small",
+          "Medium",
+          "Large"
+        ]
+      }
+    ],
+    "product_id": "cafe_latte",
+    "updated_at": "2026-11-08T16:07:10.439Z",
+    "product_type": "variable"
   }
 }

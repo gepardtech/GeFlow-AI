@@ -12,6 +12,7 @@ import AuthGuard from "./components/AuthGuard";
 import ErrorBoundary from "./components/ErrorBoundary";
 import ScrollToTop from "./components/ScrollToTop";
 import { useBusinessRealtimeSync } from "./hooks/useBusinessRealtimeSync";
+import { FullWorkspaceSkeleton } from "./components/ui/PageSkeletons";
 
 // Eagerly load primary public landing
 import Index from "./pages/Index";
@@ -121,11 +122,7 @@ function BusinessSyncObserver() {
   return null;
 }
 
-const PageLoaderFallback = () => (
-  <div className="min-h-[50vh] flex items-center justify-center p-8" aria-label="Loading page content">
-    <div className="w-8 h-8 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
-  </div>
-);
+const PageLoaderFallback = () => <FullWorkspaceSkeleton title="Loading workspace..." />;
 
 const queryClient = new QueryClient();
 

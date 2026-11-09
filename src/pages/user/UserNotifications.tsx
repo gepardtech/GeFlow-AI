@@ -7,6 +7,7 @@ import {
   UserPlus, CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getStoredAIReports, getStoredRestockReports } from "@/lib/aiReportSchedulerService";
 import { getPendingInvitationsForUser, acceptInvitation, declineInvitation, PendingInvitation } from "@/lib/teamInviteService";
 import { useToast } from "@/hooks/use-toast";
@@ -340,7 +341,20 @@ const UserNotifications = () => {
         </div>
 
         {loading ? (
-          <div className="p-12 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></div>
+          <div className="p-4 space-y-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 p-4 rounded-xl bg-card border border-border/70">
+                <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-3 w-16" />
+                  </div>
+                  <Skeleton className="h-3.5 w-3/4" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center">
             <Bell className="h-8 w-8 mx-auto text-muted-foreground mb-3" />

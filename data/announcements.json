@@ -46,17 +46,17 @@
     "audience": "public",
     "position": "top",
     "variant": "promo",
-    "link_url": "/checkout?plan=premium&period=monthly&coupon=PAK79PRO",
+    "link_url": "/checkout?plan=premium&period=lifetime&coupon=PAK79PRO",
     "link_label": "Claim PAK79PRO Offer",
     "coupon_code": "PAK79PRO",
     "priority_order": 3,
-    "popup_opens": 0,
+    "popup_opens": 2,
     "conversions": 0,
     "earnings": 0,
-    "starts_at": "2026-10-26T05:46:00+00:00",
+    "starts_at": "2026-10-26T00:46:00+00:00",
     "ends_at": null,
     "is_active": true,
     "created_at": "2026-10-26T15:48:05.996042+00:00",
-    "updated_at": "2026-10-26T15:48:54.606163+00:00"
+    "updated_at": "2026-11-07T15:45:51.588512+00:00"
   }
 ]

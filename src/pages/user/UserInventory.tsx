@@ -37,6 +37,7 @@ import { StockLedgerModal } from "@/components/inventory/StockLedgerModal";
 import { BusinessCategorySetupWizard } from "@/components/inventory/BusinessCategorySetupWizard";
 import { useMoney } from "@/lib/currency";
 import { parseProductUOM, computeProductStock } from "@/lib/uomRegistry";
+import { TableRowSkeletons } from "@/components/ui/PageSkeletons";
 
 const UserInventory = () => {
   const { plan } = usePlan();
@@ -834,7 +835,25 @@ const UserInventory = () => {
       {/* Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-xs">
         {bizLoading || loading ? (
-          <div className="p-12 text-center text-muted-foreground">Loading inventory...</div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-muted/20 text-[10px] font-bold text-muted-foreground">
+                  <th className="px-4 py-3.5 text-left">PRODUCT</th>
+                  <th className="px-4 py-3.5 text-left">CATEGORY</th>
+                  <th className="px-4 py-3.5 text-left">BARCODE</th>
+                  <th className="px-4 py-3.5 text-left">STOCK</th>
+                  <th className="px-4 py-3.5 text-left">COST</th>
+                  <th className="px-4 py-3.5 text-left">PRICE</th>
+                  <th className="px-4 py-3.5 text-center">STATUS</th>
+                  <th className="px-4 py-3.5 text-right">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <TableRowSkeletons rows={6} columns={8} />
+              </tbody>
+            </table>
+          </div>
         ) : !active ? (
           <div className="p-12 text-center">
             <Package className="h-8 w-8 mx-auto text-muted-foreground mb-3" />

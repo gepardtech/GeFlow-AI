@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import PurchaseArchitectDialog, { PurchaseProduct } from "@/components/purchases/PurchaseArchitectDialog";
 import PurchaseLedgerDialog, { PurchaseRecord } from "@/components/purchases/PurchaseLedgerDialog";
+import { TableRowSkeletons } from "@/components/ui/PageSkeletons";
 
 const UserPurchases = () => {
   const { active, loading: bizLoading } = useActiveBusiness();
@@ -184,7 +185,24 @@ const UserPurchases = () => {
       {/* Table */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         {bizLoading || loading ? (
-          <div className="p-12 text-center text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" /> Loading purchase ledger...</div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-[10px] font-bold tracking-widest text-muted-foreground border-b border-border bg-muted/20">
+                  <th className="text-left px-4 py-3.5">PURCHASE #</th>
+                  <th className="text-left px-4 py-3.5">SUPPLIER</th>
+                  <th className="text-left px-4 py-3.5">ITEMS</th>
+                  <th className="text-left px-4 py-3.5">TOTAL</th>
+                  <th className="text-left px-4 py-3.5">DATE</th>
+                  <th className="text-center px-4 py-3.5">STATUS</th>
+                  <th className="text-right px-4 py-3.5">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <TableRowSkeletons rows={6} columns={7} />
+              </tbody>
+            </table>
+          </div>
         ) : !active ? (
           <div className="p-12 text-center">
             <Package className="h-8 w-8 mx-auto text-muted-foreground mb-3" />

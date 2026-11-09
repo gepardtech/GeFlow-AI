@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import PanelLayout from "@/components/PanelLayout";
 import { ADMIN_NAV, ADMIN_IDENTITY } from "@/lib/panelNav";
+import { TableRowSkeletons } from "@/components/ui/PageSkeletons";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -228,7 +229,23 @@ const AdminPlanLimits = () => {
       </div>
 
       {loading ? (
-        <div className="p-12 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></div>
+        <div className="bg-card border border-border rounded-2xl overflow-x-auto">
+          <table className="w-full text-sm min-w-[760px]">
+            <thead>
+              <tr className="text-[10px] font-bold tracking-widest text-muted-foreground border-b border-border bg-muted/20">
+                <th className="text-left px-6 py-4">RESOURCE</th>
+                {PLAN_ORDER.map((p) => (
+                  <th key={p} className="px-4 py-4 text-center">
+                    <span className={`inline-block px-2.5 py-1 rounded-full ${PLAN_META[p].cls}`}>{PLAN_META[p].label}</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <TableRowSkeletons rows={6} columns={1 + PLAN_ORDER.length} />
+            </tbody>
+          </table>
+        </div>
       ) : (
         <div className="bg-card border border-border rounded-2xl overflow-x-auto">
           <table className="w-full text-sm min-w-[760px]">

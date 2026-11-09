@@ -20,6 +20,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TableRowSkeletons } from "@/components/ui/PageSkeletons";
 
 interface BusinessRow {
   id: string;
@@ -503,7 +504,7 @@ const AdminBusinesses = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="p-12 text-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></td></tr>
+                <TableRowSkeletons rows={6} columns={7} />
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={7} className="p-12 text-center text-muted-foreground">No businesses registered yet. Users will appear here after completing the business setup wizard.</td></tr>
               ) : filtered.map((r) => (

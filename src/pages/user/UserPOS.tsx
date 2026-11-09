@@ -24,6 +24,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMoney } from "@/lib/currency";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import SaleReceiptDialog, { ReceiptData } from "@/components/pos/SaleReceiptDialog";
 import {
   SmartUOMCalculatorModal,
@@ -1485,7 +1486,19 @@ const UserPOS = () => {
           {/* Grid */}
           <div className="flex-1 xl:overflow-y-auto pr-1 min-w-0">
             {bizLoading || loading ? (
-              <div className="p-12 text-center text-muted-foreground">Loading catalog...</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4 min-w-0">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="p-4 rounded-2xl bg-card border border-border space-y-3">
+                    <Skeleton className="h-28 w-full rounded-xl" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                    <div className="flex justify-between items-center pt-2">
+                      <Skeleton className="h-5 w-16" />
+                      <Skeleton className="h-8 w-14 rounded-lg" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : !active ? (
               <div className="bg-card border border-border rounded-2xl p-8 sm:p-12 text-center">
                 <Package className="h-8 w-8 mx-auto text-muted-foreground mb-3" />

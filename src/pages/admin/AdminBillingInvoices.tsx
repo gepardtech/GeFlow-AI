@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import jsPDF from "jspdf";
+import { TableRowSkeletons } from "@/components/ui/PageSkeletons";
 
 interface BrandOpts { logo?: string | null; appName?: string; tagline?: string | null; }
 
@@ -289,7 +290,7 @@ const AdminBillingInvoices = () => {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="p-12 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></td></tr>
+              <TableRowSkeletons rows={5} columns={6} />
             ) : filtered.length === 0 ? (
               <tr><td colSpan={6} className="p-12 text-center text-muted-foreground">No invoices yet — create one with "New Manual Invoice".</td></tr>
             ) : filtered.map((r) => (

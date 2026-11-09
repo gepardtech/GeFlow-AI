@@ -7,6 +7,7 @@ import { Search, Download, MoreVertical, Loader2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from "recharts";
 import { useToast } from "@/hooks/use-toast";
+import { TableRowSkeletons } from "@/components/ui/PageSkeletons";
 
 interface SubRow {
   id: string; owner_user_id: string; tier: string; cycle: string; status: string; amount: number;
@@ -182,7 +183,7 @@ const AdminBillingSubscriptions = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="p-12 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></td></tr>
+                <TableRowSkeletons rows={5} columns={7} />
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={7} className="p-12 text-center text-muted-foreground">No subscriptions yet.</td></tr>
               ) : filtered.map((r) => (

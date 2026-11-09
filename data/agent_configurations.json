@@ -1,0 +1,3181 @@
+[
+  {
+    "identity": {
+      "agent_id": "AGT-001",
+      "agent_name": "General Retail Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-001",
+      "configuration_id": "cfg_agt-001_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "General Retail Agent",
+      "description": "Multi-department retail operations, seasonal assortment velocity, SKU cataloging, and omni-channel stock balancing.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.audit",
+        "pos.basket_analysis",
+        "purchasing.reorder_forecast",
+        "reports.department_velocity"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "department_reorder_multiplier": 1.15,
+      "enable_seasonal_markdown_alerts": true,
+      "pos_promotion_audit_depth": 10
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-002",
+      "agent_name": "Agriculture & Farming Supplies Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-002",
+      "configuration_id": "cfg_agt-002_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Agriculture & Farming Supplies Agent",
+      "description": "Crop season planting schedules, seed germination batches, bulk fertilizer units, livestock feed lots, and rural credit tracking.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.batch_tracking",
+        "pos.bulk_weighing",
+        "purchasing.seasonal_buffer",
+        "reports.crop_cycle"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "fertilizer_expiry_warning_days": 45,
+      "enable_bulk_uom_conversion": true,
+      "farmer_credit_khata_limit": 50000
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-003",
+      "agent_name": "Wholesale & Distribution Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-003",
+      "configuration_id": "cfg_agt-003_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Wholesale & Distribution Agent",
+      "description": "B2B bulk carton/pallet logistics, multi-tier volume discounts, freight manifest audits, and distributor ledger reconciliations.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.pallet_tracking",
+        "pos.tiered_pricing",
+        "purchasing.supplier_contract",
+        "analytics.debtor_aging"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "case_pack_breakage_tolerance": 0.02,
+      "b2b_invoice_credit_terms_days": 30,
+      "tier_discount_minimum_order": 100
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-004",
+      "agent_name": "Optometry & Eyewear Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-004",
+      "configuration_id": "cfg_agt-004_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Optometry & Eyewear Agent",
+      "description": "Lens prescription parameters (Sphere, Cylinder, Axis, Addition), frame fitting ergonomics, contact lens lot expiries, and optical warranty tracking.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.rx_matrix",
+        "pos.optical_order",
+        "purchasing.lab_work_order"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "lens_prescription_axis_validation": true,
+      "frame_face_fit_metrics_enabled": true,
+      "optical_warranty_tracking_months": 12
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-005",
+      "agent_name": "Pet Shop & Veterinary Supplies Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-005",
+      "configuration_id": "cfg_agt-005_1_0_0",
+      "configuration_version": "1.2.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Pet Shop & Veterinary Supplies Agent",
+      "description": "Veterinary prescription feeds, pet vaccinations, grooming service booking schedules, and species-specific dietary inventory.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.vaccine_expiry",
+        "pos.service_booking",
+        "purchasing.feed_bulk"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "pet_vaccine_batch_shelf_life_days": 30,
+      "vet_prescription_vetting_required": true,
+      "live_animal_handling_protocol": "humane_certified"
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-006",
+      "agent_name": "Sports & Fitness Equipment Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-006",
+      "configuration_id": "cfg_agt-006_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Sports & Fitness Equipment Agent",
+      "description": "Athletic gear specifications, nutritional supplement batch expiries, gym apparatus delivery & assembly, and team club bulk jerseys.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.supplement_tracking",
+        "pos.team_order",
+        "purchasing.equipment_po"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "equipment_serial_number_mandatory": true,
+      "gym_warranty_maintenance_interval_days": 90,
+      "fitness_bundle_pricing_rules": "active"
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-007",
+      "agent_name": "Home Appliances & Kitchenware Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-007",
+      "configuration_id": "cfg_agt-007_1_0_0",
+      "configuration_version": "1.1.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Home Appliances & Kitchenware Agent",
+      "description": "Consumer electronics warranties, serial number tracking, appliance installation dispatching, and spare part cross-referencing.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.serial_lookup",
+        "pos.warranty_issuance",
+        "purchasing.spare_parts"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "voltage_compatibility_warning": true,
+      "extended_warranty_duration_years": 2,
+      "home_delivery_schedule_window_hours": 4
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-008",
+      "agent_name": "Home Furniture & Living Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-008",
+      "configuration_id": "cfg_agt-008_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Home Furniture & Living Agent",
+      "description": "Flat-pack component assembly, custom upholstery fabrics, room dimensional planning, and heavy white-glove delivery logistics.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.dimension_calc",
+        "pos.custom_order",
+        "purchasing.timber_fabric"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "flatpack_assembly_service_default": true,
+      "timber_certification_check": true,
+      "warehouse_cube_utilization_target": 0.85
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-009",
+      "agent_name": "Jewelry & Luxury Goods Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-009",
+      "configuration_id": "cfg_agt-009_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Jewelry & Luxury Goods Agent",
+      "description": "Precious metal spot rate calculations (Gold karatage, Silver grams), gemstone certification (GIA/IGI), hallmark tracking, and bespoke jewelry crafting.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.gold_rate_calc",
+        "pos.gemstone_cert",
+        "purchasing.bullion_lot"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "gold_karat_hallmark_validation": true,
+      "gemstone_carat_certification_mandatory": true,
+      "daily_precious_metal_rate_sync": true
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-010",
+      "agent_name": "Bookstore & Stationery Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-010",
+      "configuration_id": "cfg_agt-010_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Bookstore & Stationery Agent",
+      "description": "ISBN bibliographical lookups, academic curriculum booklists, publisher consignment returns, and stationery pack bundling.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.isbn_lookup",
+        "pos.curriculum_bundle",
+        "purchasing.consignment_return"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "isbn_13_checksum_validation": true,
+      "academic_term_back_to_school_reorder": true,
+      "publisher_return_credit_window_days": 60
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-011",
+      "agent_name": "Hair Salon & Barbershop Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-011",
+      "configuration_id": "cfg_agt-011_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Hair Salon & Barbershop Agent",
+      "description": "Stylist appointment calendar sync, chair occupancy metrics, professional hair treatment consumables, and stylist commission splits.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.consumable_mix",
+        "pos.appointment_split",
+        "reports.stylist_commission"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "stylist_chair_commission_rate": 0.4,
+      "appointment_no_show_buffer_minutes": 15,
+      "consumable_chemical_batch_audit": true
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-012",
+      "agent_name": "Cosmetics & Beauty Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-012",
+      "configuration_id": "cfg_agt-012_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Cosmetics & Beauty Agent",
+      "description": "Cosmetics shade matrices, skincare formula batch expiries, hypoallergenic allergen labeling, and counter tester unit controls.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.shade_matrix",
+        "pos.tester_audit",
+        "purchasing.beauty_distributor"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "dermatological_patch_test_warning": true,
+      "hypoallergenic_tag_validation": true,
+      "tester_cosmetic_write_off_limit": 5
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-013",
+      "agent_name": "Vehicle Repair & Service Garage Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-013",
+      "configuration_id": "cfg_agt-013_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Vehicle Repair & Service Garage Agent",
+      "description": "Automotive Job Cards, technician labor hours billing, vehicle VIN vehicle histories, and mechanic bay occupancy.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "pos.job_card",
+        "inventory.parts_usage",
+        "reports.mechanic_hours"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "vin_vehicle_lookup_enabled": true,
+      "technician_labor_rate_hourly": 65,
+      "preventive_oil_change_interval_km": 5000
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-014",
+      "agent_name": "Auto Parts & Accessories Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-014",
+      "configuration_id": "cfg_agt-014_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Auto Parts & Accessories Agent",
+      "description": "OEM vs. aftermarket automotive parts cross-referencing, engine chassis compatibility, core deposit returns, and fastener bins.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.vin_fitment",
+        "pos.core_deposit",
+        "purchasing.oem_aftermarket"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "oem_vs_aftermarket_part_flag": true,
+      "core_deposit_charge_enabled": true,
+      "interchange_cross_reference_depth": 3
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-015",
+      "agent_name": "Plumbing & Sanitary Ware Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-015",
+      "configuration_id": "cfg_agt-015_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Plumbing & Sanitary Ware Agent",
+      "description": "Pipe diameter thread specifications (PPRC, CPVC, PVC, Brass), sanitary fixtures, pump flow ratings, and contractor project takeoffs.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.pipe_schedule",
+        "pos.contractor_quote",
+        "purchasing.bulk_fittings"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "pipe_diameter_unit_metric": true,
+      "brass_fittings_pressure_rating_psi": 150,
+      "contractor_bulk_pipe_discount": 0.12
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-016",
+      "agent_name": "Electrical & Lighting Supplies Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-016",
+      "configuration_id": "cfg_agt-016_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Electrical & Lighting Supplies Agent",
+      "description": "Cable gauges and coil cutting lengths, circuit breaker amperages, LED color temperatures (Kelvin), and electrician rebate incentives.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.reel_cutting",
+        "pos.electrician_rebate",
+        "purchasing.lighting_specs"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "led_lumens_efficiency_check": true,
+      "wire_gauge_amp_safety_margin": 0.2,
+      "industrial_switchgear_certification": true
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-017",
+      "agent_name": "Hardware & Construction Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-017",
+      "configuration_id": "cfg_agt-017_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Hardware & Construction Agent",
+      "description": "Power tool serial warranties, fastener weight-to-count conversions, cement/steel batch tracking, and site delivery dispatches.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.weight_piece_convert",
+        "pos.jobsite_dispatch",
+        "purchasing.steel_cement"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "cement_curing_batch_shelf_life_days": 60,
+      "steel_rebar_weight_per_meter_table": "standard_astm",
+      "hazardous_solvent_flammability_warning": true
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-018",
+      "agent_name": "Bakery & Pastry Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-018",
+      "configuration_id": "cfg_agt-018_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Bakery & Pastry Agent",
+      "description": "Daily bake production recipes, raw ingredient scaling (Flour, Sugar, Butter), custom celebration cake orders, and same-day end-of-shift markdowns.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.recipe_depletion",
+        "pos.custom_cake",
+        "reports.daily_waste"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "daily_dough_proofing_schedule_hours": 6,
+      "bakery_expiry_hours_from_bake": 24,
+      "cake_custom_decoration_lead_hours": 48
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-019",
+      "agent_name": "Cafe & Coffee Shop Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-019",
+      "configuration_id": "cfg_agt-019_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Cafe & Coffee Shop Agent",
+      "description": "Coffee bean roast batch tracking, dairy and plant milk usage, barista drink modifications (Syrup, Extra Shot), and loyalty punchcards.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.bean_batch",
+        "pos.beverage_modifier",
+        "reports.peak_hours"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "coffee_roast_date_freshness_window_days": 21,
+      "dairy_alternative_milk_surcharge": 0.5,
+      "barista_speed_of_service_target_seconds": 90
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-020",
+      "agent_name": "Fast Food & Quick Service Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-020",
+      "configuration_id": "cfg_agt-020_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Fast Food & Quick Service Agent",
+      "description": "Combo meal upsells, kitchen display system (KDS) firing, made-on-order bypass (live cook items never out of stock), and drive-thru speeds.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "pos.combo_builder",
+        "inventory.made_on_order",
+        "reports.speed_of_service"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "fryer_oil_test_frequency_hours": 12,
+      "drive_thru_order_target_seconds": 180,
+      "combo_meal_auto_upsell": true
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-021",
+      "agent_name": "Restaurant Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-021",
+      "configuration_id": "cfg_agt-021_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Restaurant Agent",
+      "description": "Dining table floor plan layouts, kitchen order ticket (KOT) firing, split bills, live kitchen recipes, and waiter service tips.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "pos.table_management",
+        "pos.kot_routing",
+        "inventory.perishable_meat",
+        "reports.cover_analytics"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "table_turnover_target_minutes": 60,
+      "kitchen_display_kot_routing_enabled": true,
+      "alcohol_beverage_age_verification_prompt": true
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-022",
+      "agent_name": "Footwear & Shoes Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-022",
+      "configuration_id": "cfg_agt-022_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Footwear & Shoes Agent",
+      "description": "Shoe size conversion charts (US, UK, EU, CM), width fittings, left/right pair integrity, shoe care product attachments, and seasonal footwear clearances.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.size_matrix",
+        "pos.broken_size_sale",
+        "purchasing.case_size_run"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "shoe_size_width_standard": "us_eu_uk",
+      "left_right_shoe_pairing_check": true,
+      "footwear_box_barcode_mandatory": true
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-023",
+      "agent_name": "Fashion & Apparel Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-023",
+      "configuration_id": "cfg_agt-023_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Fashion & Apparel Agent",
+      "description": "Apparel Color & Size variant matrices (XS to 3XL), seasonal collections, fitting room reserves, alteration tracking, and garment tagging.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.color_size_matrix",
+        "pos.alteration_slip",
+        "reports.sell_through_rate"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "apparel_size_matrix": [
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL",
+        "XXL"
+      ],
+      "garment_fabric_care_label_required": true,
+      "seasonal_clothing_clearance_discount": 0.3
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-024",
+      "agent_name": "Computer & IT Hardware Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-024",
+      "configuration_id": "cfg_agt-024_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Computer & IT Hardware Agent",
+      "description": "Custom PC builder component compatibility (Socket, Motherboard, RAM, PSU Wattage), serial number warranties, and enterprise IT licenses.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.pc_compatibility",
+        "pos.serial_warranty",
+        "purchasing.it_distributor"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "pc_component_compatibility_check": true,
+      "ram_ddr_bus_speed_match": true,
+      "rma_component_warranty_serial_tracking": true
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-025",
+      "agent_name": "Mobile & Telecom Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-025",
+      "configuration_id": "cfg_agt-025_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Mobile & Telecom Agent",
+      "description": "Dual-IMEI device verification, carrier network unlocks, mobile screen repair tracking, accessories bundling, and used phone trade-in evaluations.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.imei_validation",
+        "pos.trade_in_audit",
+        "purchasing.mobile_wholesaler"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "imei_esn_serial_mandatory": true,
+      "sim_carrier_lock_status_audit": true,
+      "trade_in_device_diagnostic_flow": "standard"
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-026",
+      "agent_name": "Electronics & Gadgets Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-026",
+      "configuration_id": "cfg_agt-026_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Electronics & Gadgets Agent",
+      "description": "Smart consumer electronics, audio gear, smart home IoT ecosystem compatibility, warranty claims, and fast-depreciating tech cycles.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.tech_specs",
+        "pos.extended_warranty",
+        "analytics.gadget_velocity"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "lithium_battery_shipping_compliance": true,
+      "refurbished_grade_classification": [
+        "Grade A",
+        "Grade B",
+        "Grade C"
+      ],
+      "firmware_update_check_enabled": true
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-027",
+      "agent_name": "Grocery Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-027",
+      "configuration_id": "cfg_agt-027_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Grocery Agent",
+      "description": "FMCG high-turnover staples, loose grain weigh-scales, milk/bread daily deliveries, neighbor khata store credit, and perishable shelf-life rotations.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.fmcg_expiry",
+        "pos.weigh_scale_barcode",
+        "pos.khata_balance",
+        "purchasing.staple_buffer"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "produce_ripeness_shelf_life_days": 4,
+      "cold_chain_dairy_temp_celsius_max": 4,
+      "bag_recycling_tax_calculation": true
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-028",
+      "agent_name": "Supermarket & Hypermarket Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-028",
+      "configuration_id": "cfg_agt-028_1_0_0",
+      "configuration_version": "1.0.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Supermarket & Hypermarket Agent",
+      "description": "Multi-aisle layout velocity, gondola end-cap promotions, central warehouse restocking trucks, thermal receipt line items, and high-speed multi-lane cashiering.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.planogram_velocity",
+        "pos.multi_lane_throughput",
+        "purchasing.central_dc_order"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "pallet_intake_cross_docking_enabled": true,
+      "shrinkage_loss_prevention_alert_pct": 0.015,
+      "fmcg_fast_mover_reorder_days": 2
+    }
+  },
+  {
+    "identity": {
+      "agent_id": "AGT-029",
+      "agent_name": "Pharmacy & Health Store Agent",
+      "agent_type": "category_specialized",
+      "primary_category_id": "CAT-029",
+      "configuration_id": "cfg_agt-029_1_0_0",
+      "configuration_version": "1.1.0",
+      "contract_version": "1.0"
+    },
+    "general": {
+      "display_name": "Pharmacy & Health Store Agent",
+      "description": "Drug schedule regulations, batch and expiry date compliance, active pharmaceutical ingredient (API/Formula) generic equivalents, and temperature storage controls.",
+      "enabled_status": true,
+      "supported_languages": [
+        "en",
+        "fr",
+        "ur",
+        "hi"
+      ],
+      "default_locale": "en-US",
+      "timezone_behavior": "business_local"
+    },
+    "behavior": {
+      "response_style": "analytical",
+      "response_detail_level": "standard",
+      "task_handling_preferences": {
+        "auto_execute_read_only": true,
+        "require_confirmation_for_write": true,
+        "strict_schema_enforcement": true
+      },
+      "confirmation_behavior": "always_confirm_high_risk",
+      "error_handling_preferences": {
+        "retry_transient_failures": true,
+        "fallback_to_safe_mode": true,
+        "expose_internal_traces": false
+      }
+    },
+    "capabilities": {
+      "enabled_capabilities": [
+        "inventory.drug_batch_expiry",
+        "pos.formula_generic_sub",
+        "purchasing.pharma_distributor",
+        "reports.controlled_substance_log"
+      ],
+      "disabled_capabilities": [],
+      "capability_limits": {
+        "max_items_per_query": 100,
+        "max_audit_lookback_days": 365
+      },
+      "supported_task_types": [
+        "inventory_audit",
+        "stock_adjustment",
+        "sales_summary",
+        "held_orders_review",
+        "returns_inspection",
+        "catalog_lookup",
+        "pos_transaction",
+        "diagnostic_echo",
+        "custom_tool_run"
+      ]
+    },
+    "tools": {
+      "allowed_tool_ids": [
+        "inventory.product.get",
+        "inventory.products.list",
+        "inventory.stock.adjust",
+        "reports.sales.summary",
+        "pos.held_orders.list",
+        "pos.sale.create",
+        "returns.list",
+        "system.echo.test"
+      ],
+      "restricted_tool_ids": [],
+      "tool_configuration": {},
+      "tool_execution_preferences": {
+        "timeout_override_ms": 30000,
+        "max_retries": 2,
+        "enforce_rate_limits": true
+      }
+    },
+    "execution": {
+      "execution_timeout": 30000,
+      "retry_policy_reference": "standard_exponential",
+      "concurrency_policy_reference": "sequential",
+      "approval_policy_reference": "gateway_risk_tier",
+      "execution_mode": "standard"
+    },
+    "context": {
+      "organization_context_policy": "strict_tenant_isolation",
+      "category_context_policy": "strict_category_boundary",
+      "data_access_scope": "business_operational_only",
+      "context_visibility_rules": {
+        "allow_cross_location": false,
+        "allow_historical_lookback_days": 90
+      }
+    },
+    "metadata": {
+      "created_at": "2026-11-04T00:00:00Z",
+      "updated_at": "2026-11-04T00:00:00Z",
+      "created_by": "system_master_seed",
+      "schema_version": "1.0.0",
+      "configuration_status": "active"
+    },
+    "agent_specific_parameters": {
+      "prescription_rx_validation_mandatory": true,
+      "controlled_substance_schedule_check": true,
+      "drug_interaction_contraindication_alert": true,
+      "batch_expiry_quarantine_days": 90
+    }
+  }
+]

@@ -12,6 +12,7 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, BarChart, Bar,
   PieChart, Pie, Cell, LineChart, Line, CartesianGrid,
 } from "recharts";
+import { DashboardPageSkeleton } from "@/components/ui/PageSkeletons";
 
 type Profile = { plan: string | null; created_at: string; status: string | null };
 type Business = { id: string; business_name: string; status: string; created_at: string; usage: number | null; owner_user_id: string };
@@ -140,7 +141,7 @@ const AdminAnalytics = () => {
       </div>
 
       {loading ? (
-        <div className="p-20 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></div>
+        <DashboardPageSkeleton />
       ) : (
         <>
           {/* KPI ROW */}

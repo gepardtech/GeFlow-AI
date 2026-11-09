@@ -20,7 +20,7 @@
       "updatedAt": "2026-10-25T19:15:33.236+00:00"
     },
     {
-      "id": "mem_1793026615508_qzud9eh",
+      "id": "5814718a-6f21-4dbb-99ba-01ee713c716f",
       "businessId": "09cbccf4-0f16-4397-b4fc-bee0cc48a855",
       "businessName": "Gepard Testing",
       "businessAddress": "5331 Rexford Court, Montgomery. AL. 36116. USA",
@@ -35,8 +35,8 @@
         "inventory"
       ],
       "isActive": true,
-      "createdAt": "2026-10-26T14:56:55.508Z",
-      "updatedAt": "2026-10-26T14:56:55.508Z"
+      "createdAt": "2026-10-26T14:56:55.505025+00:00",
+      "updatedAt": "2026-10-26T14:56:55.506538+00:00"
     },
     {
       "id": "mem_1793978156039_7bqts1y",
@@ -53,7 +53,7 @@
       ],
       "isActive": true,
       "createdAt": "2026-11-06T15:15:56.038Z",
-      "updatedAt": "2026-11-06T15:21:52.619Z"
+      "updatedAt": "2026-11-09T15:13:52.713Z"
     },
     {
       "id": "mem_1793978156042_n1byfcw",
@@ -71,7 +71,42 @@
       ],
       "isActive": true,
       "createdAt": "2026-11-06T15:15:56.042Z",
-      "updatedAt": "2026-11-06T15:21:52.622Z"
+      "updatedAt": "2026-11-09T15:13:52.716Z"
+    },
+    {
+      "id": "mem_1794065175241_cru1l9j",
+      "businessId": "biz_step12_config_test",
+      "businessName": "Store",
+      "currency": "USD",
+      "userId": "user_step12_manager",
+      "userEmail": "manager@geflow.test",
+      "userName": "Config Manager",
+      "ownerId": "user_step12_owner",
+      "role": "manager",
+      "permissions": [
+        "full"
+      ],
+      "isActive": true,
+      "createdAt": "2026-11-07T15:26:15.240Z",
+      "updatedAt": "2026-11-09T15:13:56.921Z"
+    },
+    {
+      "id": "mem_1794065175242_494n08s",
+      "businessId": "biz_step12_config_test",
+      "businessName": "Store",
+      "currency": "USD",
+      "userId": "user_step12_member",
+      "userEmail": "member@geflow.test",
+      "userName": "Config Cashier",
+      "ownerId": "user_step12_owner",
+      "role": "cashier",
+      "permissions": [
+        "pos",
+        "inventory"
+      ],
+      "isActive": true,
+      "createdAt": "2026-11-07T15:26:15.242Z",
+      "updatedAt": "2026-11-09T15:13:56.925Z"
     }
   ],
   "notifications": []

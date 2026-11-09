@@ -23,6 +23,7 @@ import {
 import UserPanelGate from "@/components/UserPanelGate";
 import { useActiveBusiness } from "@/hooks/useActiveBusiness";
 import { useMoney } from "@/lib/currency";
+import { TableRowSkeletons } from "@/components/ui/PageSkeletons";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1119,9 +1120,22 @@ export default function UserReturns() {
             </div>
 
             {isLoadingHistory ? (
-              <div className="py-12 text-center text-muted-foreground flex flex-col items-center justify-center gap-2">
-                <Loader2 className="w-6 h-6 animate-spin text-sky-500" />
-                <span className="text-xs font-semibold">Synchronizing return history...</span>
+              <div className="overflow-x-auto p-4">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border/70 text-[10px] font-bold text-muted-foreground">
+                      <th className="px-4 py-3 text-left">INVOICE #</th>
+                      <th className="px-4 py-3 text-left">ITEM</th>
+                      <th className="px-4 py-3 text-left">QUANTITY</th>
+                      <th className="px-4 py-3 text-left">REFUND</th>
+                      <th className="px-4 py-3 text-left">DATE</th>
+                      <th className="px-4 py-3 text-right">ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <TableRowSkeletons rows={5} columns={6} />
+                  </tbody>
+                </table>
               </div>
             ) : filteredHistory.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground space-y-2">

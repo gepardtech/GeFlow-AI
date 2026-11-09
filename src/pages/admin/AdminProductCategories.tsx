@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { TableRowSkeletons } from "@/components/ui/PageSkeletons";
 
 interface CatRow {
   id: string; name: string; slug: string; parent_id: string | null; description: string | null;
@@ -323,7 +324,7 @@ const AdminProductCategories = () => {
                 </thead>
                 <tbody>
                   {loading ? (
-                    <tr><td colSpan={4} className="p-12 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></td></tr>
+                    <TableRowSkeletons rows={6} columns={4} />
                   ) : ordered.length === 0 ? (
                     <tr><td colSpan={4} className="p-12 text-center text-muted-foreground">No product categories yet.</td></tr>
                   ) : ordered.map(({ row: r, depth }, idx) => {

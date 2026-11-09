@@ -441,6 +441,718 @@
         "type": "in",
         "delta": 200
       }
+    },
+    {
+      "id": "appr_1794064786914_de5a167f",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Bulk spoilage write-off",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:19:46.914Z",
+      "expires_at": "2026-11-08T15:19:46.914Z"
+    },
+    {
+      "id": "appr_1794064787472_7b963ce5",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Restock from distributor",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "in"
+      },
+      "status": "approved",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:19:47.472Z",
+      "expires_at": "2026-11-08T15:19:47.472Z",
+      "decided_at": "2026-11-07T15:19:47.515Z",
+      "decided_by": "user_step11_manager",
+      "decision_reason": "Authorized by store manager.",
+      "execution_result": {
+        "success": true,
+        "newStock": null,
+        "product_id": "prod_milk",
+        "type": "in",
+        "delta": 100
+      }
+    },
+    {
+      "id": "appr_1794064787781_81277722",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Unverified discrepancy",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:19:47.781Z",
+      "expires_at": "2026-11-08T15:19:47.781Z"
+    },
+    {
+      "id": "appr_1794064787906_c137659e",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Pending test",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:19:47.907Z",
+      "expires_at": "2026-11-08T15:19:47.907Z"
+    },
+    {
+      "id": "appr_1794065233019_52b19b1c",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Bulk spoilage write-off",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:27:13.019Z",
+      "expires_at": "2026-11-08T15:27:13.019Z"
+    },
+    {
+      "id": "appr_1794065233208_eb4a42b4",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Restock from distributor",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "in"
+      },
+      "status": "approved",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:27:13.209Z",
+      "expires_at": "2026-11-08T15:27:13.209Z",
+      "decided_at": "2026-11-07T15:27:13.246Z",
+      "decided_by": "user_step11_manager",
+      "decision_reason": "Authorized by store manager.",
+      "execution_result": {
+        "success": true,
+        "newStock": null,
+        "product_id": "prod_milk",
+        "type": "in",
+        "delta": 100
+      }
+    },
+    {
+      "id": "appr_1794065233591_9cf6f446",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Unverified discrepancy",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:27:13.591Z",
+      "expires_at": "2026-11-08T15:27:13.591Z"
+    },
+    {
+      "id": "appr_1794065233773_11fb281b",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Pending test",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:27:13.773Z",
+      "expires_at": "2026-11-08T15:27:13.773Z"
+    },
+    {
+      "id": "appr_1794065242764_75ac902e",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_test_retail_001",
+      "actor_id": "usr_owner_001",
+      "input_params": {
+        "productId": "prod_gateway_test_01",
+        "deltaQuantity": 150,
+        "type": "in",
+        "reason": "Bulk Shipment Arrival"
+      },
+      "status": "rejected",
+      "reason": "Operation parameter 'deltaQuantity' value (150) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:27:22.764Z",
+      "expires_at": "2026-11-08T15:27:22.764Z",
+      "decided_at": "2026-11-07T15:27:22.765Z",
+      "decided_by": "usr_manager_001",
+      "decision_reason": "Inventory variance audit pending."
+    },
+    {
+      "id": "appr_1794065242798_4cc0c08a",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_test_retail_001",
+      "actor_id": "usr_owner_001",
+      "input_params": {
+        "productId": "prod_gateway_test_01",
+        "deltaQuantity": 200,
+        "type": "in",
+        "reason": "Quarterly Factory Restock"
+      },
+      "status": "approved",
+      "reason": "Operation parameter 'deltaQuantity' value (200) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:27:22.798Z",
+      "expires_at": "2026-11-08T15:27:22.798Z",
+      "decided_at": "2026-11-07T15:27:22.799Z",
+      "decided_by": "usr_manager_001",
+      "decision_reason": "Verified factory delivery invoice.",
+      "execution_result": {
+        "success": true,
+        "newStock": 310,
+        "product_id": "prod_gateway_test_01",
+        "type": "in",
+        "delta": 200
+      }
+    },
+    {
+      "id": "appr_1794066350712_dd87ddb7",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Bulk spoilage write-off",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:45:50.712Z",
+      "expires_at": "2026-11-08T15:45:50.712Z"
+    },
+    {
+      "id": "appr_1794066350889_beb69a62",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Restock from distributor",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "in"
+      },
+      "status": "approved",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:45:50.889Z",
+      "expires_at": "2026-11-08T15:45:50.889Z",
+      "decided_at": "2026-11-07T15:45:50.923Z",
+      "decided_by": "user_step11_manager",
+      "decision_reason": "Authorized by store manager.",
+      "execution_result": {
+        "success": true,
+        "newStock": null,
+        "product_id": "prod_milk",
+        "type": "in",
+        "delta": 100
+      }
+    },
+    {
+      "id": "appr_1794066351237_9ae9c910",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Unverified discrepancy",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:45:51.237Z",
+      "expires_at": "2026-11-08T15:45:51.237Z"
+    },
+    {
+      "id": "appr_1794066351402_16f47723",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Pending test",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:45:51.402Z",
+      "expires_at": "2026-11-08T15:45:51.402Z"
+    },
+    {
+      "id": "appr_1794066371444_6f47de24",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_test_retail_001",
+      "actor_id": "usr_owner_001",
+      "input_params": {
+        "productId": "prod_gateway_test_01",
+        "deltaQuantity": 150,
+        "type": "in",
+        "reason": "Bulk Shipment Arrival"
+      },
+      "status": "rejected",
+      "reason": "Operation parameter 'deltaQuantity' value (150) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:46:11.444Z",
+      "expires_at": "2026-11-08T15:46:11.444Z",
+      "decided_at": "2026-11-07T15:46:11.446Z",
+      "decided_by": "usr_manager_001",
+      "decision_reason": "Inventory variance audit pending."
+    },
+    {
+      "id": "appr_1794066371476_7b3ee3b5",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_test_retail_001",
+      "actor_id": "usr_owner_001",
+      "input_params": {
+        "productId": "prod_gateway_test_01",
+        "deltaQuantity": 200,
+        "type": "in",
+        "reason": "Quarterly Factory Restock"
+      },
+      "status": "approved",
+      "reason": "Operation parameter 'deltaQuantity' value (200) exceeds automatic threshold (50).",
+      "created_at": "2026-11-07T15:46:11.476Z",
+      "expires_at": "2026-11-08T15:46:11.476Z",
+      "decided_at": "2026-11-07T15:46:11.477Z",
+      "decided_by": "usr_manager_001",
+      "decision_reason": "Verified factory delivery invoice.",
+      "execution_result": {
+        "success": true,
+        "newStock": 310,
+        "product_id": "prod_gateway_test_01",
+        "type": "in",
+        "delta": 200
+      }
+    },
+    {
+      "id": "appr_1794154104806_be085fa1",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Bulk spoilage write-off",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-08T16:08:24.806Z",
+      "expires_at": "2026-11-09T16:08:24.806Z"
+    },
+    {
+      "id": "appr_1794154105012_02f0e273",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Restock from distributor",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "in"
+      },
+      "status": "approved",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-08T16:08:25.012Z",
+      "expires_at": "2026-11-09T16:08:25.012Z",
+      "decided_at": "2026-11-08T16:08:25.053Z",
+      "decided_by": "user_step11_manager",
+      "decision_reason": "Authorized by store manager.",
+      "execution_result": {
+        "success": true,
+        "newStock": null,
+        "product_id": "prod_milk",
+        "type": "in",
+        "delta": 100
+      }
+    },
+    {
+      "id": "appr_1794154105355_e8754a9a",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Unverified discrepancy",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-08T16:08:25.355Z",
+      "expires_at": "2026-11-09T16:08:25.355Z"
+    },
+    {
+      "id": "appr_1794154105524_f1d8b276",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Pending test",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-08T16:08:25.524Z",
+      "expires_at": "2026-11-09T16:08:25.524Z"
+    },
+    {
+      "id": "appr_1794154123937_44ddf11f",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_test_retail_001",
+      "actor_id": "usr_owner_001",
+      "input_params": {
+        "productId": "prod_gateway_test_01",
+        "deltaQuantity": 150,
+        "type": "in",
+        "reason": "Bulk Shipment Arrival"
+      },
+      "status": "rejected",
+      "reason": "Operation parameter 'deltaQuantity' value (150) exceeds automatic threshold (50).",
+      "created_at": "2026-11-08T16:08:43.937Z",
+      "expires_at": "2026-11-09T16:08:43.937Z",
+      "decided_at": "2026-11-08T16:08:43.938Z",
+      "decided_by": "usr_manager_001",
+      "decision_reason": "Inventory variance audit pending."
+    },
+    {
+      "id": "appr_1794154123974_0880e44a",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_test_retail_001",
+      "actor_id": "usr_owner_001",
+      "input_params": {
+        "productId": "prod_gateway_test_01",
+        "deltaQuantity": 200,
+        "type": "in",
+        "reason": "Quarterly Factory Restock"
+      },
+      "status": "approved",
+      "reason": "Operation parameter 'deltaQuantity' value (200) exceeds automatic threshold (50).",
+      "created_at": "2026-11-08T16:08:43.974Z",
+      "expires_at": "2026-11-09T16:08:43.974Z",
+      "decided_at": "2026-11-08T16:08:43.975Z",
+      "decided_by": "usr_manager_001",
+      "decision_reason": "Verified factory delivery invoice.",
+      "execution_result": {
+        "success": true,
+        "newStock": 310,
+        "product_id": "prod_gateway_test_01",
+        "type": "in",
+        "delta": 200
+      }
+    },
+    {
+      "id": "appr_1794237192095_9a761479",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Bulk spoilage write-off",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-09T15:13:12.095Z",
+      "expires_at": "2026-11-10T15:13:12.095Z"
+    },
+    {
+      "id": "appr_1794237192277_9922eaf5",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Restock from distributor",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "in"
+      },
+      "status": "approved",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-09T15:13:12.277Z",
+      "expires_at": "2026-11-10T15:13:12.277Z",
+      "decided_at": "2026-11-09T15:13:12.312Z",
+      "decided_by": "user_step11_manager",
+      "decision_reason": "Authorized by store manager.",
+      "execution_result": {
+        "success": true,
+        "newStock": null,
+        "product_id": "prod_milk",
+        "type": "in",
+        "delta": 100
+      }
+    },
+    {
+      "id": "appr_1794237192694_08fb513e",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Unverified discrepancy",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-09T15:13:12.694Z",
+      "expires_at": "2026-11-10T15:13:12.694Z"
+    },
+    {
+      "id": "appr_1794237192885_a78e6467",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Pending test",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-09T15:13:12.885Z",
+      "expires_at": "2026-11-10T15:13:12.885Z"
+    },
+    {
+      "id": "appr_1794237231152_db7f408e",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_test_retail_001",
+      "actor_id": "usr_owner_001",
+      "input_params": {
+        "productId": "prod_gateway_test_01",
+        "deltaQuantity": 150,
+        "type": "in",
+        "reason": "Bulk Shipment Arrival"
+      },
+      "status": "rejected",
+      "reason": "Operation parameter 'deltaQuantity' value (150) exceeds automatic threshold (50).",
+      "created_at": "2026-11-09T15:13:51.152Z",
+      "expires_at": "2026-11-10T15:13:51.152Z",
+      "decided_at": "2026-11-09T15:13:51.153Z",
+      "decided_by": "usr_manager_001",
+      "decision_reason": "Inventory variance audit pending."
+    },
+    {
+      "id": "appr_1794237231201_15c4ece6",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_test_retail_001",
+      "actor_id": "usr_owner_001",
+      "input_params": {
+        "productId": "prod_gateway_test_01",
+        "deltaQuantity": 200,
+        "type": "in",
+        "reason": "Quarterly Factory Restock"
+      },
+      "status": "approved",
+      "reason": "Operation parameter 'deltaQuantity' value (200) exceeds automatic threshold (50).",
+      "created_at": "2026-11-09T15:13:51.201Z",
+      "expires_at": "2026-11-10T15:13:51.201Z",
+      "decided_at": "2026-11-09T15:13:51.202Z",
+      "decided_by": "usr_manager_001",
+      "decision_reason": "Verified factory delivery invoice.",
+      "execution_result": {
+        "success": true,
+        "newStock": 310,
+        "product_id": "prod_gateway_test_01",
+        "type": "in",
+        "delta": 200
+      }
+    },
+    {
+      "id": "appr_1794237234464_1588d9d0",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Bulk spoilage write-off",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-09T15:13:54.464Z",
+      "expires_at": "2026-11-10T15:13:54.464Z"
+    },
+    {
+      "id": "appr_1794237234700_156f69c0",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Restock from distributor",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "in"
+      },
+      "status": "approved",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-09T15:13:54.700Z",
+      "expires_at": "2026-11-10T15:13:54.700Z",
+      "decided_at": "2026-11-09T15:13:54.734Z",
+      "decided_by": "user_step11_manager",
+      "decision_reason": "Authorized by store manager.",
+      "execution_result": {
+        "success": true,
+        "newStock": null,
+        "product_id": "prod_milk",
+        "type": "in",
+        "delta": 100
+      }
+    },
+    {
+      "id": "appr_1794237235063_dc6c96d4",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Unverified discrepancy",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-09T15:13:55.063Z",
+      "expires_at": "2026-11-10T15:13:55.063Z"
+    },
+    {
+      "id": "appr_1794237235241_25f02313",
+      "tool_id": "inventory.stock.adjust",
+      "tool_version": "1.0.0",
+      "agent_id": "AGT-001",
+      "business_id": "biz_step11_execution_test",
+      "actor_id": "user_step11_owner",
+      "actor_email": "owner@geflow.test",
+      "input_params": {
+        "reason": "Pending test",
+        "productId": "prod_milk",
+        "deltaQuantity": 100,
+        "type": "out"
+      },
+      "status": "pending",
+      "reason": "Operation parameter 'deltaQuantity' value (100) exceeds automatic threshold (50).",
+      "created_at": "2026-11-09T15:13:55.242Z",
+      "expires_at": "2026-11-10T15:13:55.242Z"
     }
   ]
 }

@@ -3,6 +3,9 @@ dotenv.config({ override: true });
 import express, { Request, Response } from "express";
 import cors from "cors";
 import path from "path";
+if (typeof (globalThis as any).__filename === "string" && (globalThis as any).__filename === "[eval]") {
+  (globalThis as any).__filename = path.resolve(process.cwd(), "package.json");
+}
 import { createServer as createViteServer } from "vite";
 
 import { generateRequestId, getRecentTraces } from "./src/server/ai/tracing";
@@ -41,9 +44,33 @@ import { agentVersioningService } from "./src/server/agents/agentVersioningServi
 import { toolGatewayService } from "./src/server/tools/toolGatewayService";
 import { agentExecutionEngine } from "./src/server/executions/agentExecutionEngine";
 import { agentAuditService } from "./src/server/executions/agentAuditService";
+import { agentConfigurationService } from "./src/server/configurations/agentConfigurationService";
+import { CANONICAL_AGENT_SCHEMAS } from "./src/server/configurations/agentConfigurationSchemas";
+import { cafeAgentService } from "./src/server/agents/cafe/cafeAgentService";
+
+process.on("unhandledRejection", (reason) => {
+  console.warn("Notice: Process unhandled promise rejection intercepted:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("Notice: Process uncaught exception intercepted:", error);
+});
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+
+function resolvePort(): number {
+  const portArgIdx = process.argv.indexOf("--port");
+  if (portArgIdx !== -1 && process.argv[portArgIdx + 1]) {
+    const val = Number(process.argv[portArgIdx + 1]);
+    if (!isNaN(val) && val > 0) return val;
+  }
+  if (process.env.NODE_ENV === "production") {
+    return Number(process.env.PORT) || 3000;
+  }
+  return 3000;
+}
+
+const PORT = resolvePort();
 
 app.use(cors());
 app.use(express.json({ limit: "25mb" }));
@@ -4930,7 +4957,7 @@ app.get("/api/agents/category/:categoryId", async (req: Request, res: Response) 
 app.get("/api/agents/:agentId", async (req: Request, res: Response, next) => {
   try {
     const { agentId } = req.params;
-    if (["executions", "audit-events", "version", "associations", "contracts"].includes(agentId)) {
+    if (["executions", "audit-events", "version", "associations", "contracts", "configurations", "cafe"].includes(agentId)) {
       return next();
     }
     const agent = agentRegistryService.getAgentById(agentId);
@@ -5024,6 +5051,179 @@ app.patch("/api/agents/:agentId/configuration", async (req: Request, res: Respon
     return res.json(result);
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================================
+// AGENT CONFIGURATION FRAMEWORK API (Step 12)
+// ============================================================
+
+// 1. Get all configuration schemas (Precedence: before :agentId subroutes)
+app.get("/api/agents/configurations/schemas", async (_req: Request, res: Response) => {
+  try {
+    const schemas = Array.from(CANONICAL_AGENT_SCHEMAS.values());
+    return res.json({ success: true, count: schemas.length, schemas });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 2. Get configuration schema for specific agent
+app.get("/api/agents/:agentId/schema", async (req: Request, res: Response) => {
+  try {
+    const { agentId } = req.params;
+    const schema = agentConfigurationService.getSchema(agentId);
+    return res.json({ success: true, agent_id: agentId, schema });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3. Validate candidate configuration against agent schema
+app.post("/api/agents/:agentId/configuration/validate", async (req: Request, res: Response) => {
+  try {
+    const { agentId } = req.params;
+    const { configuration } = req.body || {};
+    const result = agentConfigurationService.validateConfiguration(configuration, agentId);
+    return res.json({ success: result.is_valid, ...result });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 4. Resolve effective configuration snapshot for an agent & business context
+app.get("/api/agents/:agentId/configuration/effective", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const { agentId } = req.params;
+    const businessId = (req.query.business_id as string) || (req.headers["x-business-id"] as string);
+    const version = req.query.version as string | undefined;
+
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "business_id is required to resolve effective configuration snapshot." });
+    }
+
+    const snapshot = await agentConfigurationService.resolveEffectiveConfiguration({
+      agentId,
+      businessId,
+      version,
+      caller: {
+        userId: user.userId,
+        email: user.email,
+        isPlatformAdmin: user.isPlatformAdmin,
+      },
+    });
+
+    return res.json({ success: true, snapshot });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// 5. Get organization-level configuration override for an agent
+app.get("/api/agents/:agentId/overrides", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const { agentId } = req.params;
+    const businessId = (req.query.business_id as string) || (req.headers["x-business-id"] as string);
+
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "business_id is required." });
+    }
+
+    const override = await agentConfigurationService.getOrganizationOverride(businessId, agentId, {
+      userId: user.userId,
+      isPlatformAdmin: user.isPlatformAdmin,
+    });
+
+    return res.json({ success: true, override });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// 6. Save/update organization-level configuration override for an agent
+app.post("/api/agents/:agentId/overrides", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const { agentId } = req.params;
+    const {
+      business_id,
+      display_name_override,
+      response_style_override,
+      response_detail_level_override,
+      execution_timeout_override,
+      disabled_capabilities_override,
+      restricted_tool_ids_override,
+      custom_parameters,
+    } = req.body || {};
+
+    const targetBusinessId = business_id || (req.headers["x-business-id"] as string);
+    if (!targetBusinessId) {
+      return res.status(400).json({ success: false, error: "business_id is required." });
+    }
+
+    const override = await agentConfigurationService.saveOrganizationOverride(
+      {
+        businessId: targetBusinessId,
+        agentId,
+        displayNameOverride: display_name_override,
+        responseStyleOverride: response_style_override,
+        responseDetailLevelOverride: response_detail_level_override,
+        executionTimeoutOverride: execution_timeout_override,
+        disabledCapabilitiesOverride: disabled_capabilities_override,
+        restrictedToolIdsOverride: restricted_tool_ids_override,
+        customParameters: custom_parameters,
+      },
+      {
+        userId: user.userId,
+        email: user.email,
+        isPlatformAdmin: user.isPlatformAdmin,
+      }
+    );
+
+    return res.json({ success: true, override });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// 7. Delete organization-level configuration override for an agent
+app.delete("/api/agents/:agentId/overrides", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const { agentId } = req.params;
+    const businessId = (req.query.business_id as string) || (req.headers["x-business-id"] as string);
+
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "business_id is required." });
+    }
+
+    const result = await agentConfigurationService.deleteOrganizationOverride(businessId, agentId, {
+      userId: user.userId,
+      email: user.email,
+      isPlatformAdmin: user.isPlatformAdmin,
+    });
+
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
   }
 });
 
@@ -5707,6 +5907,194 @@ app.get("/api/agents/audit-events", async (req: Request, res: Response) => {
     });
 
     return res.json({ success: true, ...result });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// STEP 13 — CAFE AGENT (AGT-019) PILOT ROUTES
+// ==========================================
+
+// 1. Get Cafe Agent Pilot Status & Metadata
+app.get("/api/agents/cafe/status", async (req: Request, res: Response) => {
+  try {
+    const businessId = (req.query.business_id as string) || (req.headers["x-business-id"] as string);
+    const status = await cafeAgentService.getPilotStatus(businessId);
+    return res.json({ success: true, ...status });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 2. Execute Specialized Cafe Task
+app.post("/api/agents/cafe/execute", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const { business_id, query, task_type, product_id, variant_name, timeframe, correlation_id } = req.body || {};
+    if (!business_id) {
+      return res.status(400).json({ success: false, error: "business_id is required" });
+    }
+
+    const payload = await cafeAgentService.executeTask(
+      {
+        business_id,
+        query: query || "",
+        task_type,
+        product_id,
+        variant_name,
+        timeframe,
+        correlation_id,
+      },
+      {
+        userId: user.userId,
+        email: user.email,
+        isPlatformAdmin: user.isPlatformAdmin,
+      }
+    );
+
+    const httpStatus = payload.response_status === "error" ? 403 : 200;
+    return res.status(httpStatus).json(payload);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3. Conversational Cafe Chat Query
+app.post("/api/agents/cafe/chat", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const { business_id, query, language, product_id, variant_name, timeframe } = req.body || {};
+    if (!business_id) {
+      return res.status(400).json({ success: false, error: "business_id is required" });
+    }
+    if (!query) {
+      return res.status(400).json({ success: false, error: "query string is required" });
+    }
+
+    const result = await cafeAgentService.handleCafeChat(
+      {
+        business_id,
+        query,
+        language,
+        product_id,
+        variant_name,
+        timeframe,
+      },
+      {
+        userId: user.userId,
+        email: user.email,
+        isPlatformAdmin: user.isPlatformAdmin,
+      }
+    );
+
+    return res.json({ success: true, ...result });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 4. Cafe Menu Query
+app.get("/api/agents/cafe/menu", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const businessId = (req.query.business_id as string) || (req.headers["x-business-id"] as string);
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "business_id is required" });
+    }
+
+    const auth = await cafeAgentService.validateAccess({
+      userId: user.userId,
+      businessId,
+      isPlatformAdmin: user.isPlatformAdmin,
+    });
+
+    if (!auth.allowed) {
+      return res.status(403).json({ success: false, error: auth.reason });
+    }
+
+    const menu = cafeAgentService.getCafeMenu(businessId);
+    return res.json({ success: true, menu, total_count: menu.length });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5. Recipe Costing for Product
+app.get("/api/agents/cafe/products/:productId/costing", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const { productId } = req.params;
+    const businessId = (req.query.business_id as string) || (req.headers["x-business-id"] as string);
+    const variantName = req.query.variant_name as string | undefined;
+
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "business_id is required" });
+    }
+
+    const auth = await cafeAgentService.validateAccess({
+      userId: user.userId,
+      businessId,
+      isPlatformAdmin: user.isPlatformAdmin,
+    });
+
+    if (!auth.allowed) {
+      return res.status(403).json({ success: false, error: auth.reason });
+    }
+
+    const costing = cafeAgentService.calculateRecipeCosting({
+      businessId,
+      productId,
+      variantName,
+    });
+
+    return res.json({ success: true, costing });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 6. Cafe Stock & Ingredient Audit
+app.get("/api/agents/cafe/stock-audit", async (req: Request, res: Response) => {
+  try {
+    const user = await organizationAuthService.resolveUser(req);
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    const businessId = (req.query.business_id as string) || (req.headers["x-business-id"] as string);
+    if (!businessId) {
+      return res.status(400).json({ success: false, error: "business_id is required" });
+    }
+
+    const auth = await cafeAgentService.validateAccess({
+      userId: user.userId,
+      businessId,
+      isPlatformAdmin: user.isPlatformAdmin,
+    });
+
+    if (!auth.allowed) {
+      return res.status(403).json({ success: false, error: auth.reason });
+    }
+
+    const audit = cafeAgentService.auditStockAvailability(businessId);
+    return res.json({ success: true, ...audit });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -7385,6 +7773,46 @@ app.post("/api/ai/assistant", async (req: Request, res: Response) => {
       }
     }
 
+    // Step 13: Specialized Cafe & Coffee Shop Agent (AGT-019) Routing
+    const isCafeQuery =
+      requestedAgentId === "AGT-019" ||
+      lowerQuery.includes("cappuccino") ||
+      lowerQuery.includes("espresso") ||
+      lowerQuery.includes("coffee bean") ||
+      lowerQuery.includes("latte recipe") ||
+      lowerQuery.includes("barista rush");
+
+    if (isCafeQuery && businessId) {
+      const user = await organizationAuthService.resolveUser(req);
+      if (user) {
+        try {
+          const cafeResult = await cafeAgentService.handleCafeChat(
+            {
+              business_id: businessId,
+              query: lastUserMessage,
+              language: targetLanguage,
+            },
+            {
+              userId: user.userId,
+              email: user.email,
+              isPlatformAdmin: user.isPlatformAdmin,
+            }
+          );
+          if (cafeResult?.reply && !cafeResult.reply.startsWith("⚠️")) {
+            return res.json({
+              success: true,
+              reply: cafeResult.reply,
+              agentId: "AGT-019",
+              agentName: "Cafe & Coffee Shop Agent",
+              taskResponse: cafeResult.task_response,
+            });
+          }
+        } catch (_cafeErr) {
+          // Fall through to general assistant if cafe agent cannot execute
+        }
+      }
+    }
+
     recordSystemActivity({
       type: "ai_usage",
       title: "GeFlow AI Agent Query",
@@ -8503,20 +8931,49 @@ async function startServer() {
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
+      configFile: path.resolve(process.cwd(), "vite.config.ts"),
       server: { middlewareMode: true, hmr: false },
       appType: "spa",
     });
     app.use(vite.middlewares);
+
+    // Serve transformed index.html for all non-API SPA routes in development
+    app.use(async (req, res, next) => {
+      const url = req.originalUrl || req.url;
+      if (url.startsWith("/api/") || url.startsWith("/uploads/")) {
+        return next();
+      }
+      try {
+        const indexPath = path.resolve(process.cwd(), "index.html");
+        let template = fs.readFileSync(indexPath, "utf-8");
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+      } catch (e: any) {
+        vite.ssrFixStacktrace(e);
+        next(e);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*all", (req, res) => {
+    app.use((req, res, next) => {
+      if (req.method !== "GET" || req.originalUrl.startsWith("/api/")) {
+        return next();
+      }
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`GeFlow AI Server running at http://0.0.0.0:${PORT}`);
+  });
+
+  server.on("error", (err: any) => {
+    if (err.code === "EADDRINUSE") {
+      console.warn(`[Server] Port ${PORT} already bound by existing process.`);
+    } else {
+      console.error("[Server Error]", err);
+    }
   });
 }
 

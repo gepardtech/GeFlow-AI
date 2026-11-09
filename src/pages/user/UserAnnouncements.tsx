@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import UserPanelGate from "@/components/UserPanelGate";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Megaphone,
   Loader2,
@@ -147,8 +148,21 @@ const UserAnnouncements = () => {
       </div>
 
       {loading ? (
-        <div className="p-12 text-center">
-          <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+        <div className="grid grid-cols-1 gap-3.5">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-card border border-border/80 rounded-2xl p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-5 w-48 rounded-md" />
+                <Skeleton className="h-4 w-24 rounded-md" />
+              </div>
+              <Skeleton className="h-4 w-full rounded" />
+              <Skeleton className="h-4 w-3/4 rounded" />
+              <div className="pt-2 flex items-center justify-between">
+                <Skeleton className="h-6 w-20 rounded-full" />
+                <Skeleton className="h-8 w-24 rounded-lg" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : items.length === 0 ? (
         <div className="bg-card border border-border rounded-2xl p-12 text-center max-w-lg mx-auto">

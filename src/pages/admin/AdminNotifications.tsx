@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchAllContactSubmissions, markLocalContactSubmissionRead } from "@/lib/contactService";
 import PanelLayout from "@/components/PanelLayout";
 import { ADMIN_NAV, ADMIN_IDENTITY } from "@/lib/panelNav";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Bell, Loader2, Mail, MailOpen, LifeBuoy, Megaphone, CheckCheck, Search, Filter, UserPlus, Store, Sparkles,
 } from "lucide-react";
@@ -200,7 +201,20 @@ const AdminNotifications = () => {
         </div>
 
         {loading ? (
-          <div className="p-12 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></div>
+          <div className="divide-y divide-border/40 p-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="p-4 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 flex-1">
+                  <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+                  <div className="space-y-1.5 flex-1">
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="h-3 w-72" />
+                  </div>
+                </div>
+                <Skeleton className="h-3.5 w-20 shrink-0" />
+              </div>
+            ))}
+          </div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center">
             <Bell className="h-8 w-8 mx-auto text-muted-foreground mb-3" />

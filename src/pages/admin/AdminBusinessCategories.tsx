@@ -18,6 +18,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { TableRowSkeletons } from "@/components/ui/PageSkeletons";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -362,7 +363,7 @@ const AdminBusinessCategories = () => {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} className="p-12 text-center text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></td></tr>
+                <TableRowSkeletons rows={6} columns={6} />
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={6} className="p-12 text-center text-muted-foreground">No business categories yet — create your first blueprint.</td></tr>
               ) : filtered.map((r, idx) => {

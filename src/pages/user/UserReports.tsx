@@ -43,6 +43,7 @@ import { fetchSyncedReportsData } from "@/lib/businessSync";
 import { supabase } from "@/integrations/supabase/client";
 import { useMoney } from "@/lib/currency";
 import { useToast } from "@/hooks/use-toast";
+import { ReportsPageSkeleton } from "@/components/ui/PageSkeletons";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -1012,6 +1013,14 @@ export const UserReports = () => {
       setSelectedRestockReport({ ...selectedRestockReport, status: "approved" });
     }
   };
+
+  if ((bizLoading && !active) || (loading && dbProducts.length === 0 && dbSaleItems.length === 0)) {
+    return (
+      <UserPanelGate pageTitle="Reports" module="reports">
+        <ReportsPageSkeleton />
+      </UserPanelGate>
+    );
+  }
 
   return (
     <UserPanelGate pageTitle="Reports" module="reports">

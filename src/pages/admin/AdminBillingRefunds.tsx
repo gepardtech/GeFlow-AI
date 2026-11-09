@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { TableRowSkeletons } from "@/components/ui/PageSkeletons";
 
 interface Refund {
   id: string; ticket_id: string; amount: number; reason: string; status: string;
@@ -193,7 +194,7 @@ const AdminBillingRefunds = () => {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="p-12 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></td></tr>
+              <TableRowSkeletons rows={5} columns={6} />
             ) : filtered.length === 0 ? (
               <tr><td colSpan={6} className="p-12 text-center text-muted-foreground">No refund requests yet. Real-time entries will appear here.</td></tr>
             ) : filtered.map((r) => (

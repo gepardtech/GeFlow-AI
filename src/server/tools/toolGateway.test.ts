@@ -12,31 +12,28 @@
  * 8. Audit Logging & Execution Tracing
  */
 
+import { describe, it, expect } from "vitest";
 import { toolGatewayService } from "./toolGatewayService";
 import { CANONICAL_TOOL_DEFINITIONS } from "./toolCatalog";
 import { businessDataSyncService } from "../team/businessDataSyncService";
 import { agentRegistryService } from "../agents/agentRegistryService";
 import { ToolDefinition } from "./toolGatewayTypes";
 
-async function runTestSuite() {
-  console.log("=================================================");
-  console.log("  GEFLOW SHARED TOOL GATEWAY VERIFICATION SUITE  ");
-  console.log("=================================================\n");
+describe("GeFlow AI — Step 10: Shared Tool Gateway Automated Test Suite", () => {
+  it("executes all 20 lifecycle, authorization, and audit verification tests", async () => {
+    let totalTests = 0;
+    let passedTests = 0;
+    let failedTests = 0;
 
-  let totalTests = 0;
-  let passedTests = 0;
-  let failedTests = 0;
-
-  function assert(condition: boolean, testName: string, detail?: string) {
-    totalTests++;
-    if (condition) {
-      passedTests++;
-      console.log(`[PASS] ${testName}`);
-    } else {
-      failedTests++;
-      console.error(`[FAIL] ${testName}${detail ? ` - ${detail}` : ""}`);
+    function assert(condition: boolean, testName: string, detail?: string) {
+      totalTests++;
+      if (condition) {
+        passedTests++;
+      } else {
+        failedTests++;
+      }
+      expect(condition, `${testName}${detail ? ` - ${detail}` : ""}`).toBe(true);
     }
-  }
 
   // Setup test tenant in businessDataSyncService
   const testBusinessId = "biz_test_retail_001";
@@ -409,16 +406,7 @@ async function runTestSuite() {
     `Total records: ${auditLogs.length}`
   );
 
-  console.log("\n=================================================");
-  console.log(`  TEST RESULTS: ${passedTests}/${totalTests} PASSED (${failedTests} FAILED)  `);
-  console.log("=================================================\n");
-
-  if (failedTests > 0) {
-    process.exit(1);
-  }
-}
-
-runTestSuite().catch((e) => {
-  console.error("Test execution fatal error:", e);
-  process.exit(1);
+    expect(failedTests).toBe(0);
+    expect(passedTests).toBe(totalTests);
+  });
 });

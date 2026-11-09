@@ -1,0 +1,17 @@
+[
+  {
+    "override_id": "ovr_biz_step_agt-001_1794237239018",
+    "business_id": "biz_step12_config_test",
+    "agent_id": "AGT-001",
+    "category_id": "CAT-001",
+    "display_name_override": "Audited Assistant",
+    "disabled_capabilities_override": [],
+    "restricted_tool_ids_override": [],
+    "custom_parameters": {},
+    "created_at": "2026-11-09T15:13:59.018Z",
+    "updated_at": "2026-11-09T15:13:59.018Z",
+    "created_by": "user_step12_owner",
+    "updated_by": "user_step12_owner",
+    "status": "active"
+  }
+]

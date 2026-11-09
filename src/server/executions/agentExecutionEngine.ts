@@ -28,6 +28,7 @@ import { toolGatewayService } from "../tools/toolGatewayService";
 import { ToolExecutionContext, ToolInvocationRequest } from "../tools/toolGatewayTypes";
 import { agentAuditService } from "./agentAuditService";
 import { businessDataSyncService } from "../team/businessDataSyncService";
+import { agentConfigurationService } from "../configurations/agentConfigurationService";
 
 const DATA_DIR = path.resolve(process.cwd(), "data");
 const EXECUTIONS_STORE_FILE = path.join(DATA_DIR, "agent_executions.json");
@@ -78,6 +79,10 @@ const TASK_DEFAULT_TOOLS: Record<TaskType, string[]> = {
   catalog_lookup: ["inventory.product.get"],
   pos_transaction: ["pos.sale.create"],
   diagnostic_echo: ["system.echo.test"],
+  cafe_menu_query: ["inventory.products.list"],
+  cafe_recipe_costing: ["inventory.products.list"],
+  cafe_stock_audit: ["inventory.products.list"],
+  cafe_sales_velocity: ["reports.sales.summary"],
   custom_tool_run: [],
 };
 
@@ -330,6 +335,33 @@ export class AgentExecutionEngine {
         execution,
         "authorization_error",
         `Category authorization denied for ${agent.primary_category_id}: ${catAuth.reason || "Access restricted"}`,
+        "rejected"
+      );
+    }
+
+    // 6.5 Resolve Effective Configuration Snapshot
+    try {
+      const configSnapshot = await agentConfigurationService.resolveEffectiveConfiguration({
+        agentId: agent_id,
+        businessId: business_id,
+        version: execution.agent_configuration_version,
+        caller: {
+          userId: caller.userId,
+          email: caller.email,
+          isPlatformAdmin: caller.isPlatformAdmin,
+        },
+      });
+      execution.resolved_configuration_snapshot = configSnapshot;
+      execution.configuration_snapshot_hash = configSnapshot.integrity_hash;
+
+      if (!payload.timeout_ms && configSnapshot.effective_configuration?.execution?.execution_timeout) {
+        execution.timeout_ms = configSnapshot.effective_configuration.execution.execution_timeout;
+      }
+    } catch (cfgErr: any) {
+      return this.failExecution(
+        execution,
+        "configuration_error",
+        `Configuration resolution failed: ${cfgErr.message || "Invalid configuration"}`,
         "rejected"
       );
     }
